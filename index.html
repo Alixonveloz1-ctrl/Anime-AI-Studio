@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ANIME AI STUDIO · Your Name Edition</title>
+<title>ANIME AI STUDIO · Pipeline Cinematográfico</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@200;300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
@@ -272,7 +272,7 @@ video { width: 100%; border-radius: 10px; margin-top: 12px; }
       <div>
         <div class="brand-jp">アニメ・スタジオ</div>
         <div class="brand-title">Anime AI Studio</div>
-        <div class="brand-sub">Your Name Edition · Cinematic Pipeline</div>
+        <div class="brand-sub">Cinematic Pipeline · Multi-Style</div>
       </div>
     </div>
     <div class="header-actions">
@@ -318,50 +318,102 @@ video { width: 100%; border-radius: 10px; margin-top: 12px; }
         </div>
         <div class="panel-content">
           <div id="world-form">
+            <div class="form-grid cols-1">
+              <div class="field"><label>Título del Anime</label><input type="text" id="world-title" placeholder="ej: El Despertar del Último" /></div>
+            </div>
+            <div class="divider"><span>ESTILO DE ANIME</span></div>
+            <div class="form-grid cols-1">
+              <div class="field"><label>Estilo Narrativo y Visual</label>
+                <div class="tag-grid" id="style-tags">
+                  <button class="tag-btn selected" data-style="solo_leveling">⚔ Solo Leveling</button>
+                  <button class="tag-btn" data-style="jjk">🌀 Jujutsu Kaisen</button>
+                  <button class="tag-btn" data-style="mushoku">🪄 Mushoku Tensei</button>
+                  <button class="tag-btn" data-style="slime">🐉 Tensei Slime</button>
+                  <button class="tag-btn" data-style="isekai">🌍 Isekai Genérico</button>
+                  <button class="tag-btn" data-style="aot">⚔️ Attack on Titan</button>
+                  <button class="tag-btn" data-style="demon_slayer">🗡 Demon Slayer</button>
+                  <button class="tag-btn" data-style="chainsaw">⛓ Chainsaw Man</button>
+                  <button class="tag-btn" data-style="shinkai">🌅 Makoto Shinkai</button>
+                  <button class="tag-btn" data-style="ghibli">🌳 Studio Ghibli</button>
+                  <button class="tag-btn" data-style="cyberpunk">🌃 Cyberpunk Edgerunners</button>
+                  <button class="tag-btn" data-style="custom">✨ Mixto / Personalizado</button>
+                </div>
+                <div class="field-hint">Define la estética visual Y el tono narrativo del anime</div>
+              </div>
+            </div>
             <div class="form-grid">
-              <div class="field"><label>Título del Anime</label><input type="text" id="world-title" placeholder="ej: El Eco del Cielo Roto" /></div>
-              <div class="field"><label>Género Principal</label>
+              <div class="field"><label>Género</label>
                 <select id="world-genre">
-                  <option>Romance Sobrenatural</option><option>Ciencia Ficción</option><option>Thriller Psicológico</option>
-                  <option>Misterio</option><option>Cyberpunk</option><option>Fantasía</option><option>Slice of Life</option>
-                  <option>Terror Psicológico</option><option>Isekai</option><option>Drama Militar</option>
-                  <option>Sobrenatural</option><option>Post Apocalíptico</option>
+                  <option>Acción / Aventura Shounen</option>
+                  <option>Isekai / Reencarnación</option>
+                  <option>Fantasía Oscura</option>
+                  <option>Sobrenatural / Power Fantasy</option>
+                  <option>Cazadores / Dungeons</option>
+                  <option>Romance Sobrenatural</option>
+                  <option>Slice of Life</option>
+                  <option>Ciencia Ficción</option>
+                  <option>Cyberpunk</option>
+                  <option>Thriller Psicológico</option>
+                  <option>Terror / Horror</option>
+                  <option>Misterio</option>
+                  <option>Drama Militar</option>
+                  <option>Post Apocalíptico</option>
+                  <option>Magia / Academia</option>
+                  <option>Mecha</option>
+                </select>
+              </div>
+              <div class="field"><label>Tono</label>
+                <select id="world-tone">
+                  <option>Épico y heroico</option>
+                  <option>Brutal y crudo</option>
+                  <option>Oscuro y trágico</option>
+                  <option>Esperanza vs desesperación</option>
+                  <option>Tensión opresiva</option>
+                  <option>Aventura y descubrimiento</option>
+                  <option>Misterio creciente</option>
+                  <option>Melancolía esperanzadora</option>
+                  <option>Nostalgia íntima</option>
+                  <option>Comedia con drama</option>
+                  <option>Belleza en la decadencia</option>
                 </select>
               </div>
             </div>
             <div class="form-grid">
-              <div class="field"><label>Tono Emocional</label>
-                <select id="world-tone">
-                  <option>Melancolía esperanzadora</option><option>Nostalgia íntima</option>
-                  <option>Tensión opresiva</option><option>Belleza en la decadencia</option>
-                  <option>Soledad compartida</option><option>Urgencia poética</option><option>Quietud transformadora</option>
+              <div class="field"><label>Era / Mundo</label>
+                <select id="world-tech">
+                  <option>Mundo de fantasía medieval</option>
+                  <option>Reino mágico con mazmorras</option>
+                  <option>Japón moderno + magia oculta</option>
+                  <option>Otro mundo (isekai)</option>
+                  <option>Mundo post-apocalíptico</option>
+                  <option>Futuro cyberpunk</option>
+                  <option>Era moderna realista</option>
+                  <option>Japón rural tradicional</option>
+                  <option>Imperio futurista</option>
+                  <option>Mundo de demonios y humanos</option>
+                  <option>Mixto (mundo real + sobrenatural)</option>
                 </select>
               </div>
-              <div class="field"><label>Era / Tecnología</label>
-                <select id="world-tech">
-                  <option>Era moderna contemporánea</option><option>Japón rural tradicional</option>
-                  <option>Futuro cercano</option><option>Ciencia ficción avanzada</option>
-                  <option>Post-colapso</option><option>Medieval / Fantástico</option><option>Mixto (ruinas + tech)</option>
+              <div class="field"><label>Paleta Visual</label>
+                <select id="world-palette">
+                  <option value="dark_dramatic">Oscura y dramática</option>
+                  <option value="vivid_action">Vibrante de acción</option>
+                  <option value="twilight">Crepúsculo dorado</option>
+                  <option value="dawn">Amanecer rosa</option>
+                  <option value="rural">Verano rural</option>
+                  <option value="urban">Tokio nocturno</option>
+                  <option value="fantasy">Fantasía mágica</option>
+                  <option value="storm">Tormenta y lluvia</option>
+                  <option value="snow">Invierno gélido</option>
+                  <option value="dungeon">Mazmorra sombría</option>
+                  <option value="neon">Neon cyberpunk</option>
                 </select>
               </div>
             </div>
             <div class="form-grid cols-1">
               <div class="field"><label>Concepto Semilla (opcional)</label>
-                <textarea id="world-concept" placeholder="Describe brevemente tu idea, o déjalo vacío para que Claude lo genere..." rows="3"></textarea>
-                <div class="field-hint">Si lo dejas vacío, el sistema generará un concepto único</div>
-              </div>
-            </div>
-            <div class="divider"><span>ESTÉTICA</span></div>
-            <div class="form-grid cols-1">
-              <div class="field"><label>Paleta Visual (estilo Your Name)</label>
-                <div class="tag-grid" id="palette-tags">
-                  <button class="tag-btn selected" data-pal="twilight">Crepúsculo Dorado</button>
-                  <button class="tag-btn" data-pal="dawn">Amanecer Rosa</button>
-                  <button class="tag-btn" data-pal="rural">Verano Rural</button>
-                  <button class="tag-btn" data-pal="urban">Tokio Solitario</button>
-                  <button class="tag-btn" data-pal="storm">Tormenta y Lluvia</button>
-                  <button class="tag-btn" data-pal="snow">Invierno Suave</button>
-                </div>
+                <textarea id="world-concept" placeholder="Describe tu idea, o déjalo vacío. Ej: Un cazador de nivel E descubre que puede subir de nivel..." rows="3"></textarea>
+                <div class="field-hint">Mientras más detalle, mejor resultado</div>
               </div>
             </div>
             <div class="btn-row"><button class="btn btn-primary" onclick="generateWorld()">⚙ Generar Universo Completo</button></div>
@@ -667,8 +719,8 @@ function escHtml(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').
 function copyText(text, btn) { navigator.clipboard.writeText(text); if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(() => btn.textContent = orig, 1500); } }
 
 document.addEventListener('click', (e) => {
-  if (e.target.matches('#palette-tags .tag-btn')) {
-    document.querySelectorAll('#palette-tags .tag-btn').forEach(t => t.classList.remove('selected'));
+  if (e.target.matches('#style-tags .tag-btn')) {
+    document.querySelectorAll('#style-tags .tag-btn').forEach(t => t.classList.remove('selected'));
     e.target.classList.add('selected');
   }
   if (e.target.classList.contains('modal-overlay')) e.target.classList.remove('active');
@@ -740,9 +792,9 @@ async function generateImage(prompt, referenceImagesB64 = []) {
     }
   }
   const doRequest = async () => {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${STATE.apis.banana}`,
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${STATE.apis.banana}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } }) });
+        body: JSON.stringify({ contents: [{ parts }] }) });
     if (response.status === 503 || response.status === 429) {
       const err = await response.text();
       throw new Error(`RETRY:${response.status}`);
@@ -1006,17 +1058,124 @@ function renderWorldOutput() {
 }
 function renderWorldOutput_empty() { return ''; }
 
-const SYSTEM_BASE = `Eres el motor narrativo del ANIME AI STUDIO especializado en anime cinematográfico calidad Makoto Shinkai (Your Name, Weathering With You, Suzume).
-REGLAS:
+const ANIME_STYLES = {
+  solo_leveling: {
+    name: "Solo Leveling",
+    narrative: "Power fantasy oscura. Protagonista débil que se vuelve absurdamente fuerte. Sistema de niveles y rangos de cazadores. Mazmorras, monstruos, gremios. Tono brutal pero con heroísmo. Stakes altos: muerte real, traicion, evolución constante. Acción coreografiada épica con poderes únicos.",
+    visualEN: "modern dark fantasy anime, hunter aesthetic, dungeon atmosphere, dramatic blue and purple lighting, glowing magic effects, detailed armor and weapons, A-1 Pictures style animation, sharp angular character design, intense action poses, cinematic depth, gritty atmospheric backgrounds",
+    negativeEN: "soft pastels, romantic vibes, slice of life",
+    paletteDefault: "dark_dramatic"
+  },
+  jjk: {
+    name: "Jujutsu Kaisen",
+    narrative: "Sobrenatural moderno. Maldiciones, técnicas hechiceras, energia maldita. Escolar oculto mezclado con horrores cósmicos. Acción visceral con técnicas únicas. Personajes carismáticos, humor negro con tragedia brutal. Domain expansions, peleas creativas.",
+    visualEN: "Jujutsu Kaisen anime style, MAPPA studio aesthetic, dynamic fight scenes, dark supernatural horror, cursed energy as black and red wisps, modern urban Japan with eerie undertones, sharp shadows, intense facial expressions, fluid action animation",
+    negativeEN: "cute kawaii, bright cheerful palette",
+    paletteDefault: "dark_dramatic"
+  },
+  mushoku: {
+    name: "Mushoku Tensei",
+    narrative: "Isekai literario profundo. Reencarnación con consciencia adulta. Mundo de fantasía medieval detallado. Crecimiento real del personaje a lo largo de años. Sistema mágico definido. Drama familiar, romance maduro, aventuras épicas con consecuencias reales.",
+    visualEN: "Mushoku Tensei anime style, Studio Bind aesthetic, fantasy medieval world, magical realism, detailed European-inspired villages and forests, soft natural lighting with painterly backgrounds, warm earthy tones, magic spells with elemental effects, expressive character animation",
+    negativeEN: "cyberpunk, modern tech, neon",
+    paletteDefault: "fantasy"
+  },
+  slime: {
+    name: "Tensei Slime",
+    narrative: "Isekai de construcción de imperio. Protagonista poderoso pero pacifista. Política entre razas (demonios, elfos, humanos). Subir nivel, evolucionar, construir nación. Tono optimista con momentos serios. Cast amplio diverso.",
+    visualEN: "Tensei Slime anime style, vibrant fantasy world, detailed monster designs, magical effects, kingdom-building landscapes, friendly but epic atmosphere, bright color palette with magic glow, fantasy creatures and beasts",
+    negativeEN: "dark horror, grimdark, realistic gore",
+    paletteDefault: "fantasy"
+  },
+  isekai: {
+    name: "Isekai Genérico",
+    narrative: "Otro mundo de fantasía con sistema RPG (stats, niveles, clases, skills). Aventureros, gremios, mazmorras, monstruos. Magia y espadas. Protagonista usualmente OP o con habilidad única. Tropes: party, dragones, demonios, status windows.",
+    visualEN: "isekai fantasy anime style, RPG world aesthetic, medieval fantasy with magic, adventurer guild atmosphere, status window HUD overlays, magical creatures, detailed fantasy armor and weapons, vibrant magical effects",
+    negativeEN: "modern day real world settings",
+    paletteDefault: "fantasy"
+  },
+  aot: {
+    name: "Attack on Titan",
+    narrative: "Drama militar brutal. Mundo en colapso, amenaza existencial. Personajes con honor sangriento. Politica, traición, sacrificio. Muertes constantes devastadoras. Misterio profundo del mundo. Acción aérea con ODM gear.",
+    visualEN: "Attack on Titan anime style, Wit Studio and MAPPA aesthetic, post-apocalyptic walled city, military uniforms with ODM gear, gritty grim atmosphere, muted desaturated palette, intense action with vertical movement, brutal realistic violence undertones",
+    negativeEN: "bright colors, cute, comedy",
+    paletteDefault: "dark_dramatic"
+  },
+  demon_slayer: {
+    name: "Demon Slayer",
+    narrative: "Cazadores de demonios en Japón Taishō. Espadas con respiraciones elementales. Familia, sacrificio, demonios con backstory trágica. Acción acuarela hermosa. Tradición japonesa con horror sobrenatural.",
+    visualEN: "Demon Slayer anime style, ufotable aesthetic, Taisho era Japan, traditional kimono designs, watercolor-like fight effects, breathing technique visual effects with water fire and lightning swirls, beautiful nature backgrounds, dramatic lighting contrasts",
+    negativeEN: "modern tech, cyberpunk, western settings",
+    paletteDefault: "vivid_action"
+  },
+  chainsaw: {
+    name: "Chainsaw Man",
+    narrative: "Brutal y caótico. Demonios contratistas, devil hunters. Sangre, sexo, miedo existencial mezclados con comedia negra. Personajes traumatizados crudos. Tono nihilista pero humano. Acción visceral grotesca.",
+    visualEN: "Chainsaw Man anime style, MAPPA aesthetic, gritty urban Japan, devil designs grotesque and creative, blood and chaos, sharp dramatic shadows, dark humor undertones, cinematic shot composition like film, raw realistic character expressions",
+    negativeEN: "cute, clean, bright cheerful",
+    paletteDefault: "dark_dramatic"
+  },
+  shinkai: {
+    name: "Makoto Shinkai",
+    narrative: "Romance sobrenatural íntimo. Cielos hermosos cargados de simbolismo. Distancia emocional y fisica. Tiempo, memoria, pérdida. Diálogos con subtext. Belleza melancólica de lo cotidiano. Eventos cósmicos contra historias de amor.",
+    visualEN: "Makoto Shinkai cinematic anime style like Your Name and Weathering With You, hyper-detailed painterly backgrounds, soft natural lighting at golden or blue hour, soft pastel emotional palette, realistic human proportions, subtle film grain, cinematic depth of field, dramatic skies with clouds",
+    negativeEN: "action heavy, grimdark, grotesque",
+    paletteDefault: "twilight"
+  },
+  ghibli: {
+    name: "Studio Ghibli",
+    narrative: "Mundos fantásticos con corazón. Protagonistas jóvenes en aventuras transformadoras. Naturaleza viva, espíritus, magia sutil. Sin villanos puros. Slow burn emocional, momentos contemplativos.",
+    visualEN: "Studio Ghibli anime style like Miyazaki films Spirited Away and Princess Mononoke, hand-painted backgrounds with rich nature, soft watercolor textures, expressive character designs, magical realism, lush forests and detailed environments, warm nostalgic color palette",
+    negativeEN: "grim violence, cyberpunk, modern tech-heavy",
+    paletteDefault: "fantasy"
+  },
+  cyberpunk: {
+    name: "Cyberpunk Edgerunners",
+    narrative: "Futuro distópico neon. Mercenarios, corporaciones, cyber implants. Vida corta y violenta. Personajes traumatizados, romance fugaz, tragedia inevitable. Acción brutal con tech avanzada. Critica al capitalismo.",
+    visualEN: "Cyberpunk Edgerunners anime style, Studio Trigger aesthetic, neon-soaked Night City, cybernetic implants visible, vibrant magenta cyan purple lighting, dystopian future architecture, glitch effects, intense violence undertones, expressive Trigger character animation",
+    negativeEN: "medieval fantasy, nature scenes, peaceful rural",
+    paletteDefault: "neon"
+  },
+  custom: {
+    name: "Mixto / Personalizado",
+    narrative: "Estilo libre. Combina elementos de múltiples animes según el concepto. El sistema decide la mejor mezcla.",
+    visualEN: "high quality anime style, cinematic composition, detailed background art, expressive character design, dynamic lighting based on scene mood, professional anime production quality",
+    negativeEN: "3D render, photorealistic",
+    paletteDefault: "vivid_action"
+  }
+};
+
+const PALETTE_DESCRIPTIONS = {
+  dark_dramatic: "deep blacks and shadows, dramatic blue and purple accents, intense contrast, cinematic darkness",
+  vivid_action: "vibrant saturated colors, dynamic warm vs cool contrasts, energetic palette",
+  twilight: "golden hour orange and pink skies, soft amber lighting, romantic sunset palette",
+  dawn: "soft pink and lavender dawn light, gentle pastel hues, hopeful morning atmosphere",
+  rural: "warm summer greens and yellows, soft natural daylight, nostalgic countryside palette",
+  urban: "deep blues of Tokyo nights, scattered warm street lights, urban melancholy",
+  fantasy: "rich magical greens and golds, ethereal glowing magic effects, fantasy storybook palette",
+  storm: "stormy grays and deep blues, rain-soaked atmosphere, dramatic weather",
+  snow: "cold whites and pale blues, soft winter light, crystalline atmosphere",
+  dungeon: "shadowy dungeon torchlight, deep oranges against blacks, oppressive underground",
+  neon: "electric cyan magenta and purple neon, urban night with glowing signs, cyberpunk palette"
+};
+
+const SYSTEM_BASE = `Eres el motor narrativo del ANIME AI STUDIO. Generas anime de alta calidad adaptándote al estilo específico solicitado (Solo Leveling, JJK, Mushoku Tensei, Demon Slayer, Shinkai, etc).
+
+REGLAS UNIVERSALES:
 - Calidad literaria alta en español
-- Personajes con psicología real, NO arquetipos
-- Diálogos con subtext — nunca dicen lo que sienten directamente
-- Estética: iluminación natural, paletas suaves, hora dorada/azul, cielos detallados
-- Proporciones humanas realistas, NO ojos enormes ni hipersexualización
-- NO fluorescentes ni neón excesivo
-- NO estética genérica de IA
-- Cada escena cambia algo emocionalmente
-- Imágenes finales son 16:9 cinematográficas
+- Personajes con psicología real y motivaciones claras
+- Diálogos auténticos al género (épicos en shounen, íntimos en drama)
+- Stakes y consecuencias reales
+- Cada escena debe avanzar trama o desarrollar personaje
+- Imágenes 16:9 cinematográficas
+
+ADAPTACIÓN POR ESTILO:
+- Power fantasy (Solo Leveling, Slime): acción épica, sistemas de poder, evolución
+- Shounen brutal (JJK, Chainsaw, AOT): acción visceral, drama oscuro, muertes con peso
+- Isekai (Mushoku, Slime): worldbuilding profundo, sistema mágico claro
+- Drama Shinkai/Ghibli: simbolismo, subtext, belleza melancólica
+- Cazadores (Demon Slayer): técnicas únicas, tradición + sobrenatural
+
 FORMATO: Cuando se pida JSON, responde SOLO JSON válido sin texto extra.`;
 
 async function generateWorld() {
@@ -1027,17 +1186,26 @@ async function generateWorld() {
   const tone = $('world-tone').value;
   const tech = $('world-tech').value;
   const concept = $('world-concept').value.trim();
-  const palette = document.querySelector('#palette-tags .tag-btn.selected')?.dataset.pal || 'twilight';
+  const styleKey = document.querySelector('#style-tags .tag-btn.selected')?.dataset.style || 'solo_leveling';
+  const palette = $('world-palette')?.value || ANIME_STYLES[styleKey]?.paletteDefault || 'dark_dramatic';
+  const style = ANIME_STYLES[styleKey];
   $('world-loading').style.display = '';
   $('world-output').innerHTML = '';
   
-  const prompt = `Genera UNIVERSO NARRATIVO COMPLETO para anime cinematográfico Makoto Shinkai.
+  const prompt = `Genera UNIVERSO NARRATIVO COMPLETO para anime estilo ${style.name}.
+
+ESTILO NARRATIVO DE REFERENCIA:
+${style.narrative}
+
+DETALLES DEL UNIVERSO:
 TÍTULO: ${title}
 GÉNERO: ${genre}
 TONO: ${tone}
-ERA: ${tech}
-CONCEPTO: ${concept || 'libre creación'}
-PALETA: ${palette}
+MUNDO: ${tech}
+CONCEPTO BASE: ${concept || 'libre creación basada en el estilo elegido'}
+PALETA VISUAL: ${PALETTE_DESCRIPTIONS[palette] || palette}
+
+El universo debe sentirse auténtico al estilo ${style.name}, NO genérico.
 
 JSON exacto:
 \`\`\`json
@@ -1054,14 +1222,14 @@ JSON exacto:
   "visualIdentity": {"palette": "descripción poética", "lighting": "luz característica", "atmospheres": ["3 elementos"], "dominantTimeOfDay": "cuándo ocurre"},
   "musicIdentity": "Estilo musical del anime para Lyria (instrumentos, ritmo, género)",
   "narrativePotential": ["3 tipos de historias posibles"],
-  "visualPromptBase": "Tokens visuales EN INGLÉS: estilo Makoto Shinkai, paleta, iluminación, atmosphere keywords"
+  "visualPromptBase": "Tokens visuales EN INGLÉS específicos de este universo (locaciones únicas, atmósfera del mundo, props característicos, weather/lighting típico). NO incluyas estilo de anime general — eso se añade automáticamente según el estilo elegido."
 }
 \`\`\`
 Mínimo 4 locaciones. Sé profundo y específico.`;
 
   try {
     const result = await callClaudeJSON(SYSTEM_BASE, prompt);
-    STATE.currentProject.world = { ...result, title: result.title, genre, tone, tech, concept, palette, content: formatWorldText(result) };
+    STATE.currentProject.world = { ...result, title: result.title, genre, tone, tech, concept, palette, styleKey, styleName: style.name, styleNarrative: style.narrative, styleVisualEN: style.visualEN, styleNegativeEN: style.negativeEN, content: formatWorldText(result) };
     STATE.currentProject.name = result.title;
     saveCurrentProject();
     refreshUI();
@@ -1165,7 +1333,7 @@ JSON:
   "biggestFailure": "Mayor fracaso",
   "deepestJoy": "Lo que atesora",
   "characterArc": {"startState": "Quién es al inicio", "breakingPoint": "Qué presión colapsa", "transformation": "En quién se convierte"},
-  "imagePrompt": "Prompt EN INGLÉS 16:9 estilo Shinkai. Incluir: ${w.visualPromptBase || 'cinematic anime, Makoto Shinkai'}, medium shot, iluminación natural, paleta suave, fondo blurred, proporciones realistas, NO big anime eyes",
+  "imagePrompt": "Prompt EN INGLÉS describiendo SOLO al personaje en 16:9: vestimenta única, pose, expresión, contexto/fondo apropiado al universo. El estilo visual se añade automáticamente. Medium shot. Ejemplo para hunter: 'young female hunter in dark hooded coat with glowing magic dagger, determined expression, standing at dungeon entrance, dramatic backlight from blue magic portal'",
   "voiceProfile": "Descripción de voz: tono, ritmo, calidad"
 }
 \`\`\``;
@@ -1191,17 +1359,24 @@ async function generateCharacterImage(charId) {
   char._loadingImage = true;
   renderCharacters();
   try {
+    const w = STATE.currentProject.world;
+    const styleVisual = w.styleVisualEN || "high quality anime cinematic style";
+    const styleNeg = w.styleNegativeEN || "";
+    const paletteDesc = PALETTE_DESCRIPTIONS[w.palette] || "balanced cinematic palette";
     const fullPrompt = `${char.imagePrompt}
-STYLE LOCKS:
-- Makoto Shinkai cinematic anime (Your Name, Weathering With You)
-- 16:9 cinematic widescreen
-- Soft natural lighting, golden hour or blue hour
-- Realistic human proportions — NO oversized eyes
-- Painterly background, hyper-detailed
-- Soft pastel palette, NO fluorescent, NO neon
-- Medium shot portrait
-- Subtle film grain, depth of field
-NEGATIVE: oversaturated, fluorescent, neon, big anime eyes, hypersexualized, generic AI illustration, 3D render, photorealistic human, distorted proportions, blurry`;
+
+STYLE: ${styleVisual}
+PALETTE: ${paletteDesc}
+WORLD CONTEXT: ${w.visualPromptBase || ''}
+
+UNIVERSAL RULES:
+- 16:9 cinematic widescreen aspect ratio
+- Medium shot character portrait
+- Realistic human proportions, NOT oversized anime eyes
+- High quality professional anime production
+- Detailed background appropriate to the character context
+
+NEGATIVE: ${styleNeg}, hypersexualized, generic AI illustration, 3D render, photorealistic human face, distorted proportions, blurry, malformed hands, extra limbs`;
     const imgData = await generateImage(fullPrompt);
     char.imageData = imgData;
     delete char._loadingImage;
@@ -1296,16 +1471,21 @@ async function generateEpisode() {
   const prevEps = (STATE.currentProject.episodes || []).map(e => `Ep${e.number}:${e.title}`).join(', ');
 
   // COMPACT prompt — 15 scenes to avoid token overflow
-  const prompt = `Anime "${w.title}". Genera episodio ${epNumber} con EXACTAMENTE 15 escenas.
-Género: ${w.genre||''}. Tono: ${w.tone||''}. Conflicto: ${(w.centralConflict||'').slice(0,120)}
+  const styleName = w.styleName || 'Solo Leveling';
+  const styleNarrative = w.styleNarrative || '';
+  const prompt = `Anime "${w.title}" — Estilo: ${styleName}.
+ESTILO NARRATIVO: ${styleNarrative}
+
+Genera episodio ${epNumber} con EXACTAMENTE 15 escenas auténticas al estilo ${styleName}.
+Género: ${w.genre||''}. Tono: ${w.tone||''}. Conflicto: ${(w.centralConflict||'').slice(0,150)}
 Personajes: ${chars}
 ${prevEps ? 'Previos: ' + prevEps : 'Primer episodio'}
-Función: ${func}. Promesa: ${emotion||'impacto emocional'}. Extra: ${context||'ninguno'}
+Función: ${func}. Promesa emocional: ${emotion||'impacto'}. Extra: ${context||'ninguno'}
 
 Responde ÚNICAMENTE con este JSON (sin texto antes ni después):
-{"number":${epNumber},"title":"titulo poetico","summary":"2 lineas","emotionalPromise":"emocion final","scenes":[{"sceneNumber":1,"act":"cold_open","title":"titulo","location":"lugar","timeOfDay":"hora","characters":["nombre"],"summary":"que pasa en 1 linea","narration":"monólogo interno 1-2 frases o vacio","dialogue":[{"character":"nombre","line":"texto"}],"kenBurnsDirection":"zoom_in_slow","musicCue":"piano suave melancolico","soundFXCue":"lluvia","imagePromptEN":"cinematic anime Shinkai 16:9, [describe escena en ingles], soft natural lighting, painterly background, realistic proportions, NO neon NO big eyes"}]}
+{"number":${epNumber},"title":"titulo apropiado al estilo","summary":"2 lineas","emotionalPromise":"emocion final","scenes":[{"sceneNumber":1,"act":"cold_open","title":"titulo","location":"lugar","timeOfDay":"hora","characters":["nombre"],"summary":"que pasa en 1 linea","narration":"monólogo 1-2 frases o vacio","dialogue":[{"character":"nombre","line":"diálogo auténtico al estilo"}],"kenBurnsDirection":"zoom_in_slow","musicCue":"música apropiada al estilo (épica/melancólica/tensa)","soundFXCue":"efecto ambiental","imagePromptEN":"DESCRIBIR ESCENA EN INGLÉS: qué pasa visualmente, posiciones, acción, expresiones, encuadre. NO incluir estilo general. Ejemplo: 'female warrior facing massive demon in dungeon, glowing dagger raised, fierce determined expression, dramatic backlight'"}]}
 
-IMPORTANTE: 15 escenas exactas. Acts: cold_open(2), act1(4), act2(4), climax(3), resolution(1), post_credits(1). kenBurns: zoom_in_slow/zoom_out_slow/pan_left/pan_right/static`;
+IMPORTANTE: 15 escenas exactas. Distribución acts: cold_open(2), act1(4), act2(4), climax(3), resolution(1), post_credits(1). kenBurns: zoom_in_slow/zoom_out_slow/pan_left/pan_right/pan_up/pan_down/static`;
 
   try {
     toast('Generando estructura del episodio (1/2)...', 'info');
@@ -1480,22 +1660,27 @@ async function generateSceneImage(sceneId) {
   try {
     const charsInScene = STATE.currentProject.characters.filter(c => sceneCharNames.includes(c.name));
     const charDescriptions = charsInScene.map(c => `${c.name}: ${c.physicalDescription}. Hair: ${c.hairDescription}. Clothing: ${c.clothing}.`).join('\n');
+    const styleVisual = w.styleVisualEN || "high quality cinematic anime";
+    const styleNeg = w.styleNegativeEN || "";
+    const paletteDesc = PALETTE_DESCRIPTIONS[w.palette] || "";
     const fullPrompt = `${scene.imagePromptEN}
-CHARACTERS (maintain exact appearance):
+
+CHARACTERS IN SCENE (maintain exact appearance):
 ${charDescriptions}
-WORLD IDENTITY:
+
+WORLD CONTEXT:
 ${w.visualPromptBase || ''}
-Palette: ${w.visualIdentity?.palette || ''}
-Lighting: ${w.visualIdentity?.lighting || ''}
-STYLE LOCKS:
-- Makoto Shinkai cinematic anime
-- 16:9 widescreen cinematic
-- Soft natural lighting, golden or blue hour
-- Painterly hyper-detailed background
-- Soft pastel emotional palette
+Palette mood: ${paletteDesc}
+
+STYLE: ${styleVisual}
+
+UNIVERSAL RULES:
+- 16:9 cinematic widescreen
+- Composition appropriate to scene mood
 - Realistic human proportions
-- Subtle film grain, depth of field
-NEGATIVE: NO fluorescent, NO neon, NO oversaturation, NO generic AI illustration, NO 3D render, NO big anime eyes, NO hypersexualization, NO distorted proportions`;
+- High quality professional anime production
+
+NEGATIVE: ${styleNeg}, generic AI illustration, 3D render, photorealistic human, distorted proportions, blurry, malformed`;
     let imgData = refs.length > 0 ? await generateImage(fullPrompt, refs) : await generateImage(fullPrompt);
     scene.imageData = imgData;
     delete scene._loading;
