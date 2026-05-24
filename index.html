@@ -567,18 +567,76 @@ const STORAGE_KEY = 'anime_studio_v4';
 
 function loadFromStorage() {
   try {
-    const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    if (data.apis) STATE.apis = data.apis;
-    if (data.projects) STATE.projects = data.projects;
-    if (data.currentProject) STATE.currentProject = data.currentProject;
+    const apis = JSON.parse(localStorage.getItem(STORAGE_KEY + '_apis') || '{}');
+    if (apis && Object.keys(apis).length) STATE.apis = apis;
+    const meta = JSON.parse(localStorage.getItem(STORAGE_KEY + '_meta') || '{}');
+    if (meta.projects) STATE.projects = meta.projects;
+    if (meta.currentProject) STATE.currentProject = meta.currentProject;
+    // Restore media from sessionStorage
+    try {
+      const mediaStore = JSON.parse(sessionStorage.getItem(STORAGE_KEY + '_media') || '{}');
+      const restoreMedia = (p) => {
+        if (!p) return p;
+        for (const c of (p.characters || [])) {
+          if (c.imageData === '[SAVED]') c.imageData = mediaStore[`char_${c.id}`] || null;
+        }
+        for (const s of (p.scenes || [])) {
+          if (s.imageData === '[SAVED]') s.imageData = mediaStore[`scene_img_${s.id}`] || null;
+          if (s.narrationAudio === '[SAVED]') s.narrationAudio = mediaStore[`scene_nar_${s.id}`] || null;
+          if (s.dialogueAudio === '[SAVED]') s.dialogueAudio = mediaStore[`scene_dia_${s.id}`] || null;
+          if (s.musicAudio === '[SAVED]') s.musicAudio = mediaStore[`scene_mus_${s.id}`] || null;
+        }
+        return p;
+      };
+      STATE.projects = STATE.projects.map(restoreMedia);
+      STATE.currentProject = restoreMedia(STATE.currentProject);
+    } catch(se) { /* no session media */ }
   } catch(e) { console.error(e); }
   updateAPIStatus();
   refreshUI();
 }
 
 function saveToStorage() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ apis: STATE.apis, projects: STATE.projects, currentProject: STATE.currentProject })); }
-  catch(e) { console.error(e); toast('Proyecto muy grande. Exporta como ZIP regularmente.', 'error'); }
+  try {
+    // Save APIs separately (small)
+    localStorage.setItem(STORAGE_KEY + '_apis', JSON.stringify(STATE.apis));
+    // Save project metadata without imageData/audioData (to avoid quota)
+    const lightProjects = STATE.projects.map(p => stripMediaFromProject(p));
+    const lightCurrent = STATE.currentProject ? stripMediaFromProject(STATE.currentProject) : null;
+    localStorage.setItem(STORAGE_KEY + '_meta', JSON.stringify({ projects: lightProjects, currentProject: lightCurrent }));
+    // Save media in sessionStorage (survives reload, cleared on tab close)
+    try {
+      const mediaStore = {};
+      for (const p of STATE.projects) {
+        for (const c of (p.characters || [])) { if (c.imageData) mediaStore[`char_${c.id}`] = c.imageData; }
+        for (const s of (p.scenes || [])) {
+          if (s.imageData) mediaStore[`scene_img_${s.id}`] = s.imageData;
+          if (s.narrationAudio) mediaStore[`scene_nar_${s.id}`] = s.narrationAudio;
+          if (s.dialogueAudio) mediaStore[`scene_dia_${s.id}`] = s.dialogueAudio;
+          if (s.musicAudio) mediaStore[`scene_mus_${s.id}`] = s.musicAudio;
+        }
+      }
+      sessionStorage.setItem(STORAGE_KEY + '_media', JSON.stringify(mediaStore));
+    } catch(se) { /* sessionStorage full — media won't survive reload */ }
+  } catch(e) {
+    console.error(e);
+    toast('Error guardando. Exporta ZIP para no perder progreso.', 'error');
+  }
+}
+
+function stripMediaFromProject(p) {
+  return {
+    ...p,
+    characters: (p.characters || []).map(c => ({ ...c, imageData: c.imageData ? '[SAVED]' : null })),
+    scenes: (p.scenes || []).map(s => ({
+      ...s,
+      imageData: s.imageData ? '[SAVED]' : null,
+      narrationAudio: s.narrationAudio ? '[SAVED]' : null,
+      dialogueAudio: s.dialogueAudio ? '[SAVED]' : null,
+      musicAudio: s.musicAudio ? '[SAVED]' : null,
+      soundFXAudio: s.soundFXAudio ? '[SAVED]' : null,
+    }))
+  };
 }
 
 function $(id) { return document.getElementById(id); }
@@ -681,15 +739,37 @@ async function generateImage(prompt, referenceImagesB64 = []) {
       parts.push({ inlineData: { mimeType, data } });
     }
   }
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${STATE.apis.banana}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts }] }) });
-  if (!response.ok) { const err = await response.text(); throw new Error(`Gemini Image: ${response.status} — ${err.slice(0, 200)}`); }
-  const data = await response.json();
-  const respParts = data.candidates?.[0]?.content?.parts || [];
-  for (const part of respParts) {
-    if (part.inlineData?.data) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+  const doRequest = async () => {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${STATE.apis.banana}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } }) });
+    if (response.status === 503 || response.status === 429) {
+      const err = await response.text();
+      throw new Error(`RETRY:${response.status}`);
+    }
+    if (!response.ok) { const err = await response.text(); throw new Error(`Gemini Image: ${response.status} — ${err.slice(0, 200)}`); }
+    return response.json();
+  };
+  // Retry up to 3 times on 503/429
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      if (attempt > 0) {
+        toast(`Gemini ocupado, reintento ${attempt}/2...`, 'info');
+        await new Promise(r => setTimeout(r, 4000 * attempt));
+      }
+      const data = await doRequest();
+      const respParts = data.candidates?.[0]?.content?.parts || [];
+      for (const part of respParts) {
+        if (part.inlineData?.data) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+      }
+      throw new Error('Gemini no devolvió imagen en la respuesta');
+    } catch(e) {
+      lastErr = e;
+      if (!e.message.startsWith('RETRY:')) throw e;
+    }
   }
-  throw new Error('Gemini no devolvió imagen');
+  throw new Error('Gemini no disponible después de 3 intentos. Intenta en unos minutos.');
 }
 
 async function generateMusic(prompt, longForm = true) {
@@ -1210,73 +1290,22 @@ async function generateEpisode() {
   const emotion = $('ep-emotion').value.trim();
   const context = $('ep-context').value.trim();
   closeModal('modal-new-ep');
-  toast('Generando episodio ' + epNumber + ' con 30 escenas...', 'info');
-  
+
   const w = STATE.currentProject.world;
-  const chars = STATE.currentProject.characters.map(c => `- ${c.name} (${c.role}): ${c.psychology?.coreWound || ''}`).join('\n');
-  const prevEps = (STATE.currentProject.episodes || []).map(e => `Ep${e.number}: ${e.title} — ${e.summary}`).join('\n');
-  
-  const prompt = `Genera EPISODIO ${epNumber} de "${w.title}". DURACIÓN: 10 min (~30 escenas).
-UNIVERSO:
-${w.concept}
-Estado: ${w.currentState}
-Conflicto: ${w.centralConflict}
+  const chars = STATE.currentProject.characters.map(c => `${c.name}(${c.role})`).join(', ');
+  const prevEps = (STATE.currentProject.episodes || []).map(e => `Ep${e.number}:${e.title}`).join(', ');
 
-PERSONAJES:
-${chars}
+  // COMPACT prompt — 15 scenes to avoid token overflow
+  const prompt = `Anime "${w.title}". Genera episodio ${epNumber} con EXACTAMENTE 15 escenas.
+Género: ${w.genre||''}. Tono: ${w.tone||''}. Conflicto: ${(w.centralConflict||'').slice(0,120)}
+Personajes: ${chars}
+${prevEps ? 'Previos: ' + prevEps : 'Primer episodio'}
+Función: ${func}. Promesa: ${emotion||'impacto emocional'}. Extra: ${context||'ninguno'}
 
-EPISODIOS PREVIOS:
-${prevEps || 'Primero'}
+Responde ÚNICAMENTE con este JSON (sin texto antes ni después):
+{"number":${epNumber},"title":"titulo poetico","summary":"2 lineas","emotionalPromise":"emocion final","scenes":[{"sceneNumber":1,"act":"cold_open","title":"titulo","location":"lugar","timeOfDay":"hora","characters":["nombre"],"summary":"que pasa en 1 linea","narration":"monólogo interno 1-2 frases o vacio","dialogue":[{"character":"nombre","line":"texto"}],"kenBurnsDirection":"zoom_in_slow","musicCue":"piano suave melancolico","soundFXCue":"lluvia","imagePromptEN":"cinematic anime Shinkai 16:9, [describe escena en ingles], soft natural lighting, painterly background, realistic proportions, NO neon NO big eyes"}]}
 
-PARÁMETROS:
-- Episodio: ${epNumber}
-- Función: ${func}
-- Promesa: ${emotion || 'definir'}
-- Contexto: ${context || 'libre'}
-
-DISTRIBUCIÓN DE 30 ESCENAS (~20s cada una):
-- Cold Open: 2
-- Acto 1: 7
-- Acto 2: 10
-- Clímax: 8
-- Desenlace: 2
-- Post-créditos: 1
-
-JSON:
-\`\`\`json
-{
-  "number": ${epNumber},
-  "title": "Título poético",
-  "duration": 10,
-  "function": "${func}",
-  "summary": "Resumen 2-3 líneas",
-  "emotionalPromise": "Qué siente al terminar",
-  "scenes": [
-    {
-      "sceneNumber": 1,
-      "act": "cold_open / act1 / act2 / climax / resolution / post_credits",
-      "type": "tipo",
-      "title": "Título corto",
-      "duration": 20,
-      "location": "Locación del universo",
-      "timeOfDay": "Momento con luz",
-      "characters": ["nombres"],
-      "summary": "Qué pasa",
-      "narration": "Narración o monólogo interno EN ESPAÑOL (1-3 oraciones que se generan como voz). Si es silencio puro, string vacío.",
-      "emotionalArc": "Emoción apertura → pico → cierre",
-      "dialogue": [{"character": "Nombre", "line": "diálogo español", "subtext": "lo que significa"}],
-      "kenBurnsDirection": "zoom_in_slow / zoom_out_slow / pan_left / pan_right / pan_up / pan_down / static",
-      "musicCue": "Descripción música (instrumental, ritmo, emoción)",
-      "soundFXCue": "Efecto sonoro ambiental (lluvia / viento / tren / etc)",
-      "visualDescription": "Descripción cinematográfica",
-      "imagePromptEN": "Prompt EN INGLÉS 16:9 Shinkai. Shot type, subject, action, environment, specific lighting, palette, atmosphere, cinematic style. NO fluorescent, NO neon, NO oversaturation, NO big anime eyes"
-    }
-  ],
-  "openThreads": ["hilos abiertos"],
-  "closedThreads": ["hilos cerrados"]
-}
-\`\`\`
-EXACTAMENTE 30 escenas.`;
+IMPORTANTE: 15 escenas exactas. Acts: cold_open(2), act1(4), act2(4), climax(3), resolution(1), post_credits(1). kenBurns: zoom_in_slow/zoom_out_slow/pan_left/pan_right/static`;
 
   try {
     toast('Generando estructura del episodio (1/2)...', 'info');
@@ -1671,127 +1700,74 @@ async function testVoice(charId) {
 
 // AUTO-ASSIGN VOICES using Claude to match characters to available voices
 async function autoAssignVoices() {
-  if (!STATE.apis.claude) { toast('Configura Claude', 'error'); return; }
   if (!STATE.apis.eleven) { toast('Configura ElevenLabs', 'error'); return; }
   const p = STATE.currentProject;
   if (!p || !p.characters || p.characters.length === 0) { toast('No hay personajes', 'error'); return; }
-  if (!cachedVoices) {
-    try { cachedVoices = await listVoices(); } catch(e) { toast('Error voces: ' + e.message, 'error'); return; }
-  }
-  if (!confirm(`Asignar voces automáticamente a ${p.characters.length} personajes + narrador? Claude analizará el perfil de cada uno y elegirá la mejor voz de tu biblioteca. Si no hay match suficiente, creará voces nuevas con Voice Design (costo adicional ~$0.10 por voz creada).`)) return;
   
-  toast('Analizando voces disponibles...', 'info');
+  const total = p.characters.length + 1; // +1 narrator
+  if (!confirm(`Crear ${total} voces únicas con Voice Design de ElevenLabs (una por personaje + narrador). Costo ~$${(total * 0.10).toFixed(2)}. ¿Continuar?`)) return;
   
-  // Build voices catalog for Claude
-  const voicesCatalog = cachedVoices.map(v => ({
-    id: v.voice_id,
-    name: v.name,
-    gender: v.labels?.gender || 'unknown',
-    age: v.labels?.age || 'unknown',
-    accent: v.labels?.accent || 'unknown',
-    description: v.labels?.description || v.description || ''
-  }));
-  
-  // Build characters profile
-  const charProfiles = p.characters.map(c => ({
-    id: c.id,
-    name: c.name,
-    role: c.role,
-    age: c.age,
-    gender: c.gender || 'unknown',
-    voiceProfile: c.voiceProfile || '',
-    psychology: c.psychology?.coreWound || '',
-    speechPattern: c.behavior?.speechPattern || ''
-  }));
-  
-  // Limit voices to first 30 to avoid token overflow
-  const voicesSample = voicesCatalog.slice(0, 30);
-  const matchPrompt = `Asigna voces de ElevenLabs a personajes de anime.
+  STATE.currentProject.voiceAssignments = STATE.currentProject.voiceAssignments || {};
+  let created = 0, failed = 0;
 
-VOCES (id|nombre|genero|edad):
-${voicesSample.map(v => `${v.id}|${v.name}|${v.gender}|${v.age}`).join('\n')}
-
-PERSONAJES:
-${charProfiles.map(c => `${c.id}|${c.name}|${c.role}|${c.age}|${c.gender}|${c.voiceProfile}`).join('\n')}
-
-Reglas:
-- Asigna la voz más compatible por género y perfil
-- Si no hay buena coincidencia de género, marca needs_design:true
-- needs_design debe ser false por defecto (prefiere asignar existentes)
-- INCLUYE al narrador con characterId="_narrator"
-
-Responde ÚNICAMENTE con este JSON exacto sin texto adicional:
-{"assignments":[{"characterId":"ID_AQUI","characterName":"NOMBRE","voiceId":"VOICE_ID_O_NULL","needs_design":false,"design_description":""}]}`;
-
-  try {
-    let rawVoiceText, voiceResult;
+  // Create voice for each character
+  for (const char of p.characters) {
+    toast(`Creando voz para ${char.name}...`, 'info');
+    
+    // Build precise voice description from character data
+    const genderWord = (char.gender === 'Femenino' || char.gender === 'female') ? 'female' : 
+                       (char.gender === 'Masculino' || char.gender === 'male') ? 'male' : 'neutral';
+    const ageNum = typeof char.age === 'number' ? char.age : parseInt(char.age) || 17;
+    const ageGroup = ageNum < 18 ? 'teenage' : ageNum < 25 ? 'young adult' : ageNum < 40 ? 'adult' : 'mature';
+    
+    const voiceDesc = [
+      `${ageGroup} ${genderWord} voice`,
+      char.voiceProfile || '',
+      char.psychology?.mask ? `personality: ${char.psychology.mask}` : '',
+      char.behavior?.speechPattern ? char.behavior.speechPattern : '',
+      'Japanese anime character style',
+      genderWord === 'female' ? 'soft, expressive, emotional range' : 'clear, resonant, expressive',
+      'Spanish language, slight introspective quality'
+    ].filter(Boolean).join(', ');
+    
+    const sampleLine = (char.dialogue?.[0]?.line) || 
+                       `Soy ${char.name}. ${char.psychology?.consciousDesire || 'Busco lo que perdí.'}`;
+    
     try {
-      rawVoiceText = await callClaude(SYSTEM_BASE, matchPrompt, 4000);
-      // Try multiple extraction strategies
-      const jsonMatch = rawVoiceText.match(/```json\s*([\s\S]*?)\s*```/) ||
-                        rawVoiceText.match(/```\s*([\s\S]*?)\s*```/) ||
-                        rawVoiceText.match(/(\{[\s\S]*\})/);
-      if (!jsonMatch) throw new Error('Sin JSON en respuesta de voces');
-      const jsonStr = (jsonMatch[1] || jsonMatch[0]).replace(/,\s*}/g,'}').replace(/,\s*]/g,']');
-      voiceResult = JSON.parse(jsonStr);
-    } catch(parseErr) {
-      toast('Error parseando voces: ' + parseErr.message + '. Asignando manualmente...', 'error');
-      console.error('Voice parse error:', parseErr, 'Raw:', rawVoiceText);
-      // Fallback: assign first available voice to each character
-      STATE.currentProject.voiceAssignments = STATE.currentProject.voiceAssignments || {};
-      if (cachedVoices.length > 0) {
-        p.characters.forEach((c, i) => {
-          STATE.currentProject.voiceAssignments[c.id] = cachedVoices[i % cachedVoices.length].voice_id;
-        });
-        STATE.currentProject.voiceAssignments['_narrator'] = cachedVoices[0].voice_id;
-        saveCurrentProject();
-        renderVoicesPanel();
-        toast('Voces asignadas (modo fallback) — ajusta manualmente si quieres');
-      }
-      return;
+      const voiceId = await designVoice(voiceDesc, sampleLine.slice(0, 100), char.name);
+      STATE.currentProject.voiceAssignments[char.id] = voiceId;
+      char.voiceId = voiceId;
+      created++;
+      toast(`✓ Voz creada: ${char.name}`, 'info');
+      await new Promise(r => setTimeout(r, 2000)); // Rate limit pause
+    } catch(e) {
+      console.error(`Voice Design error for ${char.name}:`, e);
+      toast(`⚠ Error voz ${char.name}: ${e.message.slice(0,60)}`, 'error');
+      failed++;
+      await new Promise(r => setTimeout(r, 1000));
     }
-    const assignments = voiceResult.assignments || voiceResult;
-    if (!Array.isArray(assignments)) throw new Error('Formato de assignments inválido');
-    let designed = 0, assigned = 0;
-    STATE.currentProject.voiceAssignments = STATE.currentProject.voiceAssignments || {};
-    
-    for (const a of assignments) {
-      if (a.needs_design && a.design_description) {
-        toast(`Creando voz para ${a.characterName}...`, 'info');
-        try {
-          const newVoiceId = await designVoice(
-            a.design_description,
-            a.characterId === '_narrator' 
-              ? 'Bajo el cielo del crepúsculo, las palabras se vuelven luz, y la luz se vuelve memoria.'
-              : `Hola, soy ${a.characterName}.`,
-            `${a.characterName} (${STATE.currentProject.world?.title || 'Anime'})`
-          );
-          STATE.currentProject.voiceAssignments[a.characterId] = newVoiceId;
-          designed++;
-          await new Promise(r => setTimeout(r, 1500));
-        } catch(e) {
-          console.error('Voice Design error:', e);
-          toast(`No se pudo crear voz para ${a.characterName}: ${e.message}`, 'error');
-        }
-      } else if (a.voiceId) {
-        STATE.currentProject.voiceAssignments[a.characterId] = a.voiceId;
-        assigned++;
-      }
-    }
-    
-    // Refresh voices cache (since we added new ones)
-    if (designed > 0) {
-      cachedVoices = null;
-      try { cachedVoices = await listVoices(); } catch(e) {}
-    }
-    
-    saveCurrentProject();
-    renderVoicesPanel();
-    toast(`Voces asignadas: ${assigned} de catálogo + ${designed} nuevas creadas`);
-  } catch(e) {
-    toast('Error: ' + e.message, 'error');
-    console.error(e);
   }
+
+  // Create narrator voice
+  toast('Creando voz del Narrador...', 'info');
+  try {
+    const narratorDesc = 'warm mature neutral voice, gentle and melancholic, storyteller quality, like a soft omniscient narrator, poetic and introspective, Japanese anime narrator style, Spanish language';
+    const narratorId = await designVoice(narratorDesc, 'Bajo el cielo del crepúsculo, todo comenzó a cambiar.', 'Narrador');
+    STATE.currentProject.voiceAssignments['_narrator'] = narratorId;
+    created++;
+    toast('✓ Voz del Narrador creada');
+  } catch(e) {
+    toast('Error narrador: ' + e.message.slice(0,60), 'error');
+    failed++;
+  }
+
+  // Refresh voice cache
+  cachedVoices = null;
+  try { cachedVoices = await listVoices(); } catch(e) {}
+  
+  saveCurrentProject();
+  renderVoicesPanel();
+  toast(`✓ ${created} voces creadas${failed > 0 ? `, ${failed} fallaron` : ''}`);
 }
 
 async function generateSceneAudio(sceneId) {
