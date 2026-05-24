@@ -814,19 +814,32 @@ function setStatus(key, ok) {
 }
 
 async function callClaude(systemPrompt, userPrompt, maxTokens = 8000) {
-  if (!STATE.apis.claude) throw new Error('Falta API key de Claude');
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": STATE.apis.claude,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true"
-    },
-    body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: maxTokens, system: systemPrompt, messages: [{ role: "user", content: userPrompt }] })
-  });
-  if (!response.ok) { const err = await response.text(); throw new Error(`Claude: ${response.status} — ${err.slice(0, 300)}`); }
+  if (!STATE.apis.claude) throw new Error('Falta API key de Claude — configura en el icono llave');
+  let response;
+  try {
+    response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": STATE.apis.claude,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: maxTokens, system: systemPrompt, messages: [{ role: "user", content: userPrompt }] })
+    });
+  } catch(netErr) {
+    throw new Error('Sin conexion a Claude: ' + netErr.message);
+  }
+  if (!response.ok) {
+    const errText = await response.text().catch(() => 'sin detalle');
+    const status = response.status;
+    if (status === 401) throw new Error('API Key de Claude invalida (401) — verifica en el icono llave');
+    if (status === 429) throw new Error('Claude: demasiadas solicitudes (429) — espera 30 segundos');
+    if (status === 529 || status === 500) throw new Error('Claude sobrecargado (' + status + ') — intenta en 1 minuto');
+    throw new Error('Claude ' + status + ': ' + errText.slice(0, 200));
+  }
   const data = await response.json();
+  if (!data.content || !data.content[0] || !data.content[0].text) throw new Error('Claude devolvio respuesta vacia');
   return data.content[0].text;
 }
 
@@ -1716,7 +1729,17 @@ IMPORTANTE: 15 escenas exactas. Distribución acts: cold_open(2), act1(4), act2(
     // Auto-generate missing characters from this episode
     await autoGenerateEpisodeCharacters(ep);
     
-  } catch(e) { PROGRESS.hide(); toast('Error: ' + e.message, 'error'); console.error(e); }
+  } catch(e) {
+    PROGRESS.hide();
+    const msg = e.message || 'Error desconocido';
+    if (msg.includes('401') || msg.includes('403')) toast('API Key de Claude invalida. Verifica en llave', 'error', 6000);
+    else if (msg.includes('429')) toast('Claude: limite de velocidad. Espera 30 segundos.', 'error', 6000);
+    else if (msg.includes('500') || msg.includes('529')) toast('Claude no disponible ahora. Intenta en 1 minuto.', 'error', 6000);
+    else if (msg.includes('JSON') || msg.includes('parse') || msg.includes('inválido')) toast('Error de formato JSON. Intenta de nuevo — suele funcionar al segundo intento.', 'error', 6000);
+    else if (msg.includes('fetch') || msg.includes('network') || msg.includes('Failed')) toast('Sin conexion. Verifica tu internet.', 'error', 6000);
+    else toast(msg.slice(0, 150), 'error', 6000);
+    console.error('[generateEpisode] ERROR COMPLETO:', msg, e);
+  }
 }
 
 async function autoGenerateEpisodeCharacters(ep) {
