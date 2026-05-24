@@ -193,7 +193,39 @@ video { width: 100%; border-radius: 10px; margin-top: 12px; }
 .empty-icon { font-size: 48px; margin-bottom: 14px; opacity: 0.3; }
 .empty-text { font-size: 12px; line-height: 1.8; max-width: 300px; margin: 0 auto; }
 @media (max-width: 1200px) { .studio { grid-template-columns: 220px 1fr 280px; } }
-@media (max-width: 900px) { .studio { grid-template-columns: 1fr; } .sidebar, .right-panel { display: none; } }
+/* ═══ MOBILE FIRST ═══ */
+@media (max-width: 900px) {
+  header { padding: 14px 18px; }
+  .brand-title { font-size: 20px; }
+  .brand-jp { font-size: 9px; }
+  .brand-sub { display: none; }
+  .studio { grid-template-columns: 1fr; height: calc(100vh - 60px - 64px); }
+  .sidebar, .right-panel { display: none; }
+  .center-panel { height: 100%; overflow-y: auto; }
+  .panel-header { padding: 14px 18px 12px; }
+  .panel-title { font-size: 18px; }
+  .panel-content { padding: 18px 18px 100px; }
+  .form-grid { grid-template-columns: 1fr; gap: 12px; }
+  .btn-row { flex-direction: column; }
+  .btn-row .btn { width: 100%; justify-content: center; }
+  .tag-grid .tag-btn { font-size: 12px; padding: 8px 14px; }
+  .mobile-nav { display: flex !important; }
+  .api-status { font-size: 9px; padding: 5px 10px; }
+  .icon-btn { width: 34px; height: 34px; font-size: 14px; }
+  .output-text { font-size: 12px; max-height: none; }
+  .card-list { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .scene-grid { grid-template-columns: 1fr; }
+  .output-section { margin-top: 16px; }
+}
+@media (max-width: 480px) {
+  .card-list { grid-template-columns: 1fr; }
+  .episode-card-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+}
+.mobile-nav { display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 200; background: rgba(14,23,41,0.97); border-top: 1px solid var(--border); padding: 8px 4px env(safe-area-inset-bottom, 8px); backdrop-filter: blur(20px); justify-content: space-around; align-items: center; }
+.mobile-nav-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 10px; border-radius: 10px; background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-family: 'Inter', sans-serif; font-size: 9px; letter-spacing: 0.05em; min-width: 44px; transition: all 0.15s; }
+.mobile-nav-btn .mnav-icon { font-size: 20px; line-height: 1; }
+.mobile-nav-btn.active { color: var(--sunset-amber); background: rgba(244,162,97,0.1); }
+.mobile-nav-btn:active { transform: scale(0.92); }
 .flow-step { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); margin-bottom: 10px; }
 .flow-step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--surface-warm); border: 1px solid var(--border-warm); display: flex; align-items: center; justify-content: center; font-family: 'Cormorant Garamond', serif; font-style: italic; color: var(--sunset-amber); font-size: 13px; }
 .flow-step-num.done { background: var(--sunset-amber); color: var(--night-blue); }
@@ -430,6 +462,16 @@ video { width: 100%; border-radius: 10px; margin-top: 12px; }
   </div>
 </div>
 
+<!-- MOBILE BOTTOM NAV -->
+<nav class="mobile-nav" id="mobile-nav">
+  <button class="mobile-nav-btn active" id="mnav-world" onclick="switchModule('world')"><span class="mnav-icon">🌌</span>Universo</button>
+  <button class="mobile-nav-btn" id="mnav-characters" onclick="switchModule('characters')"><span class="mnav-icon">👤</span>Personajes</button>
+  <button class="mobile-nav-btn" id="mnav-episodes" onclick="switchModule('episodes')"><span class="mnav-icon">🎬</span>Episodios</button>
+  <button class="mobile-nav-btn" id="mnav-scenes" onclick="switchModule('scenes')"><span class="mnav-icon">🎨</span>Imágenes</button>
+  <button class="mobile-nav-btn" id="mnav-voices" onclick="switchModule('voices')"><span class="mnav-icon">🎙</span>Voces</button>
+  <button class="mobile-nav-btn" id="mnav-assembly" onclick="switchModule('assembly')"><span class="mnav-icon">🎞</span>Ensamblar</button>
+</nav>
+
 <div class="modal-overlay" id="modal-apis">
   <div class="modal">
     <div class="modal-header"><div class="modal-title">Configuración de APIs</div><button class="modal-close" onclick="closeModal('modal-apis')">×</button></div>
@@ -552,8 +594,15 @@ function closeModal(id) { $(id).classList.remove('active'); }
 function switchModule(name) {
   document.querySelectorAll('.module-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
   $('module-' + name).classList.add('active');
-  $('nav-' + name).classList.add('active');
+  const navItem = $('nav-' + name);
+  if (navItem) navItem.classList.add('active');
+  const mnavItem = $('mnav-' + name);
+  if (mnavItem) mnavItem.classList.add('active');
+  // Scroll to top on mobile when switching modules
+  const panel = document.querySelector('.center-panel');
+  if (panel) panel.scrollTop = 0;
   refreshUI();
 }
 function escHtml(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -833,7 +882,11 @@ function refreshUI() {
     if (p.world.tech) $('world-tech').value = p.world.tech;
     $('world-concept').value = p.world.concept || '';
     renderWorldOutput();
-  } else { if ($('world-output')) $('world-output').innerHTML = ''; }
+  } else {
+    if ($('world-output')) $('world-output').innerHTML = '';
+    const form = $('world-form');
+    if (form) form.style.display = '';
+  }
   
   renderCharacters();
   renderEpisodes();
@@ -848,14 +901,30 @@ function refreshUI() {
 function renderWorldOutput() {
   const p = STATE.currentProject;
   if (!p?.world?.content) { $('world-output').innerHTML = ''; return; }
+  // Hide the form, show full output
+  const form = $('world-form');
+  if (form) form.style.display = 'none';
   $('world-output').innerHTML = `
-    <div class="output-section">
-      <div class="output-header">
-        <div class="output-title">${escHtml(p.world.title)}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:24px;color:var(--paper-cream)">${escHtml(p.world.title)}</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-top:4px;letter-spacing:0.1em">${escHtml(p.world.genre)} · ${escHtml(p.world.tone)}</div>
       </div>
-      <div class="output-body"><div class="output-text">${escHtml(p.world.content)}</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost" style="font-size:11px" onclick="$('world-form').style.display='';$('world-output').innerHTML=renderWorldOutput_empty()">✏ Editar</button>
+        <button class="btn btn-primary" onclick="switchModule('characters')">+ Crear Personajes →</button>
+      </div>
+    </div>
+    <div class="output-section">
+      <div class="output-body"><div class="output-text" style="max-height:none;font-size:13px;line-height:1.8">${escHtml(p.world.content)}</div></div>
+    </div>
+    <div style="margin-top:20px;padding:16px;background:var(--surface-warm);border-radius:10px;border:1px solid var(--border-warm)">
+      <div style="font-size:10px;letter-spacing:0.2em;color:var(--sunset-amber);text-transform:uppercase;margin-bottom:10px">SIGUIENTE PASO</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Universo listo. Ahora crea los personajes que habitarán este mundo.</div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="switchModule('characters');openModal('modal-new-char')">👤 Crear Primer Personaje</button>
     </div>`;
 }
+function renderWorldOutput_empty() { return ''; }
 
 const SYSTEM_BASE = `Eres el motor narrativo del ANIME AI STUDIO especializado en anime cinematográfico calidad Makoto Shinkai (Your Name, Weathering With You, Suzume).
 REGLAS:
@@ -916,7 +985,16 @@ Mínimo 4 locaciones. Sé profundo y específico.`;
     STATE.currentProject.name = result.title;
     saveCurrentProject();
     refreshUI();
-    toast('Universo creado');
+    // Show the world output and scroll to it
+    const worldOut = $('world-output');
+    if (worldOut) {
+      worldOut.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    toast('✓ Universo "' + result.title + '" creado — ¡ahora crea tus personajes!');
+    // Auto-suggest next step after 2s
+    setTimeout(() => {
+      if (confirm('¡Universo listo! ¿Ir a crear personajes ahora?')) switchModule('characters');
+    }, 1800);
   } catch(e) { toast('Error: ' + e.message, 'error'); console.error(e); }
   finally { $('world-loading').style.display = 'none'; }
 }
@@ -1021,7 +1099,7 @@ JSON:
     saveCurrentProject();
     refreshUI();
     switchModule('characters');
-    toast('Personaje "' + char.name + '" creado');
+    toast('✓ "' + char.name + '" creado — generando retrato...');
     if (STATE.apis.banana) setTimeout(() => generateCharacterImage(char.id), 500);
   } catch(e) { toast('Error: ' + e.message, 'error'); console.error(e); }
 }
@@ -1213,7 +1291,7 @@ EXACTAMENTE 30 escenas.`;
     saveCurrentProject();
     refreshUI();
     switchModule('episodes');
-    toast(`Episodio ${ep.number} "${ep.title}" con ${ep.scenes.length} escenas`);
+    toast(`✓ Ep ${ep.number} "${ep.title}" — ${ep.scenes.length} escenas. Toca 🎨 Imágenes para generarlas.`);
   } catch(e) { toast('Error: ' + e.message, 'error'); console.error(e); }
 }
 
