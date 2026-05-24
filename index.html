@@ -999,35 +999,57 @@ async function listVoices() {
   return data.voices;
 }
 
-// Voice Design: create a new voice when no good match exists
+// Voice Design: create a new unique voice per character
 async function designVoice(description, sampleText, name) {
   if (!STATE.apis.eleven) throw new Error('Falta API key de ElevenLabs');
+  
+  // ElevenLabs requires minimum 100 characters in sample text
+  const MIN_LEN = 100;
+  const FALLBACK_TEXTS = [
+    'No voy a rendirme. No ahora que llegué hasta aquí. Aunque me cueste todo, aunque nadie me entienda, voy a seguir adelante.',
+    'Hay cosas que no puedo explicar. Solo sé que cuando todo se derrumba, algo dentro de mí se niega a ceder. Es lo único que me queda.',
+    'El mundo no te da lo que mereces. Te da lo que eres capaz de tomar. Y yo... yo todavía no sé qué soy capaz de hacer.',
+  ];
+  let finalText = sampleText || '';
+  if (finalText.length < MIN_LEN) {
+    // Pad with a contextual line until minimum is met
+    const pad = FALLBACK_TEXTS[Math.floor(Math.random() * FALLBACK_TEXTS.length)];
+    finalText = (finalText + ' ' + pad).slice(0, 300).trim();
+  }
+  
   // Step 1: generate preview voices from text description
   const previewResp = await fetch('https://api.elevenlabs.io/v1/text-to-voice/create-previews', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'xi-api-key': STATE.apis.eleven },
     body: JSON.stringify({
       voice_description: description,
-      text: sampleText || 'Hola, soy un personaje del universo de este anime cinematográfico.',
+      text: finalText,
       auto_generate_text: false
     })
   });
-  if (!previewResp.ok) { const err = await previewResp.text(); throw new Error(`Voice Design: ${previewResp.status} — ${err.slice(0, 200)}`); }
+  if (!previewResp.ok) {
+    const err = await previewResp.text();
+    throw new Error(`Voice Design: ${previewResp.status} — ${err.slice(0, 200)}`);
+  }
   const previewData = await previewResp.json();
   const previews = previewData.previews || [];
   if (previews.length === 0) throw new Error('No se generaron previews de voz');
+  
   // Step 2: save the first preview as a permanent voice
   const chosenPreview = previews[0];
   const saveResp = await fetch('https://api.elevenlabs.io/v1/text-to-voice/create-voice-from-preview', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'xi-api-key': STATE.apis.eleven },
     body: JSON.stringify({
-      voice_name: name,
+      voice_name: name + '_' + Date.now().toString().slice(-4),
       voice_description: description,
       generated_voice_id: chosenPreview.generated_voice_id
     })
   });
-  if (!saveResp.ok) { const err = await saveResp.text(); throw new Error(`Save Voice: ${saveResp.status} — ${err.slice(0, 200)}`); }
+  if (!saveResp.ok) {
+    const err = await saveResp.text();
+    throw new Error(`Guardar voz: ${saveResp.status} — ${err.slice(0, 200)}`);
+  }
   const saved = await saveResp.json();
   return saved.voice_id;
 }
@@ -2249,9 +2271,8 @@ async function autoAssignVoices() {
   PROGRESS.show(`Creando voces 0/${total}`, 0);
   let created = 0, failed = 0;
 
-  // Create voice for each character
   for (const char of p.characters) {
-    toast(`Creando voz para ${char.name}...`, 'info');
+    PROGRESS.update(`Creando voz: ${char.name} (${created + 1}/${total})`, (created / total) * 100);
     
     // Build precise voice description from character data
     const genderWord = (char.gender === 'Femenino' || char.gender === 'female') ? 'female' : 
@@ -2283,38 +2304,41 @@ async function autoAssignVoices() {
       'voice acting quality: professional dubbing studio level'
     ].filter(Boolean).join('. ');
     
-    // Use a dramatic line from character's arc or create one
-    const sampleLine = `${char.name}: ${char.psychology?.consciousDesire || char.backstory?.slice(0,80) || 'No voy a rendirme. No cuando ya llegué hasta aquí.'}`;
+    // Build sample line — must be 100+ chars for ElevenLabs
+    const desire = char.psychology?.consciousDesire || '';
+    const backstory = (char.backstory || '').slice(0, 100);
+    const sampleLine = `${char.name}: ${desire || backstory || 'No voy a rendirme. No cuando llegué hasta aquí. Aunque me cueste todo, voy a seguir adelante sin importar nada.'}`;
     
     try {
-      const voiceId = await designVoice(voiceDesc, sampleLine.slice(0, 120), char.name);
+      const voiceId = await designVoice(voiceDesc, sampleLine, char.name);
       STATE.currentProject.voiceAssignments[char.id] = voiceId;
       char.voiceId = voiceId;
       created++;
-      toast(`✓ Voz creada: ${char.name}`, 'info');
-      await new Promise(r => setTimeout(r, 2000)); // Rate limit pause
+      PROGRESS.update(`✓ ${char.name} — siguiendo con ${created}/${total}`, (created / total) * 100);
+      await new Promise(r => setTimeout(r, 1500));
     } catch(e) {
       console.error(`Voice Design error for ${char.name}:`, e);
-      toast(`⚠ Error voz ${char.name}: ${e.message.slice(0,60)}`, 'error');
+      toast(`⚠ Error voz ${char.name}: ${e.message.slice(0,80)}`, 'error', 5000);
       failed++;
       await new Promise(r => setTimeout(r, 1000));
     }
   }
 
   // Create narrator voice
-  toast('Creando voz del Narrador...', 'info');
+  PROGRESS.update(`Creando voz del Narrador (${total}/${total})`, (created / total) * 100);
   try {
     const styleName = STATE.currentProject.world?.styleName || 'Solo Leveling';
     const narratorMood = ['Solo Leveling','Jujutsu Kaisen','Attack on Titan','Chainsaw Man'].includes(styleName)
       ? 'deep powerful male narrator voice, grave and intense, like war documentary narrator, carries weight of tragedy, slow deliberate pace, anime narrator style'
       : 'warm and melancholic narrator voice, poetic and introspective, gentle but with hidden sorrow, like Studio Ghibli narrator, omniscient storyteller quality';
     const narratorDesc = `${narratorMood}. Spanish language. Professional anime dubbing quality. NOT flat or monotone — emotionally resonant on every sentence.`;
-    const narratorId = await designVoice(narratorDesc, 'Había una vez un mundo donde el poder lo era todo. Y él iba a aprenderlo de la peor manera posible.', 'Narrador');
+    const narratorSample = 'Había una vez un mundo donde el poder lo era todo. Y él iba a aprenderlo de la peor manera posible. Nadie estaba preparado para lo que vendría después.';
+    const narratorId = await designVoice(narratorDesc, narratorSample, 'Narrador');
     STATE.currentProject.voiceAssignments['_narrator'] = narratorId;
     created++;
     toast('✓ Voz del Narrador creada');
   } catch(e) {
-    toast('Error narrador: ' + e.message.slice(0,60), 'error');
+    toast('Error narrador: ' + e.message.slice(0,80), 'error', 5000);
     failed++;
   }
 
@@ -2323,8 +2347,9 @@ async function autoAssignVoices() {
   try { cachedVoices = await listVoices(); } catch(e) {}
   
   saveCurrentProject();
+  PROGRESS.hide();
   renderVoicesPanel();
-  toast(`✓ ${created} voces creadas${failed > 0 ? `, ${failed} fallaron` : ''}`);
+  toast(`✓ ${created} voces únicas creadas con Voice Design${failed > 0 ? ` (${failed} fallaron)` : ''}`);
 }
 
 async function getSceneEmotionLevel(scene) {
