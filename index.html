@@ -541,11 +541,18 @@ video { width: 100%; border-radius: 10px; margin-top: 12px; }
         <div class="api-status-pill missing" id="status-banana">FALTA</div>
       </div>
       <div class="api-row">
-        <div><div class="api-name">ElevenLabs</div><div class="api-desc">Voces y efectos de sonido</div></div>
+        <div><div class="api-name">ElevenLabs</div><div class="api-desc">Narración en off</div></div>
         <div class="field"><input type="password" id="api-eleven" placeholder="sk_..." /></div>
         <div class="api-status-pill missing" id="status-eleven">FALTA</div>
       </div>
-      <div class="help-text"><strong>Nota:</strong> Las API keys se guardan localmente en tu navegador.</div>
+      <div class="api-row" style="background:rgba(244,163,64,0.08);border:1px solid rgba(244,163,64,0.25);border-radius:10px;padding:12px">
+        <div style="flex:1">
+          <div class="api-name">Voice ID del Narrador</div>
+          <div class="api-desc">Copia el ID de tu voz favorita de ElevenLabs. Encuéntralo en elevenlabs.io → My Voices → ID debajo del nombre.</div>
+        </div>
+        <div class="field" style="min-width:180px"><input type="text" id="api-voice-id" placeholder="abc123xyz..." style="font-family:monospace;font-size:12px" /></div>
+      </div>
+      <div class="help-text" style="margin-top:8px">Las claves se guardan en tu navegador. El Voice ID es el de la voz que prefieras en ElevenLabs.</div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-apis')">Cancelar</button>
@@ -772,7 +779,18 @@ function toast(msg, type='success') {
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 3500);
 }
-function openModal(id) { if (id === 'modal-projects') renderProjectsModal(); $(id).classList.add('active'); }
+function openModal(id) {
+  if (id === 'modal-projects') renderProjectsModal();
+  if (id === 'modal-apis') {
+    setTimeout(() => {
+      if ($('api-claude')) $('api-claude').value = STATE.apis.claude || '';
+      if ($('api-banana')) $('api-banana').value = STATE.apis.banana || '';
+      if ($('api-eleven')) $('api-eleven').value = STATE.apis.eleven || '';
+      if ($('api-voice-id')) $('api-voice-id').value = STATE.apis.voiceId || '';
+    }, 50);
+  }
+  $(id).classList.add('active');
+}
 function closeModal(id) { $(id).classList.remove('active'); }
 function switchModule(name) {
   document.querySelectorAll('.module-panel').forEach(p => p.classList.remove('active'));
@@ -803,6 +821,7 @@ function saveAPIs() {
   STATE.apis.claude = $('api-claude').value.trim();
   STATE.apis.banana = $('api-banana').value.trim();
   STATE.apis.eleven = $('api-eleven').value.trim();
+  STATE.apis.voiceId = $('api-voice-id').value.trim();
   saveToStorage();
   updateAPIStatus();
   closeModal('modal-apis');
@@ -1751,24 +1770,32 @@ async function generateEpisode() {
   // COMPACT prompt — 15 scenes to avoid token overflow
   const styleName = w.styleName || 'Solo Leveling';
   const styleNarrative = w.styleNarrative || '';
-  const prompt = `Anime ORIGINAL: "${w.title}"
-UNIVERSO: ${w.concept ? w.concept.slice(0,200) : 'mundo original'}
-Género: ${w.genre||''}. Tono: ${w.tone||''}. Conflicto central: ${(w.centralConflict||'').slice(0,150)}
+  const prompt = `Eres un guionista de anime. Escribe el episodio ${epNumber} de "${w.title}".
 
-GUÍA DE TONO Y ATMÓSFERA (NO de historia — solo para el tono):
-${styleNarrative}
+UNIVERSO: ${w.concept ? w.concept.slice(0,250) : 'mundo original'}
+Género: ${w.genre||''}. Tono: ${w.tone||''}. Conflicto: ${(w.centralConflict||'').slice(0,200)}
+TONO DE REFERENCIA: ${styleNarrative}
+Personajes existentes: ${chars || 'ninguno aún — créalos'}
+${prevEps ? 'Episodios previos: ' + prevEps : 'Este es el primer episodio'}
+Función narrativa: ${func}
+${emotion ? 'Promesa emocional: ' + emotion : ''}
+${context ? 'Indicaciones extra: ' + context : ''}
 
-IMPORTANTE: Este es un anime COMPLETAMENTE ORIGINAL. NO copies personajes, poderes, organizaciones ni tramas de ningún anime existente. El tono y atmósfera son los únicos elementos que tomar de referencia.
+REGLAS ABSOLUTAS:
+- Historia 100% ORIGINAL. Cero referencias a animes existentes.
+- 30 escenas exactas para ~15 minutos de narración (30 seg por escena)
+- SOLO narración en off, SIN diálogos — es un video narrado tipo documental emocional
+- Cada narración: 3-5 frases. Poética, íntima, que duela o maraville. NO resúmenes.
+- La narración de cada escena debe conectar emocionalmente con la siguiente
+- imagePromptEN: describe visualmente la escena en inglés, específico, cinematográfico
 
-Genera episodio ${epNumber} con EXACTAMENTE 15 escenas del anime "${w.title}".
-Personajes: ${chars || 'crear personajes originales acorde al universo'}
-${prevEps ? 'Previos: ' + prevEps : 'Primer episodio — establece el mundo y los personajes originales'}
-Función: ${func}. Promesa emocional: ${emotion||'impacto genuino'}. Extra: ${context||'ninguno'}
+Responde SOLO este JSON válido:
+{"number":${epNumber},"title":"titulo","summary":"resumen en 2 líneas","scenes":[
+{"sceneNumber":1,"act":"cold_open","title":"titulo escena","location":"lugar específico","timeOfDay":"amanecer/dia/tarde/noche/medianoche","characters":["Nombre"],"summary":"qué pasa","narration":"3-5 frases de narración poética en español — voz en off íntima y emotiva que lleva al espectador","kenBurnsDirection":"zoom_in_slow","imagePromptEN":"specific cinematic scene description in English: what characters do, their expressions, exact setting, lighting, action — example: teenage boy alone on rooftop at dusk, city lights below, hands gripping railing, looking at horizon with quiet determination"}
+]}
 
-Responde ÚNICAMENTE con este JSON (sin texto antes ni después):
-{"number":${epNumber},"title":"titulo apropiado al estilo","summary":"2 lineas","emotionalPromise":"emocion final","scenes":[{"sceneNumber":1,"act":"cold_open","title":"titulo","location":"lugar","timeOfDay":"hora","characters":["nombre"],"summary":"que pasa en 1 linea","narration":"narración cinematográfica continua de 2-4 frases — VOZ EN OFF que lleva el ritmo visual. Debe tener emoción y cadencia dramática. Conecta con la siguiente escena. NO vacío salvo en diálogos puros.","dialogue":[{"character":"nombre","line":"línea corta impactante — máximo 15 palabras, cargada emocionalmente"}],"kenBurnsDirection":"zoom_in_slow","musicCue":"música apropiada al estilo","soundFXCue":"efecto ambiental","imagePromptEN":"DESCRIBIR ESCENA EN INGLÉS: qué pasa visualmente, posiciones, acción, expresiones, encuadre. NO incluir estilo general. Ejemplo: 'female warrior facing massive demon in dungeon, glowing dagger raised, fierce determined expression, dramatic backlight'"}]}
-
-IMPORTANTE: 15 escenas exactas. Distribución acts: cold_open(2), act1(4), act2(4), climax(3), resolution(1), post_credits(1). kenBurns: zoom_in_slow/zoom_out_slow/pan_left/pan_right/pan_up/pan_down/static`;
+Distribución de 30 escenas: cold_open×2, act1×8, act2×8, climax×7, resolution×4, post_credits×1
+kenBurns opciones: zoom_in_slow / zoom_out_slow / pan_left / pan_right / pan_up / static`;
 
   try {
     PROGRESS.update('Generando estructura narrativa (1/2)...', 15);
@@ -2637,23 +2664,85 @@ function loadAssemblyEpisode() {
       </div>
     </div>
     <div style="margin-bottom:16px">
-      <div style="font-size:10px;letter-spacing:0.2em;color:var(--sunset-amber);text-transform:uppercase;margin-bottom:10px">AUDIO DEL EPISODIO</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-        <button class="btn btn-primary" onclick="generateEpisodeNarration('${ep.id}')" ${!STATE.apis.eleven || !STATE.currentProject?.voiceAssignments?._narrator ?'disabled style="opacity:0.4"':''} style="flex:1">🎙 Narración Continua</button>
-        <button class="btn btn-secondary" onclick="generateAllEpisodeAudio('${ep.id}')" ${!STATE.apis.eleven?'disabled':''} style="flex:1">💬 Diálogos</button>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-secondary" onclick="generateAllEpisodeMusic('${ep.id}')" ${!STATE.apis.banana?'disabled':''} style="flex:1">🎵 Música</button>
-        <button class="btn btn-secondary" onclick="generateAllEpisodeFX('${ep.id}')" ${!STATE.apis.eleven?'disabled':''} style="flex:1">🔊 Efectos</button>
-      </div>
-      ${!STATE.currentProject?.voiceAssignments?._narrator ? '<div style="font-size:11px;color:var(--sunset-amber);margin-top:8px">⚠ Asigna voces primero para generar narración</div>' : ''}
+      <div style="font-size:10px;letter-spacing:0.2em;color:var(--sunset-amber);text-transform:uppercase;margin-bottom:10px">NARRACIÓN EN OFF</div>
+      ${STATE.apis.voiceId
+        ? `<button class="btn btn-primary" onclick="generateEpisodeNarrationDirect('${ep.id}')" ${!STATE.apis.eleven?'disabled':''} style="width:100%;margin-bottom:8px">🎙 Generar Narración Completa</button>
+           <div style="font-size:10px;color:var(--text-dim);margin-bottom:12px">Voz: <span style="color:var(--paper-cream);font-family:monospace">${STATE.apis.voiceId.slice(0,12)}...</span> · ${ep.scenes.filter(s=>s.narrationAudio).length}/${ep.scenes.length} generadas</div>`
+        : '<div style="font-size:11px;color:#ff8c69;padding:8px;background:rgba(255,140,105,0.1);border-radius:8px;margin-bottom:12px">⚠ Configura el Voice ID en 🔑 para generar narración</div>'
+      }
+      <button class="btn btn-secondary" onclick="downloadNarrationScript('${ep.id}')" style="width:100%;margin-bottom:8px">📄 Descargar Guión (.txt)</button>
     </div>
     <div class="btn-row">
       <button class="btn btn-primary" onclick="playAssembly()" ${!ready?'disabled':''}>▶ Reproducir Animatic</button>
       <button class="btn btn-secondary" onclick="stopAssembly()">⏸ Detener</button>
-      <button class="btn btn-secondary" onclick="exportAssemblyVideo()" ${!ready?'disabled':''}>⬇ Exportar Video</button>
+      <button class="btn btn-secondary" onclick="exportProject()" style="background:rgba(244,163,64,0.15);border-color:rgba(244,163,64,0.5);color:var(--sunset-amber)">📦 Exportar ZIP para CapCut</button>
     </div>
     <div id="assembly-status"></div>`;
+}
+
+// Download narration script as .txt for CapCut or manual use
+function downloadNarrationScript(epId) {
+  const ep = STATE.currentProject.episodes.find(e => e.id === epId);
+  if (!ep) return;
+  let txt = `GUIÓN: ${ep.title}\n`;
+  txt += `${'='.repeat(50)}\n\n`;
+  for (const s of ep.scenes) {
+    txt += `[ESCENA ${s.sceneNumber}: ${s.title}]\n`;
+    txt += `Acto: ${s.act} | Lugar: ${s.location} | Hora: ${s.timeOfDay}\n`;
+    txt += `Duración estimada: ~30 segundos\n\n`;
+    txt += `NARRACIÓN:\n${s.narration}\n\n`;
+    txt += `IMAGEN: ${s.imagePromptEN || ''}\n`;
+    txt += `${'─'.repeat(40)}\n\n`;
+  }
+  const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `guion_${ep.title.replace(/[^a-z0-9]/gi,'_')}.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Guión descargado');
+}
+
+// Generate narration using the configured Voice ID directly
+async function generateEpisodeNarrationDirect(epId) {
+  const ep = STATE.currentProject.episodes.find(e => e.id === epId);
+  if (!ep) return;
+  const voiceId = STATE.apis.voiceId;
+  if (!voiceId) { toast('Configura el Voice ID en el ícono 🔑', 'error'); return; }
+  if (!STATE.apis.eleven) { toast('Configura ElevenLabs en 🔑', 'error'); return; }
+  
+  const scenes = ep.scenes.filter(s => s.narration && s.narration.trim());
+  const pending = scenes.filter(s => !s.narrationAudio);
+  if (pending.length === 0) { toast('Narración ya generada completa ✓'); return; }
+  
+  if (!confirm(`Generar narración: ${pending.length} escenas.\nCosto aprox: $${(pending.length * 0.04).toFixed(2)}\n\nVoice ID: ${voiceId.slice(0,16)}...`)) return;
+  
+  PROGRESS.show('Generando narración...', 0);
+  let done = 0;
+  
+  for (const scene of pending) {
+    PROGRESS.update(`Escena ${scene.sceneNumber}/${ep.scenes.length}: ${scene.title}`, (done / pending.length) * 100);
+    try {
+      // Determine emotion from act
+      const emotionMap = { cold_open: 'calm', act1: 'normal', act2: 'normal', climax: 'intense', resolution: 'calm', post_credits: 'calm' };
+      const emotion = emotionMap[scene.act] || 'narrator';
+      const audio = await generateVoice(scene.narration, voiceId, emotion);
+      scene.narrationAudio = audio;
+      done++;
+      // Sync back to project scenes
+      const idx = STATE.currentProject.scenes.findIndex(s => s.id === scene.id);
+      if (idx >= 0) STATE.currentProject.scenes[idx].narrationAudio = audio;
+      saveCurrentProject();
+      await new Promise(r => setTimeout(r, 600));
+    } catch(e) {
+      toast(`Error escena ${scene.sceneNumber}: ${e.message.slice(0,60)}`, 'error', 4000);
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+  
+  PROGRESS.hide();
+  refreshUI();
+  toast(`✓ ${done}/${pending.length} narraciones generadas`);
 }
 
 // Generate ONE continuous narration track for the whole episode
@@ -2743,28 +2832,52 @@ function playScene(idx) {
     if (img) img.style.transform = transform.final;
   });
   
-  // Split narration into sentences and show one at a time
+  // Subtítulos sincronizados con audio real
   if (scene.narration) {
     const sentences = scene.narration
-      .split(/(?<=[.!?…])\s+|(?<=,)\s+(?=[A-ZÁÉÍÓÚÑ])/)
-      .map(s => s.trim()).filter(s => s.length > 2);
-    const totalNarDuration = scene.narrationAudio 
-      ? Math.max(sentences.length * 2500, scene.narration.length * 60)
-      : sentences.length * 3000;
-    const perSentence = Math.floor(totalNarDuration / Math.max(sentences.length, 1));
-    sentences.forEach((sentence, i) => {
-      setTimeout(() => {
-        const el = document.getElementById('narration-text');
-        if (!el) return;
-        el.style.opacity = '0';
-        setTimeout(() => { el.style.opacity = '1'; el.textContent = sentence; }, 200);
-      }, i * perSentence);
-    });
-    // Fade out narration before dialogue
-    setTimeout(() => {
+      .replace(/([.!?…])\s+/g, '$1|').replace(/,\s+(?=[A-ZÁÉÍÓÚÑ])/g, ',|')
+      .split('|').map(s => s.trim()).filter(s => s.length > 3);
+
+    const showSentence = (i) => {
       const el = document.getElementById('narration-text');
-      if (el) el.style.opacity = '0';
-    }, totalNarDuration - 300);
+      if (!el || i >= sentences.length) return;
+      el.style.opacity = '0';
+      setTimeout(() => { if (el) { el.textContent = sentences[i]; el.style.opacity = '1'; } }, 150);
+    };
+
+    if (scene.narrationAudio) {
+      // Sync with real audio using timeupdate
+      const narAudio = assemblyState.audioElements.find(a => a._isNarration);
+      if (narAudio) {
+        narAudio.addEventListener('loadedmetadata', () => {
+          const totalDur = narAudio.duration;
+          const perSentence = totalDur / sentences.length;
+          showSentence(0);
+          narAudio.addEventListener('timeupdate', () => {
+            const idx = Math.floor(narAudio.currentTime / perSentence);
+            const clampedIdx = Math.min(idx, sentences.length - 1);
+            const el = document.getElementById('narration-text');
+            if (el && el.dataset.sentenceIdx !== String(clampedIdx)) {
+              el.dataset.sentenceIdx = String(clampedIdx);
+              el.style.opacity = '0';
+              setTimeout(() => { if (el) { el.textContent = sentences[clampedIdx]; el.style.opacity = '1'; } }, 100);
+            }
+          });
+        });
+      } else {
+        // Audio exists but not tagged yet — fallback to char-based timing
+        const totalMs = Math.max(sentences.length * 2800, scene.narration.length * 65);
+        const per = totalMs / sentences.length;
+        sentences.forEach((_, i) => setTimeout(() => showSentence(i), i * per));
+      }
+    } else {
+      // No audio — timing by character count (avg 130 chars/sec spoken)
+      let elapsed = 0;
+      sentences.forEach((s, i) => {
+        setTimeout(() => showSentence(i), elapsed);
+        elapsed += Math.max(1800, s.length * 70);
+      });
+    }
   }
   
   // Schedule dialogue lines to appear after narration finishes
@@ -2792,6 +2905,7 @@ function playScene(idx) {
   if (scene.narrationAudio) {
     const n = new Audio(scene.narrationAudio);
     n.volume = 1.0;
+    n._isNarration = true;
     n.play().catch(()=>{});
     assemblyState.audioElements.push(n);
     // Use actual audio duration — wait for metadata
@@ -3046,47 +3160,117 @@ async function renderFrame(ctx, img, direction, t, subtitle, charName) {
 }
 
 async function exportProject() {
-  if (!STATE.currentProject) { toast('No hay proyecto activo', 'error'); return; }
-  toast('Generando ZIP...');
-  const zip = new JSZip();
+  if (!STATE.currentProject) { toast('No hay proyecto', 'error'); return; }
   const p = STATE.currentProject;
-  zip.file('project.json', JSON.stringify(p, null, 2));
-  const charsFolder = zip.folder('characters');
-  for (const c of (p.characters || [])) {
-    charsFolder.file(`${sanitize(c.name)}_info.txt`, formatCharText(c));
-    if (c.imageData) charsFolder.file(`${sanitize(c.name)}_portrait.png`, c.imageData.split(',')[1], { base64: true });
-  }
-  const epsFolder = zip.folder('episodes');
-  for (const e of (p.episodes || [])) {
-    epsFolder.file(`ep${e.number}_${sanitize(e.title)}.txt`, formatEpisodeText(e));
-    const sceneFolder = epsFolder.folder(`ep${e.number}_assets`);
-    for (const s of (e.scenes || [])) {
-      const sceneName = `scene${String(s.sceneNumber).padStart(2,'0')}`;
-      if (s.imageData) sceneFolder.file(`${sceneName}.png`, s.imageData.split(',')[1], { base64: true });
-      if (s.dialogueAudio) sceneFolder.file(`${sceneName}_dialogue.${s.dialogueAudio.includes('wav')?'wav':'mp3'}`, s.dialogueAudio.split(',')[1], { base64: true });
-      if (s.narrationAudio) sceneFolder.file(`${sceneName}_narration.mp3`, s.narrationAudio.split(',')[1], { base64: true });
-      if (s.musicAudio) sceneFolder.file(`${sceneName}_music.wav`, s.musicAudio.split(',')[1], { base64: true });
-      if (s.soundFXAudio) sceneFolder.file(`${sceneName}_sfx.mp3`, s.soundFXAudio.split(',')[1], { base64: true });
-    }
-  }
-  if (p.world?.content) zip.file('world.txt', `${p.world.title}\n${'═'.repeat(40)}\n\n${p.world.content}`);
-  zip.file('README.md', `# ${p.world?.title || p.name}
-Proyecto Anime AI Studio
-- ${p.characters?.length || 0} personajes
-- ${p.episodes?.length || 0} episodios
-- ${p.scenes?.length || 0} escenas
-- ${(p.scenes || []).filter(s => s.imageData).length} imágenes
-- ${(p.scenes || []).filter(s => s.dialogueAudio || s.narrationAudio).length} audios
+  const epTitle = sanitize(p.world?.title || p.name);
+  PROGRESS.show('Preparando ZIP...', 5);
+  const zip = new JSZip();
 
-Fecha: ${new Date().toLocaleString('es-ES')}`);
-  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+  for (const ep of (p.episodes || [])) {
+    const folder = zip.folder(`${epTitle}_ep${ep.number}`);
+    const scenes = ep.scenes || [];
+    let srtContent = '';
+    let srtIdx = 1;
+    let timeMs = 0;
+
+    // Build narration script TXT
+    let scriptTxt = `${ep.title}\n${'='.repeat(50)}\n\n`;
+
+    for (const s of scenes) {
+      const num = String(s.sceneNumber).padStart(2, '0');
+      PROGRESS.update(`Empaquetando escena ${s.sceneNumber}/${scenes.length}...`, (s.sceneNumber / scenes.length) * 90);
+
+      // Image
+      if (s.imageData && s.imageData.startsWith('data:')) {
+        const b64 = s.imageData.split(',')[1];
+        folder.file(`escena${num}.png`, b64, { base64: true });
+      }
+
+      // Narration audio
+      let narDuration = 8000; // default 8s
+      if (s.narrationAudio && s.narrationAudio.startsWith('data:')) {
+        const ext = s.narrationAudio.includes('wav') ? 'wav' : 'mp3';
+        folder.file(`escena${num}_narracion.${ext}`, s.narrationAudio.split(',')[1], { base64: true });
+        // Try to get duration from audio
+        try {
+          const tmp = new Audio(s.narrationAudio);
+          await new Promise(r => { tmp.onloadedmetadata = r; tmp.onerror = r; setTimeout(r, 1500); });
+          if (tmp.duration && tmp.duration > 0) narDuration = Math.round(tmp.duration * 1000);
+        } catch(e) {}
+      }
+
+      // SRT subtitle entry
+      if (s.narration) {
+        const startSRT = msToSRT(timeMs);
+        const endSRT = msToSRT(timeMs + narDuration - 200);
+        // Split narration into 2 lines max for readability
+        const lines = splitNarrationForSRT(s.narration);
+        for (const line of lines) {
+          const lineDur = Math.floor(narDuration / lines.length);
+          srtContent += `${srtIdx}\n${msToSRT(timeMs + lines.indexOf(line) * lineDur)} --> ${msToSRT(timeMs + lines.indexOf(line) * lineDur + lineDur - 100)}\n${line}\n\n`;
+          srtIdx++;
+        }
+        scriptTxt += `[${num}] ${s.title}\n${s.narration}\n\n`;
+      }
+      timeMs += narDuration + 300; // 300ms gap
+    }
+
+    // Add SRT file (for CapCut auto-subtitles)
+    if (srtContent) folder.file(`subtitulos.srt`, srtContent);
+    // Add script
+    folder.file(`guion_completo.txt`, scriptTxt);
+    // Add CapCut guide
+    folder.file(`INSTRUCCIONES_CAPCUT.txt`,
+`CÓMO MONTAR EN CAPCUT
+=====================
+1. Importa todas las imágenes escena01.png, escena02.png...
+2. Ajusta duración de cada imagen al largo de su audio
+3. Añade el audio escena01_narracion.mp3 a cada imagen
+4. Importa subtitulos.srt → Texto → Subtítulos → Importar SRT
+5. Añade tu música de fondo al -20db
+6. Exporta en 1080p
+
+Escenas: ${scenes.length} | Imágenes: ${scenes.filter(s=>s.imageData).length} | Audios: ${scenes.filter(s=>s.narrationAudio).length}
+`);
+  }
+
+  PROGRESS.update('Comprimiendo...', 95);
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
+    meta => PROGRESS.update(`Comprimiendo ${meta.percent.toFixed(0)}%...`, 95 + meta.percent * 0.05)
+  );
+  PROGRESS.hide();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${sanitize(p.world?.title || p.name)}_${Date.now()}.zip`;
+  a.download = `${epTitle}_para_capcut.zip`;
   a.click();
   URL.revokeObjectURL(url);
-  toast('Exportado');
+  toast('✓ ZIP descargado — listo para CapCut');
+}
+
+function msToSRT(ms) {
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  const ms2 = ms % 1000;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')},${String(ms2).padStart(3,'0')}`;
+}
+
+function splitNarrationForSRT(text) {
+  // Split long narration into chunks of max 80 chars at sentence boundaries
+  const sentences = text.split(/(?<=[.!?…])\s+/).filter(s => s.trim());
+  const chunks = [];
+  let current = '';
+  for (const s of sentences) {
+    if ((current + ' ' + s).trim().length <= 85) {
+      current = (current + ' ' + s).trim();
+    } else {
+      if (current) chunks.push(current);
+      current = s;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks.length ? chunks : [text.slice(0, 85)];
 }
 
 function sanitize(s) { return (s || 'proyecto').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40); }
