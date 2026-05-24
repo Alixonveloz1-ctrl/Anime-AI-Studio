@@ -273,6 +273,10 @@ video { width: 100%; border-radius: 10px; margin-top: 12px; }
 </style>
 </head>
 <body>
+<div id="global-progress" style="position:fixed;top:0;left:0;right:0;z-index:9999;background:rgba(10,12,20,0.96);padding:10px 16px 12px;display:none;flex-direction:column;gap:4px;border-bottom:1px solid rgba(255,140,50,0.3)">
+  <div style="font-size:11px;color:#e8d5b0;letter-spacing:0.05em;display:flex;justify-content:space-between"><span id="global-progress-text">Generando...</span><span id="global-progress-pct">0%</span></div>
+  <div style="height:3px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden"><div id="global-progress-fill" style="height:100%;background:linear-gradient(90deg,#f4a340,#ff9f6b);border-radius:2px;transition:width 0.3s ease;width:0%"></div></div>
+</div>
 <div class="atmosphere"></div>
 <div class="stars"></div>
 <div class="sunset-glow"></div>
@@ -749,6 +753,32 @@ function stripMediaFromProject(p) {
 }
 
 function $(id) { return document.getElementById(id); }
+// Barra de progreso global
+var PROGRESS = {
+  show: function(label, pct) {
+    var el = document.getElementById('global-progress');
+    if (el) el.style.display = 'flex';
+    this.update(label, pct || 0);
+  },
+  update: function(label, pct) {
+    var txt = document.getElementById('global-progress-text');
+    var pctEl = document.getElementById('global-progress-pct');
+    var fill = document.getElementById('global-progress-fill');
+    if (txt) txt.textContent = label;
+    if (pctEl) pctEl.textContent = Math.round(pct || 0) + '%';
+    if (fill) fill.style.width = Math.min(100, pct || 0) + '%';
+  },
+  hide: function() {
+    var fill = document.getElementById('global-progress-fill');
+    if (fill) fill.style.width = '100%';
+    setTimeout(function() {
+      var el = document.getElementById('global-progress');
+      if (el) el.style.display = 'none';
+      if (fill) fill.style.width = '0%';
+    }, 600);
+  }
+};
+
 function toast(msg, type='success') {
   const t = document.createElement('div');
   t.className = `toast ${type}`;
