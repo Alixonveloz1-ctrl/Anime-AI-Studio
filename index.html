@@ -1649,15 +1649,40 @@ function deleteCharacter(id) {
 }
 
 async function generateEpisode() {
-  if (!STATE.currentProject?.world) { toast('Define el universo', 'error'); closeModal('modal-new-ep'); switchModule('world'); return; }
-  // Characters are auto-generated from episode — no block needed
-  if (!STATE.apis.claude) { toast('Configura Claude', 'error'); return; }
-  const epNumber = (STATE.currentProject.episodes?.length || 0) + 1;
-  const func = $('ep-function').value;
-  const emotion = $('ep-emotion').value.trim();
-  const context = $('ep-context').value.trim();
-  closeModal('modal-new-ep');
-  PROGRESS.show('Generando guión del episodio...', 5);
+  // INMEDIATAMENTE mostrar feedback visible
+  PROGRESS.show('Iniciando...', 2);
+  toast('Iniciando generación...', 'info', 2000);
+  
+  try {
+    if (!STATE.currentProject?.world) { 
+      PROGRESS.hide();
+      toast('Define el universo primero', 'error', 5000); 
+      closeModal('modal-new-ep'); 
+      switchModule('world'); 
+      return; 
+    }
+    if (!STATE.apis.claude) { 
+      PROGRESS.hide();
+      toast('Configura API Key de Claude (icono llave arriba)', 'error', 6000); 
+      return; 
+    }
+    
+    const epNumber = (STATE.currentProject.episodes?.length || 0) + 1;
+    const funcEl = $('ep-function');
+    const emotionEl = $('ep-emotion');
+    const contextEl = $('ep-context');
+    
+    if (!funcEl) {
+      PROGRESS.hide();
+      toast('Error: modal no cargado correctamente. Recarga la página.', 'error', 6000);
+      return;
+    }
+    
+    const func = funcEl.value;
+    const emotion = (emotionEl?.value || '').trim();
+    const context = (contextEl?.value || '').trim();
+    closeModal('modal-new-ep');
+    PROGRESS.update('Generando guión del episodio...', 5);
 
   const w = STATE.currentProject.world;
   const chars = STATE.currentProject.characters.map(c => `${c.name}(${c.role})`).join(', ');
@@ -1739,6 +1764,11 @@ IMPORTANTE: 15 escenas exactas. Distribución acts: cold_open(2), act1(4), act2(
     else if (msg.includes('fetch') || msg.includes('network') || msg.includes('Failed')) toast('Sin conexion. Verifica tu internet.', 'error', 6000);
     else toast(msg.slice(0, 150), 'error', 6000);
     console.error('[generateEpisode] ERROR COMPLETO:', msg, e);
+  }
+  } catch(outerErr) {
+    PROGRESS.hide();
+    toast('Error: ' + (outerErr.message || 'desconocido').slice(0,150), 'error', 6000);
+    console.error('[generateEpisode OUTER]', outerErr);
   }
 }
 
@@ -3096,6 +3126,24 @@ async function importProject(event) {
   } catch(e) { toast('Error: ' + e.message, 'error'); console.error(e); }
   event.target.value = '';
 }
+
+// Global error handlers — make silent errors VISIBLE
+window.addEventListener('error', (e) => {
+  try {
+    if (typeof PROGRESS !== 'undefined') PROGRESS.hide();
+    const msg = (e.error?.message || e.message || 'Error JS').slice(0, 150);
+    if (typeof toast === 'function') toast('JS Error: ' + msg, 'error', 8000);
+    console.error('[GLOBAL ERROR]', e.error || e);
+  } catch(_) {}
+});
+window.addEventListener('unhandledrejection', (e) => {
+  try {
+    if (typeof PROGRESS !== 'undefined') PROGRESS.hide();
+    const msg = (e.reason?.message || e.reason || 'Promise rechazada').toString().slice(0, 150);
+    if (typeof toast === 'function') toast('Error async: ' + msg, 'error', 8000);
+    console.error('[UNHANDLED REJECTION]', e.reason);
+  } catch(_) {}
+});
 
 loadFromStorage();
 if (!STATE.apis.claude) setTimeout(() => toast('Configura tus API keys para empezar', 'info'), 500);
