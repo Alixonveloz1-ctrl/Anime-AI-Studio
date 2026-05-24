@@ -510,6 +510,7 @@ video { width: 100%; border-radius: 10px; margin-top: 12px; }
         <button class="btn btn-secondary" style="flex:1;font-size:10px" onclick="saveProject()">💾 Guardar</button>
         <button class="btn btn-ghost" style="font-size:10px" onclick="exportProject()">⬇ ZIP</button>
       </div>
+      <button onclick="deleteAllProjects()" style="width:100%;margin-top:10px;background:rgba(255,107,107,0.08);border:1px solid rgba(255,107,107,0.3);color:#ff6b6b;font-size:10px;padding:8px;border-radius:8px;cursor:pointer;letter-spacing:0.05em">🗑 Borrar TODO</button>
     </aside>
   </div>
 </div>
@@ -623,7 +624,12 @@ async function loadFromStorage() {
     if (apis && Object.keys(apis).length) STATE.apis = apis;
     const meta = JSON.parse(localStorage.getItem(STORAGE_KEY + '_meta') || '{}');
     if (meta.projects) STATE.projects = meta.projects;
-    if (meta.currentProject) STATE.currentProject = meta.currentProject;
+    if (meta.currentProject) {
+      STATE.currentProject = meta.currentProject;
+      // Ensure scenes belong only to this project
+      const validEpIds = new Set((STATE.currentProject.episodes || []).map(e => e.id));
+      STATE.currentProject.scenes = (STATE.currentProject.scenes || []).filter(s => !s.episodeId || validEpIds.has(s.episodeId));
+    }
     // Restore media from IndexedDB
     for (let i = 0; i < STATE.projects.length; i++) {
       STATE.projects[i] = await loadMediaFromDB(STATE.projects[i]);
@@ -814,11 +820,22 @@ async function callClaude(systemPrompt, userPrompt, maxTokens = 8000) {
 }
 
 async function callClaudeJSON(systemPrompt, userPrompt, maxTokens = 8000) {
-  const result = await callClaude(systemPrompt, userPrompt, maxTokens);
-  const match = result.match(/```json\s*([\s\S]*?)\s*```/) || result.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('No JSON encontrado');
-  try { return JSON.parse(match[1] || match[0]); }
-  catch(e) { throw new Error('JSON inválido: ' + e.message); }
+  const text = await callClaude(systemPrompt, userPrompt, maxTokens);
+  const clean = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+  // Try direct parse first
+  try { return JSON.parse(clean); } catch(e) {}
+  // Try extracting object
+  const mObj = clean.match(/\{[\s\S]*\}/);
+  if (mObj) { try { return JSON.parse(mObj[0]); } catch(e) {} }
+  // Try extracting array
+  const mArr = clean.match(/\[[\s\S]*\]/);
+  if (mArr) { try { return JSON.parse(mArr[0]); } catch(e) {} }
+  // Last resort: fix common issues
+  const candidates = [mObj?.[0], mArr?.[0]].filter(Boolean);
+  for (const c of candidates) {
+    try { return JSON.parse(c.replace(/,\s*}/g,'}').replace(/,\s*]/g,']')); } catch(e) {}
+  }
+  throw new Error('JSON inválido: ' + clean.slice(0, 120));
 }
 
 async function generateImage(prompt, referenceImagesB64 = []) {
@@ -976,12 +993,27 @@ function newProject() {
     saveCurrentProject();
   }
   STATE.currentProject = { id: 'p_' + Date.now(), name: 'Nuevo Proyecto', created: new Date().toISOString(), world: null, characters: [], episodes: [], scenes: [], voiceAssignments: {} };
+  // Hard reset all form fields to defaults
+  try {
+    $('world-title').value = '';
+    $('world-concept').value = '';
+    if ($('world-form')) $('world-form').style.display = '';
+    if ($('world-output')) $('world-output').innerHTML = '';
+    document.querySelectorAll('#style-tags .tag-btn').forEach((b,i) => b.classList.toggle('selected', i===0));
+  } catch(e) {}
   refreshUI();
   toast('Nuevo proyecto creado');
 }
 
 function saveCurrentProject() {
   if (!STATE.currentProject) return;
+  // Clean orphaned scenes (scenes whose episodeId doesn't match any episode in this project)
+  const validEpIds = new Set((STATE.currentProject.episodes || []).map(e => e.id));
+  STATE.currentProject.scenes = (STATE.currentProject.scenes || []).filter(s => !s.episodeId || validEpIds.has(s.episodeId));
+  // Also sync episode.scenes references
+  for (const ep of (STATE.currentProject.episodes || [])) {
+    ep.scenes = ep.scenes || [];
+  }
   const idx = STATE.projects.findIndex(p => p.id === STATE.currentProject.id);
   if (idx >= 0) STATE.projects[idx] = JSON.parse(JSON.stringify(STATE.currentProject));
   else STATE.projects.push(JSON.parse(JSON.stringify(STATE.currentProject)));
@@ -999,43 +1031,117 @@ function loadProject(id) {
   const p = STATE.projects.find(x => x.id === id);
   if (!p) return;
   STATE.currentProject = JSON.parse(JSON.stringify(p));
+  // Ensure scenes only belong to THIS project's episodes
+  if (STATE.currentProject.episodes && STATE.currentProject.scenes) {
+    const validEpIds = new Set(STATE.currentProject.episodes.map(e => e.id));
+    STATE.currentProject.scenes = STATE.currentProject.scenes.filter(s => !s.episodeId || validEpIds.has(s.episodeId));
+  }
   saveToStorage();
   refreshUI();
   closeModal('modal-projects');
   toast(`Proyecto "${p.name}" cargado`);
 }
 
-function deleteProject(id) {
-  if (!confirm('¿Eliminar este proyecto?')) return;
+async function deleteProject(id) {
+  const proj = STATE.projects.find(p => p.id === id);
+  const name = proj?.world?.title || proj?.name || 'proyecto';
+  if (!confirm(`¿Eliminar "${name}"?\n\nSe borrarán todos sus personajes, episodios, imágenes y audios. Esta acción no se puede deshacer.`)) return;
+  
+  // Clean IndexedDB media for this project
+  try {
+    const db = await getDB();
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    const store = tx.objectStore(DB_STORE);
+    if (proj) {
+      for (const c of (proj.characters || [])) store.delete(`char_${c.id}`);
+      for (const s of (proj.scenes || [])) {
+        store.delete(`scene_img_${s.id}`);
+        store.delete(`scene_nar_${s.id}`);
+        store.delete(`scene_dia_${s.id}`);
+        store.delete(`scene_mus_${s.id}`);
+        store.delete(`scene_sfx_${s.id}`);
+      }
+    }
+  } catch(e) { console.error('IDB clean error:', e); }
+  
   STATE.projects = STATE.projects.filter(p => p.id !== id);
   if (STATE.currentProject?.id === id) STATE.currentProject = null;
   saveToStorage();
   refreshUI();
   renderSavedProjects();
-  toast('Proyecto eliminado');
+  renderProjectsModal();
+  toast(`✓ "${name}" eliminado`);
+}
+
+// NUCLEAR OPTION: delete everything
+async function deleteAllProjects() {
+  if (STATE.projects.length === 0 && !STATE.currentProject) { toast('No hay nada que borrar'); return; }
+  const total = STATE.projects.length + (STATE.currentProject ? 1 : 0);
+  if (!confirm(`⚠ BORRAR TODO\n\nSe eliminarán ${total} proyecto(s) con TODAS sus imágenes, audios y datos.\n\nEsta acción es PERMANENTE.\n\n¿Continuar?`)) return;
+  if (!confirm('¿Estás completamente seguro? Última oportunidad.')) return;
+  
+  try {
+    // Wipe IndexedDB completely
+    const db = await getDB();
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).clear();
+    await new Promise(r => { tx.oncomplete = r; tx.onerror = r; });
+  } catch(e) { console.error(e); }
+  
+  // Wipe localStorage project data (keep APIs)
+  try {
+    localStorage.removeItem(STORAGE_KEY + '_meta');
+    sessionStorage.clear();
+  } catch(e) {}
+  
+  STATE.projects = [];
+  STATE.currentProject = null;
+  refreshUI();
+  renderSavedProjects();
+  renderProjectsModal();
+  closeModal('modal-projects');
+  toast('✓ Todo eliminado. Lista para empezar de cero.');
 }
 
 function renderProjectsModal() {
   const body = $('modal-projects-body');
-  if (STATE.projects.length === 0) { body.innerHTML = '<div class="empty"><div class="empty-text">No tienes proyectos guardados</div></div>'; return; }
-  body.innerHTML = STATE.projects.map(p => `
-    <div class="project-item ${STATE.currentProject?.id === p.id ? 'active' : ''}">
-      <div onclick="loadProject('${p.id}')" style="flex:1;cursor:pointer">
-        <div class="project-item-title">${escHtml(p.name)}</div>
-        <div class="project-item-meta">${p.characters?.length || 0} personajes · ${p.episodes?.length || 0} episodios · ${p.scenes?.length || 0} escenas</div>
-      </div>
-      <button class="btn btn-ghost" style="font-size:10px" onclick="event.stopPropagation();deleteProject('${p.id}')">Eliminar</button>
-    </div>`).join('');
+  if (STATE.projects.length === 0) {
+    body.innerHTML = '<div class="empty"><div class="empty-text">No tienes proyectos guardados</div></div>';
+    return;
+  }
+  body.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--text-dim);letter-spacing:0.1em">${STATE.projects.length} PROYECTO(S)</div>
+      <button onclick="deleteAllProjects()" style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.4);color:#ff6b6b;font-size:11px;padding:6px 12px;border-radius:6px;cursor:pointer;font-weight:600">🗑 Borrar TODO</button>
+    </div>
+    ${STATE.projects.map(p => {
+      const title = p.world?.title || p.name || 'Sin título';
+      const created = p.created ? new Date(p.created).toLocaleDateString('es-ES', { day:'numeric', month:'short' }) : '';
+      return `
+      <div class="project-item ${STATE.currentProject?.id === p.id ? 'active' : ''}" style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div onclick="loadProject('${p.id}')" style="flex:1;cursor:pointer;min-width:0">
+          <div class="project-item-title">${escHtml(title)}</div>
+          <div class="project-item-meta">${p.characters?.length || 0} personajes · ${p.episodes?.length || 0} eps · ${p.scenes?.length || 0} escenas${created ? ' · '+created : ''}</div>
+        </div>
+        <button onclick="event.stopPropagation();deleteProject('${p.id}')" style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.4);color:#ff6b6b;font-size:11px;padding:6px 12px;border-radius:6px;cursor:pointer;flex-shrink:0;font-weight:600">Eliminar</button>
+      </div>`;
+    }).join('')}`;
 }
 
 function renderSavedProjects() {
   const list = $('saved-projects-list');
   if (STATE.projects.length === 0) { list.innerHTML = '<div class="empty" style="padding:20px 10px"><div class="empty-text" style="font-size:10px">No hay proyectos</div></div>'; return; }
-  list.innerHTML = STATE.projects.slice(0, 5).map(p => `
-    <div class="project-item ${STATE.currentProject?.id === p.id ? 'active' : ''}" onclick="loadProject('${p.id}')">
-      <div class="project-item-title">${escHtml(p.name)}</div>
-      <div class="project-item-meta">${p.episodes?.length || 0} eps · ${p.scenes?.length || 0} escenas</div>
-    </div>`).join('');
+  list.innerHTML = STATE.projects.slice(0, 5).map(p => {
+    const title = p.world?.title || p.name || 'Sin título';
+    return `
+    <div class="project-item ${STATE.currentProject?.id === p.id ? 'active' : ''}" style="display:flex;align-items:center;gap:6px">
+      <div onclick="loadProject('${p.id}')" style="flex:1;cursor:pointer;min-width:0">
+        <div class="project-item-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(title)}</div>
+        <div class="project-item-meta">${p.episodes?.length || 0} eps · ${p.scenes?.length || 0} escenas</div>
+      </div>
+      <button onclick="event.stopPropagation();deleteProject('${p.id}')" title="Eliminar" style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.3);color:#ff6b6b;font-size:14px;padding:4px 8px;border-radius:6px;cursor:pointer;flex-shrink:0">✕</button>
+    </div>`;
+  }).join('');
 }
 
 function refreshUI() {
@@ -1637,13 +1743,16 @@ SOLO JSON array, sin texto adicional. Los diálogos deben tener emoción y energ
   try {
     let chars;
     try {
-      chars = await callClaudeJSON(SYSTEM_BASE, prompt, 8000);
-      if (!Array.isArray(chars)) chars = chars.characters || chars.result || [chars];
-    } catch(e) {
       const raw = await callClaude(SYSTEM_BASE, prompt, 8000);
-      const match = raw.match(/\[[\s\S]*\]/);
-      if (!match) throw new Error('No se pudo parsear personajes');
-      chars = JSON.parse(match[0].replace(/,\s*]/g, ']').replace(/,\s*}/g, '}'));
+      // Extract array from response
+      const clean = raw.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+      const arrMatch = clean.match(/\[[\s\S]*\]/);
+      if (!arrMatch) throw new Error('No array in response');
+      chars = JSON.parse(arrMatch[0].replace(/,\s*]/g,']').replace(/,\s*}/g,'}'));
+      if (!Array.isArray(chars)) throw new Error('Not an array');
+    } catch(e) {
+      console.error('Character parse error:', e.message);
+      throw new Error('No se pudo parsear personajes: ' + e.message);
     }
     
     for (const char of chars) {
