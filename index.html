@@ -1198,7 +1198,7 @@ function renderWorldOutput() {
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-ghost" style="font-size:11px" onclick="$('world-form').style.display='';$('world-output').innerHTML=renderWorldOutput_empty()">✏ Editar</button>
-        <button class="btn btn-primary" onclick="switchModule('characters')">+ Crear Personajes →</button>
+        <button class="btn btn-primary" onclick="switchModule('episodes')">+ Crear Episodio →</button>
       </div>
     </div>
     <div class="output-section">
@@ -1206,8 +1206,8 @@ function renderWorldOutput() {
     </div>
     <div style="margin-top:20px;padding:16px;background:var(--surface-warm);border-radius:10px;border:1px solid var(--border-warm)">
       <div style="font-size:10px;letter-spacing:0.2em;color:var(--sunset-amber);text-transform:uppercase;margin-bottom:10px">SIGUIENTE PASO</div>
-      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Universo listo. Ahora crea los personajes que habitarán este mundo.</div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="switchModule('characters');openModal('modal-new-char')">👤 Crear Primer Personaje</button>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Universo listo. Genera el primer episodio — los personajes se crearán automáticamente.</div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="switchModule('episodes');openModal('modal-new-ep')">🎬 Crear Primer Episodio</button>
     </div>`;
 }
 function renderWorldOutput_empty() { return ''; }
@@ -1400,10 +1400,10 @@ Mínimo 4 locaciones. Sé profundo y específico.`;
     if (worldOut) {
       worldOut.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-    toast('✓ Universo "' + result.title + '" creado — ¡ahora crea tus personajes!');
+    toast('✓ Universo "' + result.title + '" creado — ¡ahora genera el primer episodio!');
     // Auto-suggest next step after 2s
     setTimeout(() => {
-      if (confirm('¡Universo listo! ¿Ir a crear personajes ahora?')) switchModule('characters');
+      if (confirm('¡Universo listo! ¿Ir a crear el primer episodio?')) { switchModule('episodes'); openModal('modal-new-ep'); }
     }, 1800);
   } catch(e) { toast('Error: ' + e.message, 'error'); console.error(e); }
   finally { $('world-loading').style.display = 'none'; }
@@ -1508,7 +1508,6 @@ JSON:
     STATE.currentProject.characters.push(char);
     saveCurrentProject();
     refreshUI();
-    switchModule('characters');
     toast('✓ "' + char.name + '" creado — generando retrato...');
     if (STATE.apis.banana) setTimeout(() => generateCharacterImage(char.id), 500);
   } catch(e) { toast('Error: ' + e.message, 'error'); console.error(e); }
@@ -1623,7 +1622,7 @@ function deleteCharacter(id) {
 
 async function generateEpisode() {
   if (!STATE.currentProject?.world) { toast('Define el universo', 'error'); closeModal('modal-new-ep'); switchModule('world'); return; }
-  if (STATE.currentProject.characters.length === 0) { toast('Crea personajes', 'error'); closeModal('modal-new-ep'); switchModule('characters'); return; }
+  // Characters are auto-generated from episode — no block needed
   if (!STATE.apis.claude) { toast('Configura Claude', 'error'); return; }
   const epNumber = (STATE.currentProject.episodes?.length || 0) + 1;
   const func = $('ep-function').value;
@@ -2030,7 +2029,7 @@ let cachedVoices = null;
 async function renderVoicesPanel() {
   const c = $('voices-content');
   const p = STATE.currentProject;
-  if (!p || !p.characters || p.characters.length === 0) { c.innerHTML = '<div class="empty"><div class="empty-icon">声</div><div class="empty-text">Crea personajes primero.</div></div>'; return; }
+  if (!p || !p.characters || p.characters.length === 0) { c.innerHTML = '<div class="empty"><div class="empty-icon">声</div><div class="empty-text">Genera un episodio primero — los personajes se crearán automáticamente.</div></div>'; return; }
   if (!STATE.apis.eleven) { c.innerHTML = '<div class="empty"><div class="empty-icon">🔑</div><div class="empty-text">Configura ElevenLabs.<br><br><button class="btn btn-primary" onclick="openModal(\'modal-apis\')" style="margin-top:14px">Configurar APIs</button></div></div>'; return; }
   
   if (!cachedVoices) {
