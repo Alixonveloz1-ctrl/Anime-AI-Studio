@@ -106,6 +106,17 @@ header { padding: 22px 36px; border-bottom: 1px solid var(--border); display: fl
 .loading-block { margin-top: 20px; padding: 18px 22px; background: var(--surface); border: 1px solid var(--border-warm); border-radius: 10px; }
 .loading-text { font-size: 11px; color: var(--sunset-amber); letter-spacing: 0.2em; margin-bottom: 10px; text-transform: uppercase; }
 .loading-bar { height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; }
+/* Global progress bar */
+#global-progress {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+  background: rgba(10,12,20,0.95); padding: 10px 16px 12px;
+  display: none; border-bottom: 1px solid var(--border-warm);
+  flex-direction: column; gap: 4px;
+}
+#global-progress.active { display: flex; }
+#global-progress-label { font-size: 11px; color: var(--paper-cream); letter-spacing: 0.05em; display: flex; justify-content: space-between; }
+#global-progress-bar-wrap { height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+#global-progress-fill { height: 100%; background: linear-gradient(90deg, var(--sunset-amber), #ff9f6b); border-radius: 2px; transition: width 0.3s ease; width: 0%; }
 .loading-fill { height: 100%; border-radius: 1px; background: linear-gradient(90deg, transparent, var(--sunset-amber), transparent); background-size: 50% 100%; animation: shimmer 1.4s ease-in-out infinite; }
 @keyframes shimmer { 0%{background-position:-50% 0} 100%{background-position:150% 0} }
 .output-section { margin-top: 24px; border: 1px solid var(--border-warm); border-radius: 12px; overflow: hidden; background: rgba(14, 23, 41, 0.5); backdrop-filter: blur(20px); }
@@ -430,7 +441,7 @@ video { width: 100%; border-radius: 10px; margin-top: 12px; }
             <div class="panel-title">Protagonistas</div>
             <div class="panel-subtitle">Personajes con identidad visual consistente y psicología profunda</div>
           </div>
-          <button class="btn btn-primary" onclick="openModal('modal-new-char')">+ Crear Personaje</button>
+          <button class="btn btn-secondary" style="font-size:11px" onclick="openModal('modal-new-char')">+ Manual</button>
         </div>
         <div class="panel-content">
           <div id="characters-list"><div class="empty"><div class="empty-icon">人</div><div class="empty-text">Aún no has creado personajes.</div></div></div>
@@ -1554,7 +1565,11 @@ function renderCharacters() {
   const p = STATE.currentProject;
   const list = $('characters-list');
   if (!p || !p.characters || p.characters.length === 0) {
-    list.innerHTML = '<div class="empty"><div class="empty-icon">人</div><div class="empty-text">Aún no has creado personajes.</div></div>';
+    list.innerHTML = `<div class="empty">
+      <div class="empty-icon">人</div>
+      <div class="empty-text" style="margin-bottom:14px">Los personajes se crean automáticamente al generar un episodio.</div>
+      <button class="btn btn-primary" onclick="switchModule('episodes');openModal('modal-new-ep')" style="margin:0 auto">🎬 Ir a Episodios</button>
+    </div>`;
     return;
   }
   list.innerHTML = `<div class="card-list">${p.characters.map(c => `
@@ -1629,6 +1644,7 @@ async function generateEpisode() {
   const emotion = $('ep-emotion').value.trim();
   const context = $('ep-context').value.trim();
   closeModal('modal-new-ep');
+  PROGRESS.show('Generando guión del episodio...', 5);
 
   const w = STATE.currentProject.world;
   const chars = STATE.currentProject.characters.map(c => `${c.name}(${c.role})`).join(', ');
@@ -1652,13 +1668,13 @@ Responde ÚNICAMENTE con este JSON (sin texto antes ni después):
 IMPORTANTE: 15 escenas exactas. Distribución acts: cold_open(2), act1(4), act2(4), climax(3), resolution(1), post_credits(1). kenBurns: zoom_in_slow/zoom_out_slow/pan_left/pan_right/pan_up/pan_down/static`;
 
   try {
-    toast('Generando estructura del episodio (1/2)...', 'info');
+    PROGRESS.update('Generando estructura narrativa (1/2)...', 15);
     let ep;
     try {
       ep = await callClaudeJSON(SYSTEM_BASE, prompt, 16000);
     } catch(parseErr) {
       // If JSON parse fails, try extracting partial JSON
-      toast('Reintentando con formato simplificado...', 'info');
+      PROGRESS.update('Reintentando generación...', 30);
       const rawResult = await callClaude(SYSTEM_BASE, prompt + '\n\nIMPORTANTE: Responde SOLO con el JSON, sin texto adicional antes ni después. El JSON debe ser válido y completo.', 16000);
       // Try to extract JSON more aggressively
       const jsonMatch = rawResult.match(/\{[\s\S]*\}/);
@@ -1692,6 +1708,7 @@ IMPORTANTE: 15 escenas exactas. Distribución acts: cold_open(2), act1(4), act2(
     STATE.currentProject.episodes = STATE.currentProject.episodes || [];
     STATE.currentProject.episodes.push(ep);
     saveCurrentProject();
+    PROGRESS.update('Episodio listo. Generando personajes...', 85);
     refreshUI();
     switchModule('episodes');
     toast(`✓ Ep ${ep.number} "${ep.title}" — ${ep.scenes.length} escenas`);
@@ -1699,7 +1716,7 @@ IMPORTANTE: 15 escenas exactas. Distribución acts: cold_open(2), act1(4), act2(
     // Auto-generate missing characters from this episode
     await autoGenerateEpisodeCharacters(ep);
     
-  } catch(e) { toast('Error: ' + e.message, 'error'); console.error(e); }
+  } catch(e) { PROGRESS.hide(); toast('Error: ' + e.message, 'error'); console.error(e); }
 }
 
 async function autoGenerateEpisodeCharacters(ep) {
@@ -1775,6 +1792,7 @@ SOLO JSON array, sin texto adicional. Los diálogos deben tener emoción y energ
     
     saveCurrentProject();
     refreshUI();
+    PROGRESS.hide();
     toast(`✓ ${chars.length} personaje(s) generado(s). Retratos en proceso...`);
   } catch(e) {
     toast(`Error generando personajes: ${e.message}`, 'error');
@@ -1948,12 +1966,15 @@ async function generateAllEpisodeImages(epId) {
   const pending = ep.scenes.filter(s => !s.imageData);
   if (pending.length === 0) { toast('Todas ya generadas'); return; }
   if (!confirm(`Generar ${pending.length} imágenes? Costo ~$${(pending.length * 0.039).toFixed(2)}`)) return;
+  PROGRESS.show(`Generando imágenes 0/${pending.length}`, 0);
   for (let i = 0; i < pending.length; i++) {
-    toast(`Imagen ${i+1}/${pending.length}: ${pending[i].title}`, 'info');
+    const pct = ((i) / pending.length) * 100;
+    PROGRESS.update(`Imagen ${i+1}/${pending.length}: ${pending[i].title}`, pct);
     try { await generateSceneImage(pending[i].id); await new Promise(r => setTimeout(r, 800)); }
     catch(e) { console.error('Error escena', i, e); }
   }
-  toast('Imágenes completadas');
+  PROGRESS.hide();
+  toast('✓ Imágenes completadas');
 }
 
 function viewScene(id) {
@@ -2142,6 +2163,7 @@ async function autoAssignVoices() {
   if (!confirm(`Crear ${total} voces únicas con Voice Design de ElevenLabs (una por personaje + narrador). Costo ~$${(total * 0.10).toFixed(2)}. ¿Continuar?`)) return;
   
   STATE.currentProject.voiceAssignments = STATE.currentProject.voiceAssignments || {};
+  PROGRESS.show(`Creando voces 0/${total}`, 0);
   let created = 0, failed = 0;
 
   // Create voice for each character
@@ -2525,6 +2547,7 @@ async function generateEpisodeNarration(epId) {
   if (totalNarration === 0) { toast('No hay narración en este episodio', 'error'); return; }
   if (!confirm(`Generar narración continua: ${totalNarration} fragmentos con voz del narrador. Las escenas de diálogo puro se omiten. ¿Continuar?`)) return;
   
+  PROGRESS.show(`Generando narración 0/${totalNarration}`, 0);
   let done = 0;
   for (const scene of ep.scenes) {
     if (!scene.narration || !scene.narration.trim()) continue;
@@ -2535,6 +2558,7 @@ async function generateEpisodeNarration(epId) {
       const audio = await generateVoice(scene.narration, narratorVoice, emotionLevel);
       scene.narrationAudio = audio;
       done++;
+      PROGRESS.update(`Narración ${done}/${totalNarration}`, (done/totalNarration)*100);
       // Save after each to prevent loss
       STATE.currentProject.scenes = STATE.currentProject.scenes.map(s => s.id === scene.id ? scene : s);
       saveCurrentProject();
@@ -2545,6 +2569,7 @@ async function generateEpisodeNarration(epId) {
     }
   }
   refreshUI();
+  PROGRESS.hide();
   toast(`✓ Narración completa: ${done} fragmentos generados`);
 }
 
