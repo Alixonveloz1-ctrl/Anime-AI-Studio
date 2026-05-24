@@ -1279,19 +1279,49 @@ JSON:
 EXACTAMENTE 30 escenas.`;
 
   try {
-    const ep = await callClaudeJSON(SYSTEM_BASE, prompt, 16000);
-    ep.id = 'ep_' + Date.now();
-    if (ep.scenes) {
-      ep.scenes = ep.scenes.map((s, i) => ({ ...s, id: 'scene_' + Date.now() + '_' + i, episodeId: ep.id, episodeNumber: ep.number, imageData: null, dialogueAudio: null, narrationAudio: null, musicAudio: null, soundFXAudio: null }));
-      STATE.currentProject.scenes = STATE.currentProject.scenes || [];
-      STATE.currentProject.scenes.push(...ep.scenes);
+    toast('Generando estructura del episodio (1/2)...', 'info');
+    let ep;
+    try {
+      ep = await callClaudeJSON(SYSTEM_BASE, prompt, 16000);
+    } catch(parseErr) {
+      // If JSON parse fails, try extracting partial JSON
+      toast('Reintentando con formato simplificado...', 'info');
+      const rawResult = await callClaude(SYSTEM_BASE, prompt + '\n\nIMPORTANTE: Responde SOLO con el JSON, sin texto adicional antes ni después. El JSON debe ser válido y completo.', 16000);
+      // Try to extract JSON more aggressively
+      const jsonMatch = rawResult.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('No se pudo parsear la respuesta. Intenta de nuevo.');
+      try {
+        ep = JSON.parse(jsonMatch[0]);
+      } catch(e2) {
+        // Last resort: try to fix common JSON issues
+        const fixed = jsonMatch[0]
+          .replace(/,\s*}/g, '}')
+          .replace(/,\s*]/g, ']')
+          .replace(/([^\\])"/g, (m, p) => p + '"');
+        ep = JSON.parse(fixed);
+      }
     }
+    ep.id = 'ep_' + Date.now();
+    if (!ep.scenes || ep.scenes.length === 0) throw new Error('El episodio no tiene escenas. Intenta de nuevo.');
+    ep.scenes = ep.scenes.map((s, i) => ({
+      ...s,
+      id: 'scene_' + Date.now() + '_' + i,
+      episodeId: ep.id,
+      episodeNumber: ep.number,
+      imageData: null,
+      dialogueAudio: null,
+      narrationAudio: null,
+      musicAudio: null,
+      soundFXAudio: null
+    }));
+    STATE.currentProject.scenes = STATE.currentProject.scenes || [];
+    STATE.currentProject.scenes.push(...ep.scenes);
     STATE.currentProject.episodes = STATE.currentProject.episodes || [];
     STATE.currentProject.episodes.push(ep);
     saveCurrentProject();
     refreshUI();
     switchModule('episodes');
-    toast(`✓ Ep ${ep.number} "${ep.title}" — ${ep.scenes.length} escenas. Toca 🎨 Imágenes para generarlas.`);
+    toast(`✓ Ep ${ep.number} "${ep.title}" — ${ep.scenes.length} escenas listas`);
   } catch(e) { toast('Error: ' + e.message, 'error'); console.error(e); }
 }
 
@@ -1618,11 +1648,25 @@ async function testVoice(charId) {
   const voiceId = STATE.currentProject.voiceAssignments?.[charId];
   if (!voiceId) return;
   let sample;
-  if (charId === '_narrator') sample = 'La ciudad dormía bajo el cielo púrpura del crepúsculo, y en algún lugar, alguien empezaba a recordar.';
-  else { const char = STATE.currentProject.characters.find(c => c.id === charId); sample = `Hola, soy ${char.name}.`; }
-  toast('Generando muestra...');
-  try { const audio = await generateVoice(sample, voiceId); new Audio(audio).play(); }
-  catch(e) { toast('Error: ' + e.message, 'error'); }
+  if (charId === '_narrator') sample = 'La ciudad dormía bajo el cielo del crepúsculo. Alguien empezaba a recordar.';
+  else { const char = STATE.currentProject.characters.find(c => c.id === charId); sample = `Soy ${char?.name || 'el personaje'}. Este es mi sonido.`; }
+  toast('Generando muestra de voz...', 'info');
+  try {
+    const audioData = await generateVoice(sample, voiceId);
+    // iOS-compatible: inject audio element into DOM and autoplay
+    const existing = document.getElementById('test-audio-player');
+    if (existing) existing.remove();
+    const audioEl = document.createElement('audio');
+    audioEl.id = 'test-audio-player';
+    audioEl.src = audioData;
+    audioEl.controls = true;
+    audioEl.autoplay = true;
+    audioEl.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);width:80%;max-width:360px;z-index:3000;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.6)';
+    document.body.appendChild(audioEl);
+    audioEl.play().catch(() => toast('Toca el reproductor para escuchar', 'info'));
+    setTimeout(() => { const el = document.getElementById('test-audio-player'); if(el) el.remove(); }, 15000);
+    toast('▶ Escucha la muestra');
+  } catch(e) { toast('Error voz: ' + e.message, 'error'); }
 }
 
 // AUTO-ASSIGN VOICES using Claude to match characters to available voices
@@ -1660,42 +1704,58 @@ async function autoAssignVoices() {
     speechPattern: c.behavior?.speechPattern || ''
   }));
   
-  const matchPrompt = `Tengo ${cachedVoices.length} voces disponibles en ElevenLabs y necesito asignar la mejor a cada personaje + un narrador.
+  // Limit voices to first 30 to avoid token overflow
+  const voicesSample = voicesCatalog.slice(0, 30);
+  const matchPrompt = `Asigna voces de ElevenLabs a personajes de anime.
 
-VOCES DISPONIBLES:
-${JSON.stringify(voicesCatalog, null, 2)}
+VOCES (id|nombre|genero|edad):
+${voicesSample.map(v => `${v.id}|${v.name}|${v.gender}|${v.age}`).join('\n')}
 
 PERSONAJES:
-${JSON.stringify(charProfiles, null, 2)}
+${charProfiles.map(c => `${c.id}|${c.name}|${c.role}|${c.age}|${c.gender}|${c.voiceProfile}`).join('\n')}
 
-Para cada personaje y el narrador, devuelve la mejor voz que coincida con su perfil emocional, género, edad y carácter. Si NINGUNA voz disponible es buena coincidencia (por ejemplo: ninguna voz coincide bien con el género, la edad o el tono emocional requerido), marca needs_design=true y proporciona una descripción detallada para crear una voz nueva.
+Reglas:
+- Asigna la voz más compatible por género y perfil
+- Si no hay buena coincidencia de género, marca needs_design:true
+- needs_design debe ser false por defecto (prefiere asignar existentes)
+- INCLUYE al narrador con characterId="_narrator"
 
-Responde SOLO JSON:
-\`\`\`json
-{
-  "assignments": [
-    {
-      "characterId": "id del personaje o _narrator",
-      "characterName": "nombre",
-      "voiceId": "voice_id de la lista si hay buen match, null si needs_design",
-      "voiceName": "nombre de la voz si hay match",
-      "matchQuality": "excellent / good / acceptable / poor",
-      "reasoning": "por qué es buena/mala opción",
-      "needs_design": false,
-      "design_description": "Solo si needs_design=true: descripción detallada de la voz a crear (edad, género, acento, tono, ritmo, calidad emocional). Ejemplo: 'Joven mujer japonesa de 17 años, voz suave y melancólica, ritmo pausado, ligeramente susurrante, con calidad introspectiva'"
-    }
-  ]
-}
-\`\`\`
-
-INCLUYE SIEMPRE al narrador con characterId="_narrator". Para el narrador, prefiere una voz neutral, cálida, con autoridad sutil — capaz de transmitir nostalgia y poesía.`;
+Responde ÚNICAMENTE con este JSON exacto sin texto adicional:
+{"assignments":[{"characterId":"ID_AQUI","characterName":"NOMBRE","voiceId":"VOICE_ID_O_NULL","needs_design":false,"design_description":""}]}`;
 
   try {
-    const result = await callClaudeJSON(SYSTEM_BASE, matchPrompt, 4000);
+    let rawVoiceText, voiceResult;
+    try {
+      rawVoiceText = await callClaude(SYSTEM_BASE, matchPrompt, 4000);
+      // Try multiple extraction strategies
+      const jsonMatch = rawVoiceText.match(/```json\s*([\s\S]*?)\s*```/) ||
+                        rawVoiceText.match(/```\s*([\s\S]*?)\s*```/) ||
+                        rawVoiceText.match(/(\{[\s\S]*\})/);
+      if (!jsonMatch) throw new Error('Sin JSON en respuesta de voces');
+      const jsonStr = (jsonMatch[1] || jsonMatch[0]).replace(/,\s*}/g,'}').replace(/,\s*]/g,']');
+      voiceResult = JSON.parse(jsonStr);
+    } catch(parseErr) {
+      toast('Error parseando voces: ' + parseErr.message + '. Asignando manualmente...', 'error');
+      console.error('Voice parse error:', parseErr, 'Raw:', rawVoiceText);
+      // Fallback: assign first available voice to each character
+      STATE.currentProject.voiceAssignments = STATE.currentProject.voiceAssignments || {};
+      if (cachedVoices.length > 0) {
+        p.characters.forEach((c, i) => {
+          STATE.currentProject.voiceAssignments[c.id] = cachedVoices[i % cachedVoices.length].voice_id;
+        });
+        STATE.currentProject.voiceAssignments['_narrator'] = cachedVoices[0].voice_id;
+        saveCurrentProject();
+        renderVoicesPanel();
+        toast('Voces asignadas (modo fallback) — ajusta manualmente si quieres');
+      }
+      return;
+    }
+    const assignments = voiceResult.assignments || voiceResult;
+    if (!Array.isArray(assignments)) throw new Error('Formato de assignments inválido');
     let designed = 0, assigned = 0;
     STATE.currentProject.voiceAssignments = STATE.currentProject.voiceAssignments || {};
     
-    for (const a of result.assignments) {
+    for (const a of assignments) {
       if (a.needs_design && a.design_description) {
         toast(`Creando voz para ${a.characterName}...`, 'info');
         try {
