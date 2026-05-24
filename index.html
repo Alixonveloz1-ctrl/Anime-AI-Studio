@@ -1,0 +1,2346 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ANIME AI STUDIO · Your Name Edition</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@200;300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<style>
+:root {
+  --twilight-deep: #1a2842;
+  --twilight-mid: #2d4870;
+  --twilight-soft: #4a6b9b;
+  --sunset-amber: #f4a261;
+  --sunset-rose: #e76f51;
+  --sunset-coral: #ffb088;
+  --paper-cream: #f5ebe0;
+  --paper-warm: #fdf6ec;
+  --green-grass: #6b8e5a;
+  --comet-gold: #e6c068;
+  --shrine-red: #b84a3d;
+  --night-blue: #0e1729;
+  --mist: #95a3c0;
+  --ink: #2a2e3a;
+  --bg: linear-gradient(180deg, #0e1729 0%, #1a2842 35%, #2d4870 70%, #4a6b9b 100%);
+  --surface: rgba(253, 246, 236, 0.04);
+  --surface-warm: rgba(244, 162, 97, 0.08);
+  --border: rgba(245, 235, 224, 0.12);
+  --border-warm: rgba(244, 162, 97, 0.25);
+  --border-strong: rgba(245, 235, 224, 0.25);
+  --text: #f5ebe0;
+  --text-dim: #95a3c0;
+  --text-faded: rgba(245, 235, 224, 0.5);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: var(--night-blue); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+.atmosphere { position: fixed; inset: 0; z-index: 0; background: var(--bg); }
+.stars { position: fixed; inset: 0; z-index: 0;
+  background-image: radial-gradient(1px 1px at 15% 20%, rgba(245,235,224,0.5), transparent),
+    radial-gradient(1px 1px at 25% 60%, rgba(245,235,224,0.3), transparent),
+    radial-gradient(1.5px 1.5px at 50% 30%, rgba(230,192,104,0.6), transparent),
+    radial-gradient(1px 1px at 70% 70%, rgba(245,235,224,0.4), transparent),
+    radial-gradient(1px 1px at 85% 15%, rgba(245,235,224,0.5), transparent),
+    radial-gradient(1px 1px at 90% 50%, rgba(230,192,104,0.4), transparent);
+  animation: twinkle 8s ease-in-out infinite; pointer-events: none; }
+@keyframes twinkle { 0%,100%{opacity:0.6} 50%{opacity:1} }
+.sunset-glow { position: fixed; bottom: 0; left: 0; right: 0; height: 60vh; z-index: 0;
+  background: radial-gradient(ellipse 100% 100% at 50% 100%, rgba(244,162,97,0.18) 0%, rgba(231,111,81,0.10) 30%, transparent 60%);
+  pointer-events: none; }
+.comet { position: fixed; top: 10%; left: -100px; z-index: 0; width: 200px; height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(230,192,104,0.6), rgba(245,235,224,0.9), transparent);
+  animation: comet 18s linear infinite; pointer-events: none; transform: rotate(15deg); }
+@keyframes comet { 0% { left: -200px; opacity: 0; } 10% { opacity: 1; } 60% { opacity: 1; } 100% { left: 110%; opacity: 0; } }
+.app { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; }
+header { padding: 22px 36px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; backdrop-filter: blur(20px); background: rgba(14, 23, 41, 0.7); position: sticky; top: 0; z-index: 100; }
+.brand { display: flex; align-items: baseline; gap: 18px; }
+.brand-jp { font-family: 'Noto Serif JP', serif; font-weight: 300; font-size: 11px; color: var(--sunset-amber); letter-spacing: 0.4em; opacity: 0.85; }
+.brand-title { font-family: 'Cormorant Garamond', serif; font-weight: 500; font-size: 26px; letter-spacing: 0.04em; color: var(--paper-cream); font-style: italic; }
+.brand-sub { font-size: 9px; letter-spacing: 0.35em; color: var(--text-faded); text-transform: uppercase; margin-top: 2px; }
+.header-actions { display: flex; align-items: center; gap: 12px; }
+.api-status { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); font-size: 10px; letter-spacing: 0.15em; color: var(--text-dim); text-transform: uppercase; }
+.api-status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--shrine-red); }
+.api-status.ready .dot { background: var(--green-grass); box-shadow: 0 0 8px var(--green-grass); }
+.icon-btn { width: 38px; height: 38px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--paper-cream); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; transition: all 0.2s; }
+.icon-btn:hover { border-color: var(--sunset-amber); color: var(--sunset-amber); }
+.studio { display: grid; grid-template-columns: 260px 1fr 320px; flex: 1; height: calc(100vh - 76px); }
+.sidebar { border-right: 1px solid var(--border); overflow-y: auto; padding: 24px 0; background: rgba(14, 23, 41, 0.4); }
+.sidebar::-webkit-scrollbar, .panel-content::-webkit-scrollbar, .right-panel::-webkit-scrollbar { width: 3px; }
+.sidebar::-webkit-scrollbar-thumb, .panel-content::-webkit-scrollbar-thumb, .right-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.sidebar-label { font-family: 'Noto Serif JP', serif; font-weight: 300; font-size: 9px; letter-spacing: 0.4em; color: var(--sunset-amber); text-transform: uppercase; padding: 0 24px 12px; margin-top: 8px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.sidebar-section { padding: 0 18px 24px; }
+.nav-item { width: 100%; text-align: left; padding: 11px 14px; border-radius: 8px; background: transparent; border: 1px solid transparent; color: var(--text-dim); cursor: pointer; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 400; letter-spacing: 0.02em; transition: all 0.2s; margin-bottom: 3px; display: flex; align-items: center; gap: 11px; }
+.nav-item:hover { background: var(--surface-warm); color: var(--paper-cream); }
+.nav-item.active { background: linear-gradient(90deg, rgba(244,162,97,0.15), rgba(244,162,97,0.05)); border-color: var(--border-warm); color: var(--sunset-amber); }
+.nav-item .nav-icon { font-size: 14px; width: 18px; text-align: center; opacity: 0.8; }
+.center-panel { display: flex; flex-direction: column; overflow: hidden; }
+.panel-header { padding: 22px 36px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.panel-title-block { display: flex; flex-direction: column; gap: 4px; }
+.panel-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 500; color: var(--paper-cream); letter-spacing: 0.02em; font-style: italic; }
+.panel-subtitle { font-size: 11px; color: var(--text-dim); letter-spacing: 0.08em; }
+.panel-content { flex: 1; overflow-y: auto; padding: 28px 36px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+.form-grid.cols-1 { grid-template-columns: 1fr; }
+.field { display: flex; flex-direction: column; gap: 7px; }
+.field label { font-size: 10px; letter-spacing: 0.18em; color: var(--sunset-amber); text-transform: uppercase; font-weight: 500; }
+.field input, .field select, .field textarea { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--paper-cream); font-family: 'Inter', sans-serif; font-size: 13px; padding: 11px 14px; outline: none; transition: all 0.2s; width: 100%; }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--sunset-amber); background: var(--surface-warm); }
+.field select option { background: var(--night-blue); color: var(--paper-cream); }
+.field textarea { resize: vertical; min-height: 90px; line-height: 1.7; }
+.field-hint { font-size: 10px; color: var(--text-faded); font-style: italic; }
+.btn { padding: 12px 24px; border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; letter-spacing: 0.05em; cursor: pointer; transition: all 0.2s; border: none; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.btn-primary { background: linear-gradient(135deg, var(--sunset-amber), var(--sunset-rose)); color: var(--night-blue); font-weight: 600; }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(244,162,97,0.3); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-secondary { background: var(--surface); border: 1px solid var(--border-strong); color: var(--paper-cream); }
+.btn-secondary:hover { border-color: var(--sunset-amber); color: var(--sunset-amber); }
+.btn-ghost { background: transparent; color: var(--text-dim); padding: 8px 14px; font-size: 11px; }
+.btn-ghost:hover { color: var(--sunset-amber); }
+.btn-row { display: flex; align-items: center; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+.tag-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag-btn { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-dim); font-family: 'Inter', sans-serif; font-size: 11px; cursor: pointer; transition: all 0.15s; }
+.tag-btn:hover { border-color: var(--sunset-amber); color: var(--paper-cream); }
+.tag-btn.selected { background: var(--surface-warm); border-color: var(--sunset-amber); color: var(--sunset-amber); }
+.divider { height: 1px; background: var(--border); margin: 28px 0; position: relative; }
+.divider span { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); background: var(--night-blue); padding: 0 18px; font-family: 'Noto Serif JP', serif; font-size: 9px; font-weight: 300; color: var(--sunset-amber); letter-spacing: 0.4em; }
+.loading-block { margin-top: 20px; padding: 18px 22px; background: var(--surface); border: 1px solid var(--border-warm); border-radius: 10px; }
+.loading-text { font-size: 11px; color: var(--sunset-amber); letter-spacing: 0.2em; margin-bottom: 10px; text-transform: uppercase; }
+.loading-bar { height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; }
+.loading-fill { height: 100%; border-radius: 1px; background: linear-gradient(90deg, transparent, var(--sunset-amber), transparent); background-size: 50% 100%; animation: shimmer 1.4s ease-in-out infinite; }
+@keyframes shimmer { 0%{background-position:-50% 0} 100%{background-position:150% 0} }
+.output-section { margin-top: 24px; border: 1px solid var(--border-warm); border-radius: 12px; overflow: hidden; background: rgba(14, 23, 41, 0.5); backdrop-filter: blur(20px); }
+.output-header { padding: 14px 22px; background: linear-gradient(90deg, rgba(244,162,97,0.12), transparent); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.output-title { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 16px; color: var(--paper-cream); letter-spacing: 0.02em; }
+.output-body { padding: 22px 26px; }
+.output-text { white-space: pre-wrap; font-size: 13px; line-height: 1.9; color: var(--paper-cream); font-family: 'Inter', sans-serif; font-weight: 300; max-height: 600px; overflow-y: auto; }
+.right-panel { border-left: 1px solid var(--border); overflow-y: auto; padding: 24px 22px; background: rgba(14, 23, 41, 0.4); }
+.project-info { padding: 18px; border: 1px solid var(--border-warm); border-radius: 12px; margin-bottom: 24px; background: linear-gradient(135deg, rgba(244,162,97,0.06), transparent); }
+.project-name { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 18px; color: var(--paper-cream); margin-bottom: 4px; }
+.project-meta { font-size: 10px; color: var(--text-dim); letter-spacing: 0.05em; }
+.stat-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid rgba(245,235,224,0.05); font-size: 11px; }
+.stat-row:last-child { border-bottom: none; }
+.stat-label { color: var(--text-dim); }
+.stat-val { color: var(--sunset-amber); font-weight: 600; font-family: 'Cormorant Garamond', serif; font-size: 14px; }
+.module-panel { display: none; }
+.module-panel.active { display: block; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+.card-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-top: 20px; }
+.character-card { border: 1px solid var(--border-warm); border-radius: 14px; overflow: hidden; background: var(--surface); transition: all 0.2s; }
+.character-card:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(0,0,0,0.3); }
+.char-portrait { width: 100%; aspect-ratio: 1/1; background: linear-gradient(135deg, var(--twilight-mid), var(--twilight-deep)); position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.char-portrait img { width: 100%; height: 100%; object-fit: cover; }
+.char-portrait-placeholder { font-family: 'Noto Serif JP', serif; font-size: 60px; color: var(--sunset-amber); opacity: 0.3; }
+.char-info { padding: 14px 16px; }
+.char-name { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 18px; color: var(--paper-cream); }
+.char-role-tag { font-size: 9px; letter-spacing: 0.2em; color: var(--sunset-amber); text-transform: uppercase; margin-top: 3px; }
+.char-actions { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+.char-actions .btn { padding: 6px 10px; font-size: 10px; flex: 1; justify-content: center; }
+.episode-card { border: 1px solid var(--border-warm); border-radius: 14px; overflow: hidden; background: var(--surface); margin-bottom: 16px; }
+.episode-card-header { padding: 16px 20px; background: linear-gradient(90deg, rgba(244,162,97,0.1), transparent); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.ep-num { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 22px; color: var(--sunset-amber); }
+.ep-title { font-size: 14px; color: var(--paper-cream); }
+.ep-meta { font-size: 10px; color: var(--text-dim); letter-spacing: 0.1em; margin-top: 2px; }
+.episode-card-body { padding: 16px 20px; }
+.scene-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; margin-top: 20px; }
+.scene-card { border: 1px solid var(--border-warm); border-radius: 14px; overflow: hidden; background: var(--surface); }
+.scene-thumb { width: 100%; aspect-ratio: 16/9; background: linear-gradient(135deg, var(--twilight-deep), var(--twilight-mid)); position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.scene-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.scene-thumb-placeholder { font-size: 32px; opacity: 0.3; color: var(--sunset-amber); }
+.scene-thumb-overlay { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 50%, rgba(14,23,41,0.95)); padding: 14px; display: flex; flex-direction: column; justify-content: flex-end; }
+.scene-num { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 16px; color: var(--sunset-amber); }
+.scene-title { font-size: 13px; color: var(--paper-cream); margin-top: 2px; }
+.scene-body { padding: 14px 16px; }
+.scene-desc { font-size: 11px; line-height: 1.7; color: var(--text-dim); }
+.scene-actions { padding: 0 16px 16px; display: flex; gap: 8px; }
+.scene-actions .btn { padding: 6px 10px; font-size: 10px; flex: 1; justify-content: center; }
+.scene-status-pills { display: flex; gap: 4px; padding: 0 16px 12px; flex-wrap: wrap; }
+.status-pill { font-size: 8px; padding: 3px 7px; border-radius: 4px; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid var(--border); }
+.status-pill.done { background: rgba(107,142,90,0.15); color: var(--green-grass); border-color: var(--green-grass); }
+.status-pill.pending { color: var(--text-faded); }
+.modal-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(14, 23, 41, 0.85); backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; padding: 20px; }
+.modal-overlay.active { display: flex; }
+.modal { background: linear-gradient(180deg, var(--twilight-deep), var(--night-blue)); border: 1px solid var(--border-warm); border-radius: 16px; max-width: 640px; width: 100%; max-height: 90vh; overflow-y: auto; }
+.modal-header { padding: 22px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.modal-title { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 22px; color: var(--paper-cream); }
+.modal-close { background: transparent; border: none; color: var(--text-dim); font-size: 22px; cursor: pointer; line-height: 1; }
+.modal-close:hover { color: var(--sunset-amber); }
+.modal-body { padding: 24px 28px; }
+.modal-footer { padding: 18px 28px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px; }
+.api-row { padding: 14px 0; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 120px 1fr auto; gap: 14px; align-items: center; }
+.api-row:last-child { border-bottom: none; }
+.api-name { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 15px; color: var(--paper-cream); }
+.api-desc { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+.api-status-pill { padding: 4px 10px; border-radius: 12px; font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; }
+.api-status-pill.ok { background: rgba(107,142,90,0.2); color: var(--green-grass); border: 1px solid var(--green-grass); }
+.api-status-pill.missing { background: rgba(184,74,61,0.2); color: #d97757; border: 1px solid rgba(184,74,61,0.4); }
+.image-preview { width: 100%; aspect-ratio: 16/9; background: linear-gradient(135deg, var(--twilight-deep), var(--twilight-mid)); border-radius: 10px; overflow: hidden; margin: 16px 0; position: relative; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); }
+.image-preview img { width: 100%; height: 100%; object-fit: cover; }
+.image-loading { font-size: 11px; color: var(--sunset-amber); letter-spacing: 0.15em; text-align: center; }
+.image-loading::after { content: ''; display: block; margin: 10px auto; width: 30px; height: 30px; border: 2px solid var(--border-warm); border-top-color: var(--sunset-amber); border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+audio { width: 100%; margin-top: 12px; }
+video { width: 100%; border-radius: 10px; margin-top: 12px; }
+.toast { position: fixed; bottom: 28px; right: 28px; z-index: 2000; padding: 14px 22px; border-radius: 10px; background: var(--twilight-deep); border: 1px solid var(--border-warm); color: var(--paper-cream); font-size: 12px; box-shadow: 0 12px 36px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 10px; animation: slideIn 0.3s ease; max-width: 400px; }
+.toast.success { border-color: var(--green-grass); }
+.toast.error { border-color: var(--shrine-red); }
+@keyframes slideIn { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+.project-item { padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; cursor: pointer; transition: all 0.15s; background: var(--surface); }
+.project-item:hover { border-color: var(--sunset-amber); }
+.project-item.active { background: var(--surface-warm); border-color: var(--sunset-amber); }
+.project-item-title { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 14px; color: var(--paper-cream); }
+.project-item-meta { font-size: 9px; color: var(--text-dim); margin-top: 3px; letter-spacing: 0.05em; }
+.empty { padding: 60px 20px; text-align: center; color: var(--text-dim); }
+.empty-icon { font-size: 48px; margin-bottom: 14px; opacity: 0.3; }
+.empty-text { font-size: 12px; line-height: 1.8; max-width: 300px; margin: 0 auto; }
+@media (max-width: 1200px) { .studio { grid-template-columns: 220px 1fr 280px; } }
+@media (max-width: 900px) { .studio { grid-template-columns: 1fr; } .sidebar, .right-panel { display: none; } }
+.flow-step { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); margin-bottom: 10px; }
+.flow-step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--surface-warm); border: 1px solid var(--border-warm); display: flex; align-items: center; justify-content: center; font-family: 'Cormorant Garamond', serif; font-style: italic; color: var(--sunset-amber); font-size: 13px; }
+.flow-step-num.done { background: var(--sunset-amber); color: var(--night-blue); }
+.flow-step-info { flex: 1; }
+.flow-step-title { font-size: 13px; color: var(--paper-cream); }
+.flow-step-desc { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+.flow-step-status { font-size: 10px; color: var(--sunset-amber); letter-spacing: 0.15em; text-transform: uppercase; }
+.collapsible-header { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); margin-bottom: 12px; }
+.collapsible-header:hover { border-color: var(--sunset-amber); }
+.collapsible-title { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 15px; color: var(--paper-cream); }
+.collapsible-arrow { color: var(--sunset-amber); transition: transform 0.2s; }
+.collapsible.open .collapsible-arrow { transform: rotate(90deg); }
+.collapsible-body { display: none; padding: 16px 18px; }
+.collapsible.open .collapsible-body { display: block; animation: fadeIn 0.25s ease; }
+.prompt-box { background: var(--night-blue); border: 1px solid var(--border-warm); border-radius: 8px; padding: 14px 16px; font-family: 'Inter', sans-serif; font-size: 11px; color: var(--text-dim); line-height: 1.7; white-space: pre-wrap; margin: 12px 0; position: relative; }
+.prompt-label { font-size: 9px; letter-spacing: 0.25em; color: var(--sunset-amber); text-transform: uppercase; margin-bottom: 8px; font-weight: 600; }
+.prompt-copy-btn { position: absolute; top: 12px; right: 12px; background: transparent; border: 1px solid var(--border); color: var(--text-dim); font-size: 9px; padding: 4px 10px; border-radius: 4px; cursor: pointer; letter-spacing: 0.1em; font-family: 'Inter', sans-serif; }
+.prompt-copy-btn:hover { color: var(--sunset-amber); border-color: var(--sunset-amber); }
+.assembly-canvas { width: 100%; aspect-ratio: 16/9; background: var(--night-blue); border-radius: 12px; border: 1px solid var(--border-warm); overflow: hidden; position: relative; margin-bottom: 20px; }
+.assembly-canvas img { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; transition: transform 8s linear, opacity 0.6s ease; will-change: transform; }
+.assembly-subtitle { position: absolute; bottom: 8%; left: 10%; right: 10%; text-align: center; color: var(--paper-cream); font-size: 18px; font-weight: 500; text-shadow: 0 2px 16px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.7); line-height: 1.4; z-index: 2; }
+.assembly-name { position: absolute; bottom: calc(8% + 50px); left: 10%; right: 10%; text-align: center; color: var(--sunset-amber); font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; text-shadow: 0 2px 8px rgba(0,0,0,0.9); z-index: 2; }
+.assembly-progress { padding: 14px 18px; background: var(--surface-warm); border: 1px solid var(--border-warm); border-radius: 10px; margin: 14px 0; }
+.assembly-progress-text { font-size: 11px; color: var(--sunset-amber); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 8px; }
+.assembly-progress-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.assembly-progress-fill { height: 100%; background: linear-gradient(90deg, var(--sunset-amber), var(--sunset-rose)); transition: width 0.3s; }
+.cost-banner { background: linear-gradient(90deg, rgba(244,162,97,0.08), transparent); border: 1px solid var(--border-warm); border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; display: flex; gap: 14px; align-items: center; }
+.cost-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--surface-warm); display: flex; align-items: center; justify-content: center; font-size: 20px; }
+.cost-label { font-size: 10px; letter-spacing: 0.2em; color: var(--sunset-amber); text-transform: uppercase; }
+.cost-value { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 18px; color: var(--paper-cream); }
+.cost-detail { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.help-text { margin-top: 14px; padding: 14px; background: var(--surface-warm); border-radius: 10px; font-size: 11px; color: var(--text-dim); line-height: 1.7; }
+.help-text strong { color: var(--sunset-amber); }
+</style>
+</head>
+<body>
+<div class="atmosphere"></div>
+<div class="stars"></div>
+<div class="sunset-glow"></div>
+<div class="comet"></div>
+<div class="app">
+  <header>
+    <div class="brand">
+      <div>
+        <div class="brand-jp">アニメ・スタジオ</div>
+        <div class="brand-title">Anime AI Studio</div>
+        <div class="brand-sub">Your Name Edition · Cinematic Pipeline</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div class="api-status" id="api-status-pill"><div class="dot"></div><span id="api-status-text">SIN APIS</span></div>
+      <button class="icon-btn" onclick="openModal('modal-apis')" title="Configurar APIs">🔑</button>
+      <button class="icon-btn" onclick="openModal('modal-projects')" title="Proyectos">📁</button>
+      <button class="icon-btn" onclick="exportProject()" title="Exportar ZIP">⬇</button>
+      <button class="icon-btn" onclick="document.getElementById('import-input').click()" title="Importar ZIP">⬆</button>
+      <input type="file" id="import-input" accept=".zip" style="display:none" onchange="importProject(event)" />
+    </div>
+  </header>
+  <div class="studio">
+    <aside class="sidebar">
+      <div class="sidebar-label">Producción</div>
+      <div class="sidebar-section">
+        <button class="nav-item active" onclick="switchModule('world')" id="nav-world"><span class="nav-icon">🌌</span> Universo</button>
+        <button class="nav-item" onclick="switchModule('characters')" id="nav-characters"><span class="nav-icon">👤</span> Protagonistas</button>
+        <button class="nav-item" onclick="switchModule('episodes')" id="nav-episodes"><span class="nav-icon">🎬</span> Episodios</button>
+        <button class="nav-item" onclick="switchModule('scenes')" id="nav-scenes"><span class="nav-icon">🎭</span> Escenas e Imágenes</button>
+        <button class="nav-item" onclick="switchModule('voices')" id="nav-voices"><span class="nav-icon">🎙️</span> Voces y Audio</button>
+        <button class="nav-item" onclick="switchModule('music')" id="nav-music"><span class="nav-icon">🎵</span> Música y Efectos</button>
+        <button class="nav-item" onclick="switchModule('assembly')" id="nav-assembly"><span class="nav-icon">🎞️</span> Ensamblar Episodio</button>
+      </div>
+      <div class="sidebar-label">Estado</div>
+      <div class="sidebar-section">
+        <div class="stat-row"><span class="stat-label">Universo</span><span class="stat-val" id="stat-world">—</span></div>
+        <div class="stat-row"><span class="stat-label">Personajes</span><span class="stat-val" id="stat-chars">0</span></div>
+        <div class="stat-row"><span class="stat-label">Episodios</span><span class="stat-val" id="stat-eps">0</span></div>
+        <div class="stat-row"><span class="stat-label">Escenas</span><span class="stat-val" id="stat-scenes">0</span></div>
+        <div class="stat-row"><span class="stat-label">Imágenes</span><span class="stat-val" id="stat-images">0</span></div>
+        <div class="stat-row"><span class="stat-label">Audio</span><span class="stat-val" id="stat-audio">0</span></div>
+        <div class="stat-row"><span class="stat-label">Costo total</span><span class="stat-val" id="stat-cost">$0.00</span></div>
+      </div>
+    </aside>
+    <main class="center-panel">
+      <div id="module-world" class="module-panel active">
+        <div class="panel-header">
+          <div class="panel-title-block">
+            <div class="panel-title">El Universo de tu Historia</div>
+            <div class="panel-subtitle">Define el mundo, la atmósfera y la identidad visual</div>
+          </div>
+          <button class="btn btn-ghost" onclick="newProject()">+ Nuevo Proyecto</button>
+        </div>
+        <div class="panel-content">
+          <div id="world-form">
+            <div class="form-grid">
+              <div class="field"><label>Título del Anime</label><input type="text" id="world-title" placeholder="ej: El Eco del Cielo Roto" /></div>
+              <div class="field"><label>Género Principal</label>
+                <select id="world-genre">
+                  <option>Romance Sobrenatural</option><option>Ciencia Ficción</option><option>Thriller Psicológico</option>
+                  <option>Misterio</option><option>Cyberpunk</option><option>Fantasía</option><option>Slice of Life</option>
+                  <option>Terror Psicológico</option><option>Isekai</option><option>Drama Militar</option>
+                  <option>Sobrenatural</option><option>Post Apocalíptico</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-grid">
+              <div class="field"><label>Tono Emocional</label>
+                <select id="world-tone">
+                  <option>Melancolía esperanzadora</option><option>Nostalgia íntima</option>
+                  <option>Tensión opresiva</option><option>Belleza en la decadencia</option>
+                  <option>Soledad compartida</option><option>Urgencia poética</option><option>Quietud transformadora</option>
+                </select>
+              </div>
+              <div class="field"><label>Era / Tecnología</label>
+                <select id="world-tech">
+                  <option>Era moderna contemporánea</option><option>Japón rural tradicional</option>
+                  <option>Futuro cercano</option><option>Ciencia ficción avanzada</option>
+                  <option>Post-colapso</option><option>Medieval / Fantástico</option><option>Mixto (ruinas + tech)</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-grid cols-1">
+              <div class="field"><label>Concepto Semilla (opcional)</label>
+                <textarea id="world-concept" placeholder="Describe brevemente tu idea, o déjalo vacío para que Claude lo genere..." rows="3"></textarea>
+                <div class="field-hint">Si lo dejas vacío, el sistema generará un concepto único</div>
+              </div>
+            </div>
+            <div class="divider"><span>ESTÉTICA</span></div>
+            <div class="form-grid cols-1">
+              <div class="field"><label>Paleta Visual (estilo Your Name)</label>
+                <div class="tag-grid" id="palette-tags">
+                  <button class="tag-btn selected" data-pal="twilight">Crepúsculo Dorado</button>
+                  <button class="tag-btn" data-pal="dawn">Amanecer Rosa</button>
+                  <button class="tag-btn" data-pal="rural">Verano Rural</button>
+                  <button class="tag-btn" data-pal="urban">Tokio Solitario</button>
+                  <button class="tag-btn" data-pal="storm">Tormenta y Lluvia</button>
+                  <button class="tag-btn" data-pal="snow">Invierno Suave</button>
+                </div>
+              </div>
+            </div>
+            <div class="btn-row"><button class="btn btn-primary" onclick="generateWorld()">⚙ Generar Universo Completo</button></div>
+          </div>
+          <div id="world-loading" style="display:none">
+            <div class="loading-block"><div class="loading-text">Construyendo el universo narrativo...</div><div class="loading-bar"><div class="loading-fill"></div></div></div>
+          </div>
+          <div id="world-output"></div>
+        </div>
+      </div>
+      <div id="module-characters" class="module-panel">
+        <div class="panel-header">
+          <div class="panel-title-block">
+            <div class="panel-title">Protagonistas</div>
+            <div class="panel-subtitle">Personajes con identidad visual consistente y psicología profunda</div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('modal-new-char')">+ Crear Personaje</button>
+        </div>
+        <div class="panel-content">
+          <div id="characters-list"><div class="empty"><div class="empty-icon">人</div><div class="empty-text">Aún no has creado personajes.</div></div></div>
+        </div>
+      </div>
+      <div id="module-episodes" class="module-panel">
+        <div class="panel-header">
+          <div class="panel-title-block">
+            <div class="panel-title">Episodios</div>
+            <div class="panel-subtitle">Capítulos de 10 minutos · 30 escenas cinematográficas</div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('modal-new-ep')">+ Nuevo Episodio</button>
+        </div>
+        <div class="panel-content">
+          <div id="total-cost-banner"></div>
+          <div id="episodes-list"><div class="empty"><div class="empty-icon">章</div><div class="empty-text">Aún no hay episodios.</div></div></div>
+        </div>
+      </div>
+      <div id="module-scenes" class="module-panel">
+        <div class="panel-header">
+          <div class="panel-title-block">
+            <div class="panel-title">Escenas e Imágenes</div>
+            <div class="panel-subtitle">30 imágenes 16:9 por episodio con consistencia de personajes</div>
+          </div>
+          <select id="scene-ep-filter" class="btn btn-secondary" style="font-size:11px;padding:8px 14px" onchange="renderScenes()">
+            <option value="">Todos los episodios</option>
+          </select>
+        </div>
+        <div class="panel-content">
+          <div id="scenes-list"><div class="empty"><div class="empty-icon">画</div><div class="empty-text">Las escenas aparecerán al generar un episodio.</div></div></div>
+        </div>
+      </div>
+      <div id="module-voices" class="module-panel">
+        <div class="panel-header">
+          <div class="panel-title-block">
+            <div class="panel-title">Voces y Diálogos</div>
+            <div class="panel-subtitle">Asigna voces de ElevenLabs y genera audio</div>
+          </div>
+        </div>
+        <div class="panel-content" id="voices-content">
+          <div class="empty"><div class="empty-icon">声</div><div class="empty-text">Crea personajes primero.</div></div>
+        </div>
+      </div>
+      <div id="module-music" class="module-panel">
+        <div class="panel-header">
+          <div class="panel-title-block">
+            <div class="panel-title">Música y Efectos</div>
+            <div class="panel-subtitle">Música (Gemini Lyria) y efectos de sonido (ElevenLabs)</div>
+          </div>
+        </div>
+        <div class="panel-content" id="music-content">
+          <div class="empty"><div class="empty-icon">音</div><div class="empty-text">Genera un episodio primero.</div></div>
+        </div>
+      </div>
+      <div id="module-assembly" class="module-panel">
+        <div class="panel-header">
+          <div class="panel-title-block">
+            <div class="panel-title">Ensamblar Episodio Final</div>
+            <div class="panel-subtitle">Animatic Ken Burns 16:9 con voces, música y efectos integrados</div>
+          </div>
+        </div>
+        <div class="panel-content" id="assembly-content">
+          <div class="empty"><div class="empty-icon">映</div><div class="empty-text">Necesitas un episodio para ensamblar.</div></div>
+        </div>
+      </div>
+    </main>
+    <aside class="right-panel">
+      <div id="project-info-block" class="project-info">
+        <div class="project-name" id="project-name-display">Sin proyecto</div>
+        <div class="project-meta" id="project-meta-display">Crea o carga un proyecto</div>
+      </div>
+      <div class="sidebar-label" style="border:none;padding:0 0 12px">Proyectos Guardados</div>
+      <div id="saved-projects-list">
+        <div class="empty" style="padding:20px 10px"><div class="empty-text" style="font-size:10px">No hay proyectos guardados</div></div>
+      </div>
+      <div class="btn-row" style="margin-top:18px">
+        <button class="btn btn-secondary" style="flex:1;font-size:10px" onclick="saveProject()">💾 Guardar</button>
+        <button class="btn btn-ghost" style="font-size:10px" onclick="exportProject()">⬇ ZIP</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-apis">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Configuración de APIs</div><button class="modal-close" onclick="closeModal('modal-apis')">×</button></div>
+    <div class="modal-body">
+      <div class="api-row">
+        <div><div class="api-name">Claude</div><div class="api-desc">Guiones y narrativa</div></div>
+        <div class="field"><input type="password" id="api-claude" placeholder="sk-ant-..." /></div>
+        <div class="api-status-pill missing" id="status-claude">FALTA</div>
+      </div>
+      <div class="api-row">
+        <div><div class="api-name">Gemini</div><div class="api-desc">Imágenes 16:9 y música (Lyria)</div></div>
+        <div class="field"><input type="password" id="api-banana" placeholder="API key Google AI..." /></div>
+        <div class="api-status-pill missing" id="status-banana">FALTA</div>
+      </div>
+      <div class="api-row">
+        <div><div class="api-name">ElevenLabs</div><div class="api-desc">Voces y efectos de sonido</div></div>
+        <div class="field"><input type="password" id="api-eleven" placeholder="sk_..." /></div>
+        <div class="api-status-pill missing" id="status-eleven">FALTA</div>
+      </div>
+      <div class="help-text"><strong>Nota:</strong> Las API keys se guardan localmente en tu navegador.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-apis')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveAPIs()">Guardar Claves</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-projects">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Proyectos</div><button class="modal-close" onclick="closeModal('modal-projects')">×</button></div>
+    <div class="modal-body" id="modal-projects-body"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-new-char">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Crear Personaje</div><button class="modal-close" onclick="closeModal('modal-new-char')">×</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field"><label>Rol</label>
+          <select id="char-role"><option>Protagonista</option><option>Deuteragonista</option><option>Antagonista</option><option>Mentor</option><option>Foil / Espejo</option><option>Catalizador</option><option>Secundario</option></select>
+        </div>
+        <div class="field"><label>Edad</label>
+          <select id="char-age"><option>15-17 (adolescente)</option><option>18-22 (joven adulto)</option><option>23-30 (adulto)</option><option>31-45 (maduro)</option><option>46+ (veterano)</option></select>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="field"><label>Género</label><select id="char-gender"><option>Femenino</option><option>Masculino</option><option>No binario</option></select></div>
+        <div class="field"><label>Arquetipo emocional</label>
+          <select id="char-arch"><option>El que carga un secreto</option><option>El que busca redención</option><option>El que protege a otros</option><option>El que está perdido</option><option>El que se sacrifica</option><option>El que esconde su dolor</option><option>El que ya no cree en nada</option></select>
+        </div>
+      </div>
+      <div class="field" style="margin-top:14px"><label>Descripción inicial (opcional)</label><textarea id="char-desc" rows="3"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-char')">Cancelar</button>
+      <button class="btn btn-primary" onclick="generateCharacter()">Crear con IA</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-new-ep">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Nuevo Episodio</div><button class="modal-close" onclick="closeModal('modal-new-ep')">×</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field"><label>Función en el arco</label>
+          <select id="ep-function"><option>Apertura — establecer mundo y personajes</option><option>Ruptura del status quo</option><option>Escalada — las cosas empeoran</option><option>Punto de inflexión emocional</option><option>Clímax</option><option>Resolución y consecuencias</option><option>Interludio — respiro emocional</option></select>
+        </div>
+        <div class="field"><label>Duración objetivo</label><select id="ep-duration"><option value="10">10 minutos · 30 escenas</option></select></div>
+      </div>
+      <div class="field" style="margin-top:14px"><label>Promesa emocional</label><input type="text" id="ep-emotion" placeholder="ej: El espectador debe sentir que algo cambió" /></div>
+      <div class="field" style="margin-top:14px"><label>Contexto adicional</label><textarea id="ep-context" rows="3"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-ep')">Cancelar</button>
+      <button class="btn btn-primary" onclick="generateEpisode()">Generar Episodio</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-detail">
+  <div class="modal" style="max-width:780px">
+    <div class="modal-header"><div class="modal-title" id="modal-detail-title">Detalle</div><button class="modal-close" onclick="closeModal('modal-detail')">×</button></div>
+    <div class="modal-body" id="modal-detail-body"></div>
+  </div>
+</div>
+
+<script>
+const STATE = { apis: { claude: '', banana: '', eleven: '' }, currentProject: null, projects: [] };
+const STORAGE_KEY = 'anime_studio_v4';
+
+function loadFromStorage() {
+  try {
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    if (data.apis) STATE.apis = data.apis;
+    if (data.projects) STATE.projects = data.projects;
+    if (data.currentProject) STATE.currentProject = data.currentProject;
+  } catch(e) { console.error(e); }
+  updateAPIStatus();
+  refreshUI();
+}
+
+function saveToStorage() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ apis: STATE.apis, projects: STATE.projects, currentProject: STATE.currentProject })); }
+  catch(e) { console.error(e); toast('Proyecto muy grande. Exporta como ZIP regularmente.', 'error'); }
+}
+
+function $(id) { return document.getElementById(id); }
+function toast(msg, type='success') {
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `${type === 'success' ? '✓' : type === 'error' ? '✗' : 'ⓘ'} ${msg}`;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+function openModal(id) { if (id === 'modal-projects') renderProjectsModal(); $(id).classList.add('active'); }
+function closeModal(id) { $(id).classList.remove('active'); }
+function switchModule(name) {
+  document.querySelectorAll('.module-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  $('module-' + name).classList.add('active');
+  $('nav-' + name).classList.add('active');
+  refreshUI();
+}
+function escHtml(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function copyText(text, btn) { navigator.clipboard.writeText(text); if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(() => btn.textContent = orig, 1500); } }
+
+document.addEventListener('click', (e) => {
+  if (e.target.matches('#palette-tags .tag-btn')) {
+    document.querySelectorAll('#palette-tags .tag-btn').forEach(t => t.classList.remove('selected'));
+    e.target.classList.add('selected');
+  }
+  if (e.target.classList.contains('modal-overlay')) e.target.classList.remove('active');
+});
+
+function saveAPIs() {
+  STATE.apis.claude = $('api-claude').value.trim();
+  STATE.apis.banana = $('api-banana').value.trim();
+  STATE.apis.eleven = $('api-eleven').value.trim();
+  saveToStorage();
+  updateAPIStatus();
+  closeModal('modal-apis');
+  toast('Claves API guardadas');
+}
+
+function updateAPIStatus() {
+  $('api-claude').value = STATE.apis.claude || '';
+  $('api-banana').value = STATE.apis.banana || '';
+  $('api-eleven').value = STATE.apis.eleven || '';
+  setStatus('claude', !!STATE.apis.claude);
+  setStatus('banana', !!STATE.apis.banana);
+  setStatus('eleven', !!STATE.apis.eleven);
+  const allReady = STATE.apis.claude && STATE.apis.banana && STATE.apis.eleven;
+  const pill = $('api-status-pill');
+  const text = $('api-status-text');
+  if (allReady) { pill.classList.add('ready'); text.textContent = 'APIs LISTAS'; }
+  else if (STATE.apis.claude) { pill.classList.add('ready'); text.textContent = 'CLAUDE LISTO'; }
+  else { pill.classList.remove('ready'); text.textContent = 'SIN APIs'; }
+}
+function setStatus(key, ok) {
+  const el = $('status-' + key);
+  if (ok) { el.classList.add('ok'); el.classList.remove('missing'); el.textContent = 'OK'; }
+  else { el.classList.add('missing'); el.classList.remove('ok'); el.textContent = 'FALTA'; }
+}
+
+async function callClaude(systemPrompt, userPrompt, maxTokens = 8000) {
+  if (!STATE.apis.claude) throw new Error('Falta API key de Claude');
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": STATE.apis.claude,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: maxTokens, system: systemPrompt, messages: [{ role: "user", content: userPrompt }] })
+  });
+  if (!response.ok) { const err = await response.text(); throw new Error(`Claude: ${response.status} — ${err.slice(0, 300)}`); }
+  const data = await response.json();
+  return data.content[0].text;
+}
+
+async function callClaudeJSON(systemPrompt, userPrompt, maxTokens = 8000) {
+  const result = await callClaude(systemPrompt, userPrompt, maxTokens);
+  const match = result.match(/```json\s*([\s\S]*?)\s*```/) || result.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('No JSON encontrado');
+  try { return JSON.parse(match[1] || match[0]); }
+  catch(e) { throw new Error('JSON inválido: ' + e.message); }
+}
+
+async function generateImage(prompt, referenceImagesB64 = []) {
+  if (!STATE.apis.banana) throw new Error('Falta API key de Gemini');
+  const parts = [{ text: prompt }];
+  for (const img of referenceImagesB64) {
+    if (img && img.startsWith('data:')) {
+      const [meta, data] = img.split(',');
+      const mimeType = meta.match(/data:([^;]+)/)[1];
+      parts.push({ inlineData: { mimeType, data } });
+    }
+  }
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${STATE.apis.banana}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts }] }) });
+  if (!response.ok) { const err = await response.text(); throw new Error(`Gemini Image: ${response.status} — ${err.slice(0, 200)}`); }
+  const data = await response.json();
+  const respParts = data.candidates?.[0]?.content?.parts || [];
+  for (const part of respParts) {
+    if (part.inlineData?.data) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+  }
+  throw new Error('Gemini no devolvió imagen');
+}
+
+async function generateMusic(prompt, longForm = true) {
+  if (!STATE.apis.banana) throw new Error('Falta API key de Gemini');
+  // Use Lyria 3 Pro for longer tracks (2-3 min), fallback to lyria-002 for 30s
+  const model = longForm ? 'lyria-3-pro' : 'lyria-002';
+  const enrichedPrompt = longForm 
+    ? `${prompt} Duration: approximately 2 to 3 minutes. Full instrumental composition with intro, development and gentle outro.`
+    : prompt;
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${STATE.apis.banana}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instances: [{ prompt: enrichedPrompt }], parameters: { sampleCount: 1 } }) });
+  if (!response.ok) {
+    // Fallback to short model if Pro not available
+    if (longForm) {
+      const fallback = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/lyria-002:predict?key=${STATE.apis.banana}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instances: [{ prompt: prompt }], parameters: { sampleCount: 1 } }) });
+      if (!fallback.ok) { const err = await fallback.text(); throw new Error(`Lyria: ${fallback.status} — ${err.slice(0, 200)}`); }
+      const data = await fallback.json();
+      const audioB64 = data.predictions?.[0]?.bytesBase64Encoded;
+      if (!audioB64) throw new Error('Lyria no devolvió audio');
+      return `data:audio/wav;base64,${audioB64}`;
+    }
+    const err = await response.text(); throw new Error(`Lyria: ${response.status} — ${err.slice(0, 200)}`);
+  }
+  const data = await response.json();
+  const audioB64 = data.predictions?.[0]?.bytesBase64Encoded;
+  if (!audioB64) throw new Error('Lyria no devolvió audio');
+  return `data:audio/wav;base64,${audioB64}`;
+}
+
+async function generateVoice(text, voiceId) {
+  if (!STATE.apis.eleven) throw new Error('Falta API key de ElevenLabs');
+  const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json', 'xi-api-key': STATE.apis.eleven, 'Accept': 'audio/mpeg' },
+      body: JSON.stringify({ text, model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.4, use_speaker_boost: true } }) });
+  if (!response.ok) { const err = await response.text(); throw new Error(`ElevenLabs: ${response.status} — ${err.slice(0, 200)}`); }
+  const blob = await response.blob();
+  return await blobToBase64(blob);
+}
+
+async function generateSoundEffect(prompt, durationSeconds = 5) {
+  if (!STATE.apis.eleven) throw new Error('Falta API key de ElevenLabs');
+  const response = await fetch('https://api.elevenlabs.io/v1/sound-generation',
+    { method: 'POST', headers: { 'Content-Type': 'application/json', 'xi-api-key': STATE.apis.eleven, 'Accept': 'audio/mpeg' },
+      body: JSON.stringify({ text: prompt, duration_seconds: Math.min(22, Math.max(0.5, durationSeconds)) }) });
+  if (!response.ok) { const err = await response.text(); throw new Error(`Sound FX: ${response.status} — ${err.slice(0, 200)}`); }
+  const blob = await response.blob();
+  return await blobToBase64(blob);
+}
+
+async function listVoices() {
+  if (!STATE.apis.eleven) throw new Error('Falta API key de ElevenLabs');
+  const response = await fetch('https://api.elevenlabs.io/v1/voices', { headers: { 'xi-api-key': STATE.apis.eleven } });
+  if (!response.ok) throw new Error('No se pudieron obtener las voces');
+  const data = await response.json();
+  return data.voices;
+}
+
+// Voice Design: create a new voice when no good match exists
+async function designVoice(description, sampleText, name) {
+  if (!STATE.apis.eleven) throw new Error('Falta API key de ElevenLabs');
+  // Step 1: generate preview voices from text description
+  const previewResp = await fetch('https://api.elevenlabs.io/v1/text-to-voice/create-previews', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'xi-api-key': STATE.apis.eleven },
+    body: JSON.stringify({
+      voice_description: description,
+      text: sampleText || 'Hola, soy un personaje del universo de este anime cinematográfico.',
+      auto_generate_text: false
+    })
+  });
+  if (!previewResp.ok) { const err = await previewResp.text(); throw new Error(`Voice Design: ${previewResp.status} — ${err.slice(0, 200)}`); }
+  const previewData = await previewResp.json();
+  const previews = previewData.previews || [];
+  if (previews.length === 0) throw new Error('No se generaron previews de voz');
+  // Step 2: save the first preview as a permanent voice
+  const chosenPreview = previews[0];
+  const saveResp = await fetch('https://api.elevenlabs.io/v1/text-to-voice/create-voice-from-preview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'xi-api-key': STATE.apis.eleven },
+    body: JSON.stringify({
+      voice_name: name,
+      voice_description: description,
+      generated_voice_id: chosenPreview.generated_voice_id
+    })
+  });
+  if (!saveResp.ok) { const err = await saveResp.text(); throw new Error(`Save Voice: ${saveResp.status} — ${err.slice(0, 200)}`); }
+  const saved = await saveResp.json();
+  return saved.voice_id;
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function newProject() {
+  if (STATE.currentProject) {
+    if (!confirm('¿Crear nuevo proyecto? El actual quedará guardado.')) return;
+    saveCurrentProject();
+  }
+  STATE.currentProject = { id: 'p_' + Date.now(), name: 'Nuevo Proyecto', created: new Date().toISOString(), world: null, characters: [], episodes: [], scenes: [], voiceAssignments: {} };
+  refreshUI();
+  toast('Nuevo proyecto creado');
+}
+
+function saveCurrentProject() {
+  if (!STATE.currentProject) return;
+  const idx = STATE.projects.findIndex(p => p.id === STATE.currentProject.id);
+  if (idx >= 0) STATE.projects[idx] = JSON.parse(JSON.stringify(STATE.currentProject));
+  else STATE.projects.push(JSON.parse(JSON.stringify(STATE.currentProject)));
+  saveToStorage();
+}
+
+function saveProject() {
+  if (!STATE.currentProject) { toast('No hay proyecto activo', 'error'); return; }
+  saveCurrentProject();
+  toast('Proyecto guardado');
+  renderSavedProjects();
+}
+
+function loadProject(id) {
+  const p = STATE.projects.find(x => x.id === id);
+  if (!p) return;
+  STATE.currentProject = JSON.parse(JSON.stringify(p));
+  saveToStorage();
+  refreshUI();
+  closeModal('modal-projects');
+  toast(`Proyecto "${p.name}" cargado`);
+}
+
+function deleteProject(id) {
+  if (!confirm('¿Eliminar este proyecto?')) return;
+  STATE.projects = STATE.projects.filter(p => p.id !== id);
+  if (STATE.currentProject?.id === id) STATE.currentProject = null;
+  saveToStorage();
+  refreshUI();
+  renderSavedProjects();
+  toast('Proyecto eliminado');
+}
+
+function renderProjectsModal() {
+  const body = $('modal-projects-body');
+  if (STATE.projects.length === 0) { body.innerHTML = '<div class="empty"><div class="empty-text">No tienes proyectos guardados</div></div>'; return; }
+  body.innerHTML = STATE.projects.map(p => `
+    <div class="project-item ${STATE.currentProject?.id === p.id ? 'active' : ''}">
+      <div onclick="loadProject('${p.id}')" style="flex:1;cursor:pointer">
+        <div class="project-item-title">${escHtml(p.name)}</div>
+        <div class="project-item-meta">${p.characters?.length || 0} personajes · ${p.episodes?.length || 0} episodios · ${p.scenes?.length || 0} escenas</div>
+      </div>
+      <button class="btn btn-ghost" style="font-size:10px" onclick="event.stopPropagation();deleteProject('${p.id}')">Eliminar</button>
+    </div>`).join('');
+}
+
+function renderSavedProjects() {
+  const list = $('saved-projects-list');
+  if (STATE.projects.length === 0) { list.innerHTML = '<div class="empty" style="padding:20px 10px"><div class="empty-text" style="font-size:10px">No hay proyectos</div></div>'; return; }
+  list.innerHTML = STATE.projects.slice(0, 5).map(p => `
+    <div class="project-item ${STATE.currentProject?.id === p.id ? 'active' : ''}" onclick="loadProject('${p.id}')">
+      <div class="project-item-title">${escHtml(p.name)}</div>
+      <div class="project-item-meta">${p.episodes?.length || 0} eps · ${p.scenes?.length || 0} escenas</div>
+    </div>`).join('');
+}
+
+function refreshUI() {
+  const p = STATE.currentProject;
+  if (p) {
+    $('project-name-display').textContent = p.world?.title || p.name || 'Sin título';
+    $('project-meta-display').textContent = `${p.characters?.length || 0} personajes · ${p.episodes?.length || 0} eps · ${p.scenes?.length || 0} escenas`;
+  } else {
+    $('project-name-display').textContent = 'Sin proyecto';
+    $('project-meta-display').textContent = 'Crea o carga un proyecto';
+  }
+  $('stat-world').textContent = p?.world ? '✓' : '—';
+  $('stat-chars').textContent = p?.characters?.length || 0;
+  $('stat-eps').textContent = p?.episodes?.length || 0;
+  $('stat-scenes').textContent = p?.scenes?.length || 0;
+  $('stat-images').textContent = (p?.scenes || []).filter(s => s.imageData).length;
+  $('stat-audio').textContent = (p?.scenes || []).filter(s => s.dialogueAudio || s.narrationAudio).length;
+  $('stat-cost').textContent = '$' + calculateProjectCost().toFixed(2);
+  
+  if (p?.world) {
+    $('world-title').value = p.world.title || '';
+    if (p.world.genre) $('world-genre').value = p.world.genre;
+    if (p.world.tone) $('world-tone').value = p.world.tone;
+    if (p.world.tech) $('world-tech').value = p.world.tech;
+    $('world-concept').value = p.world.concept || '';
+    renderWorldOutput();
+  } else { if ($('world-output')) $('world-output').innerHTML = ''; }
+  
+  renderCharacters();
+  renderEpisodes();
+  renderTotalCostBanner();
+  renderScenes();
+  renderVoicesPanel();
+  renderMusicPanel();
+  renderAssemblyPanel();
+  renderSavedProjects();
+}
+
+function renderWorldOutput() {
+  const p = STATE.currentProject;
+  if (!p?.world?.content) { $('world-output').innerHTML = ''; return; }
+  $('world-output').innerHTML = `
+    <div class="output-section">
+      <div class="output-header">
+        <div class="output-title">${escHtml(p.world.title)}</div>
+      </div>
+      <div class="output-body"><div class="output-text">${escHtml(p.world.content)}</div></div>
+    </div>`;
+}
+
+const SYSTEM_BASE = `Eres el motor narrativo del ANIME AI STUDIO especializado en anime cinematográfico calidad Makoto Shinkai (Your Name, Weathering With You, Suzume).
+REGLAS:
+- Calidad literaria alta en español
+- Personajes con psicología real, NO arquetipos
+- Diálogos con subtext — nunca dicen lo que sienten directamente
+- Estética: iluminación natural, paletas suaves, hora dorada/azul, cielos detallados
+- Proporciones humanas realistas, NO ojos enormes ni hipersexualización
+- NO fluorescentes ni neón excesivo
+- NO estética genérica de IA
+- Cada escena cambia algo emocionalmente
+- Imágenes finales son 16:9 cinematográficas
+FORMATO: Cuando se pida JSON, responde SOLO JSON válido sin texto extra.`;
+
+async function generateWorld() {
+  if (!STATE.apis.claude) { toast('Configura Claude primero', 'error'); openModal('modal-apis'); return; }
+  if (!STATE.currentProject) newProject();
+  const title = $('world-title').value.trim() || 'Sin título';
+  const genre = $('world-genre').value;
+  const tone = $('world-tone').value;
+  const tech = $('world-tech').value;
+  const concept = $('world-concept').value.trim();
+  const palette = document.querySelector('#palette-tags .tag-btn.selected')?.dataset.pal || 'twilight';
+  $('world-loading').style.display = '';
+  $('world-output').innerHTML = '';
+  
+  const prompt = `Genera UNIVERSO NARRATIVO COMPLETO para anime cinematográfico Makoto Shinkai.
+TÍTULO: ${title}
+GÉNERO: ${genre}
+TONO: ${tone}
+ERA: ${tech}
+CONCEPTO: ${concept || 'libre creación'}
+PALETA: ${palette}
+
+JSON exacto:
+\`\`\`json
+{
+  "title": "${title}",
+  "tagline": "Frase poética corta",
+  "concept": "2-3 párrafos del concepto central",
+  "foundingEvent": "Evento histórico que formó este mundo",
+  "currentState": "Tensión activa actual",
+  "hiddenTruth": "Lo que nadie sabe — corazón del misterio",
+  "locations": [{"name": "Nombre", "description": "descripción visual y emocional", "emotionalValue": "qué representa"}],
+  "centralConflict": "Tensión estructural del mundo",
+  "emotionalClimate": {"dominant": "emoción principal", "undercurrent": "lo no dicho", "contrast": "emoción que rompe monotonía"},
+  "visualIdentity": {"palette": "descripción poética", "lighting": "luz característica", "atmospheres": ["3 elementos"], "dominantTimeOfDay": "cuándo ocurre"},
+  "musicIdentity": "Estilo musical del anime para Lyria (instrumentos, ritmo, género)",
+  "narrativePotential": ["3 tipos de historias posibles"],
+  "visualPromptBase": "Tokens visuales EN INGLÉS: estilo Makoto Shinkai, paleta, iluminación, atmosphere keywords"
+}
+\`\`\`
+Mínimo 4 locaciones. Sé profundo y específico.`;
+
+  try {
+    const result = await callClaudeJSON(SYSTEM_BASE, prompt);
+    STATE.currentProject.world = { ...result, title: result.title, genre, tone, tech, concept, palette, content: formatWorldText(result) };
+    STATE.currentProject.name = result.title;
+    saveCurrentProject();
+    refreshUI();
+    toast('Universo creado');
+  } catch(e) { toast('Error: ' + e.message, 'error'); console.error(e); }
+  finally { $('world-loading').style.display = 'none'; }
+}
+
+function formatWorldText(w) {
+  return `${w.tagline ? '« ' + w.tagline + ' »\n\n' : ''}═══ CONCEPTO ═══
+${w.concept || ''}
+
+═══ EVENTO FUNDACIONAL ═══
+${w.foundingEvent || ''}
+
+═══ ESTADO ACTUAL ═══
+${w.currentState || ''}
+
+═══ VERDAD OCULTA ═══
+${w.hiddenTruth || ''}
+
+═══ LOCACIONES ═══
+${(w.locations || []).map(l => `▸ ${l.name}\n  ${l.description}\n  (${l.emotionalValue})`).join('\n\n')}
+
+═══ CONFLICTO CENTRAL ═══
+${w.centralConflict || ''}
+
+═══ CLIMA EMOCIONAL ═══
+Dominante: ${w.emotionalClimate?.dominant || ''}
+Subcorriente: ${w.emotionalClimate?.undercurrent || ''}
+Contraste: ${w.emotionalClimate?.contrast || ''}
+
+═══ IDENTIDAD VISUAL ═══
+Paleta: ${w.visualIdentity?.palette || ''}
+Iluminación: ${w.visualIdentity?.lighting || ''}
+Atmósferas: ${(w.visualIdentity?.atmospheres || []).join(' · ')}
+
+═══ IDENTIDAD MUSICAL ═══
+${w.musicIdentity || ''}`;
+}
+
+async function generateCharacter() {
+  if (!STATE.currentProject?.world) { toast('Define primero el universo', 'error'); closeModal('modal-new-char'); switchModule('world'); return; }
+  if (!STATE.apis.claude) { toast('Configura Claude', 'error'); return; }
+  const role = $('char-role').value;
+  const age = $('char-age').value;
+  const gender = $('char-gender').value;
+  const arch = $('char-arch').value;
+  const desc = $('char-desc').value.trim();
+  closeModal('modal-new-char');
+  toast('Creando personaje...', 'info');
+  const w = STATE.currentProject.world;
+  
+  const prompt = `Genera PERSONAJE COMPLETO.
+UNIVERSO: ${w.title}
+CONCEPTO: ${w.concept}
+GÉNERO: ${w.genre}
+PARÁMETROS:
+- Rol: ${role}
+- Edad: ${age}
+- Género: ${gender}
+- Arquetipo: ${arch}
+- Detalles: ${desc || 'libre creación'}
+
+JSON:
+\`\`\`json
+{
+  "name": "Nombre japonés",
+  "nameMeaning": "Significado",
+  "age": ${parseInt(age) || 17},
+  "role": "${role}",
+  "physicalDescription": "Físico, proporciones realistas",
+  "hairDescription": "Cabello",
+  "eyeDescription": "Ojos realistas",
+  "clothing": "Vestimenta detallada",
+  "psychology": {
+    "coreWound": "Herida específica",
+    "mask": "Cómo se presenta",
+    "consciousDesire": "Lo que cree querer",
+    "unconsciousNeed": "Lo que necesita",
+    "deepFear": "Su peor miedo",
+    "lieTheyBelieve": "Creencia equivocada",
+    "truthToLearn": "Arco de transformación"
+  },
+  "behavior": {
+    "underPressure": "Bajo presión",
+    "quirks": ["3 detalles únicos"],
+    "speechPattern": "Cómo habla",
+    "physicalHabits": ["gestos"]
+  },
+  "backstory": "Recuerdo formativo",
+  "biggestFailure": "Mayor fracaso",
+  "deepestJoy": "Lo que atesora",
+  "characterArc": {"startState": "Quién es al inicio", "breakingPoint": "Qué presión colapsa", "transformation": "En quién se convierte"},
+  "imagePrompt": "Prompt EN INGLÉS 16:9 estilo Shinkai. Incluir: ${w.visualPromptBase || 'cinematic anime, Makoto Shinkai'}, medium shot, iluminación natural, paleta suave, fondo blurred, proporciones realistas, NO big anime eyes",
+  "voiceProfile": "Descripción de voz: tono, ritmo, calidad"
+}
+\`\`\``;
+
+  try {
+    const char = await callClaudeJSON(SYSTEM_BASE, prompt);
+    char.id = 'char_' + Date.now();
+    char.imageData = null;
+    char.voiceId = null;
+    STATE.currentProject.characters.push(char);
+    saveCurrentProject();
+    refreshUI();
+    switchModule('characters');
+    toast('Personaje "' + char.name + '" creado');
+    if (STATE.apis.banana) setTimeout(() => generateCharacterImage(char.id), 500);
+  } catch(e) { toast('Error: ' + e.message, 'error'); console.error(e); }
+}
+
+async function generateCharacterImage(charId) {
+  const char = STATE.currentProject.characters.find(c => c.id === charId);
+  if (!char) return;
+  if (!STATE.apis.banana) { toast('Configura Gemini', 'error'); return; }
+  char._loadingImage = true;
+  renderCharacters();
+  try {
+    const fullPrompt = `${char.imagePrompt}
+STYLE LOCKS:
+- Makoto Shinkai cinematic anime (Your Name, Weathering With You)
+- 16:9 cinematic widescreen
+- Soft natural lighting, golden hour or blue hour
+- Realistic human proportions — NO oversized eyes
+- Painterly background, hyper-detailed
+- Soft pastel palette, NO fluorescent, NO neon
+- Medium shot portrait
+- Subtle film grain, depth of field
+NEGATIVE: oversaturated, fluorescent, neon, big anime eyes, hypersexualized, generic AI illustration, 3D render, photorealistic human, distorted proportions, blurry`;
+    const imgData = await generateImage(fullPrompt);
+    char.imageData = imgData;
+    delete char._loadingImage;
+    saveCurrentProject();
+    renderCharacters();
+    toast('Retrato: ' + char.name);
+  } catch(e) { delete char._loadingImage; renderCharacters(); toast('Error: ' + e.message, 'error'); }
+}
+
+function renderCharacters() {
+  const p = STATE.currentProject;
+  const list = $('characters-list');
+  if (!p || !p.characters || p.characters.length === 0) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">人</div><div class="empty-text">Aún no has creado personajes.</div></div>';
+    return;
+  }
+  list.innerHTML = `<div class="card-list">${p.characters.map(c => `
+    <div class="character-card">
+      <div class="char-portrait">
+        ${c._loadingImage ? '<div class="image-loading">Generando</div>' :
+          c.imageData ? `<img src="${c.imageData}" alt="${escHtml(c.name)}" />` :
+          `<div class="char-portrait-placeholder">${(c.name || '?')[0]}</div>`}
+      </div>
+      <div class="char-info">
+        <div class="char-name">${escHtml(c.name)}</div>
+        <div class="char-role-tag">${escHtml(c.role)} · ${c.age} años</div>
+      </div>
+      <div class="char-actions">
+        <button class="btn btn-secondary" onclick="viewCharacter('${c.id}')">Detalles</button>
+        <button class="btn btn-ghost" onclick="generateCharacterImage('${c.id}')" ${!STATE.apis.banana?'disabled style="opacity:0.4"':''}>${c.imageData?'↻':'+'} Img</button>
+        <button class="btn btn-ghost" onclick="deleteCharacter('${c.id}')">×</button>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+function viewCharacter(id) {
+  const c = STATE.currentProject.characters.find(x => x.id === id);
+  if (!c) return;
+  $('modal-detail-title').textContent = c.name + ' — ' + c.role;
+  $('modal-detail-body').innerHTML = `
+    ${c.imageData ? `<div class="image-preview"><img src="${c.imageData}" /></div>` : ''}
+    <div style="font-style:italic;color:var(--sunset-amber);font-size:13px;margin-bottom:14px">"${escHtml(c.nameMeaning || '')}"</div>
+    <div class="collapsible open">
+      <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="collapsible-title">Apariencia</div><span class="collapsible-arrow">›</span>
+      </div>
+      <div class="collapsible-body">
+        <div style="font-size:12px;line-height:1.8;color:var(--text-dim)">
+          <p><strong style="color:var(--paper-cream)">Físico:</strong> ${escHtml(c.physicalDescription || '')}</p>
+          <p style="margin-top:8px"><strong style="color:var(--paper-cream)">Cabello:</strong> ${escHtml(c.hairDescription || '')}</p>
+          <p style="margin-top:8px"><strong style="color:var(--paper-cream)">Ojos:</strong> ${escHtml(c.eyeDescription || '')}</p>
+          <p style="margin-top:8px"><strong style="color:var(--paper-cream)">Vestimenta:</strong> ${escHtml(c.clothing || '')}</p>
+        </div>
+      </div>
+    </div>
+    <div class="collapsible">
+      <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="collapsible-title">Psicología</div><span class="collapsible-arrow">›</span>
+      </div>
+      <div class="collapsible-body">
+        <div style="font-size:12px;line-height:1.8;color:var(--text-dim)">
+          <p><strong style="color:var(--paper-cream)">Herida:</strong> ${escHtml(c.psychology?.coreWound || '')}</p>
+          <p style="margin-top:8px"><strong style="color:var(--paper-cream)">Máscara:</strong> ${escHtml(c.psychology?.mask || '')}</p>
+          <p style="margin-top:8px"><strong style="color:var(--paper-cream)">Deseo:</strong> ${escHtml(c.psychology?.consciousDesire || '')}</p>
+          <p style="margin-top:8px"><strong style="color:var(--paper-cream)">Necesidad:</strong> ${escHtml(c.psychology?.unconsciousNeed || '')}</p>
+          <p style="margin-top:8px"><strong style="color:var(--paper-cream)">Miedo:</strong> ${escHtml(c.psychology?.deepFear || '')}</p>
+        </div>
+      </div>
+    </div>`;
+  openModal('modal-detail');
+}
+
+function deleteCharacter(id) {
+  if (!confirm('¿Eliminar?')) return;
+  STATE.currentProject.characters = STATE.currentProject.characters.filter(c => c.id !== id);
+  saveCurrentProject();
+  refreshUI();
+}
+
+async function generateEpisode() {
+  if (!STATE.currentProject?.world) { toast('Define el universo', 'error'); closeModal('modal-new-ep'); switchModule('world'); return; }
+  if (STATE.currentProject.characters.length === 0) { toast('Crea personajes', 'error'); closeModal('modal-new-ep'); switchModule('characters'); return; }
+  if (!STATE.apis.claude) { toast('Configura Claude', 'error'); return; }
+  const epNumber = (STATE.currentProject.episodes?.length || 0) + 1;
+  const func = $('ep-function').value;
+  const emotion = $('ep-emotion').value.trim();
+  const context = $('ep-context').value.trim();
+  closeModal('modal-new-ep');
+  toast('Generando episodio ' + epNumber + ' con 30 escenas...', 'info');
+  
+  const w = STATE.currentProject.world;
+  const chars = STATE.currentProject.characters.map(c => `- ${c.name} (${c.role}): ${c.psychology?.coreWound || ''}`).join('\n');
+  const prevEps = (STATE.currentProject.episodes || []).map(e => `Ep${e.number}: ${e.title} — ${e.summary}`).join('\n');
+  
+  const prompt = `Genera EPISODIO ${epNumber} de "${w.title}". DURACIÓN: 10 min (~30 escenas).
+UNIVERSO:
+${w.concept}
+Estado: ${w.currentState}
+Conflicto: ${w.centralConflict}
+
+PERSONAJES:
+${chars}
+
+EPISODIOS PREVIOS:
+${prevEps || 'Primero'}
+
+PARÁMETROS:
+- Episodio: ${epNumber}
+- Función: ${func}
+- Promesa: ${emotion || 'definir'}
+- Contexto: ${context || 'libre'}
+
+DISTRIBUCIÓN DE 30 ESCENAS (~20s cada una):
+- Cold Open: 2
+- Acto 1: 7
+- Acto 2: 10
+- Clímax: 8
+- Desenlace: 2
+- Post-créditos: 1
+
+JSON:
+\`\`\`json
+{
+  "number": ${epNumber},
+  "title": "Título poético",
+  "duration": 10,
+  "function": "${func}",
+  "summary": "Resumen 2-3 líneas",
+  "emotionalPromise": "Qué siente al terminar",
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "act": "cold_open / act1 / act2 / climax / resolution / post_credits",
+      "type": "tipo",
+      "title": "Título corto",
+      "duration": 20,
+      "location": "Locación del universo",
+      "timeOfDay": "Momento con luz",
+      "characters": ["nombres"],
+      "summary": "Qué pasa",
+      "narration": "Narración o monólogo interno EN ESPAÑOL (1-3 oraciones que se generan como voz). Si es silencio puro, string vacío.",
+      "emotionalArc": "Emoción apertura → pico → cierre",
+      "dialogue": [{"character": "Nombre", "line": "diálogo español", "subtext": "lo que significa"}],
+      "kenBurnsDirection": "zoom_in_slow / zoom_out_slow / pan_left / pan_right / pan_up / pan_down / static",
+      "musicCue": "Descripción música (instrumental, ritmo, emoción)",
+      "soundFXCue": "Efecto sonoro ambiental (lluvia / viento / tren / etc)",
+      "visualDescription": "Descripción cinematográfica",
+      "imagePromptEN": "Prompt EN INGLÉS 16:9 Shinkai. Shot type, subject, action, environment, specific lighting, palette, atmosphere, cinematic style. NO fluorescent, NO neon, NO oversaturation, NO big anime eyes"
+    }
+  ],
+  "openThreads": ["hilos abiertos"],
+  "closedThreads": ["hilos cerrados"]
+}
+\`\`\`
+EXACTAMENTE 30 escenas.`;
+
+  try {
+    const ep = await callClaudeJSON(SYSTEM_BASE, prompt, 16000);
+    ep.id = 'ep_' + Date.now();
+    if (ep.scenes) {
+      ep.scenes = ep.scenes.map((s, i) => ({ ...s, id: 'scene_' + Date.now() + '_' + i, episodeId: ep.id, episodeNumber: ep.number, imageData: null, dialogueAudio: null, narrationAudio: null, musicAudio: null, soundFXAudio: null }));
+      STATE.currentProject.scenes = STATE.currentProject.scenes || [];
+      STATE.currentProject.scenes.push(...ep.scenes);
+    }
+    STATE.currentProject.episodes = STATE.currentProject.episodes || [];
+    STATE.currentProject.episodes.push(ep);
+    saveCurrentProject();
+    refreshUI();
+    switchModule('episodes');
+    toast(`Episodio ${ep.number} "${ep.title}" con ${ep.scenes.length} escenas`);
+  } catch(e) { toast('Error: ' + e.message, 'error'); console.error(e); }
+}
+
+function renderEpisodes() {
+  const p = STATE.currentProject;
+  const list = $('episodes-list');
+  if (!p || !p.episodes || p.episodes.length === 0) { list.innerHTML = '<div class="empty"><div class="empty-icon">章</div><div class="empty-text">Aún no hay episodios.</div></div>'; return; }
+  
+  const filter = $('scene-ep-filter');
+  if (filter) {
+    const cur = filter.value;
+    filter.innerHTML = '<option value="">Todos los episodios</option>' + p.episodes.map(e => `<option value="${e.id}">Ep ${e.number}: ${escHtml(e.title)}</option>`).join('');
+    filter.value = cur;
+  }
+  
+  list.innerHTML = p.episodes.map(e => {
+    const imgsDone = (e.scenes || []).filter(s => s.imageData).length;
+    const audioDone = (e.scenes || []).filter(s => s.dialogueAudio || s.narrationAudio).length;
+    const musicDone = (e.scenes || []).filter(s => s.musicAudio).length;
+    const epCost = calculateEpisodeCost(e);
+    return `
+    <div class="episode-card">
+      <div class="episode-card-header">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div class="ep-num">${e.number}</div>
+          <div>
+            <div class="ep-title">${escHtml(e.title)}</div>
+            <div class="ep-meta">${e.duration} min · ${(e.scenes || []).length} escenas · ${escHtml(e.function)}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <div style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:16px;color:var(--sunset-amber);margin-right:8px">$${epCost.toFixed(2)}</div>
+          <button class="btn btn-secondary" style="font-size:11px;padding:8px 14px" onclick="viewEpisode('${e.id}')">Ver</button>
+          <button class="btn btn-primary" style="font-size:11px;padding:8px 14px" onclick="generateAllEpisodeImages('${e.id}')" ${!STATE.apis.banana?'disabled style="opacity:0.4"':''}>🎨 Imágenes</button>
+          <button class="btn btn-ghost" onclick="deleteEpisode('${e.id}')">×</button>
+        </div>
+      </div>
+      <div class="episode-card-body">
+        <div style="font-size:12px;color:var(--text-dim);line-height:1.7;margin-bottom:10px">${escHtml(e.summary || '')}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <span class="status-pill ${imgsDone===(e.scenes||[]).length?'done':'pending'}">🎨 ${imgsDone}/${(e.scenes||[]).length}</span>
+          <span class="status-pill ${audioDone===(e.scenes||[]).length?'done':'pending'}">🎙 ${audioDone}/${(e.scenes||[]).length}</span>
+          <span class="status-pill ${musicDone===(e.scenes||[]).length?'done':'pending'}">🎵 ${musicDone}/${(e.scenes||[]).length}</span>
+        </div>
+        <div style="font-style:italic;color:var(--sunset-amber);font-size:11px">« ${escHtml(e.emotionalPromise || '')} »</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function viewEpisode(id) {
+  const e = STATE.currentProject.episodes.find(x => x.id === id);
+  if (!e) return;
+  $('modal-detail-title').textContent = `Episodio ${e.number}: ${e.title}`;
+  $('modal-detail-body').innerHTML = `
+    <div style="font-style:italic;color:var(--sunset-amber);font-size:13px;margin-bottom:18px">${escHtml(e.summary || '')}</div>
+    <div style="margin-bottom:18px">
+      <div style="font-size:10px;letter-spacing:0.2em;color:var(--sunset-amber);text-transform:uppercase;margin-bottom:8px">PROMESA EMOCIONAL</div>
+      <div style="font-size:12px;color:var(--text-dim);line-height:1.7">${escHtml(e.emotionalPromise || '')}</div>
+    </div>
+    <div style="margin-bottom:18px">
+      <div style="font-size:10px;letter-spacing:0.2em;color:var(--sunset-amber);text-transform:uppercase;margin-bottom:8px">ESCENAS (${(e.scenes||[]).length})</div>
+      ${(e.scenes || []).map(s => `
+        <div class="flow-step">
+          <div class="flow-step-num ${s.imageData?'done':''}">${s.sceneNumber}</div>
+          <div class="flow-step-info">
+            <div class="flow-step-title">${escHtml(s.title)}</div>
+            <div class="flow-step-desc">${escHtml(s.act)} · ${escHtml(s.timeOfDay)} · ${escHtml(s.kenBurnsDirection || 'static')}</div>
+          </div>
+          <div class="flow-step-status">${s.imageData ? '✓' : '—'}</div>
+        </div>`).join('')}
+    </div>`;
+  openModal('modal-detail');
+}
+
+function deleteEpisode(id) {
+  if (!confirm('¿Eliminar episodio?')) return;
+  STATE.currentProject.episodes = STATE.currentProject.episodes.filter(e => e.id !== id);
+  STATE.currentProject.scenes = STATE.currentProject.scenes.filter(s => s.episodeId !== id);
+  saveCurrentProject();
+  refreshUI();
+}
+
+function renderScenes() {
+  const p = STATE.currentProject;
+  const list = $('scenes-list');
+  const filterId = $('scene-ep-filter')?.value || '';
+  if (!p || !p.scenes || p.scenes.length === 0) { list.innerHTML = '<div class="empty"><div class="empty-icon">画</div><div class="empty-text">Las escenas aparecerán al generar un episodio.</div></div>'; return; }
+  const scenes = filterId ? p.scenes.filter(s => s.episodeId === filterId) : p.scenes;
+  if (scenes.length === 0) { list.innerHTML = '<div class="empty"><div class="empty-text">No hay escenas en este filtro</div></div>'; return; }
+  
+  list.innerHTML = `<div class="scene-grid">${scenes.map(s => `
+    <div class="scene-card">
+      <div class="scene-thumb" onclick="viewScene('${s.id}')">
+        ${s._loading ? '<div class="image-loading">Generando</div>' :
+          s.imageData ? `<img src="${s.imageData}" />` : `<div class="scene-thumb-placeholder">🎬</div>`}
+        <div class="scene-thumb-overlay">
+          <div class="scene-num">EP ${s.episodeNumber} · Escena ${s.sceneNumber}</div>
+          <div class="scene-title">${escHtml(s.title)}</div>
+        </div>
+      </div>
+      <div class="scene-body">
+        <div class="scene-desc">${escHtml((s.summary || '').slice(0, 100))}${(s.summary||'').length>100?'...':''}</div>
+      </div>
+      <div class="scene-status-pills">
+        <span class="status-pill ${s.imageData?'done':'pending'}">🎨 Img</span>
+        <span class="status-pill ${(s.dialogueAudio||s.narrationAudio)?'done':'pending'}">🎙 Voz</span>
+        <span class="status-pill ${s.musicAudio?'done':'pending'}">🎵 Mus</span>
+        <span class="status-pill ${s.soundFXAudio?'done':'pending'}">🔊 SFX</span>
+      </div>
+      <div class="scene-actions">
+        <button class="btn btn-secondary" onclick="viewScene('${s.id}')">Ver</button>
+        <button class="btn btn-primary" onclick="generateSceneImage('${s.id}')" ${!STATE.apis.banana?'disabled style="opacity:0.4"':''}>${s.imageData?'↻':'+'} Img</button>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+async function generateSceneImage(sceneId) {
+  if (!STATE.apis.banana) { toast('Configura Gemini', 'error'); return; }
+  const scene = STATE.currentProject.scenes.find(s => s.id === sceneId);
+  if (!scene) return;
+  const w = STATE.currentProject.world;
+  const sceneCharNames = scene.characters || [];
+  const refs = STATE.currentProject.characters.filter(c => sceneCharNames.includes(c.name) && c.imageData).map(c => c.imageData);
+  scene._loading = true;
+  renderScenes();
+  try {
+    const charsInScene = STATE.currentProject.characters.filter(c => sceneCharNames.includes(c.name));
+    const charDescriptions = charsInScene.map(c => `${c.name}: ${c.physicalDescription}. Hair: ${c.hairDescription}. Clothing: ${c.clothing}.`).join('\n');
+    const fullPrompt = `${scene.imagePromptEN}
+CHARACTERS (maintain exact appearance):
+${charDescriptions}
+WORLD IDENTITY:
+${w.visualPromptBase || ''}
+Palette: ${w.visualIdentity?.palette || ''}
+Lighting: ${w.visualIdentity?.lighting || ''}
+STYLE LOCKS:
+- Makoto Shinkai cinematic anime
+- 16:9 widescreen cinematic
+- Soft natural lighting, golden or blue hour
+- Painterly hyper-detailed background
+- Soft pastel emotional palette
+- Realistic human proportions
+- Subtle film grain, depth of field
+NEGATIVE: NO fluorescent, NO neon, NO oversaturation, NO generic AI illustration, NO 3D render, NO big anime eyes, NO hypersexualization, NO distorted proportions`;
+    let imgData = refs.length > 0 ? await generateImage(fullPrompt, refs) : await generateImage(fullPrompt);
+    scene.imageData = imgData;
+    delete scene._loading;
+    const ep = STATE.currentProject.episodes.find(e => e.id === scene.episodeId);
+    if (ep) { const epScene = ep.scenes.find(s => s.id === sceneId); if (epScene) epScene.imageData = imgData; }
+    saveCurrentProject();
+    refreshUI();
+    toast('Imagen: Escena ' + scene.sceneNumber);
+  } catch(e) { delete scene._loading; renderScenes(); toast('Error: ' + e.message, 'error'); }
+}
+
+async function generateAllEpisodeImages(epId) {
+  const ep = STATE.currentProject.episodes.find(e => e.id === epId);
+  if (!ep) return;
+  if (!STATE.apis.banana) { toast('Configura Gemini', 'error'); return; }
+  const pending = ep.scenes.filter(s => !s.imageData);
+  if (pending.length === 0) { toast('Todas ya generadas'); return; }
+  if (!confirm(`Generar ${pending.length} imágenes? Costo ~$${(pending.length * 0.039).toFixed(2)}`)) return;
+  for (let i = 0; i < pending.length; i++) {
+    toast(`Imagen ${i+1}/${pending.length}: ${pending[i].title}`, 'info');
+    try { await generateSceneImage(pending[i].id); await new Promise(r => setTimeout(r, 800)); }
+    catch(e) { console.error('Error escena', i, e); }
+  }
+  toast('Imágenes completadas');
+}
+
+function viewScene(id) {
+  const s = STATE.currentProject.scenes.find(x => x.id === id);
+  if (!s) return;
+  $('modal-detail-title').textContent = `Ep ${s.episodeNumber} · Escena ${s.sceneNumber}: ${s.title}`;
+  $('modal-detail-body').innerHTML = `
+    ${s.imageData ? `<div class="image-preview"><img src="${s.imageData}" /></div>` : `<div class="image-preview"><div style="color:var(--text-dim);font-size:12px">Sin imagen</div></div>`}
+    <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="generateSceneImage('${s.id}');closeModal('modal-detail')" ${!STATE.apis.banana?'disabled':''}>${s.imageData?'↻':'+'} Imagen</button>
+      ${s.imageData ? `<button class="btn btn-secondary" onclick="downloadImage('${s.id}')">⬇ PNG</button>` : ''}
+      <button class="btn btn-secondary" onclick="generateSceneAudio('${s.id}')" ${!STATE.apis.eleven?'disabled':''}>🎙 Audio</button>
+      <button class="btn btn-secondary" onclick="generateSceneMusic('${s.id}')" ${!STATE.apis.banana?'disabled':''}>🎵 Música</button>
+      <button class="btn btn-secondary" onclick="generateSceneFX('${s.id}')" ${!STATE.apis.eleven?'disabled':''}>🔊 SFX</button>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;letter-spacing:0.2em;color:var(--sunset-amber);text-transform:uppercase;margin-bottom:8px">CONTEXTO</div>
+      <div style="font-size:12px;color:var(--text-dim);line-height:1.7">
+        <div><strong style="color:var(--paper-cream)">Acto:</strong> ${escHtml(s.act)}</div>
+        <div><strong style="color:var(--paper-cream)">Tipo:</strong> ${escHtml(s.type)}</div>
+        <div><strong style="color:var(--paper-cream)">Locación:</strong> ${escHtml(s.location)}</div>
+        <div><strong style="color:var(--paper-cream)">Tiempo:</strong> ${escHtml(s.timeOfDay)}</div>
+        <div><strong style="color:var(--paper-cream)">Personajes:</strong> ${(s.characters || []).join(', ')}</div>
+        <div><strong style="color:var(--paper-cream)">Ken Burns:</strong> ${escHtml(s.kenBurnsDirection || 'static')}</div>
+      </div>
+    </div>
+    ${s.narration ? `
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;letter-spacing:0.2em;color:var(--sunset-amber);text-transform:uppercase;margin-bottom:8px">NARRACIÓN</div>
+      <div style="font-size:13px;color:var(--paper-cream);line-height:1.7;font-style:italic">"${escHtml(s.narration)}"</div>
+      ${s.narrationAudio ? `<audio controls src="${s.narrationAudio}"></audio>` : ''}
+    </div>` : ''}
+    ${(s.dialogue || []).length > 0 ? `
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;letter-spacing:0.2em;color:var(--sunset-amber);text-transform:uppercase;margin-bottom:8px">DIÁLOGO</div>
+      ${s.dialogue.map(d => `
+        <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="font-size:12px;color:var(--paper-cream)"><strong>${escHtml(d.character)}:</strong> ${escHtml(d.line)}</div>
+          <div style="font-size:10px;color:var(--text-faded);font-style:italic;margin-top:3px">↳ ${escHtml(d.subtext || '')}</div>
+        </div>`).join('')}
+      ${s.dialogueAudio ? `<audio controls src="${s.dialogueAudio}" style="margin-top:10px"></audio>` : ''}
+    </div>` : ''}
+    ${s.musicAudio ? `<div style="margin-bottom:14px"><div style="font-size:10px;letter-spacing:0.2em;color:var(--sunset-amber);text-transform:uppercase;margin-bottom:8px">MÚSICA</div><audio controls src="${s.musicAudio}"></audio></div>` : ''}
+    ${s.soundFXAudio ? `<div style="margin-bottom:14px"><div style="font-size:10px;letter-spacing:0.2em;color:var(--sunset-amber);text-transform:uppercase;margin-bottom:8px">EFECTOS</div><audio controls src="${s.soundFXAudio}"></audio></div>` : ''}
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;letter-spacing:0.2em;color:var(--sunset-amber);text-transform:uppercase;margin-bottom:8px">RESUMEN</div>
+      <div style="font-size:12px;color:var(--text-dim);line-height:1.7">${escHtml(s.summary)}</div>
+    </div>
+    <div class="collapsible">
+      <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="collapsible-title">Prompts técnicos</div><span class="collapsible-arrow">›</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="prompt-box"><div class="prompt-label">IMAGE PROMPT (EN)</div>${escHtml(s.imagePromptEN || '')}</div>
+        <div class="prompt-box"><div class="prompt-label">MUSIC CUE</div>${escHtml(s.musicCue || '')}</div>
+        <div class="prompt-box"><div class="prompt-label">SOUND FX</div>${escHtml(s.soundFXCue || '')}</div>
+      </div>
+    </div>`;
+  openModal('modal-detail');
+}
+
+function downloadImage(sceneId) {
+  const s = STATE.currentProject.scenes.find(x => x.id === sceneId);
+  if (!s || !s.imageData) return;
+  const a = document.createElement('a');
+  a.href = s.imageData;
+  a.download = `ep${s.episodeNumber}_scene${s.sceneNumber}.png`;
+  a.click();
+}
+
+let cachedVoices = null;
+
+async function renderVoicesPanel() {
+  const c = $('voices-content');
+  const p = STATE.currentProject;
+  if (!p || !p.characters || p.characters.length === 0) { c.innerHTML = '<div class="empty"><div class="empty-icon">声</div><div class="empty-text">Crea personajes primero.</div></div>'; return; }
+  if (!STATE.apis.eleven) { c.innerHTML = '<div class="empty"><div class="empty-icon">🔑</div><div class="empty-text">Configura ElevenLabs.<br><br><button class="btn btn-primary" onclick="openModal(\'modal-apis\')" style="margin-top:14px">Configurar APIs</button></div></div>'; return; }
+  
+  if (!cachedVoices) {
+    c.innerHTML = '<div class="loading-block"><div class="loading-text">Cargando voces...</div><div class="loading-bar"><div class="loading-fill"></div></div></div>';
+    try { cachedVoices = await listVoices(); }
+    catch(e) { c.innerHTML = '<div class="empty"><div class="empty-icon">⚠</div><div class="empty-text">Error: ' + escHtml(e.message) + '</div></div>'; return; }
+  }
+  
+  STATE.currentProject.voiceAssignments = STATE.currentProject.voiceAssignments || {};
+  
+  c.innerHTML = `
+    <div class="help-text"><strong>${cachedVoices.length} voces disponibles.</strong> Asigna voz a cada personaje y al narrador. Usa <strong>asignación automática</strong> para que Claude elija la mejor voz para cada personaje según su perfil — y cree voces nuevas si no hay match.</div>
+    <div class="btn-row" style="margin-bottom:18px">
+      <button class="btn btn-primary" onclick="autoAssignVoices()">🪄 Asignar voces automáticamente</button>
+    </div>
+    ${p.characters.map(char => `
+      <div class="episode-card">
+        <div class="episode-card-header">
+          <div style="display:flex;align-items:center;gap:14px;flex:1">
+            ${char.imageData ? `<img src="${char.imageData}" style="width:54px;height:54px;border-radius:10px;object-fit:cover" />` :
+              `<div style="width:54px;height:54px;border-radius:10px;background:var(--surface-warm);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-style:italic;color:var(--sunset-amber);font-size:20px">${char.name[0]}</div>`}
+            <div style="flex:1">
+              <div class="ep-title">${escHtml(char.name)}</div>
+              <div class="ep-meta">${escHtml(char.voiceProfile || char.role)}</div>
+            </div>
+          </div>
+        </div>
+        <div class="episode-card-body">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <select class="field" style="flex:1;min-width:200px" onchange="assignVoice('${char.id}', this.value)">
+              <option value="">— Sin voz —</option>
+              ${cachedVoices.map(v => `<option value="${v.voice_id}" ${STATE.currentProject.voiceAssignments[char.id] === v.voice_id ? 'selected' : ''}>${escHtml(v.name)}${v.labels?.gender?` (${v.labels.gender})`:''}</option>`).join('')}
+            </select>
+            <button class="btn btn-secondary" onclick="testVoice('${char.id}')" ${!STATE.currentProject.voiceAssignments[char.id]?'disabled':''}>▶ Probar</button>
+          </div>
+        </div>
+      </div>`).join('')}
+    <div class="episode-card">
+      <div class="episode-card-header">
+        <div style="display:flex;align-items:center;gap:14px;flex:1">
+          <div style="width:54px;height:54px;border-radius:10px;background:var(--surface-warm);display:flex;align-items:center;justify-content:center;font-size:24px">📖</div>
+          <div style="flex:1"><div class="ep-title">Narrador</div><div class="ep-meta">Voz para narraciones</div></div>
+        </div>
+      </div>
+      <div class="episode-card-body">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <select class="field" style="flex:1;min-width:200px" onchange="assignVoice('_narrator', this.value)">
+            <option value="">— Sin voz —</option>
+            ${cachedVoices.map(v => `<option value="${v.voice_id}" ${STATE.currentProject.voiceAssignments['_narrator'] === v.voice_id ? 'selected' : ''}>${escHtml(v.name)}${v.labels?.gender?` (${v.labels.gender})`:''}</option>`).join('')}
+          </select>
+          <button class="btn btn-secondary" onclick="testVoice('_narrator')" ${!STATE.currentProject.voiceAssignments['_narrator']?'disabled':''}>▶ Probar</button>
+        </div>
+      </div>
+    </div>
+    ${p.episodes && p.episodes.length > 0 ? `
+      <div class="divider"><span>GENERACIÓN MASIVA</span></div>
+      ${p.episodes.map(e => `
+        <div class="episode-card">
+          <div class="episode-card-header">
+            <div style="display:flex;align-items:center;gap:14px">
+              <div class="ep-num">${e.number}</div>
+              <div><div class="ep-title">${escHtml(e.title)}</div>
+                <div class="ep-meta">${(e.scenes||[]).filter(s=>s.narrationAudio||s.dialogueAudio).length}/${(e.scenes||[]).length} escenas con audio</div>
+              </div>
+            </div>
+            <button class="btn btn-primary" style="font-size:11px" onclick="generateAllEpisodeAudio('${e.id}')">🎙 Generar todo</button>
+          </div>
+        </div>`).join('')}` : ''}`;
+}
+
+function assignVoice(charId, voiceId) {
+  STATE.currentProject.voiceAssignments = STATE.currentProject.voiceAssignments || {};
+  STATE.currentProject.voiceAssignments[charId] = voiceId;
+  saveCurrentProject();
+  renderVoicesPanel();
+}
+
+async function testVoice(charId) {
+  const voiceId = STATE.currentProject.voiceAssignments?.[charId];
+  if (!voiceId) return;
+  let sample;
+  if (charId === '_narrator') sample = 'La ciudad dormía bajo el cielo púrpura del crepúsculo, y en algún lugar, alguien empezaba a recordar.';
+  else { const char = STATE.currentProject.characters.find(c => c.id === charId); sample = `Hola, soy ${char.name}.`; }
+  toast('Generando muestra...');
+  try { const audio = await generateVoice(sample, voiceId); new Audio(audio).play(); }
+  catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// AUTO-ASSIGN VOICES using Claude to match characters to available voices
+async function autoAssignVoices() {
+  if (!STATE.apis.claude) { toast('Configura Claude', 'error'); return; }
+  if (!STATE.apis.eleven) { toast('Configura ElevenLabs', 'error'); return; }
+  const p = STATE.currentProject;
+  if (!p || !p.characters || p.characters.length === 0) { toast('No hay personajes', 'error'); return; }
+  if (!cachedVoices) {
+    try { cachedVoices = await listVoices(); } catch(e) { toast('Error voces: ' + e.message, 'error'); return; }
+  }
+  if (!confirm(`Asignar voces automáticamente a ${p.characters.length} personajes + narrador? Claude analizará el perfil de cada uno y elegirá la mejor voz de tu biblioteca. Si no hay match suficiente, creará voces nuevas con Voice Design (costo adicional ~$0.10 por voz creada).`)) return;
+  
+  toast('Analizando voces disponibles...', 'info');
+  
+  // Build voices catalog for Claude
+  const voicesCatalog = cachedVoices.map(v => ({
+    id: v.voice_id,
+    name: v.name,
+    gender: v.labels?.gender || 'unknown',
+    age: v.labels?.age || 'unknown',
+    accent: v.labels?.accent || 'unknown',
+    description: v.labels?.description || v.description || ''
+  }));
+  
+  // Build characters profile
+  const charProfiles = p.characters.map(c => ({
+    id: c.id,
+    name: c.name,
+    role: c.role,
+    age: c.age,
+    gender: c.gender || 'unknown',
+    voiceProfile: c.voiceProfile || '',
+    psychology: c.psychology?.coreWound || '',
+    speechPattern: c.behavior?.speechPattern || ''
+  }));
+  
+  const matchPrompt = `Tengo ${cachedVoices.length} voces disponibles en ElevenLabs y necesito asignar la mejor a cada personaje + un narrador.
+
+VOCES DISPONIBLES:
+${JSON.stringify(voicesCatalog, null, 2)}
+
+PERSONAJES:
+${JSON.stringify(charProfiles, null, 2)}
+
+Para cada personaje y el narrador, devuelve la mejor voz que coincida con su perfil emocional, género, edad y carácter. Si NINGUNA voz disponible es buena coincidencia (por ejemplo: ninguna voz coincide bien con el género, la edad o el tono emocional requerido), marca needs_design=true y proporciona una descripción detallada para crear una voz nueva.
+
+Responde SOLO JSON:
+\`\`\`json
+{
+  "assignments": [
+    {
+      "characterId": "id del personaje o _narrator",
+      "characterName": "nombre",
+      "voiceId": "voice_id de la lista si hay buen match, null si needs_design",
+      "voiceName": "nombre de la voz si hay match",
+      "matchQuality": "excellent / good / acceptable / poor",
+      "reasoning": "por qué es buena/mala opción",
+      "needs_design": false,
+      "design_description": "Solo si needs_design=true: descripción detallada de la voz a crear (edad, género, acento, tono, ritmo, calidad emocional). Ejemplo: 'Joven mujer japonesa de 17 años, voz suave y melancólica, ritmo pausado, ligeramente susurrante, con calidad introspectiva'"
+    }
+  ]
+}
+\`\`\`
+
+INCLUYE SIEMPRE al narrador con characterId="_narrator". Para el narrador, prefiere una voz neutral, cálida, con autoridad sutil — capaz de transmitir nostalgia y poesía.`;
+
+  try {
+    const result = await callClaudeJSON(SYSTEM_BASE, matchPrompt, 4000);
+    let designed = 0, assigned = 0;
+    STATE.currentProject.voiceAssignments = STATE.currentProject.voiceAssignments || {};
+    
+    for (const a of result.assignments) {
+      if (a.needs_design && a.design_description) {
+        toast(`Creando voz para ${a.characterName}...`, 'info');
+        try {
+          const newVoiceId = await designVoice(
+            a.design_description,
+            a.characterId === '_narrator' 
+              ? 'Bajo el cielo del crepúsculo, las palabras se vuelven luz, y la luz se vuelve memoria.'
+              : `Hola, soy ${a.characterName}.`,
+            `${a.characterName} (${STATE.currentProject.world?.title || 'Anime'})`
+          );
+          STATE.currentProject.voiceAssignments[a.characterId] = newVoiceId;
+          designed++;
+          await new Promise(r => setTimeout(r, 1500));
+        } catch(e) {
+          console.error('Voice Design error:', e);
+          toast(`No se pudo crear voz para ${a.characterName}: ${e.message}`, 'error');
+        }
+      } else if (a.voiceId) {
+        STATE.currentProject.voiceAssignments[a.characterId] = a.voiceId;
+        assigned++;
+      }
+    }
+    
+    // Refresh voices cache (since we added new ones)
+    if (designed > 0) {
+      cachedVoices = null;
+      try { cachedVoices = await listVoices(); } catch(e) {}
+    }
+    
+    saveCurrentProject();
+    renderVoicesPanel();
+    toast(`Voces asignadas: ${assigned} de catálogo + ${designed} nuevas creadas`);
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+    console.error(e);
+  }
+}
+
+async function generateSceneAudio(sceneId) {
+  const scene = STATE.currentProject.scenes.find(s => s.id === sceneId);
+  if (!scene) return;
+  if (!STATE.apis.eleven) { toast('Configura ElevenLabs', 'error'); return; }
+  toast('Generando audio...');
+  try {
+    if (scene.narration && scene.narration.trim()) {
+      const narratorVoice = STATE.currentProject.voiceAssignments?._narrator;
+      if (narratorVoice) {
+        const audio = await generateVoice(scene.narration, narratorVoice);
+        scene.narrationAudio = audio;
+      } else { toast('Asigna voz al Narrador primero', 'error'); }
+    }
+    if (scene.dialogue && scene.dialogue.length > 0) {
+      const audioParts = [];
+      for (const d of scene.dialogue) {
+        const char = STATE.currentProject.characters.find(c => c.name === d.character);
+        if (!char) continue;
+        const voiceId = STATE.currentProject.voiceAssignments?.[char.id];
+        if (!voiceId) { toast(`${char.name} sin voz`, 'error'); continue; }
+        const audio = await generateVoice(d.line, voiceId);
+        audioParts.push({ character: d.character, audio, text: d.line });
+        await new Promise(r => setTimeout(r, 400));
+      }
+      if (audioParts.length > 0) {
+        const merged = await mergeAudios(audioParts.map(p => p.audio), 500);
+        scene.dialogueAudio = merged;
+        scene.dialogueParts = audioParts;
+      }
+    }
+    saveCurrentProject();
+    refreshUI();
+    toast('Audio generado');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function generateAllEpisodeAudio(epId) {
+  const ep = STATE.currentProject.episodes.find(e => e.id === epId);
+  if (!ep) return;
+  if (!STATE.apis.eleven) { toast('Configura ElevenLabs', 'error'); return; }
+  const pending = ep.scenes.filter(s => (s.narration || s.dialogue?.length) && !s.narrationAudio && !s.dialogueAudio);
+  if (pending.length === 0) { toast('Audio ya generado'); return; }
+  if (!confirm(`Generar audio ${pending.length} escenas? ~$${(pending.length * 0.05).toFixed(2)}`)) return;
+  for (let i = 0; i < pending.length; i++) {
+    toast(`Audio ${i+1}/${pending.length}`, 'info');
+    try { await generateSceneAudio(pending[i].id); await new Promise(r => setTimeout(r, 500)); }
+    catch(e) { console.error(e); }
+  }
+  toast('Audio completado');
+}
+
+function renderMusicPanel() {
+  const c = $('music-content');
+  const p = STATE.currentProject;
+  if (!p || !p.scenes || p.scenes.length === 0) { c.innerHTML = '<div class="empty"><div class="empty-icon">音</div><div class="empty-text">Genera un episodio primero.</div></div>'; return; }
+  c.innerHTML = `
+    <div class="help-text"><strong>Música:</strong> Gemini Lyria (~30s clips). <strong>Efectos:</strong> ElevenLabs Sound Effects.</div>
+    ${p.episodes.map(e => {
+      const musicDone = (e.scenes||[]).filter(s => s.musicAudio).length;
+      const fxDone = (e.scenes||[]).filter(s => s.soundFXAudio).length;
+      return `
+      <div class="episode-card">
+        <div class="episode-card-header">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div class="ep-num">${e.number}</div>
+            <div><div class="ep-title">${escHtml(e.title)}</div>
+              <div class="ep-meta">${musicDone}/${e.scenes.length} música · ${fxDone}/${e.scenes.length} efectos</div></div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary" style="font-size:11px" onclick="generateAllEpisodeMusic('${e.id}')" ${!STATE.apis.banana?'disabled':''}>🎵 Música</button>
+            <button class="btn btn-secondary" style="font-size:11px" onclick="generateAllEpisodeFX('${e.id}')" ${!STATE.apis.eleven?'disabled':''}>🔊 Efectos</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}`;
+}
+
+async function generateSceneMusic(sceneId) {
+  const scene = STATE.currentProject.scenes.find(s => s.id === sceneId);
+  if (!scene) return;
+  if (!STATE.apis.banana) { toast('Configura Gemini', 'error'); return; }
+  const w = STATE.currentProject.world;
+  const musicPrompt = `${scene.musicCue || 'emotional anime piano'}. Style: ${w.musicIdentity || 'cinematic anime score, orchestral, Joe Hisaishi inspired'}. Instrumental only, no vocals. Soft, emotional, cinematic. 30 seconds.`;
+  toast('Generando música...');
+  try {
+    const audio = await generateMusic(musicPrompt);
+    scene.musicAudio = audio;
+    saveCurrentProject();
+    refreshUI();
+    toast('Música generada');
+  } catch(e) { toast('Error música: ' + e.message, 'error'); }
+}
+
+async function generateSceneFX(sceneId) {
+  const scene = STATE.currentProject.scenes.find(s => s.id === sceneId);
+  if (!scene) return;
+  if (!STATE.apis.eleven) { toast('Configura ElevenLabs', 'error'); return; }
+  if (!scene.soundFXCue) { toast('Escena sin cue de FX', 'error'); return; }
+  toast('Generando efecto...');
+  try {
+    const audio = await generateSoundEffect(scene.soundFXCue, scene.duration || 20);
+    scene.soundFXAudio = audio;
+    saveCurrentProject();
+    refreshUI();
+    toast('Efecto generado');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function generateAllEpisodeMusic(epId) {
+  const ep = STATE.currentProject.episodes.find(e => e.id === epId);
+  if (!ep) return;
+  if (!STATE.apis.banana) { toast('Configura Gemini', 'error'); return; }
+  const pending = ep.scenes.filter(s => !s.musicAudio);
+  if (pending.length === 0) { toast('Música ya generada'); return; }
+  if (!confirm(`Generar ${pending.length} clips de música? ~$${(pending.length * 0.01).toFixed(2)}`)) return;
+  for (let i = 0; i < pending.length; i++) {
+    toast(`Música ${i+1}/${pending.length}`, 'info');
+    try { await generateSceneMusic(pending[i].id); await new Promise(r => setTimeout(r, 800)); }
+    catch(e) { console.error(e); }
+  }
+  toast('Música completada');
+}
+
+async function generateAllEpisodeFX(epId) {
+  const ep = STATE.currentProject.episodes.find(e => e.id === epId);
+  if (!ep) return;
+  if (!STATE.apis.eleven) { toast('Configura ElevenLabs', 'error'); return; }
+  const pending = ep.scenes.filter(s => s.soundFXCue && !s.soundFXAudio);
+  if (pending.length === 0) { toast('Efectos ya generados'); return; }
+  if (!confirm(`Generar ${pending.length} efectos? ~$${(pending.length * 0.08).toFixed(2)}`)) return;
+  for (let i = 0; i < pending.length; i++) {
+    toast(`Efecto ${i+1}/${pending.length}`, 'info');
+    try { await generateSceneFX(pending[i].id); await new Promise(r => setTimeout(r, 600)); }
+    catch(e) { console.error(e); }
+  }
+  toast('Efectos completados');
+}
+
+async function mergeAudios(audioBase64Array, gapMs = 300) {
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const buffers = [];
+  for (const b64 of audioBase64Array) {
+    const response = await fetch(b64);
+    const arrayBuf = await response.arrayBuffer();
+    const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
+    buffers.push(audioBuf);
+  }
+  const sampleRate = buffers[0].sampleRate;
+  const numChannels = buffers[0].numberOfChannels;
+  const gapSamples = Math.floor((gapMs / 1000) * sampleRate);
+  const totalLength = buffers.reduce((sum, b) => sum + b.length, 0) + gapSamples * (buffers.length - 1);
+  const mergedBuffer = audioCtx.createBuffer(numChannels, totalLength, sampleRate);
+  for (let ch = 0; ch < numChannels; ch++) {
+    const out = mergedBuffer.getChannelData(ch);
+    let offset = 0;
+    for (let i = 0; i < buffers.length; i++) {
+      const data = buffers[i].getChannelData(Math.min(ch, buffers[i].numberOfChannels - 1));
+      out.set(data, offset);
+      offset += buffers[i].length + (i < buffers.length - 1 ? gapSamples : 0);
+    }
+  }
+  const wav = bufferToWav(mergedBuffer);
+  const blob = new Blob([wav], { type: 'audio/wav' });
+  return await blobToBase64(blob);
+}
+
+function bufferToWav(buffer) {
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const bitDepth = 16;
+  const bytesPerSample = bitDepth / 8;
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = buffer.length * blockAlign;
+  const bufferSize = 44 + dataSize;
+  const arrayBuffer = new ArrayBuffer(bufferSize);
+  const view = new DataView(arrayBuffer);
+  let offset = 0;
+  const writeString = s => { for (let i = 0; i < s.length; i++) view.setUint8(offset++, s.charCodeAt(i)); };
+  writeString('RIFF');
+  view.setUint32(offset, bufferSize - 8, true); offset += 4;
+  writeString('WAVE');
+  writeString('fmt ');
+  view.setUint32(offset, 16, true); offset += 4;
+  view.setUint16(offset, 1, true); offset += 2;
+  view.setUint16(offset, numChannels, true); offset += 2;
+  view.setUint32(offset, sampleRate, true); offset += 4;
+  view.setUint32(offset, byteRate, true); offset += 4;
+  view.setUint16(offset, blockAlign, true); offset += 2;
+  view.setUint16(offset, bitDepth, true); offset += 2;
+  writeString('data');
+  view.setUint32(offset, dataSize, true); offset += 4;
+  const channels = [];
+  for (let ch = 0; ch < numChannels; ch++) channels.push(buffer.getChannelData(ch));
+  for (let i = 0; i < buffer.length; i++) {
+    for (let ch = 0; ch < numChannels; ch++) {
+      const sample = Math.max(-1, Math.min(1, channels[ch][i]));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+      offset += 2;
+    }
+  }
+  return arrayBuffer;
+}
+
+function renderAssemblyPanel() {
+  const c = $('assembly-content');
+  const p = STATE.currentProject;
+  if (!p || !p.episodes || p.episodes.length === 0) { c.innerHTML = '<div class="empty"><div class="empty-icon">映</div><div class="empty-text">Necesitas un episodio.</div></div>'; return; }
+  c.innerHTML = `
+    <div class="help-text"><strong>Ensamblaje:</strong> Previsualiza el animatic completo en el navegador y exporta como WebM con audio mezclado.</div>
+    <div style="margin-top:20px">
+      <div class="field" style="margin-bottom:20px">
+        <label>Episodio a ensamblar</label>
+        <select id="assembly-ep-select" onchange="loadAssemblyEpisode()">
+          <option value="">— Selecciona —</option>
+          ${p.episodes.map(e => `<option value="${e.id}">Ep ${e.number}: ${escHtml(e.title)}</option>`).join('')}
+        </select>
+      </div>
+      <div id="assembly-preview"></div>
+    </div>`;
+}
+
+let assemblyState = { episode: null, isPlaying: false, currentScene: 0, audioElements: [] };
+
+function loadAssemblyEpisode() {
+  const epId = $('assembly-ep-select').value;
+  if (!epId) { $('assembly-preview').innerHTML = ''; return; }
+  const ep = STATE.currentProject.episodes.find(e => e.id === epId);
+  if (!ep) return;
+  assemblyState.episode = ep;
+  const totalImages = ep.scenes.filter(s => s.imageData).length;
+  const totalAudio = ep.scenes.filter(s => s.dialogueAudio || s.narrationAudio).length;
+  const totalMusic = ep.scenes.filter(s => s.musicAudio).length;
+  const ready = totalImages === ep.scenes.length;
+  $('assembly-preview').innerHTML = `
+    <div class="cost-banner" style="margin-bottom:20px">
+      <div class="cost-icon">🎬</div>
+      <div style="flex:1">
+        <div class="cost-label">Estado del episodio</div>
+        <div class="cost-value">Ep ${ep.number}: ${escHtml(ep.title)}</div>
+        <div class="cost-detail">${totalImages}/${ep.scenes.length} imágenes · ${totalAudio}/${ep.scenes.length} voces · ${totalMusic}/${ep.scenes.length} música</div>
+      </div>
+    </div>
+    <div class="assembly-canvas" id="assembly-canvas">
+      <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:13px">
+        ${ready ? 'Listo para reproducir' : 'Faltan imágenes — genera todas antes de ensamblar'}
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="playAssembly()" ${!ready?'disabled':''}>▶ Reproducir Animatic</button>
+      <button class="btn btn-secondary" onclick="stopAssembly()">⏸ Detener</button>
+      <button class="btn btn-secondary" onclick="exportAssemblyVideo()" ${!ready?'disabled':''}>⬇ Exportar Video WebM</button>
+    </div>
+    <div id="assembly-status"></div>`;
+}
+
+function playAssembly() {
+  if (!assemblyState.episode || assemblyState.isPlaying) return;
+  assemblyState.isPlaying = true;
+  assemblyState.currentScene = 0;
+  playScene(0);
+}
+
+function stopAssembly() {
+  assemblyState.isPlaying = false;
+  for (const a of assemblyState.audioElements) { try { a.pause(); } catch(e) {} }
+  assemblyState.audioElements = [];
+  const canvas = $('assembly-canvas');
+  if (canvas) canvas.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:13px">Detenido</div>';
+}
+
+function playScene(idx) {
+  if (!assemblyState.isPlaying || !assemblyState.episode) return;
+  const scenes = assemblyState.episode.scenes;
+  if (idx >= scenes.length) { assemblyState.isPlaying = false; toast('Reproducción terminada'); return; }
+  const scene = scenes[idx];
+  assemblyState.currentScene = idx;
+  const canvas = $('assembly-canvas');
+  if (!canvas) return;
+  const direction = scene.kenBurnsDirection || 'static';
+  const duration = scene.duration || 20;
+  const transform = getKenBurnsTransform(direction);
+  let subtitle = '', charName = '';
+  if (scene.dialogue && scene.dialogue.length > 0) {
+    subtitle = scene.dialogue.map(d => d.line).join(' / ');
+    charName = scene.dialogue[0].character;
+  } else if (scene.narration) { subtitle = scene.narration; charName = 'Narrador'; }
+  canvas.innerHTML = `
+    <img id="kb-img" src="${scene.imageData}" style="${transform.initial}" />
+    ${charName ? `<div class="assembly-name">${escHtml(charName)}</div>` : ''}
+    ${subtitle ? `<div class="assembly-subtitle">${escHtml(subtitle)}</div>` : ''}`;
+  setTimeout(() => {
+    const img = document.getElementById('kb-img');
+    if (img) { img.style.transition = `transform ${duration}s linear`; img.style.transform = transform.final; }
+  }, 50);
+  assemblyState.audioElements = [];
+  if (scene.musicAudio) { const m = new Audio(scene.musicAudio); m.volume = 0.3; m.loop = true; m.play().catch(()=>{}); assemblyState.audioElements.push(m); }
+  if (scene.soundFXAudio) { const fx = new Audio(scene.soundFXAudio); fx.volume = 0.4; fx.play().catch(()=>{}); assemblyState.audioElements.push(fx); }
+  if (scene.narrationAudio) { const n = new Audio(scene.narrationAudio); n.volume = 0.95; n.play().catch(()=>{}); assemblyState.audioElements.push(n); }
+  if (scene.dialogueAudio) {
+    const d = new Audio(scene.dialogueAudio); d.volume = 0.95;
+    if (scene.narrationAudio) setTimeout(() => d.play().catch(()=>{}), 2000);
+    else d.play().catch(()=>{});
+    assemblyState.audioElements.push(d);
+  }
+  const status = $('assembly-status');
+  if (status) status.innerHTML = `<div class="assembly-progress"><div class="assembly-progress-text">Escena ${idx + 1}/${scenes.length} · ${scene.title} · ${duration}s</div><div class="assembly-progress-bar"><div class="assembly-progress-fill" style="width:${((idx+1)/scenes.length)*100}%"></div></div></div>`;
+  setTimeout(() => {
+    if (!assemblyState.isPlaying) return;
+    for (const a of assemblyState.audioElements) {
+      try {
+        const fadeStart = a.volume; let v = fadeStart;
+        const fade = setInterval(() => { v -= fadeStart / 10; if (v <= 0) { a.pause(); clearInterval(fade); } else a.volume = v; }, 50);
+      } catch(e) {}
+    }
+    playScene(idx + 1);
+  }, duration * 1000);
+}
+
+function getKenBurnsTransform(direction) {
+  const Z = 1.15;
+  switch(direction) {
+    case 'zoom_in_slow': return { initial: 'transform: scale(1);', final: `transform: scale(${Z});` };
+    case 'zoom_out_slow': return { initial: `transform: scale(${Z});`, final: 'transform: scale(1);' };
+    case 'pan_left': return { initial: `transform: scale(${Z}) translateX(5%);`, final: `transform: scale(${Z}) translateX(-5%);` };
+    case 'pan_right': return { initial: `transform: scale(${Z}) translateX(-5%);`, final: `transform: scale(${Z}) translateX(5%);` };
+    case 'pan_up': return { initial: `transform: scale(${Z}) translateY(5%);`, final: `transform: scale(${Z}) translateY(-5%);` };
+    case 'pan_down': return { initial: `transform: scale(${Z}) translateY(-5%);`, final: `transform: scale(${Z}) translateY(5%);` };
+    default: return { initial: 'transform: scale(1.05);', final: 'transform: scale(1.08);' };
+  }
+}
+
+async function exportAssemblyVideo() {
+  if (!assemblyState.episode) return;
+  const ep = assemblyState.episode;
+  const ready = ep.scenes.every(s => s.imageData);
+  if (!ready) { toast('Faltan imágenes', 'error'); return; }
+  if (!confirm(`Exportar video? Tomará varios minutos. 1920x1080.`)) return;
+  const status = $('assembly-status');
+  status.innerHTML = `<div class="assembly-progress"><div class="assembly-progress-text">Iniciando exportación...</div><div class="assembly-progress-bar"><div class="assembly-progress-fill" style="width:0%"></div></div></div>`;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1920; canvas.height = 1080;
+    const ctx = canvas.getContext('2d');
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioDest = audioCtx.createMediaStreamDestination();
+    const videoStream = canvas.captureStream(30);
+    const audioStream = audioDest.stream;
+    const combined = new MediaStream([...videoStream.getVideoTracks(), ...audioStream.getAudioTracks()]);
+    // Detect best format: prefer MP4 (iPhone/Safari native) → WebM (others)
+    const formats = [
+      { mime: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', ext: 'mp4', label: 'MP4 H.264/AAC' },
+      { mime: 'video/mp4;codecs=avc1,mp4a', ext: 'mp4', label: 'MP4' },
+      { mime: 'video/mp4', ext: 'mp4', label: 'MP4 generic' },
+      { mime: 'video/webm;codecs=vp9,opus', ext: 'webm', label: 'WebM VP9' },
+      { mime: 'video/webm;codecs=vp8,opus', ext: 'webm', label: 'WebM VP8' },
+      { mime: 'video/webm', ext: 'webm', label: 'WebM' }
+    ];
+    let chosen = null;
+    for (const f of formats) {
+      if (MediaRecorder.isTypeSupported(f.mime)) { chosen = f; break; }
+    }
+    if (!chosen) { toast('Tu navegador no soporta grabación de video', 'error'); return; }
+    toast(`Formato: ${chosen.label}`, 'info');
+    const recorder = new MediaRecorder(combined, { mimeType: chosen.mime, videoBitsPerSecond: 5_000_000 });
+    const chunks = [];
+    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    let resolveDone;
+    const done = new Promise(r => { resolveDone = r; });
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: chosen.mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${sanitize(STATE.currentProject.world?.title || 'episodio')}_ep${ep.number}.${chosen.ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      resolveDone();
+    };
+    recorder.start();
+    const images = [];
+    for (let i = 0; i < ep.scenes.length; i++) {
+      const img = new Image();
+      img.src = ep.scenes[i].imageData;
+      await new Promise(r => { img.onload = r; img.onerror = r; });
+      images.push(img);
+    }
+    for (let i = 0; i < ep.scenes.length; i++) {
+      const scene = ep.scenes[i];
+      const img = images[i];
+      const duration = scene.duration || 20;
+      status.innerHTML = `<div class="assembly-progress"><div class="assembly-progress-text">Renderizando ${i+1}/${ep.scenes.length}: ${scene.title}</div><div class="assembly-progress-bar"><div class="assembly-progress-fill" style="width:${((i+1)/ep.scenes.length)*100}%"></div></div></div>`;
+      const sources = [];
+      if (scene.musicAudio) { const s = await playAudioToContext(scene.musicAudio, audioCtx, audioDest, 0.3); sources.push(s); }
+      if (scene.soundFXAudio) { const s = await playAudioToContext(scene.soundFXAudio, audioCtx, audioDest, 0.4); sources.push(s); }
+      if (scene.narrationAudio) { const s = await playAudioToContext(scene.narrationAudio, audioCtx, audioDest, 0.95); sources.push(s); }
+      if (scene.dialogueAudio) {
+        const delay = scene.narrationAudio ? 2 : 0;
+        setTimeout(async () => { const s = await playAudioToContext(scene.dialogueAudio, audioCtx, audioDest, 0.95); sources.push(s); }, delay * 1000);
+      }
+      const fps = 30;
+      const totalFrames = duration * fps;
+      const direction = scene.kenBurnsDirection || 'static';
+      const subtitle = (scene.dialogue || []).map(d => d.line).join(' / ') || scene.narration || '';
+      const charName = (scene.dialogue && scene.dialogue[0]?.character) || (scene.narration ? 'Narrador' : '');
+      for (let frame = 0; frame < totalFrames; frame++) {
+        const t = frame / totalFrames;
+        await renderFrame(ctx, img, direction, t, subtitle, charName);
+        await new Promise(r => setTimeout(r, 1000 / fps));
+      }
+      for (const s of sources) { try { s.stop(); } catch(e) {} }
+    }
+    recorder.stop();
+    await done;
+    status.innerHTML = '<div class="assembly-progress"><div class="assembly-progress-text">✓ Video exportado</div></div>';
+    toast('Video exportado');
+  } catch(e) { toast('Error: ' + e.message, 'error'); console.error(e); }
+}
+
+async function playAudioToContext(base64, audioCtx, dest, volume = 1.0) {
+  const response = await fetch(base64);
+  const arrayBuf = await response.arrayBuffer();
+  const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
+  const src = audioCtx.createBufferSource();
+  src.buffer = audioBuf;
+  const gain = audioCtx.createGain();
+  gain.gain.value = volume;
+  src.connect(gain);
+  gain.connect(dest);
+  src.start();
+  return src;
+}
+
+async function renderFrame(ctx, img, direction, t, subtitle, charName) {
+  const W = ctx.canvas.width;
+  const H = ctx.canvas.height;
+  ctx.fillStyle = '#0e1729';
+  ctx.fillRect(0, 0, W, H);
+  let scale = 1.05, tx = 0, ty = 0;
+  const ZD = 0.10, PD = 0.05;
+  switch(direction) {
+    case 'zoom_in_slow': scale = 1 + ZD * t; break;
+    case 'zoom_out_slow': scale = 1 + ZD * (1 - t); break;
+    case 'pan_left': scale = 1 + ZD; tx = PD * (1 - 2 * t); break;
+    case 'pan_right': scale = 1 + ZD; tx = -PD * (1 - 2 * t); break;
+    case 'pan_up': scale = 1 + ZD; ty = PD * (1 - 2 * t); break;
+    case 'pan_down': scale = 1 + ZD; ty = -PD * (1 - 2 * t); break;
+    default: scale = 1.05 + 0.03 * t;
+  }
+  const sw = img.naturalWidth || img.width;
+  const sh = img.naturalHeight || img.height;
+  const aspectImg = sw / sh;
+  const aspectCanvas = W / H;
+  let dw, dh;
+  if (aspectImg > aspectCanvas) { dh = H * scale; dw = dh * aspectImg; }
+  else { dw = W * scale; dh = dw / aspectImg; }
+  const dx = (W - dw) / 2 + tx * W;
+  const dy = (H - dh) / 2 + ty * H;
+  ctx.drawImage(img, dx, dy, dw, dh);
+  if (subtitle || charName) {
+    const sy = H * 0.85;
+    if (charName) {
+      ctx.font = '600 24px Inter, sans-serif';
+      ctx.fillStyle = '#f4a261';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = 'rgba(0,0,0,0.95)';
+      ctx.shadowBlur = 12;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 3;
+      ctx.fillText(charName.toUpperCase(), W / 2, sy - 50);
+    }
+    if (subtitle) {
+      ctx.font = '500 36px Inter, sans-serif';
+      ctx.fillStyle = '#f5ebe0';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = 'rgba(0,0,0,0.95)';
+      ctx.shadowBlur = 16;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 4;
+      const maxWidth = W * 0.8;
+      const words = subtitle.split(' ');
+      const lines = [];
+      let line = '';
+      for (const word of words) {
+        const test = line + (line ? ' ' : '') + word;
+        if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = word; }
+        else line = test;
+      }
+      if (line) lines.push(line);
+      lines.forEach((l, i) => ctx.fillText(l, W / 2, sy + i * 48));
+    }
+    ctx.shadowBlur = 0;
+  }
+}
+
+async function exportProject() {
+  if (!STATE.currentProject) { toast('No hay proyecto activo', 'error'); return; }
+  toast('Generando ZIP...');
+  const zip = new JSZip();
+  const p = STATE.currentProject;
+  zip.file('project.json', JSON.stringify(p, null, 2));
+  const charsFolder = zip.folder('characters');
+  for (const c of (p.characters || [])) {
+    charsFolder.file(`${sanitize(c.name)}_info.txt`, formatCharText(c));
+    if (c.imageData) charsFolder.file(`${sanitize(c.name)}_portrait.png`, c.imageData.split(',')[1], { base64: true });
+  }
+  const epsFolder = zip.folder('episodes');
+  for (const e of (p.episodes || [])) {
+    epsFolder.file(`ep${e.number}_${sanitize(e.title)}.txt`, formatEpisodeText(e));
+    const sceneFolder = epsFolder.folder(`ep${e.number}_assets`);
+    for (const s of (e.scenes || [])) {
+      const sceneName = `scene${String(s.sceneNumber).padStart(2,'0')}`;
+      if (s.imageData) sceneFolder.file(`${sceneName}.png`, s.imageData.split(',')[1], { base64: true });
+      if (s.dialogueAudio) sceneFolder.file(`${sceneName}_dialogue.${s.dialogueAudio.includes('wav')?'wav':'mp3'}`, s.dialogueAudio.split(',')[1], { base64: true });
+      if (s.narrationAudio) sceneFolder.file(`${sceneName}_narration.mp3`, s.narrationAudio.split(',')[1], { base64: true });
+      if (s.musicAudio) sceneFolder.file(`${sceneName}_music.wav`, s.musicAudio.split(',')[1], { base64: true });
+      if (s.soundFXAudio) sceneFolder.file(`${sceneName}_sfx.mp3`, s.soundFXAudio.split(',')[1], { base64: true });
+    }
+  }
+  if (p.world?.content) zip.file('world.txt', `${p.world.title}\n${'═'.repeat(40)}\n\n${p.world.content}`);
+  zip.file('README.md', `# ${p.world?.title || p.name}
+Proyecto Anime AI Studio
+- ${p.characters?.length || 0} personajes
+- ${p.episodes?.length || 0} episodios
+- ${p.scenes?.length || 0} escenas
+- ${(p.scenes || []).filter(s => s.imageData).length} imágenes
+- ${(p.scenes || []).filter(s => s.dialogueAudio || s.narrationAudio).length} audios
+
+Fecha: ${new Date().toLocaleString('es-ES')}`);
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${sanitize(p.world?.title || p.name)}_${Date.now()}.zip`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Exportado');
+}
+
+function sanitize(s) { return (s || 'proyecto').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40); }
+
+// ═══════════════════════════════════════════════════════════════
+// REAL COST CALCULATION
+// ═══════════════════════════════════════════════════════════════
+const COSTS = {
+  claudeGeneration: 0.05,    // promedio por episodio (guión completo)
+  geminiImage: 0.039,        // por imagen generada
+  lyriaProMusic: 0.03,       // por clip 2-3 min con Lyria 3 Pro
+  elevenLabsVoice: 0.0003,   // por caracter (multilingual v2)
+  elevenLabsFX: 0.08,        // por efecto de sonido
+  voiceDesign: 0.10          // por voz nueva creada
+};
+
+function calculateProjectCost() {
+  const p = STATE.currentProject;
+  if (!p) return 0;
+  let total = 0;
+  // Claude: 1 universo + 1 por personaje + 1 por episodio
+  total += COSTS.claudeGeneration * (1 + (p.characters?.length || 0) * 0.3 + (p.episodes?.length || 0));
+  // Imágenes (personajes + escenas)
+  total += COSTS.geminiImage * (p.characters || []).filter(c => c.imageData).length;
+  total += COSTS.geminiImage * (p.scenes || []).filter(s => s.imageData).length;
+  // Música
+  total += COSTS.lyriaProMusic * (p.scenes || []).filter(s => s.musicAudio).length;
+  // Voces (estimado por caracteres)
+  let totalChars = 0;
+  for (const s of (p.scenes || [])) {
+    if (s.narrationAudio) totalChars += (s.narration || '').length;
+    if (s.dialogueAudio) totalChars += (s.dialogue || []).reduce((sum, d) => sum + (d.line || '').length, 0);
+  }
+  total += COSTS.elevenLabsVoice * totalChars;
+  // Efectos
+  total += COSTS.elevenLabsFX * (p.scenes || []).filter(s => s.soundFXAudio).length;
+  return total;
+}
+
+function calculateEpisodeCost(ep) {
+  if (!ep || !ep.scenes) return 0;
+  let total = COSTS.claudeGeneration;
+  total += COSTS.geminiImage * ep.scenes.filter(s => s.imageData).length;
+  total += COSTS.lyriaProMusic * ep.scenes.filter(s => s.musicAudio).length;
+  let chars = 0;
+  for (const s of ep.scenes) {
+    if (s.narrationAudio) chars += (s.narration || '').length;
+    if (s.dialogueAudio) chars += (s.dialogue || []).reduce((sum, d) => sum + (d.line || '').length, 0);
+  }
+  total += COSTS.elevenLabsVoice * chars;
+  total += COSTS.elevenLabsFX * ep.scenes.filter(s => s.soundFXAudio).length;
+  return total;
+}
+
+function renderTotalCostBanner() {
+  const el = $('total-cost-banner');
+  if (!el) return;
+  const p = STATE.currentProject;
+  if (!p || !p.episodes || p.episodes.length === 0) { el.innerHTML = ''; return; }
+  const total = calculateProjectCost();
+  el.innerHTML = `
+    <div class="cost-banner">
+      <div class="cost-icon">💰</div>
+      <div>
+        <div class="cost-label">Costo total acumulado del proyecto</div>
+        <div class="cost-value">$${total.toFixed(2)} USD</div>
+        <div class="cost-detail">${p.episodes.length} episodio${p.episodes.length>1?'s':''} · ${(p.scenes||[]).filter(s=>s.imageData).length} imágenes · ${(p.scenes||[]).filter(s=>s.dialogueAudio||s.narrationAudio).length} audios</div>
+      </div>
+    </div>`;
+}
+
+function formatCharText(c) {
+  return `${c.name}
+${'═'.repeat(50)}
+${c.nameMeaning ? '« ' + c.nameMeaning + ' »\n' : ''}
+Rol: ${c.role}
+Edad: ${c.age}
+
+APARIENCIA
+${c.physicalDescription || ''}
+Cabello: ${c.hairDescription || ''}
+Ojos: ${c.eyeDescription || ''}
+Vestimenta: ${c.clothing || ''}
+
+PSICOLOGÍA
+Herida: ${c.psychology?.coreWound || ''}
+Máscara: ${c.psychology?.mask || ''}
+Deseo: ${c.psychology?.consciousDesire || ''}
+Necesidad: ${c.psychology?.unconsciousNeed || ''}
+Miedo: ${c.psychology?.deepFear || ''}
+
+ARCO
+${c.characterArc?.startState || ''}
+→ ${c.characterArc?.breakingPoint || ''}
+→ ${c.characterArc?.transformation || ''}`;
+}
+
+function formatEpisodeText(e) {
+  return `EPISODIO ${e.number}: ${e.title}
+${'═'.repeat(50)}
+Función: ${e.function}
+Duración: ${e.duration} min
+${e.summary}
+
+${(e.scenes || []).map(s => `
+ESCENA ${s.sceneNumber}: ${s.title}
+${'─'.repeat(50)}
+Acto: ${s.act} · Tipo: ${s.type}
+Locación: ${s.location} · ${s.timeOfDay}
+Ken Burns: ${s.kenBurnsDirection}
+Personajes: ${(s.characters || []).join(', ')}
+
+${s.summary}
+
+${s.narration ? `NARRACIÓN: ${s.narration}\n` : ''}
+DIÁLOGO:
+${(s.dialogue || []).map(d => `${d.character}: "${d.line}"\n  ↳ ${d.subtext || ''}`).join('\n\n')}
+
+MÚSICA: ${s.musicCue || ''}
+EFECTOS: ${s.soundFXCue || ''}
+
+IMAGE PROMPT (EN):
+${s.imagePromptEN || ''}
+`).join('\n\n')}`;
+}
+
+async function importProject(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  toast('Importando...');
+  try {
+    const zip = await JSZip.loadAsync(file);
+    const projectFile = zip.file('project.json');
+    if (!projectFile) throw new Error('project.json no encontrado');
+    const json = await projectFile.async('string');
+    const project = JSON.parse(json);
+    project.id = 'p_' + Date.now();
+    STATE.currentProject = project;
+    STATE.projects.push(JSON.parse(JSON.stringify(project)));
+    saveToStorage();
+    refreshUI();
+    toast('Proyecto importado');
+  } catch(e) { toast('Error: ' + e.message, 'error'); console.error(e); }
+  event.target.value = '';
+}
+
+loadFromStorage();
+if (!STATE.apis.claude) setTimeout(() => toast('Configura tus API keys para empezar', 'info'), 500);
+</script>
+</body>
+</html>
