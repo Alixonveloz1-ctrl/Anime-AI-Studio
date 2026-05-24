@@ -922,19 +922,36 @@ async function generateImage(prompt, referenceImagesB64 = []) {
 }
 
 async function generateMusic(prompt, longForm = true) {
+  // Try Lyria 002 first, then MusicFX, then fail gracefully
   if (!STATE.apis.banana) throw new Error('Falta API key de Gemini');
-  // Use Lyria 3 Pro for longer tracks (2-3 min), fallback to lyria-002 for 30s
-  const model = 'lyria-002';
-  const enrichedPrompt = prompt + ' Duration: 30 seconds. Instrumental only, no vocals.';
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/lyria-002:predict?key=${STATE.apis.banana}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instances: [{ prompt: enrichedPrompt }], parameters: { sampleCount: 1 } }) });
-  if (!response.ok) {
-    const err = await response.text(); throw new Error(`Lyria: ${response.status} — ${err.slice(0, 200)}`);
-  }
-  const data = await response.json();
-  const audioB64 = data.predictions?.[0]?.bytesBase64Encoded;
-  if (!audioB64) throw new Error('Lyria no devolvió audio');
-  return `data:audio/wav;base64,${audioB64}`;
+  
+  // Try lyria-002 
+  try {
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/lyria-002:predict?key=${STATE.apis.banana}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instances: [{ prompt: prompt + ' Instrumental only, no vocals. 30 seconds.' }], parameters: { sampleCount: 1 } }) });
+    if (resp.ok) {
+      const data = await resp.json();
+      const b64 = data.predictions?.[0]?.bytesBase64Encoded;
+      if (b64) return `data:audio/wav;base64,${b64}`;
+    }
+    const errText = await resp.text().catch(()=>'');
+    console.warn('Lyria-002 failed:', resp.status, errText.slice(0,100));
+  } catch(e) { console.warn('Lyria error:', e.message); }
+  
+  // Fallback: MusicFX (different endpoint)
+  try {
+    const resp2 = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/musicfx:predict?key=${STATE.apis.banana}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instances: [{ prompt: prompt }], parameters: { sampleCount: 1, sampleDurationSeconds: 30 } }) });
+    if (resp2.ok) {
+      const data2 = await resp2.json();
+      const b64 = data2.predictions?.[0]?.bytesBase64Encoded || data2.predictions?.[0]?.audioContent;
+      if (b64) return `data:audio/wav;base64,${b64}`;
+    }
+  } catch(e) { console.warn('MusicFX error:', e.message); }
+  
+  throw new Error('Música no disponible — Lyria y MusicFX no responden. La música es opcional, puedes continuar sin ella.');
 }
 
 async function generateVoice(text, voiceId, emotionLevel = 'normal') {
@@ -1378,32 +1395,36 @@ const PALETTE_DESCRIPTIONS = {
   neon: "anime color palette: electric cyan, hot magenta, deep purple, neon signs reflecting on wet pavement, cyberpunk night city like Cyberpunk Edgerunners"
 };
 
-const SYSTEM_BASE = `Eres el motor narrativo del ANIME AI STUDIO. Generas anime de calidad cinematográfica.
+const SYSTEM_BASE = `Eres el guionista de anime más talentoso del mundo. Escribes historias que hacen llorar, que emocionan, que no se pueden parar de ver.
 
-REGLAS DE ORO PARA DIÁLOGOS:
-- Los diálogos DEBEN ser memorables, emotivos, con peso real
-- NUNCA escribas diálogos genéricos como "Entiendo" o "De acuerdo"
-- Cada línea debe revelar personalidad O avanzar trama O crear tensión
-- Los adolescentes hablan con energía, intensidad, contradicción emocional — NO como adultos cansados
-- Usa cortes de frase, interrupciones, silencios marcados (...)
-- En escenas de acción: diálogos cortos, explosivos, adrenalínicos
-- En escenas emocionales: palabras que duelen, subtext brutal
-- EJEMPLOS BUENOS:
-  * "¿Sabes lo que significa llegar hasta aquí sin que nadie te crea? ¡Nadie!" 
-  * "No pienso morir. No... todavía no."
-  * "Entonces era real. Todo era real y tú lo sabías."
-- EJEMPLOS MALOS (PROHIBIDOS):
-  * "Entiendo tus sentimientos."
-  * "Esto es sorprendente."
-  * "Debemos ser cuidadosos."
+LO MÁS IMPORTANTE — LA HISTORIA DEBE SENTIRSE VIVA:
+- Cada escena tiene UNA emoción dominante que el espectador siente en el cuerpo
+- Los personajes toman decisiones que duelen, no las "correctas" sino las HUMANAS
+- Algo debe cambiar en cada escena — una relación, una creencia, un estado emocional
+- El espectador debe querer saber qué pasa después. Siempre.
 
-REGLAS NARRATIVAS:
-- Stakes reales: que algo importe, que algo se pierda
-- Personajes con motivaciones claras y contradictorias
-- Cada episodio debe tener UN momento que golpee emocionalmente
-- Adaptarse al estilo (power fantasy = épico, drama = íntimo, horror = opresivo)
+NARRACIÓN (voz en off):
+- Íntima y personal, como alguien recordando algo doloroso
+- Poética pero concreta: imágenes específicas, no abstracciones
+- NUNCA narrativa de resumen — siempre evoca, sugiere, duele
+- BUENA: "Esa mañana olía a humo y a algo que nunca volvería."
+- MALA: "El protagonista se despertó y comenzó su aventura."
 
-FORMATO: Cuando se pida JSON, responde SOLO JSON válido sin texto extra.`;
+DIÁLOGOS — cada línea debe ganarse su lugar:
+- Los personajes NO dicen lo que sienten directamente — lo esconden, lo atacan, lo callan
+- Interrupciones (...), silencios, frases incompletas son más poderosas que los discursos
+- BUENA: "Oye. Solo... ten cuidado, ¿sí?" (en vez de "Me preocupo por ti")
+- BUENA: "¿Sabes cuánto tiempo llevo esperando esto? ¡TODO este tiempo!"
+- MALA: "Entiendo tus sentimientos." / "Debemos ser cuidadosos." / "Interesante."
+- Los adolescentes son caóticos, contradictorios, intensos — NO hablan como adultos
+
+ESTRUCTURA QUE ENGANCHA:
+- cold_open: arranca en el momento más tenso o misterioso, sin explicar nada
+- act1/act2: escalan la presión, cada escena más difícil que la anterior
+- climax: el momento que rompe todo — decisión imposible, revelación, pérdida
+- resolution: no resuelve todo, deja algo abierto que duele
+
+FORMATO: Responde SOLO JSON válido, sin texto antes ni después.`;
 
 async function generateWorld() {
   if (!STATE.apis.claude) { toast('Configura Claude primero', 'error'); openModal('modal-apis'); return; }
@@ -2001,8 +2022,8 @@ function renderScenes() {
       <div class="scene-status-pills">
         <span class="status-pill ${s.imageData?'done':'pending'}">🎨 Img</span>
         <span class="status-pill ${(s.dialogueAudio||s.narrationAudio)?'done':'pending'}">🎙 Voz</span>
-        <span class="status-pill ${s.musicAudio?'done':'pending'}">🎵 Mus</span>
-        <span class="status-pill ${s.soundFXAudio?'done':'pending'}">🔊 SFX</span>
+        <span class="status-pill ${s.musicAudio?'done':'pending'}" title="${s.musicAudio?'Música lista':'Sin música'}">🎵 ${s.musicAudio?'✓':'—'}</span>
+        <span class="status-pill ${s.soundFXAudio?'done':'pending'}" title="${s.soundFXAudio?'FX listo':'Sin efectos'}">🔊 ${s.soundFXAudio?'✓':'—'}</span>
       </div>
       <div class="scene-actions">
         <button class="btn btn-secondary" onclick="viewScene('${s.id}')">Ver</button>
@@ -2711,11 +2732,10 @@ function playScene(idx) {
   
   canvas.innerHTML = `
     <img id="kb-img-${idx}" src="${scene.imageData}" style="position:absolute;width:100%;height:100%;object-fit:cover;${transform.initial}transition:transform ${duration}s linear" />
-    <div id="subtitle-box" style="position:absolute;bottom:0;left:0;right:0;padding:0 0 28px;z-index:10;pointer-events:none">
-      <div id="narration-text" style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:clamp(14px,3.5vw,19px);color:rgba(255,255,255,0.95);text-shadow:0 2px 12px rgba(0,0,0,1),0 0 30px rgba(0,0,0,0.9);line-height:1.5;text-align:center;padding:0 20px 8px;opacity:0;transition:opacity 0.5s"></div>
-      <div id="dialogue-text" style="font-family:'Inter',sans-serif;font-size:clamp(13px,3vw,17px);color:#fff;text-shadow:0 2px 8px rgba(0,0,0,1);line-height:1.4;text-align:center;padding:0 16px;opacity:0;transition:opacity 0.3s;min-height:24px"></div>
-    </div>
-    <div style="position:absolute;top:14px;left:16px;z-index:10;font-size:9px;letter-spacing:0.15em;color:rgba(255,255,255,0.4);text-transform:uppercase;background:rgba(0,0,0,0.3);padding:3px 8px;border-radius:4px">${escHtml(scene.title)}</div>`;
+    <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,0.7) 40%);height:35%;pointer-events:none;z-index:9"></div>
+    <div id="narration-text" style="position:absolute;bottom:44px;left:0;right:0;padding:0 18px;text-align:left;z-index:10;pointer-events:none;font-family:'Cormorant Garamond',serif;font-style:italic;font-size:clamp(13px,3.8vw,17px);color:rgba(255,255,255,0.95);text-shadow:0 1px 6px rgba(0,0,0,0.9);line-height:1.55;opacity:0;transition:opacity 0.5s;max-width:92%"></div>
+    <div id="dialogue-text" style="position:absolute;bottom:10px;left:0;right:0;padding:0 14px;z-index:10;pointer-events:none;font-family:'Inter',sans-serif;font-size:clamp(12px,3.5vw,16px);font-weight:500;color:#fff;text-shadow:0 1px 5px rgba(0,0,0,1);line-height:1.4;opacity:0;transition:opacity 0.25s"></div>
+    <div style="position:absolute;top:10px;left:12px;z-index:10;font-size:8px;letter-spacing:0.12em;color:rgba(255,255,255,0.35);text-transform:uppercase;background:rgba(0,0,0,0.25);padding:2px 7px;border-radius:3px">${escHtml(scene.title)}</div>`;
   
   // Start Ken Burns
   requestAnimationFrame(() => {
@@ -2774,8 +2794,11 @@ function playScene(idx) {
     n.volume = 1.0;
     n.play().catch(()=>{});
     assemblyState.audioElements.push(n);
-    // Dialogue starts after narration ends (estimated by text length ~120 chars/sec)
-    dialogueDelay = Math.max(2000, (scene.narration || '').length * 70);
+    // Use actual audio duration — wait for metadata
+    dialogueDelay = Math.max(2000, (scene.narration || '').length * 65);
+    n.addEventListener('loadedmetadata', () => {
+      if (n.duration && n.duration > 0) dialogueDelay = n.duration * 1000 + 300;
+    });
   }
   
   // Dialogue audio after narration
@@ -2902,7 +2925,22 @@ async function exportAssemblyVideo() {
     for (let i = 0; i < ep.scenes.length; i++) {
       const scene = ep.scenes[i];
       const img = images[i];
-      const duration = scene.duration || 20;
+      // Calculate actual duration from available audio
+      let duration = scene.duration || 8;
+      if (scene.narrationAudio) {
+        try {
+          const tmpAudio = new Audio(scene.narrationAudio);
+          await new Promise(r => { tmpAudio.onloadedmetadata = r; tmpAudio.onerror = r; setTimeout(r, 2000); });
+          if (tmpAudio.duration > 0) duration = tmpAudio.duration + (scene.dialogueAudio ? 3 : 0.5);
+        } catch(e) {}
+      } else if (scene.dialogueAudio) {
+        try {
+          const tmpAudio = new Audio(scene.dialogueAudio);
+          await new Promise(r => { tmpAudio.onloadedmetadata = r; tmpAudio.onerror = r; setTimeout(r, 2000); });
+          if (tmpAudio.duration > 0) duration = tmpAudio.duration + 0.5;
+        } catch(e) {}
+      }
+      duration = Math.max(4, Math.min(duration, 60));
       status.innerHTML = `<div class="assembly-progress"><div class="assembly-progress-text">Renderizando ${i+1}/${ep.scenes.length}: ${scene.title}</div><div class="assembly-progress-bar"><div class="assembly-progress-fill" style="width:${((i+1)/ep.scenes.length)*100}%"></div></div></div>`;
       const sources = [];
       if (scene.musicAudio) { const s = await playAudioToContext(scene.musicAudio, audioCtx, audioDest, 0.3); sources.push(s); }
