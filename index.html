@@ -409,21 +409,7 @@ video { width: 100%; border-radius: 10px; margin-top: 12px; }
                   <option>Mixto (mundo real + sobrenatural)</option>
                 </select>
               </div>
-              <div class="field"><label>Paleta Visual</label>
-                <select id="world-palette">
-                  <option value="dark_dramatic">Oscura y dramática</option>
-                  <option value="vivid_action">Vibrante de acción</option>
-                  <option value="twilight">Crepúsculo dorado</option>
-                  <option value="dawn">Amanecer rosa</option>
-                  <option value="rural">Verano rural</option>
-                  <option value="urban">Tokio nocturno</option>
-                  <option value="fantasy">Fantasía mágica</option>
-                  <option value="storm">Tormenta y lluvia</option>
-                  <option value="snow">Invierno gélido</option>
-                  <option value="dungeon">Mazmorra sombría</option>
-                  <option value="neon">Neon cyberpunk</option>
-                </select>
-              </div>
+
             </div>
             <div class="form-grid cols-1">
               <div class="field"><label>Concepto Semilla (opcional)</label>
@@ -938,23 +924,11 @@ async function generateImage(prompt, referenceImagesB64 = []) {
 async function generateMusic(prompt, longForm = true) {
   if (!STATE.apis.banana) throw new Error('Falta API key de Gemini');
   // Use Lyria 3 Pro for longer tracks (2-3 min), fallback to lyria-002 for 30s
-  const model = longForm ? 'lyria-3-pro' : 'lyria-002';
-  const enrichedPrompt = longForm 
-    ? `${prompt} Duration: approximately 2 to 3 minutes. Full instrumental composition with intro, development and gentle outro.`
-    : prompt;
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${STATE.apis.banana}`,
+  const model = 'lyria-002';
+  const enrichedPrompt = prompt + ' Duration: 30 seconds. Instrumental only, no vocals.';
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/lyria-002:predict?key=${STATE.apis.banana}`,
     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instances: [{ prompt: enrichedPrompt }], parameters: { sampleCount: 1 } }) });
   if (!response.ok) {
-    // Fallback to short model if Pro not available
-    if (longForm) {
-      const fallback = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/lyria-002:predict?key=${STATE.apis.banana}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instances: [{ prompt: prompt }], parameters: { sampleCount: 1 } }) });
-      if (!fallback.ok) { const err = await fallback.text(); throw new Error(`Lyria: ${fallback.status} — ${err.slice(0, 200)}`); }
-      const data = await fallback.json();
-      const audioB64 = data.predictions?.[0]?.bytesBase64Encoded;
-      if (!audioB64) throw new Error('Lyria no devolvió audio');
-      return `data:audio/wav;base64,${audioB64}`;
-    }
     const err = await response.text(); throw new Error(`Lyria: ${response.status} — ${err.slice(0, 200)}`);
   }
   const data = await response.json();
@@ -1306,78 +1280,78 @@ function renderWorldOutput_empty() { return ''; }
 const ANIME_STYLES = {
   solo_leveling: {
     name: "Solo Leveling",
-    narrative: "Power fantasy oscura. Protagonista débil que se vuelve absurdamente fuerte. Sistema de niveles y rangos de cazadores. Mazmorras, monstruos, gremios. Tono brutal pero con heroísmo. Stakes altos: muerte real, traicion, evolución constante. Acción coreografiada épica con poderes únicos.",
-    visualEN: "modern dark fantasy anime, hunter aesthetic, dungeon atmosphere, dramatic blue and purple lighting, glowing magic effects, detailed armor and weapons, A-1 Pictures style animation, sharp angular character design, intense action poses, cinematic depth, gritty atmospheric backgrounds",
+    narrative: "TONO: oscuro, brutal, épico. ATMÓSFERA: tensión constante, poder latente, peligro real. RITMO: acción veloz alternada con momentos de calma cargados de significado. EMOCIÓN: determinación ante lo imposible, soledad del fuerte, sacrificio silencioso.",
+    visualEN: "2D anime illustration, A-1 Pictures animation style like Solo Leveling, dark fantasy aesthetic, deep navy and black color palette with electric blue and purple magic glows, dungeon atmospheres with dramatic contrast lighting, detailed armor designs, sharp angular character art, cinematic composition",
     negativeEN: "soft pastels, romantic vibes, slice of life",
     paletteDefault: "dark_dramatic"
   },
   jjk: {
     name: "Jujutsu Kaisen",
-    narrative: "Sobrenatural moderno. Maldiciones, técnicas hechiceras, energia maldita. Escolar oculto mezclado con horrores cósmicos. Acción visceral con técnicas únicas. Personajes carismáticos, humor negro con tragedia brutal. Domain expansions, peleas creativas.",
-    visualEN: "Jujutsu Kaisen anime style, MAPPA studio aesthetic, dynamic fight scenes, dark supernatural horror, cursed energy as black and red wisps, modern urban Japan with eerie undertones, sharp shadows, intense facial expressions, fluid action animation",
+    narrative: "TONO: sobrenatural intenso, humor negro mezclado con tragedia. ATMÓSFERA: horror oculto bajo normalidad cotidiana, lo monstruoso convive con lo humano. RITMO: explosiones de acción extrema entre momentos de conexión humana. EMOCIÓN: camaradería antes de la pérdida inevitable.",
+    visualEN: "2D anime illustration, MAPPA studio style like Jujutsu Kaisen, modern urban Japan color palette with dark blacks and deep grays, cursed energy as red and black wisps, eerie blue-green supernatural lighting, sharp high-contrast shadows, intense dynamic compositions",
     negativeEN: "cute kawaii, bright cheerful palette",
     paletteDefault: "dark_dramatic"
   },
   mushoku: {
     name: "Mushoku Tensei",
-    narrative: "Isekai literario profundo. Reencarnación con consciencia adulta. Mundo de fantasía medieval detallado. Crecimiento real del personaje a lo largo de años. Sistema mágico definido. Drama familiar, romance maduro, aventuras épicas con consecuencias reales.",
-    visualEN: "Mushoku Tensei anime style, Studio Bind aesthetic, fantasy medieval world, magical realism, detailed European-inspired villages and forests, soft natural lighting with painterly backgrounds, warm earthy tones, magic spells with elemental effects, expressive character animation",
+    narrative: "TONO: íntimo y literario, maduro emocionalmente. ATMÓSFERA: mundo vasto explorado con curiosidad genuina, magia como extensión del alma. RITMO: lento y contemplativo, cada momento tiene peso. EMOCIÓN: redención, crecimiento real, vínculos que cuestan años construir.",
+    visualEN: "2D anime illustration, Studio Bind style like Mushoku Tensei, warm earthy color palette with golden sunlight, rich forest greens, soft painterly backgrounds, European fantasy medieval atmosphere, natural warm light, elemental magic effects with soft color glows",
     negativeEN: "cyberpunk, modern tech, neon",
     paletteDefault: "fantasy"
   },
   slime: {
     name: "Tensei Slime",
-    narrative: "Isekai de construcción de imperio. Protagonista poderoso pero pacifista. Política entre razas (demonios, elfos, humanos). Subir nivel, evolucionar, construir nación. Tono optimista con momentos serios. Cast amplio diverso.",
-    visualEN: "Tensei Slime anime style, vibrant fantasy world, detailed monster designs, magical effects, kingdom-building landscapes, friendly but epic atmosphere, bright color palette with magic glow, fantasy creatures and beasts",
+    narrative: "TONO: optimista pero con stakes reales, esperanzador. ATMÓSFERA: mundo que puede ser mejor si alguien decide construirlo. RITMO: expansivo, cada arco más grande que el anterior. EMOCIÓN: pertenencia, lealtad entre diferentes, orgullo de construir algo propio.",
+    visualEN: "2D anime illustration, bright vibrant fantasy anime style like Tensei Slime, cheerful saturated color palette with magical glows, lush green forests and colorful kingdom landscapes, friendly creature designs, warm inviting atmosphere with bright lighting",
     negativeEN: "dark horror, grimdark, realistic gore",
     paletteDefault: "fantasy"
   },
   isekai: {
     name: "Isekai Genérico",
-    narrative: "Otro mundo de fantasía con sistema RPG (stats, niveles, clases, skills). Aventureros, gremios, mazmorras, monstruos. Magia y espadas. Protagonista usualmente OP o con habilidad única. Tropes: party, dragones, demonios, status windows.",
-    visualEN: "isekai fantasy anime style, RPG world aesthetic, medieval fantasy with magic, adventurer guild atmosphere, status window HUD overlays, magical creatures, detailed fantasy armor and weapons, vibrant magical effects",
+    narrative: "TONO: aventurero, progresivo, con descobrimiento constante. ATMÓSFERA: mundo lleno de peligros y recompensas, reglas claras que se pueden dominar. RITMO: episódico con arco largo, cada desafío superable con esfuerzo. EMOCIÓN: superación personal, amistad forjada en batalla, asombro ante lo desconocido.",
+    visualEN: "2D anime illustration, classic isekai fantasy anime style, standard RPG color palette with rich blues and greens for magic, golden light in dungeons and fields, vibrant adventurer aesthetics, medieval fantasy atmosphere with clear bright colors",
     negativeEN: "modern day real world settings",
     paletteDefault: "fantasy"
   },
   aot: {
     name: "Attack on Titan",
-    narrative: "Drama militar brutal. Mundo en colapso, amenaza existencial. Personajes con honor sangriento. Politica, traición, sacrificio. Muertes constantes devastadoras. Misterio profundo del mundo. Acción aérea con ODM gear.",
-    visualEN: "Attack on Titan anime style, Wit Studio and MAPPA aesthetic, post-apocalyptic walled city, military uniforms with ODM gear, gritty grim atmosphere, muted desaturated palette, intense action with vertical movement, brutal realistic violence undertones",
+    narrative: "TONO: oscuro, pesado, con verdades que destruyen. ATMÓSFERA: mundo que aplasta a los individuos, libertad como concepto casi inalcanzable. RITMO: tenso y deliberado, cada revelación cambia todo. EMOCIÓN: rabia justa, traición dolorosa, sacrificio sin garantías.",
+    visualEN: "2D anime illustration, Wit Studio and MAPPA style like Attack on Titan, desaturated muted color palette with cold grays and greens, oppressive overcast skies, military browns and greens, stark white walls against gray landscapes, gritty realistic atmosphere",
     negativeEN: "bright colors, cute, comedy",
     paletteDefault: "dark_dramatic"
   },
   demon_slayer: {
     name: "Demon Slayer",
-    narrative: "Cazadores de demonios en Japón Taishō. Espadas con respiraciones elementales. Familia, sacrificio, demonios con backstory trágica. Acción acuarela hermosa. Tradición japonesa con horror sobrenatural.",
-    visualEN: "Demon Slayer anime style, ufotable aesthetic, Taisho era Japan, traditional kimono designs, watercolor-like fight effects, breathing technique visual effects with water fire and lightning swirls, beautiful nature backgrounds, dramatic lighting contrasts",
+    narrative: "TONO: emotivo y bello incluso en la violencia. ATMÓSFERA: tradición y honor mezclados con horror sobrenatural, naturaleza como escenario épico. RITMO: confrontaciones largas e intensas con desenlaces devastadores. EMOCIÓN: amor fraternal inquebrantable, respeto incluso al enemigo, duelo y determinación.",
+    visualEN: "2D anime illustration, ufotable style like Demon Slayer, rich Taisho Japan color palette with deep indigos and blacks at night, vivid watercolor-effect technique colors like crimson red for fire and deep blue for water, traditional Japanese aesthetics, dramatic lighting contrasts",
     negativeEN: "modern tech, cyberpunk, western settings",
     paletteDefault: "vivid_action"
   },
   chainsaw: {
     name: "Chainsaw Man",
-    narrative: "Brutal y caótico. Demonios contratistas, devil hunters. Sangre, sexo, miedo existencial mezclados con comedia negra. Personajes traumatizados crudos. Tono nihilista pero humano. Acción visceral grotesca.",
-    visualEN: "Chainsaw Man anime style, MAPPA aesthetic, gritty urban Japan, devil designs grotesque and creative, blood and chaos, sharp dramatic shadows, dark humor undertones, cinematic shot composition like film, raw realistic character expressions",
+    narrative: "TONO: caótico, nihilista pero paradójicamente humano. ATMÓSFERA: violencia absurda donde los momentos de ternura duelen más. RITMO: impredecible, rompe expectativas constantemente. EMOCIÓN: soledad extrema, deseo de conexión en un mundo que destruye a quien amas.",
+    visualEN: "2D anime illustration, MAPPA cinematic style like Chainsaw Man, gritty urban Japan color palette with desaturated muted tones and sudden bursts of vivid red and orange for violence, harsh fluorescent interior lighting, film-like composition",
     negativeEN: "cute, clean, bright cheerful",
     paletteDefault: "dark_dramatic"
   },
   shinkai: {
     name: "Makoto Shinkai",
-    narrative: "Romance sobrenatural íntimo. Cielos hermosos cargados de simbolismo. Distancia emocional y fisica. Tiempo, memoria, pérdida. Diálogos con subtext. Belleza melancólica de lo cotidiano. Eventos cósmicos contra historias de amor.",
-    visualEN: "Makoto Shinkai cinematic anime style like Your Name and Weathering With You, hyper-detailed painterly backgrounds, soft natural lighting at golden or blue hour, soft pastel emotional palette, realistic human proportions, subtle film grain, cinematic depth of field, dramatic skies with clouds",
+    narrative: "TONO: melancólico y hermoso, la distancia como dolor físico. ATMÓSFERA: lo cotidiano cargado de significado, el tiempo como enemigo invisible. RITMO: lento y contemplativo, silencio tan importante como el diálogo. EMOCIÓN: amor que trasciende el tiempo pero no puede vencer a la realidad.",
+    visualEN: "2D anime illustration, Makoto Shinkai cinematic style like Your Name, hyper-detailed painterly backgrounds, warm golden hour orange and pink palettes or deep blue twilight, luminous sky colors, soft lens flare, pastel emotional tones, subtle film grain, dramatic cloud formations",
     negativeEN: "action heavy, grimdark, grotesque",
     paletteDefault: "twilight"
   },
   ghibli: {
     name: "Studio Ghibli",
-    narrative: "Mundos fantásticos con corazón. Protagonistas jóvenes en aventuras transformadoras. Naturaleza viva, espíritus, magia sutil. Sin villanos puros. Slow burn emocional, momentos contemplativos.",
-    visualEN: "Studio Ghibli anime style like Miyazaki films Spirited Away and Princess Mononoke, hand-painted backgrounds with rich nature, soft watercolor textures, expressive character designs, magical realism, lush forests and detailed environments, warm nostalgic color palette",
+    narrative: "TONO: maravilloso y humano, con peso emocional real bajo la fantasía. ATMÓSFERA: la naturaleza como entidad viva, lo mágico como parte de lo cotidiano. RITMO: contemplativo, los momentos de quietud son tan importantes como la acción. EMOCIÓN: asombro puro, crecimiento doloroso pero necesario, compasión hacia todo.",
+    visualEN: "2D anime illustration, Studio Ghibli hand-painted style like Spirited Away, warm nostalgic color palette with rich natural greens and earthy browns, golden warm sunlight, soft watercolor textures, lush detailed nature, magical warm atmospheric glow",
     negativeEN: "grim violence, cyberpunk, modern tech-heavy",
     paletteDefault: "fantasy"
   },
   cyberpunk: {
     name: "Cyberpunk Edgerunners",
-    narrative: "Futuro distópico neon. Mercenarios, corporaciones, cyber implants. Vida corta y violenta. Personajes traumatizados, romance fugaz, tragedia inevitable. Acción brutal con tech avanzada. Critica al capitalismo.",
-    visualEN: "Cyberpunk Edgerunners anime style, Studio Trigger aesthetic, neon-soaked Night City, cybernetic implants visible, vibrant magenta cyan purple lighting, dystopian future architecture, glitch effects, intense violence undertones, expressive Trigger character animation",
+    narrative: "TONO: trágico y veloz, la vida vale poco pero se vive con todo. ATMÓSFERA: sistema que tritura individuos, belleza extraña en la decadencia neón. RITMO: frenético, nunca hay tiempo suficiente. EMOCIÓN: amor desesperado sabiendo que no durará, dignidad en la caída inevitable.",
+    visualEN: "2D anime illustration, Studio Trigger style like Cyberpunk Edgerunners, neon cyberpunk color palette with electric cyan magenta and deep purple, wet pavement reflections, harsh neon sign lighting, dark dystopian backgrounds contrasted with vivid artificial colors",
     negativeEN: "medieval fantasy, nature scenes, peaceful rural",
     paletteDefault: "neon"
   },
@@ -1391,17 +1365,17 @@ const ANIME_STYLES = {
 };
 
 const PALETTE_DESCRIPTIONS = {
-  dark_dramatic: "deep blacks and shadows, dramatic blue and purple accents, intense contrast, cinematic darkness",
-  vivid_action: "vibrant saturated colors, dynamic warm vs cool contrasts, energetic palette",
-  twilight: "golden hour orange and pink skies, soft amber lighting, romantic sunset palette",
-  dawn: "soft pink and lavender dawn light, gentle pastel hues, hopeful morning atmosphere",
-  rural: "warm summer greens and yellows, soft natural daylight, nostalgic countryside palette",
-  urban: "deep blues of Tokyo nights, scattered warm street lights, urban melancholy",
-  fantasy: "rich magical greens and golds, ethereal glowing magic effects, fantasy storybook palette",
-  storm: "stormy grays and deep blues, rain-soaked atmosphere, dramatic weather",
-  snow: "cold whites and pale blues, soft winter light, crystalline atmosphere",
-  dungeon: "shadowy dungeon torchlight, deep oranges against blacks, oppressive underground",
-  neon: "electric cyan magenta and purple neon, urban night with glowing signs, cyberpunk palette"
+  dark_dramatic: "anime color palette: deep navy blacks, cold blue shadows, electric blue and purple accent glows, high contrast dramatic lighting, cinematic darkness like Solo Leveling or Attack on Titan",
+  vivid_action: "anime color palette: bold saturated reds oranges and yellows, warm vs cool high-energy contrast, vibrant action lighting like Demon Slayer or Naruto fight scenes",
+  twilight: "anime color palette: warm golden orange skies, soft amber and peach tones, romantic sunset light like Makoto Shinkai films, soft glow on characters",
+  dawn: "anime color palette: soft cherry blossom pinks, gentle lavender and pale blue, hopeful warm morning light, pastel sky tones like slice-of-life anime",
+  rural: "anime color palette: lush natural greens, bright summer yellows, warm soft daylight, golden countryside feel like Studio Ghibli outdoor scenes",
+  urban: "anime color palette: deep midnight blues, warm scattered orange streetlights, reflective wet pavement, melancholic city night atmosphere like Tokyo anime",
+  fantasy: "anime color palette: rich emerald greens, magical gold and cream tones, glowing ethereal whites and teals, enchanted forest palette like fantasy RPG anime",
+  storm: "anime color palette: heavy stormy gray-blues, desaturated cold tones, dramatic dark clouds with occasional lightning white highlights, rain-soaked moody atmosphere",
+  snow: "anime color palette: crisp whites and ice blues, pale winter sky, soft cold shadows, clean crystalline atmosphere like winter anime episodes",
+  dungeon: "anime color palette: deep blacks with warm orange torchlight accents, dramatic chiaroscuro lighting, glowing magical effects against darkness like dungeon crawler anime",
+  neon: "anime color palette: electric cyan, hot magenta, deep purple, neon signs reflecting on wet pavement, cyberpunk night city like Cyberpunk Edgerunners"
 };
 
 const SYSTEM_BASE = `Eres el motor narrativo del ANIME AI STUDIO. Generas anime de calidad cinematográfica.
@@ -1440,7 +1414,7 @@ async function generateWorld() {
   const tech = $('world-tech').value;
   const concept = $('world-concept').value.trim();
   const styleKey = document.querySelector('#style-tags .tag-btn.selected')?.dataset.style || 'solo_leveling';
-  const palette = $('world-palette')?.value || ANIME_STYLES[styleKey]?.paletteDefault || 'dark_dramatic';
+  const palette = ANIME_STYLES[styleKey]?.paletteDefault || 'dark_dramatic'; // auto from style
   const style = ANIME_STYLES[styleKey];
   $('world-loading').style.display = '';
   $('world-output').innerHTML = '';
@@ -1456,8 +1430,6 @@ GÉNERO: ${genre}
 TONO: ${tone}
 MUNDO: ${tech}
 CONCEPTO BASE: ${concept || 'libre creación basada en el estilo elegido'}
-PALETA VISUAL: ${PALETTE_DESCRIPTIONS[palette] || palette}
-
 El universo debe sentirse auténtico al estilo ${style.name}, NO genérico.
 
 JSON exacto:
@@ -1758,14 +1730,19 @@ async function generateEpisode() {
   // COMPACT prompt — 15 scenes to avoid token overflow
   const styleName = w.styleName || 'Solo Leveling';
   const styleNarrative = w.styleNarrative || '';
-  const prompt = `Anime "${w.title}" — Estilo: ${styleName}.
-ESTILO NARRATIVO: ${styleNarrative}
+  const prompt = `Anime ORIGINAL: "${w.title}"
+UNIVERSO: ${w.concept ? w.concept.slice(0,200) : 'mundo original'}
+Género: ${w.genre||''}. Tono: ${w.tone||''}. Conflicto central: ${(w.centralConflict||'').slice(0,150)}
 
-Genera episodio ${epNumber} con EXACTAMENTE 15 escenas auténticas al estilo ${styleName}.
-Género: ${w.genre||''}. Tono: ${w.tone||''}. Conflicto: ${(w.centralConflict||'').slice(0,150)}
-Personajes: ${chars}
-${prevEps ? 'Previos: ' + prevEps : 'Primer episodio'}
-Función: ${func}. Promesa emocional: ${emotion||'impacto'}. Extra: ${context||'ninguno'}
+GUÍA DE TONO Y ATMÓSFERA (NO de historia — solo para el tono):
+${styleNarrative}
+
+IMPORTANTE: Este es un anime COMPLETAMENTE ORIGINAL. NO copies personajes, poderes, organizaciones ni tramas de ningún anime existente. El tono y atmósfera son los únicos elementos que tomar de referencia.
+
+Genera episodio ${epNumber} con EXACTAMENTE 15 escenas del anime "${w.title}".
+Personajes: ${chars || 'crear personajes originales acorde al universo'}
+${prevEps ? 'Previos: ' + prevEps : 'Primer episodio — establece el mundo y los personajes originales'}
+Función: ${func}. Promesa emocional: ${emotion||'impacto genuino'}. Extra: ${context||'ninguno'}
 
 Responde ÚNICAMENTE con este JSON (sin texto antes ni después):
 {"number":${epNumber},"title":"titulo apropiado al estilo","summary":"2 lineas","emotionalPromise":"emocion final","scenes":[{"sceneNumber":1,"act":"cold_open","title":"titulo","location":"lugar","timeOfDay":"hora","characters":["nombre"],"summary":"que pasa en 1 linea","narration":"narración cinematográfica continua de 2-4 frases — VOZ EN OFF que lleva el ritmo visual. Debe tener emoción y cadencia dramática. Conecta con la siguiente escena. NO vacío salvo en diálogos puros.","dialogue":[{"character":"nombre","line":"línea corta impactante — máximo 15 palabras, cargada emocionalmente"}],"kenBurnsDirection":"zoom_in_slow","musicCue":"música apropiada al estilo","soundFXCue":"efecto ambiental","imagePromptEN":"DESCRIBIR ESCENA EN INGLÉS: qué pasa visualmente, posiciones, acción, expresiones, encuadre. NO incluir estilo general. Ejemplo: 'female warrior facing massive demon in dungeon, glowing dagger raised, fierce determined expression, dramatic backlight'"}]}
@@ -2343,11 +2320,12 @@ async function autoAssignVoices() {
   PROGRESS.update(`Creando voz del Narrador (${total}/${total})`, (created / total) * 100);
   try {
     const styleName = STATE.currentProject.world?.styleName || 'Solo Leveling';
-    const narratorMood = ['Solo Leveling','Jujutsu Kaisen','Attack on Titan','Chainsaw Man'].includes(styleName)
-      ? 'deep powerful male narrator voice, grave and intense, like war documentary narrator, carries weight of tragedy, slow deliberate pace, anime narrator style'
-      : 'warm and melancholic narrator voice, poetic and introspective, gentle but with hidden sorrow, like Studio Ghibli narrator, omniscient storyteller quality';
-    const narratorDesc = `${narratorMood}. Latin American Spanish neutral accent, NOT Spain accent. Professional LATAM anime dubbing quality, like Dragon Ball Z narrator. NOT flat or monotone — emotionally resonant on every sentence.`;
-    const narratorSample = 'Había una vez un mundo donde el poder lo era todo. Y él iba a aprenderlo de la peor manera posible. Nadie estaba preparado para lo que vendría después.';
+    const darkStyles = ['Solo Leveling','Jujutsu Kaisen','Attack on Titan','Chainsaw Man'];
+    const narratorMood = darkStyles.includes(styleName)
+      ? 'young adult male narrator voice, 25-30 years old, deeply emotional, voice cracks with contained pain, speaks like someone who survived something terrible, intimate and close like whispering a secret, NOT documentary, NOT announcer, raw and human'
+      : 'young adult female narrator voice, 22-28 years old, melancholic and tender, like remembering something precious that was lost, intimate whisper quality, deeply emotional, NOT documentary';
+    const narratorDesc = `${narratorMood}. Latin American Spanish neutral accent, clear LATAM pronunciation, NOT Spain accent. Anime narrator style like Sword Art Online or Your Name LATAM dub. Emotionally resonant, NOT flat, NOT robotic, NOT documentary.`;
+    const narratorSample = 'Había momentos en que el mundo se detenía. No para todos. Solo para él. Solo para los que cargaban con algo que nadie más podía ver. Y esa noche, sin saberlo, todo comenzó a cambiar.';
     const narratorId = await designVoice(narratorDesc, narratorSample, 'Narrador');
     STATE.currentProject.voiceAssignments['_narrator'] = narratorId;
     created++;
@@ -2733,11 +2711,11 @@ function playScene(idx) {
   
   canvas.innerHTML = `
     <img id="kb-img-${idx}" src="${scene.imageData}" style="position:absolute;width:100%;height:100%;object-fit:cover;${transform.initial}transition:transform ${duration}s linear" />
-    <div id="subtitle-box" style="position:absolute;bottom:32px;left:0;right:0;text-align:center;padding:0 24px;z-index:10;pointer-events:none">
-      ${scene.narration ? `<div id="narration-text" style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:clamp(13px,2.2vw,18px);color:rgba(255,255,255,0.92);text-shadow:0 2px 8px rgba(0,0,0,0.9),0 0 40px rgba(0,0,0,0.7);line-height:1.6;max-width:85%;margin:0 auto;opacity:0;transition:opacity 0.4s">${escHtml(scene.narration)}</div>` : ''}
-      <div id="dialogue-text" style="font-family:'Inter',sans-serif;font-size:clamp(12px,2vw,16px);color:#fff;text-shadow:0 2px 6px rgba(0,0,0,0.95);line-height:1.5;max-width:80%;margin:8px auto 0;min-height:40px"></div>
+    <div id="subtitle-box" style="position:absolute;bottom:0;left:0;right:0;padding:0 0 28px;z-index:10;pointer-events:none">
+      <div id="narration-text" style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:clamp(14px,3.5vw,19px);color:rgba(255,255,255,0.95);text-shadow:0 2px 12px rgba(0,0,0,1),0 0 30px rgba(0,0,0,0.9);line-height:1.5;text-align:center;padding:0 20px 8px;opacity:0;transition:opacity 0.5s"></div>
+      <div id="dialogue-text" style="font-family:'Inter',sans-serif;font-size:clamp(13px,3vw,17px);color:#fff;text-shadow:0 2px 8px rgba(0,0,0,1);line-height:1.4;text-align:center;padding:0 16px;opacity:0;transition:opacity 0.3s;min-height:24px"></div>
     </div>
-    <div style="position:absolute;top:16px;left:20px;z-index:10;font-size:10px;letter-spacing:0.15em;color:rgba(255,255,255,0.5);text-transform:uppercase">${escHtml(scene.title)}</div>`;
+    <div style="position:absolute;top:14px;left:16px;z-index:10;font-size:9px;letter-spacing:0.15em;color:rgba(255,255,255,0.4);text-transform:uppercase;background:rgba(0,0,0,0.3);padding:3px 8px;border-radius:4px">${escHtml(scene.title)}</div>`;
   
   // Start Ken Burns
   requestAnimationFrame(() => {
@@ -2745,9 +2723,29 @@ function playScene(idx) {
     if (img) img.style.transform = transform.final;
   });
   
-  // Fade in narration text
-  const narEl = document.getElementById('narration-text');
-  if (narEl) setTimeout(() => { narEl.style.opacity = '1'; }, 200);
+  // Split narration into sentences and show one at a time
+  if (scene.narration) {
+    const sentences = scene.narration
+      .split(/(?<=[.!?…])\s+|(?<=,)\s+(?=[A-ZÁÉÍÓÚÑ])/)
+      .map(s => s.trim()).filter(s => s.length > 2);
+    const totalNarDuration = scene.narrationAudio 
+      ? Math.max(sentences.length * 2500, scene.narration.length * 60)
+      : sentences.length * 3000;
+    const perSentence = Math.floor(totalNarDuration / Math.max(sentences.length, 1));
+    sentences.forEach((sentence, i) => {
+      setTimeout(() => {
+        const el = document.getElementById('narration-text');
+        if (!el) return;
+        el.style.opacity = '0';
+        setTimeout(() => { el.style.opacity = '1'; el.textContent = sentence; }, 200);
+      }, i * perSentence);
+    });
+    // Fade out narration before dialogue
+    setTimeout(() => {
+      const el = document.getElementById('narration-text');
+      if (el) el.style.opacity = '0';
+    }, totalNarDuration - 300);
+  }
   
   // Schedule dialogue lines to appear after narration finishes
   assemblyState.audioElements = [];
