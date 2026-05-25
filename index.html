@@ -478,7 +478,13 @@ audio { width: 100%; margin-top: 6px; border-radius: 8px; }
         <div class="form-group">
           <label>Voz narradora</label>
           <select id="voiceGenderSelect">
-            <optgroup label="🆓 AZURE SPEECH — Gratis">
+            <optgroup label="🔮 GEMINI TTS — Casi gratis con tus $300">
+              <option value="gemini_male">🎙️ Charon — Masculino profundo</option>
+              <option value="gemini_female">🎙️ Kore — Femenino natural</option>
+              <option value="gemini_male2">🎙️ Fenrir — Masculino dramático</option>
+              <option value="gemini_female2">🎙️ Aoede — Femenino expresivo</option>
+            </optgroup>
+            <optgroup label="🆓 AZURE SPEECH — Gratis (backup)">
               <option value="azure_male_mx">🇲🇽 Jorge — Masculino mexicano</option>
               <option value="azure_female_mx">🇲🇽 Dalia — Femenino mexicano</option>
               <option value="azure_male_co">🇨🇴 Gonzalo — Masculino colombiano</option>
@@ -486,16 +492,7 @@ audio { width: 100%; margin-top: 6px; border-radius: 8px; }
               <option value="azure_male_ar">🇦🇷 Tomas — Masculino argentino</option>
               <option value="azure_female_ar">🇦🇷 Elena — Femenino argentino</option>
             </optgroup>
-            <optgroup label="💳 ELEVENLABS">
-              <option value="el_female">🎙️ Femenina (tu voz)</option>
-              <option value="el_male">🎙️ Masculina (tu voz)</option>
-              <option value="el_custom">🔧 Voice ID personalizado</option>
-            </optgroup>
           </select>
-        </div>
-        <div class="form-group" id="customVoiceGroup" style="display:none">
-          <label>Voice ID personalizado (ElevenLabs)</label>
-          <input type="text" id="voiceIdInput" placeholder="pega tu Voice ID aquí" />
         </div>
         <button class="btn btn-primary" id="btnGenerarEpisodio">
           <span>✨</span> Generar Episodio (30 escenas)
@@ -535,6 +532,31 @@ audio { width: 100%; margin-top: 6px; border-radius: 8px; }
         <div class="stat-box"><div class="stat-num" id="statImg">0</div><div class="stat-lbl">Imágenes</div></div>
         <div class="stat-box"><div class="stat-num" id="statAud">0</div><div class="stat-lbl">Audios</div></div>
         <div class="stat-box"><div class="stat-num" id="statEsc">0</div><div class="stat-lbl">Escenas</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🎬 Video con Veo 3.1 Lite</div>
+        <p style="font-size:12px; color:var(--text-dim); margin-bottom:8px; line-height:1.6">
+          Anima cada escena (imagen → clip 8 seg). Usa tu Gemini API Key.<br>
+          <span style="color:var(--sunset-amber)">⚠️ Costo: ~$0.24/escena · Episodio completo ~$7.20</span>
+        </p>
+        <div class="form-group" style="margin-bottom:10px">
+          <label>Escenas a generar</label>
+          <select id="veoScenesSelect">
+            <option value="1">Solo escena 1 (prueba — $0.24)</option>
+            <option value="5">Primeras 5 escenas (~$1.20)</option>
+            <option value="10">Primeras 10 escenas (~$2.40)</option>
+            <option value="30">Episodio completo 30 escenas (~$7.20)</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" id="btnGenerateVideo">
+          <span>🎬</span> Generar Video
+        </button>
+        <div id="videoProgress" style="display:none; margin-top:12px">
+          <div class="progress-wrap"><div class="progress-bar" id="videoBar" style="width:0%"></div></div>
+          <div class="progress-label" id="videoLabel">Iniciando Veo 3.1 Lite...</div>
+        </div>
+        <div id="videoResults" style="margin-top:12px"></div>
       </div>
 
       <div class="card">
@@ -758,7 +780,6 @@ function renderAll() {
   renderCharacters();
   renderScenes();
   renderStats();
-  if (state.voiceId) document.getElementById('voiceIdInput').value = state.voiceId;
 }
 
 // ══════════════════════════════════════════════
@@ -808,7 +829,6 @@ function getKeys() {
   return {
     claude:        localStorage.getItem('key_claude')         || '',
     gemini:        localStorage.getItem('key_gemini')         || '',
-    eleven:        localStorage.getItem('key_eleven')         || '',
     azure:         localStorage.getItem('key_azure')          || '',
     azureRegion:   localStorage.getItem('key_azure_region')   || 'eastus',
     azureOpenai:   localStorage.getItem('key_azure_openai')   || '',
@@ -831,16 +851,20 @@ document.getElementById('btnApis').addEventListener('click', () => {
       <input type="password" id="mk_claude" value="${k.claude}" placeholder="sk-ant-..." />
     </div>
 
-    <div class="form-group">
-      <label>Gemini API Key (imágenes)</label>
-      <input type="password" id="mk_gemini" value="${k.gemini}" placeholder="AIza..." />
+    <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.25);border-radius:10px;padding:12px;margin-bottom:12px">
+      <div style="font-size:11px;color:#a855f7;font-weight:600;margin-bottom:8px">🔮 GEMINI — Imágenes + Audio + Video (Veo 3.1 Lite)</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Usa tus $300 de crédito Google Cloud. Una sola key para todo.</div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Gemini API Key</label>
+        <input type="password" id="mk_gemini" value="${k.gemini}" placeholder="AIza..." />
+      </div>
     </div>
 
     <div style="background:rgba(244,162,97,0.07);border:1px solid rgba(244,162,97,0.2);border-radius:10px;padding:12px;margin-bottom:12px">
-      <div style="font-size:11px;color:var(--sunset-amber);font-weight:600;margin-bottom:8px">🎨 AZURE OPENAI — FLUX.2-pro para imágenes</div>
+      <div style="font-size:11px;color:var(--sunset-amber);font-weight:600;margin-bottom:8px">🎨 AZURE OPENAI — FLUX.2-pro (alternativa imágenes)</div>
       <div class="form-group" style="margin-bottom:8px">
         <label>Azure OpenAI Key</label>
-        <input type="password" id="mk_azure_openai" value="${k.azureOpenai}" placeholder="key de anime-openai..." />
+        <input type="password" id="mk_azure_openai" value="${k.azureOpenai}" placeholder="key del deploy de FLUX..." />
       </div>
       <div class="form-group" style="margin-bottom:0">
         <label>Azure Endpoint</label>
@@ -849,7 +873,7 @@ document.getElementById('btnApis').addEventListener('click', () => {
     </div>
 
     <div style="background:rgba(111,207,151,0.07);border:1px solid rgba(111,207,151,0.2);border-radius:10px;padding:12px;margin-bottom:12px">
-      <div style="font-size:11px;color:#6fcf97;font-weight:600;margin-bottom:8px">🎙️ AZURE SPEECH — Audio gratis</div>
+      <div style="font-size:11px;color:#6fcf97;font-weight:600;margin-bottom:8px">🎙️ AZURE SPEECH — Audio gratis (backup)</div>
       <div class="form-group" style="margin-bottom:8px">
         <label>Azure Speech Key</label>
         <input type="password" id="mk_azure" value="${k.azure}" placeholder="key de anime-tts..." />
@@ -860,18 +884,12 @@ document.getElementById('btnApis').addEventListener('click', () => {
       </div>
     </div>
 
-    <div class="form-group">
-      <label>ElevenLabs API Key (opcional)</label>
-      <input type="password" id="mk_eleven" value="${k.eleven}" placeholder="..." />
-    </div>
-
     <button class="btn btn-primary" onclick="saveKeys()">💾 Guardar</button>
   `);
 });
 window.saveKeys = function() {
   localStorage.setItem('key_claude',         document.getElementById('mk_claude').value.trim());
   localStorage.setItem('key_gemini',         document.getElementById('mk_gemini').value.trim());
-  localStorage.setItem('key_eleven',         document.getElementById('mk_eleven').value.trim());
   localStorage.setItem('key_azure',          document.getElementById('mk_azure').value.trim());
   localStorage.setItem('key_azure_region',   document.getElementById('mk_azure_region').value.trim() || 'eastus');
   localStorage.setItem('key_azure_openai',   document.getElementById('mk_azure_openai').value.trim());
@@ -1010,13 +1028,6 @@ async function generateFluxImage(prompt) {
   if (!k.azureOpenai) throw new Error('Azure OpenAI Key no configurada. Ve a APIS.');
   const endpoint = k.azureEndpoint || 'https://alixonveloz1-6892-resource.services.ai.azure.com';
 
-  // Sanitize prompt — FLUX rejects sexual/suggestive content
-  const safePrompt = prompt
-    .replace(/\b(sexy|sensual|seductive|nude|naked|half-naked|revealing|cleavage|busty|voluptuous|erotic|lustful|intimate pose)\b/gi, '')
-    .replace(/\b(beautiful woman|attractive woman|gorgeous woman)\b/gi, 'young woman')
-    .replace(/\b(handsome man|attractive man)\b/gi, 'young man')
-    .trim();
-
   const res = await fetch(`${endpoint}/providers/blackforestlabs/v1/flux-2-pro?api-version=preview`, {
     method: 'POST',
     headers: {
@@ -1025,7 +1036,7 @@ async function generateFluxImage(prompt) {
       'Authorization': `Bearer ${k.azureOpenai}`,
     },
     body: JSON.stringify({
-      prompt: safePrompt,
+      prompt,
       model: 'FLUX.2-pro',
       width: 576,
       height: 1024,
@@ -1092,25 +1103,23 @@ async function generateOpenAIAudio(text, act) {
 // ── IMAGE ROUTER ──────────────────────────────
 async function generateImage(prompt, refImageBase64 = null) {
   const manualModel = document.getElementById('imageModelSelect')?.value || 'auto';
+  const genre = state.universe?.genero || '';
 
-  // Auto mode: ecchi → Gemini, everything else → FLUX
-  let useFlux;
-  if (manualModel === 'auto') {
-    const genre = state.universe?.genero || '';
-    useFlux = genre !== 'ecchi';
-  } else {
-    useFlux = manualModel === 'flux2pro';
+  // Ecchi siempre Gemini — acepta contenido sugerente anime
+  if (genre === 'ecchi' && manualModel !== 'flux2pro') {
+    return await generateGeminiImage(prompt, refImageBase64);
   }
 
-  if (useFlux) {
-    const k = getKeys();
-    if (!k.azureOpenai) {
-      // No Azure key — fallback to Gemini
-      return await generateGeminiImage(prompt, refImageBase64);
-    }
+  // Gemini forzado manual
+  if (manualModel === 'gemini') {
+    return await generateGeminiImage(prompt, refImageBase64);
+  }
+
+  // FLUX (todos los demás géneros) — si no hay key cae a Gemini
+  const k = getKeys();
+  if (k.azureOpenai) {
     return await generateFluxImage(prompt);
   }
-  // Gemini (ecchi or manual selection)
   return await generateGeminiImage(prompt, refImageBase64);
 }
 async function generateGeminiImage(prompt, refImageBase64 = null, retryNeutral = false) {
@@ -1300,8 +1309,61 @@ function addAudioTags(text, act) {
   return text;
 }
 
+// ══════════════════════════════════════════════
+// GEMINI TTS
+// ══════════════════════════════════════════════
+const GEMINI_VOICE_MAP = {
+  gemini_male:    'Charon',
+  gemini_female:  'Kore',
+  gemini_male2:   'Fenrir',
+  gemini_female2: 'Aoede',
+};
+
+async function generateGeminiAudio(text, act) {
+  const key = getKeys().gemini;
+  if (!key) throw new Error('Gemini API Key no configurada. Ve a APIS.');
+  const gender = document.getElementById('voiceGenderSelect')?.value || 'gemini_male';
+  const voice = GEMINI_VOICE_MAP[gender] || 'Charon';
+
+  // Add emotion tags based on act
+  const emotionPrefix = act === 'climax' ? '[excited] ' : act === 'resolution' ? '[soft] ' : act === 'cold_open' ? '[curious] ' : '';
+  const taggedText = emotionPrefix + text;
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${key}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: taggedText }] }],
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: voice }
+            }
+          }
+        }
+      })
+    }
+  );
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gemini TTS error ${res.status}: ${err}`);
+  }
+  const data = await res.json();
+  const audioB64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  if (!audioB64) throw new Error('Gemini TTS: no audio in response');
+  return audioB64;
+}
+
 async function generateAudio(text, act) {
-  const gender = document.getElementById('voiceGenderSelect')?.value || 'azure_male_mx';
+  const gender = document.getElementById('voiceGenderSelect')?.value || 'gemini_male';
+
+  // ── GEMINI TTS ────────────────────────────────
+  if (gender.startsWith('gemini_')) {
+    return await generateGeminiAudio(text, act);
+  }
 
   // ── AZURE SPEECH ──────────────────────────────
   if (gender.startsWith('azure_')) {
@@ -1309,29 +1371,117 @@ async function generateAudio(text, act) {
     return await generateAzureAudio(text, act, voiceName);
   }
 
-  // ── ELEVENLABS ────────────────────────────────
-  const key = getKeys().eleven;
-  if (!key) throw new Error('ElevenLabs API Key no configurada. Ve a APIS.');
-  const VOICE_MAP = {
-    el_female: 'GoUxgLPR8rxnhjBSvxFy',
-    el_male:   '8mBRP99B2Ng2QwsJMFQl',
-  };
-  const voiceId  = (gender === 'el_custom' && state.voiceId)
-    ? state.voiceId
-    : (VOICE_MAP[gender] || VOICE_MAP.el_female);
-  const params   = getVoiceParams(act);
-  const taggedTx = addAudioTags(text, act);
-  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'xi-api-key': key },
-    body: JSON.stringify({ text: taggedTx, model_id: 'eleven_v3', language_code: 'es', voice_settings: params }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`ElevenLabs error ${res.status}: ${err}`);
+  throw new Error('Voz no soportada: ' + gender);
+}
+
+// ══════════════════════════════════════════════
+// VEO 3.1 LITE — IMAGE TO VIDEO
+// ══════════════════════════════════════════════
+async function generateVeoVideo(imageBase64, prompt) {
+  const key = getKeys().gemini;
+  if (!key) throw new Error('Gemini API Key no configurada. Ve a APIS.');
+
+  // Step 1: Submit job
+  const submitRes = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-lite-generate-001:predictLongRunning?key=${key}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        instances: [{
+          prompt: prompt + ', anime 2D style, 9:16 vertical, cinematic motion',
+          image: { bytesBase64Encoded: imageBase64, mimeType: 'image/png' },
+        }],
+        parameters: {
+          aspectRatio: '9:16',
+          durationSeconds: 8,
+          enhancePrompt: true,
+          generateAudio: false, // sin audio = más barato
+        },
+      }),
+    }
+  );
+  if (!submitRes.ok) {
+    const err = await submitRes.text();
+    throw new Error(`Veo submit error ${submitRes.status}: ${err}`);
   }
-  const blob = await res.blob();
-  return await blobToBase64(blob);
+  const submitData = await submitRes.json();
+  const operationName = submitData.name;
+  if (!operationName) throw new Error('Veo: no operation name in response');
+
+  // Step 2: Poll until done (máx 3 minutos)
+  const pollUrl = `https://generativelanguage.googleapis.com/v1beta/${operationName}?key=${key}`;
+  for (let i = 0; i < 36; i++) {
+    await new Promise(r => setTimeout(r, 5000)); // espera 5 seg
+    const pollRes = await fetch(pollUrl);
+    if (!pollRes.ok) continue;
+    const pollData = await pollRes.json();
+    if (pollData.done) {
+      const videoB64 = pollData.response?.predictions?.[0]?.bytesBase64Encoded;
+      if (videoB64) return videoB64;
+      throw new Error('Veo: video done but no bytes in response');
+    }
+  }
+  throw new Error('Veo: timeout después de 3 minutos');
+}
+
+document.getElementById('btnGenerateVideo').addEventListener('click', async () => {
+  if (!state.scenes.length) { showToast('Genera un episodio primero', 'error'); return; }
+  const btn = document.getElementById('btnGenerateVideo');
+  const progDiv = document.getElementById('videoProgress');
+  const resultsDiv = document.getElementById('videoResults');
+  const count = parseInt(document.getElementById('veoScenesSelect').value);
+  const scenes = state.scenes.slice(0, count);
+
+  btn.disabled = true;
+  progDiv.style.display = 'block';
+  resultsDiv.innerHTML = '';
+
+  let done = 0;
+  for (const scene of scenes) {
+    setProgress('video', (done / scenes.length) * 100, `Video ${done + 1}/${scenes.length}: ${scene.title}`);
+    try {
+      const imgData = await dbGet(sceneImgKey(scene.id));
+      if (!imgData) { showToast(`Escena ${scene.num} sin imagen — omitida`, 'error'); done++; continue; }
+
+      const videoB64 = await generateVeoVideo(imgData, scene.imagePromptEN);
+
+      // Save to IndexedDB
+      await dbSet(`${state.projectId}_vid_${scene.id}`, videoB64);
+
+      // Show download link
+      const blob = b64ToBlob(videoB64, 'video/mp4');
+      const url = URL.createObjectURL(blob);
+      resultsDiv.innerHTML += `
+        <div style="margin-bottom:8px;padding:8px;background:rgba(255,255,255,0.05);border-radius:8px;font-size:12px">
+          <div style="margin-bottom:4px">🎬 Escena ${scene.num}: ${scene.title}</div>
+          <a href="${url}" download="escena_${String(scene.num).padStart(2,'0')}.mp4"
+             style="color:var(--sunset-amber);text-decoration:none">⬇️ Descargar MP4</a>
+          <video src="${url}" controls style="width:100%;border-radius:6px;margin-top:6px;max-height:200px"></video>
+        </div>`;
+    } catch(e) {
+      resultsDiv.innerHTML += `<div style="color:#ff6b6b;font-size:11px;margin-bottom:4px">❌ Escena ${scene.num}: ${e.message.substring(0, 80)}</div>`;
+    }
+    done++;
+    setProgress('video', (done / scenes.length) * 100, `${done}/${scenes.length} videos generados`);
+  }
+
+  btn.disabled = false;
+  showToast(`${done} videos generados con Veo 3.1 Lite`, 'success');
+});
+
+function b64ToBlob(b64, mimeType) {
+  const bytes = atob(b64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mimeType });
+}
+
+function setProgress(type, pct, label) {
+  const bar = document.getElementById(type + 'Bar');
+  const lbl = document.getElementById(type + 'Label');
+  if (bar) bar.style.width = pct + '%';
+  if (lbl) lbl.textContent = label;
 }
 
 function blobToBase64(blob) {
@@ -1512,8 +1662,6 @@ function safeParseChars(raw) {
 document.getElementById('btnGenerarEpisodio').addEventListener('click', async () => {
   if (!state.universe) { showToast('Genera un universo primero', 'error'); return; }
   const btn = document.getElementById('btnGenerarEpisodio');
-  const voiceId = document.getElementById('voiceIdInput').value.trim();
-  if (voiceId) { state.voiceId = voiceId; }
 
   btn.disabled = true;
   const progDiv = document.getElementById('epProgress');
@@ -1524,10 +1672,13 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
   const u = state.universe;
   const genrePrompt = GENRE_PROMPTS[u.genero] || '';
 
+  const isEcchi = u.genero === 'ecchi';
+
   const sysBase = `Eres un guionista de anime experto. REGLAS:
 - Narración PRIMERA PERSONA, 4-5 frases fluidas por escena, con gancho final
 - Pensamiento interno visible, nombres japoneses reales
-- imagePromptEN en INGLÉS, 9:16 anime 2D, muy visual
+- imagePromptEN en INGLÉS, 9:16 anime 2D, muy visual${isEcchi ? `
+- Para ecchi: imagePromptEN DEBE incluir descripción física detallada y sugerente de los personajes femeninos: ropa ajustada, uniforme escolar o ropa de verano reveladora, escote, falda corta, postura sexy, expresión de rubor. Lenguaje explícito en el prompt de imagen es necesario para el motor de generación.` : ''}
 - Responde SOLO JSON válido sin markdown ni texto extra`;
 
   const ctx = `Universo: ${u.title} | Género: ${u.genero}
@@ -1656,10 +1807,10 @@ window.generateCharImage = async function(charId) {
   const prevContent = wrap.innerHTML;
   wrap.innerHTML = `<div class="char-generating">⏳</div>`;
   
-  const prompt = `Anime/donghua 2D character portrait, vertical 9:16, full body character reference sheet: ${char.name}, ${char.appearance}. Clean anime art style, vibrant colors, white background, professional character design. High quality illustration.`;
-  
+  const charPrompt = `Anime/donghua 2D character portrait, vertical 9:16, full body character reference sheet: ${char.name}, ${char.appearance}. Clean anime art style, vibrant colors, white background, professional character design. High quality illustration.`;
+
   try {
-    const imgData = await generateImage(prompt);
+    const imgData = await generateImage(charPrompt);
     await dbSet(imgKey(charId), imgData);
     wrap.innerHTML = `<img src="data:image/png;base64,${imgData}" alt="${char.name}">`;
     showToast('Imagen generada', 'success');
@@ -2163,20 +2314,6 @@ async function init() {
   
   updateApiDot();
   renderAll();
-  
-  // Voice gender selector logic
-  const voiceGenderSel = document.getElementById('voiceGenderSelect');
-  const customVoiceGroup = document.getElementById('customVoiceGroup');
-  voiceGenderSel.addEventListener('change', () => {
-    customVoiceGroup.style.display = voiceGenderSel.value === 'custom' ? 'block' : 'none';
-    if (voiceGenderSel.value !== 'custom') { state.voiceId = ''; saveState(); }
-  });
-
-  // Auto-save voice id
-  document.getElementById('voiceIdInput').addEventListener('change', e => {
-    state.voiceId = e.target.value.trim();
-    saveState();
-  });
 }
 
 init().catch(console.error);
