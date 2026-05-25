@@ -470,8 +470,11 @@ audio { width: 100%; margin-top: 6px; border-radius: 8px; }
         <div class="form-group">
           <label>Voz narradora</label>
           <select id="voiceGenderSelect">
-            <option value="female">🎙️ Femenina — Español Latino</option>
-            <option value="male">🎙️ Masculina — Español Latino</option>
+            <option value="female_custom">🎙️ Femenina (tu voz)</option>
+            <option value="male_custom">🎙️ Masculina (tu voz)</option>
+            <option value="female_mx">🇲🇽 Femenina — Acento mexicano (pública)</option>
+            <option value="male_mx">🇲🇽 Masculino — Acento mexicano (público)</option>
+            <option value="female_co">🇨🇴 Femenina — Acento colombiano (pública)</option>
             <option value="custom">🔧 Voice ID personalizado</option>
           </select>
         </div>
@@ -981,16 +984,19 @@ async function generateAudio(text, act) {
   const key = getKeys().eleven;
   if (!key) throw new Error('ElevenLabs API Key no configurada');
 
-  // Determinar voice ID según selector
-  const gender = document.getElementById('voiceGenderSelect')?.value || 'female';
-  let voiceId;
-  if (state.voiceId && gender === 'custom') {
-    voiceId = state.voiceId;
-  } else if (gender === 'male') {
-    voiceId = 'IRHApOXLvnW57QJPQH2P'; // Masculino latino
-  } else {
-    voiceId = 'GoUxgLPR8rxnhjBSvxFy'; // Femenino latino (default)
-  }
+  // Voice ID map — acento controlado por el voice ID, no por language_code
+  const VOICE_MAP = {
+    female_custom: 'GoUxgLPR8rxnhjBSvxFy',  // Tu voz femenina
+    male_custom:   'IRHApOXLvnW57QJPQH2P',  // Tu voz masculina
+    female_mx:     'kPzsL2i3teMYv0FxEYQ6',  // Pilar — latinoamericana femenina (pública ElevenLabs)
+    male_mx:       'bIHbv24MWmeRgasZH58o',  // Will — neutro latino masculino (pública ElevenLabs)
+    female_co:     'XB0fDUnXU5powFXDhCwa',  // Charlotte — colombiana (pública ElevenLabs)
+  };
+
+  const gender = document.getElementById('voiceGenderSelect')?.value || 'female_custom';
+  const voiceId = (gender === 'custom' && state.voiceId)
+    ? state.voiceId
+    : (VOICE_MAP[gender] || VOICE_MAP.female_custom);
 
   const params = getVoiceParams(act);
   const taggedText = addAudioTags(text, act);
