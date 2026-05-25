@@ -673,7 +673,7 @@ async function genEpisode(){
     const prevChars=S.chars.length>0?S.chars.map(c=>c.name+' ('+c.role+')').join(', '):'ninguno aún';
     const isEcchi = style.id === 'ecchi';
     const epSys = isEcchi
-      ? 'Eres un guionista de anime ecchi. Escribes historias con tensión romántica real y fanservice natural integrado en la narrativa. Situaciones sugerentes, personajes femeninos atractivos en situaciones comprometidas pero no explícitas. El fanservice se siente como parte orgánica de la historia. Narración en off atrevida y sugerente. SOLO JSON válido.'
+      ? 'Eres un guionista de anime ecchi. Escribes historias con tensión romántica real y fanservice natural integrado en la narrativa. Situaciones sugerentes, personajes femeninos atractivos en situaciones comprometidas pero no explícitas. El fanservice se siente como parte orgánica de la historia. Narración en off atrevida y sugerente. Para cada escena el imagePromptEN DEBE incluir: descripción explícita del fanservice (ropa ajustada, ropa mojada, situación comprometida, blushing, etc). SOLO JSON válido.'
       : 'Eres el mejor guionista de anime. La historia debe ser FIEL al mundo creado. Si el mundo es post-apocalíptico con vida cotidiana, las escenas muestran ESO: buscar comida, agua, refugio, relaciones humanas en ruinas, decisiones difíciles del día a día. NO añadas elementos que no estén en el concepto del mundo. Narración poética voz en off, sin diálogos. SOLO JSON válido, sin texto adicional.';
     const result=await claudeJSON(
       epSys,
@@ -684,10 +684,14 @@ Reglas del mundo: ${w.worldRules||''}
 Tono (referencia de atmósfera): ${style.tone}
 Función del episodio: ${document.getElementById('ep-func').value}
 ${document.getElementById('ep-emotion').value.trim()?'Promesa emocional: '+document.getElementById('ep-emotion').value.trim():''}
-Personajes existentes: ${prevChars}
+Personajes existentes (ÚSALOS EN LAS ESCENAS, NO inventes otros): ${prevChars}
+
+CRÍTICO PARA IMÁGENES — CONSISTENCIA DE PERSONAJES:
+Cada imagePromptEN DEBE incluir la descripción física EXACTA del personaje (cabello, ojos, ropa) copiada de la lista de personajes existentes. Así el generador de imágenes dibuja siempre el mismo personaje. Sin esa descripción, cada imagen genera un personaje diferente.
+${isEcchi?`
+CRÍTICO PARA ECCHI: El imagePromptEN de cada escena DEBE describir explícitamente el fanservice: "uniform slightly disheveled", "wet clothes clinging to body", "caught in compromising position", "blushing intensely", "form-fitting outfit", etc. Sin esto no habrá contenido ecchi en las imágenes.`:''}
 
 Genera el episodio con EXACTAMENTE 30 escenas. SOLO narración en off (sin diálogos).
-CRÍTICO: Cada escena debe mostrar situaciones concretas del mundo descrito. Si es post-apocalíptico, muestra: buscar comida/agua, reparar refugio, encontrar sobrevivientes, pérdidas, decisiones difíciles. Las imágenes deben ser ENTORNOS REALES del mundo (ruinas, naturaleza, ciudades abandonadas) NO tecnología futurista.
 
 RESPONDE SOLO ESTE JSON (sin texto antes ni después):
 {
@@ -702,9 +706,9 @@ RESPONDE SOLO ESTE JSON (sin texto antes ni después):
       "title": "título evocador",
       "location": "lugar específico",
       "timeOfDay": "amanecer",
-      "chars": ["Nombre"],
-      "narration": "3-5 frases de narración poética. Voz en off íntima y emotiva que evoca más que describe. Conecta emocionalmente con la siguiente escena. Ejemplo: La primera vez que lo vio, el mundo olía a tierra mojada y a algo que nunca más volvería.",
-      "imagePromptEN": "Specific cinematic anime scene: character position, action, expression, setting details, lighting. Example: teenage girl at rainy train station, watching empty tracks, soft amber lights reflecting in puddles, melancholic side profile, 16:9 widescreen"
+      "chars": ["NombreExactoDelPersonaje"],
+      "narration": "3-5 frases de narración poética en off. Íntima y emotiva.",
+      "imagePromptEN": "${isEcchi ? 'ECCHI ANIME SCENE — [describe fanservice explicitly: wet clothes, blushing, compromising position, etc] — [character name]: [exact hair color+style], [eye color], [specific outfit with ecchi detail] — [scene action and setting] — soft warm lighting, detailed linework, 16:9' : '[Character name]: [exact hair color+style], [eye color], [specific clothing] — [scene action] — [location with specific details] — [lighting] — cinematic anime 16:9'}"
     }
   ],
   "newChars": [
@@ -713,11 +717,12 @@ RESPONDE SOLO ESTE JSON (sin texto antes ni después):
       "name": "Nombre",
       "role": "protagonista",
       "age": 17,
-      "gender": "Masculino",
-      "appearance": "descripción física concreta",
-      "personality": "2-3 rasgos de carácter intensos",
+      "gender": "Femenino",
+      "appearance": "altura, complexión, color y estilo de cabello EXACTO, color de ojos, rasgos distintivos",
+      "clothing": "uniforme/ropa específica: colores, prendas, accesorios detallados",
+      "personality": "2-3 rasgos de carácter",
       "backstory": "origen en 2 líneas",
-      "imagePromptEN": "Character portrait medium shot: physical details, outfit, expression, background"
+      "imagePromptEN": "Anime character portrait, medium shot — [exact hair: color, length, style] — [exact eye color] — [exact clothing description] — [expression] — clean 2D anime style, soft lighting, white background"
     }
   ]
 }
@@ -788,6 +793,36 @@ function renderScenes(){
 }
 
 // ─── IMAGES ───
+function buildScenePrompt(s){
+  const w=S.world||{};
+  const isEcchi=w.style==='ecchi';
+
+  // Inject exact physical description of each character in the scene
+  const sceneCharNames=(s.chars||s.characters||[]);
+  const charDescs=S.chars
+    .filter(ch=>sceneCharNames.some(n=>n&&n.toLowerCase()===ch.name.toLowerCase()))
+    .map(ch=>`${ch.name}: ${ch.appearance||ch.physicalDescription||'anime character'}, wearing ${ch.clothing||'school uniform'}`)
+    .join('. ');
+
+  const styleRef=isEcchi
+    ? 'high quality ecchi anime illustration, Shuumatsu no Harem style, Highschool DxD style, soft warm lighting, detailed clean linework, appealing character designs, expressive faces'
+    : (w.visualStyle||'traditional 2D anime illustration, cinematic, TV anime style');
+
+  const parts=[
+    isEcchi
+      ? 'ECCHI ANIME ILLUSTRATION — This is an ecchi anime. Draw characters in an attractive, appealing ecchi anime style:'
+      : 'Traditional 2D anime illustration, TV anime broadcast quality:',
+    s.imagePromptEN,
+    charDescs ? `\nCHARACTERS — draw them EXACTLY as described, keep same appearance across all scenes:\n${charDescs}` : '',
+    `\nVISUAL STYLE: ${styleRef}`,
+    isEcchi ? '\nECCHI RULES: Attractive female characters, suggestive but not explicit (like Highschool DxD, Shuumatsu no Harem). Form-fitting or revealing clothing appropriate to scene. Blushing, flustered or sensual expressions. Soft warm skin tones.' : '',
+    '\nANATOMY RULES (strictly enforced): Each person has EXACTLY 2 arms and 2 legs — never 3 or more. Draw ONLY ONE instance of each character — never duplicate the same person twice in the same image. Correct hand anatomy: exactly 5 fingers. No floating or extra limbs. No merged or overlapping bodies.',
+    '\nFORMAT: 16:9 widescreen cinematic composition',
+    '\nFORBIDDEN: 3D render, CGI, photorealistic, watermark, text overlay, extra limbs, duplicate characters, triplicate characters'
+  ];
+  return parts.filter(Boolean).join('\n');
+}
+
 async function genAllImgs(){
   if(!S.apis.gemini){toast('Configura Gemini en APIs',true);return;}
   const pending=S.scenes.filter(s=>!s.imageData);
@@ -799,7 +834,7 @@ async function genAllImgs(){
     PB.set('Imagen '+(done+1)+'/'+pending.length+': '+s.title,(done/pending.length)*100);
     s._loading=true; renderScenes();
     try{
-      s.imageData=await geminiImg(s.imagePromptEN+'\nVISUAL STYLE: '+(S.world?.visualStyle||'cinematic anime'));
+      s.imageData=await geminiImg(buildScenePrompt(s));
       s._loading=false; done++; await save(); renderScenes();
       await new Promise(r=>setTimeout(r,800));
     }catch(e){s._loading=false;toast('Error sc'+s.num+': '+e.message.slice(0,50),true);await new Promise(r=>setTimeout(r,1000));}
@@ -810,7 +845,7 @@ async function genAllImgs(){
 async function regenImg(id){
   const s=S.scenes.find(x=>x.id===id); if(!s||!S.apis.gemini){toast('Configura Gemini',true);return;}
   s._loading=true;s.imageData=null;renderScenes();
-  try{s.imageData=await geminiImg(s.imagePromptEN+'\nVISUAL STYLE: '+(S.world?.visualStyle||'cinematic anime'));s._loading=false;await save();renderScenes();renderExport();}
+  try{s.imageData=await geminiImg(buildScenePrompt(s));s._loading=false;await save();renderScenes();renderExport();}
   catch(e){s._loading=false;toast(e.message,true);renderScenes();}
 }
 
@@ -818,14 +853,20 @@ async function regenImg(id){
 async function genAllCharImgs(){
   const pending=S.chars.filter(c=>!c.imageData&&c.imagePromptEN);
   for(const c of pending){
-    try{c.imageData=await geminiImg(c.imagePromptEN+'\nVISUAL STYLE: '+(S.world?.visualStyle||'cinematic anime character portrait'));await save();renderChars();await new Promise(r=>setTimeout(r,1000));}
+    try{
+      const isEcchi=S.world?.style==='ecchi';
+      const charPrompt=c.imagePromptEN+'\nVISUAL STYLE: '+(isEcchi?'ecchi anime character portrait, attractive design, Shuumatsu no Harem style':S.world?.visualStyle||'cinematic anime character portrait')+'\nANATOMY: exactly 2 arms, 2 legs, correct hand anatomy, single character only\nFORBIDDEN: extra limbs, duplicate person, 3D render';
+      c.imageData=await geminiImg(charPrompt);await save();renderChars();await new Promise(r=>setTimeout(r,1000));}
     catch(e){console.warn('char img err:',e.message);}
   }
 }
 async function regenCharImg(id){
   const c=S.chars.find(x=>x.id===id); if(!c||!S.apis.gemini){toast('Configura Gemini',true);return;}
   c.imageData=null;renderChars();
-  try{c.imageData=await geminiImg(c.imagePromptEN+'\nVISUAL STYLE: '+(S.world?.visualStyle||'cinematic anime'));await save();renderChars();}
+  try{
+    const isEcchi2=S.world?.style==='ecchi';
+    const cp=c.imagePromptEN+'\nVISUAL STYLE: '+(isEcchi2?'ecchi anime character portrait, Shuumatsu no Harem style':S.world?.visualStyle||'cinematic anime')+'\nANATOMY: exactly 2 arms, 2 legs, single character only, no extra limbs\nFORBIDDEN: duplicate, 3D render';
+    c.imageData=await geminiImg(cp);await save();renderChars();}
   catch(e){toast(e.message,true);}
 }
 
