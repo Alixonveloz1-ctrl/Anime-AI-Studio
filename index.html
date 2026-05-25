@@ -281,7 +281,10 @@ select option{background:var(--night-blue);color:var(--paper-cream)}
       <div id="audio-warn" class="info" style="display:none">Configura <strong>ElevenLabs</strong> en el botón APIs y añade un Voice ID arriba.</div>
       <div id="audio-ok">
         <div class="stat-row"><span>Narraciones listas</span><span class="stat-val" id="nar-count">0 / 0</span></div>
-        <button class="btn btn-p" onclick="genAllNar()" id="btn-nar" style="margin-top:10px">🎙 Generar Narración Completa</button>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn-p" onclick="genAllNar()" id="btn-nar" style="flex:1">🎙 Generar Narración Completa</button>
+          <button class="btn" style="background:rgba(220,60,60,0.12);color:#e07070;border:1px solid rgba(220,60,60,0.25);padding:10px 14px;border-radius:8px;font-size:12px;white-space:nowrap" onclick="deleteAllNar()" title="Borrar todos los audios para regenerar con otro narrador">🗑 Borrar audios</button>
+        </div>
       </div>
     </div>
     <div id="scenes-list"></div>
@@ -644,7 +647,7 @@ async function claudeJSON(sys,usr,tok=8000){
 }
 
 // ─── GEMINI IMAGE ───
-async function geminiImg(prompt){
+async function geminiImg(prompt, refImages=[]){
   if(!S.apis.gemini) throw new Error('Configura Gemini en APIs');
   const worldVis = S.world?.visualStyle || 'traditional anime 2D';
   const isEcchi = S.world?.style === 'ecchi';
@@ -695,7 +698,16 @@ async function geminiImg(prompt){
         body=JSON.stringify({instances:[{prompt:full}],parameters:{sampleCount:1,aspectRatio:'16:9'}});
       } else {
         url=`https://generativelanguage.googleapis.com/v1beta/models/${name}:generateContent?key=${S.apis.gemini}`;
-        body=JSON.stringify({contents:[{parts:[{text:full}]}],generationConfig:{responseModalities:['IMAGE','TEXT']}});
+        // Build parts: text prompt + reference images for character consistency
+        const parts=[{text:full}];
+        for(const ri of refImages){
+          if(ri&&ri.startsWith('data:')){
+            const [meta,data]=ri.split(',');
+            const mime=meta.split(':')[1].split(';')[0];
+            parts.push({inlineData:{mimeType:mime,data}});
+          }
+        }
+        body=JSON.stringify({contents:[{parts}],generationConfig:{responseModalities:['IMAGE','TEXT']}});
       }
       const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body});
       if(r.status===429){errors.push(name+': rate limit 429');await new Promise(res=>setTimeout(res,4000));continue;}
@@ -911,7 +923,12 @@ function renderScenes(){
         <div class="sc-nar">${s.narration}</div>
         <div class="sc-actions">
           <button class="btn btn-g" onclick="regenImg('${s.id}')" ${!S.apis.gemini?'disabled':''}>${s._loading?'⏳':s.imageData?'↻':'🎨'} Imagen</button>
-          ${s.narrationAudio?`<button class="btn btn-s" onclick="playNar('${s.id}')">▶ Escuchar</button>`:`<button class="btn btn-g" onclick="regenNar('${s.id}')" ${!S.apis.eleven||!S.world?.voiceId?'disabled':''}>🎙 Audio</button>`}
+          ${s.narrationAudio
+            ?`<div style="display:flex;gap:6px">
+                <button class="btn btn-s" onclick="playNar('${s.id}')">▶ Escuchar</button>
+                <button class="btn" style="background:rgba(220,60,60,0.15);color:#e07070;border:1px solid rgba(220,60,60,0.3);padding:6px 10px;border-radius:6px;font-size:11px" onclick="deleteNar('${s.id}')" title="Borrar audio para regenerar">🗑</button>
+              </div>`
+            :`<button class="btn btn-g" onclick="regenNar('${s.id}')" ${!S.apis.eleven||!S.world?.voiceId?'disabled':''}>🎙 Audio</button>`}
         </div>
       </div>
     </div>`).join('');
@@ -938,6 +955,13 @@ function buildScenePrompt(s){
     ? 'romantic anime illustration, soft warm lighting, detailed clean linework, appealing character designs'
     : (w.visualStyle||'traditional 2D anime, cinematic');
 
+  // Collect reference images from characters in this scene (for consistency)
+  const refChars=S.chars
+    .filter(ch=>sceneCharNames.some(n=>n&&n.toLowerCase()===ch.name.toLowerCase())&&ch.imageData&&ch.imageData.startsWith('data:'))
+    .map(ch=>ch.imageData)
+    .slice(0,3); // max 3 ref images to avoid token limits
+  const refImages=refChars;
+
   // Safety-friendly ecchi phrasing — no words that trigger IMAGE_SAFETY filter
   const ecchiNote=isEcchi
     ? 'Romantic anime art style. Characters in intimate or playful situations. Attractive character designs with expressive emotional reactions, blushing.'
@@ -948,11 +972,12 @@ function buildScenePrompt(s){
     s.imagePromptEN,
     charDescs ? 'Characters (draw exactly as described, consistent across scenes): '+charDescs : '',
     ecchiNote,
+    refChars.length ? 'Use the provided reference images to keep exact character appearance.' : '',
     'Rules: exactly 2 arms and 2 legs per person, one instance of each character only, correct anatomy.',
     '16:9 widescreen. No 3D render, no watermark, no extra limbs, no clones.'
   ].filter(Boolean).join(' | ');
 
-  return prompt;
+  return {prompt, refImages};
 }
 
 async function genAllImgs(){
@@ -967,7 +992,7 @@ async function genAllImgs(){
     s._loading=true; renderScenes();
     try{
       // 90 second timeout per image
-      const imgPromise=geminiImg(buildScenePrompt(s));
+      const {prompt:sp1,refImages:ri1}=buildScenePrompt(s);const imgPromise=geminiImg(sp1,ri1);
       const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout 120s — intenta de nuevo')),120000));
       s.imageData=await Promise.race([imgPromise,timeout]);
       s._loading=false; done++; await save(); renderScenes();
@@ -987,7 +1012,7 @@ async function regenImg(id){
   const s=S.scenes.find(x=>x.id===id); if(!s||!S.apis.gemini){toast('Configura Gemini',true);return;}
   s._loading=true;s.imageData=null;renderScenes();
   try{
-    const p2=geminiImg(buildScenePrompt(s));
+    const {prompt:sp2,refImages:ri2}=buildScenePrompt(s);const p2=geminiImg(sp2,ri2);
     const t2=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout 120s')),120000));
     s.imageData=await Promise.race([p2,t2]);
     s._loading=false;await save();renderScenes();renderExport();
@@ -1052,6 +1077,26 @@ async function regenNar(id){
 function playNar(id){
   const s=S.scenes.find(x=>x.id===id); if(!s?.narrationAudio) return;
   new Audio(s.narrationAudio).play().catch(e=>toast('Error: '+e.message,true));
+}
+
+async function deleteNar(id){
+  const s=S.scenes.find(x=>x.id===id); if(!s) return;
+  if(!confirm('¿Borrar el audio de esta escena?')) return;
+  s.narrationAudio=null;
+  try{const req=indexedDB.open('AnimeStudio2',1);req.onsuccess=e=>{const db=e.target.result;const tx=db.transaction('blobs','readwrite');tx.objectStore('blobs').delete('sn'+id);};}catch(e){}
+  await save(); renderScenes();
+  toast('Audio borrado — cambia el Voice ID y regenera');
+}
+
+async function deleteAllNar(){
+  if(!S.scenes.some(s=>s.narrationAudio)) return;
+  if(!confirm('¿Borrar TODOS los audios del episodio?\nPodrás regenerarlos con otro narrador.')) return;
+  for(const s of S.scenes){
+    s.narrationAudio=null;
+    try{const req=indexedDB.open('AnimeStudio2',1);req.onsuccess=e=>{const db=e.target.result;const tx=db.transaction('blobs','readwrite');tx.objectStore('blobs').delete('sn'+s.id);};}catch(e){}
+  }
+  await save(); renderScenes();
+  toast('Todos los audios borrados');
 }
 
 // ─── CHARS PANEL ───
