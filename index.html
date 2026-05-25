@@ -833,11 +833,7 @@ document.getElementById('btnApis').addEventListener('click', () => {
 
     <div style="background:rgba(66,133,244,0.08);border:1px solid rgba(66,133,244,0.25);border-radius:10px;padding:12px;margin-bottom:12px">
       <div style="font-size:11px;color:#4285f4;font-weight:600;margin-bottom:6px">🆓 GOOGLE NEURAL2 — 1,000,000 chars/mes gratis</div>
-      <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Las mejores voces gratuitas. Activa "Cloud Text-to-Speech API" en console.cloud.google.com → APIs → obtén una API Key.</div>
-      <div class="form-group" style="margin-bottom:0">
-        <label>Google Cloud API Key</label>
-        <input type="password" id="mk_google" value="${k.google}" placeholder="AIza..." />
-      </div>
+      <div style="font-size:11px;color:var(--text-dim)">✅ Usa automáticamente tu Gemini API Key — no necesitas configurar nada extra.</div>
     </div>
 
     <div style="background:rgba(111,207,151,0.08);border:1px solid rgba(111,207,151,0.2);border-radius:10px;padding:12px;margin-bottom:12px">
@@ -1006,10 +1002,46 @@ async function generateGeminiImage(prompt, refImageBase64 = null, retryNeutral =
 }
 
 // ══════════════════════════════════════════════
-// AUDIO ENGINE — Azure Neural TTS + ElevenLabs
+// AUDIO ENGINE — Google Neural2 + Azure + ElevenLabs
 // ══════════════════════════════════════════════
 
-// Azure Neural voice map — natural Latin American accents
+// Google Cloud TTS voice map
+const GOOGLE_VOICE_MAP = {
+  google_male_us:   { name: 'es-US-Neural2-B', lang: 'es-US' },
+  google_female_us: { name: 'es-US-Neural2-A', lang: 'es-US' },
+  google_male_es:   { name: 'es-US-Neural2-C', lang: 'es-US' },
+  google_female_es: { name: 'es-US-Neural2-D', lang: 'es-US' },
+};
+
+async function generateGoogleAudio(text, act, voiceName, langCode) {
+  // Usa la misma API key de Gemini — es la misma cuenta de Google Cloud
+  const key = getKeys().google || getKeys().gemini;
+  if (!key) throw new Error('Google/Gemini API Key no configurada.');
+  const speakingRate = act === 'climax' ? 1.12 : act === 'resolution' ? 0.88 : 0.95;
+  const pitch        = act === 'climax' ? 2.0  : act === 'resolution' ? -1.5  : 0.0;
+  const res = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${key}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      input: { text },
+      voice: { languageCode: langCode, name: voiceName },
+      audioConfig: {
+        audioEncoding: 'MP3',
+        speakingRate,
+        pitch,
+        effectsProfileId: ['headphone-class-device'],
+      },
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Google TTS error ${res.status}: ${err}`);
+  }
+  const data = await res.json();
+  return data.audioContent; // already base64 MP3
+}
+
+// Azure Neural voice map
 const AZURE_VOICE_MAP = {
   azure_male_mx:   'es-MX-JorgeNeural',
   azure_female_mx: 'es-MX-DaliaNeural',
@@ -1019,26 +1051,17 @@ const AZURE_VOICE_MAP = {
   azure_female_ar: 'es-AR-ElenaNeural',
 };
 
-// Azure TTS SSML rate/pitch per act
 function azureSSML(text, voiceName, act) {
   const rate  = act === 'climax' ? '+15%' : act === 'resolution' ? '-12%' : '-5%';
   const pitch = act === 'climax' ? '+8%'  : act === 'resolution' ? '-6%'  : '+0%';
-  // Escape XML special chars
-  const safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  return `<speak version='1.0' xml:lang='es-MX'>
-  <voice name='${voiceName}'>
-    <prosody rate='${rate}' pitch='${pitch}'>${safe}</prosody>
-  </voice>
-</speak>`;
+  const safe  = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return `<speak version='1.0' xml:lang='es-MX'><voice name='${voiceName}'><prosody rate='${rate}' pitch='${pitch}'>${safe}</prosody></voice></speak>`;
 }
 
 async function generateAzureAudio(text, act, voiceName) {
   const k = getKeys();
-  if (!k.azure) throw new Error('Azure Speech Key no configurada. Ve a APIS y añade tu key gratuita.');
-
+  if (!k.azure) throw new Error('Azure Speech Key no configurada.');
   const region = k.azureRegion || 'eastus';
-  const ssml = azureSSML(text, voiceName, act);
-
   const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
     method: 'POST',
     headers: {
@@ -1047,9 +1070,8 @@ async function generateAzureAudio(text, act, voiceName) {
       'X-Microsoft-OutputFormat': 'audio-16khz-128kbitrate-mono-mp3',
       'User-Agent': 'AnimeAIStudio',
     },
-    body: ssml,
+    body: azureSSML(text, voiceName, act),
   });
-
   if (!res.ok) {
     const err = await res.text();
     throw new Error(`Azure TTS error ${res.status}: ${err}`);
@@ -1073,7 +1095,13 @@ function addAudioTags(text, act) {
 async function generateAudio(text, act) {
   const gender = document.getElementById('voiceGenderSelect')?.value || 'azure_male_mx';
 
-  // ── AZURE NEURAL (free) ───────────────────────
+  // ── GOOGLE NEURAL2 ────────────────────────────
+  if (gender.startsWith('google_')) {
+    const v = GOOGLE_VOICE_MAP[gender] || GOOGLE_VOICE_MAP.google_male_us;
+    return await generateGoogleAudio(text, act, v.name, v.lang);
+  }
+
+  // ── AZURE NEURAL ──────────────────────────────
   if (gender.startsWith('azure_')) {
     const voiceName = AZURE_VOICE_MAP[gender] || 'es-MX-JorgeNeural';
     return await generateAzureAudio(text, act, voiceName);
@@ -1081,18 +1109,12 @@ async function generateAudio(text, act) {
 
   // ── ELEVENLABS ────────────────────────────────
   const key = getKeys().eleven;
-  if (!key) throw new Error('ElevenLabs API Key no configurada. Usa una opción Azure del selector.');
-
+  if (!key) throw new Error('ElevenLabs API Key no configurada.');
   const VOICE_MAP = {
     female_custom: 'GoUxgLPR8rxnhjBSvxFy',
     male_custom:   '8mBRP99B2Ng2QwsJMFQl',
-    female_mx:     'kPzsL2i3teMYv0FxEYQ6',
-    male_mx:       'bIHbv24MWmeRgasZH58o',
   };
-  const voiceId = (gender === 'custom' && state.voiceId)
-    ? state.voiceId
-    : (VOICE_MAP[gender] || VOICE_MAP.female_custom);
-
+  const voiceId  = (gender === 'custom' && state.voiceId) ? state.voiceId : (VOICE_MAP[gender] || VOICE_MAP.female_custom);
   const params   = getVoiceParams(act);
   const taggedTx = addAudioTags(text, act);
   const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
