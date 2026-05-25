@@ -468,15 +468,16 @@ audio { width: 100%; margin-top: 6px; border-radius: 8px; }
           <input type="text" id="emocionInput" placeholder="ej: asombro mezclado con orgullo silencioso" />
         </div>
         <div class="form-group">
+          <label>Motor de imágenes</label>
+          <select id="imageModelSelect">
+            <option value="gemini">🔮 Gemini — Estilo anime/donghua</option>
+            <option value="flux2pro">🎨 FLUX.2-pro — Alta calidad (Azure)</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label>Voz narradora</label>
           <select id="voiceGenderSelect">
-            <optgroup label="🆓 GOOGLE NEURAL2 — 1M chars/mes gratis">
-              <option value="google_male_us">🇺🇸 Neural2-B — Masculino latino US</option>
-              <option value="google_female_us">🇺🇸 Neural2-A — Femenino latina US</option>
-              <option value="google_male_es">🌎 Neural2-C — Masculino español</option>
-              <option value="google_female_es">🌎 Neural2-D — Femenino español</option>
-            </optgroup>
-            <optgroup label="🆓 AZURE NEURAL — 500k chars/mes gratis">
+            <optgroup label="🆓 AZURE SPEECH — Gratis">
               <option value="azure_male_mx">🇲🇽 Jorge — Masculino mexicano</option>
               <option value="azure_female_mx">🇲🇽 Dalia — Femenino mexicano</option>
               <option value="azure_male_co">🇨🇴 Gonzalo — Masculino colombiano</option>
@@ -484,16 +485,16 @@ audio { width: 100%; margin-top: 6px; border-radius: 8px; }
               <option value="azure_male_ar">🇦🇷 Tomas — Masculino argentino</option>
               <option value="azure_female_ar">🇦🇷 Elena — Femenino argentino</option>
             </optgroup>
-            <optgroup label="💳 ELEVENLABS (requiere créditos)">
-              <option value="female_custom">🎙️ Femenina (tu voz EL)</option>
-              <option value="male_custom">🎙️ Masculina (tu voz EL)</option>
-              <option value="custom">🔧 Voice ID personalizado (EL)</option>
+            <optgroup label="💳 ELEVENLABS">
+              <option value="el_female">🎙️ Femenina (tu voz)</option>
+              <option value="el_male">🎙️ Masculina (tu voz)</option>
+              <option value="el_custom">🔧 Voice ID personalizado</option>
             </optgroup>
           </select>
         </div>
         <div class="form-group" id="customVoiceGroup" style="display:none">
           <label>Voice ID personalizado (ElevenLabs)</label>
-          <input type="text" id="voiceIdInput" placeholder="pega tu Voice ID de ElevenLabs aquí" />
+          <input type="text" id="voiceIdInput" placeholder="pega tu Voice ID aquí" />
         </div>
         <button class="btn btn-primary" id="btnGenerarEpisodio">
           <span>✨</span> Generar Episodio (30 escenas)
@@ -804,19 +805,80 @@ function closeModal() {
 // ══════════════════════════════════════════════
 function getKeys() {
   return {
-    claude:      localStorage.getItem('key_claude')        || '',
-    gemini:      localStorage.getItem('key_gemini')        || '',
-    eleven:      localStorage.getItem('key_eleven')        || '',
-    azure:       localStorage.getItem('key_azure')         || '',
-    azureRegion: localStorage.getItem('key_azure_region')  || 'eastus',
-    google:      localStorage.getItem('key_google_tts')    || '',
+    claude:        localStorage.getItem('key_claude')         || '',
+    gemini:        localStorage.getItem('key_gemini')         || '',
+    eleven:        localStorage.getItem('key_eleven')         || '',
+    azure:         localStorage.getItem('key_azure')          || '',
+    azureRegion:   localStorage.getItem('key_azure_region')   || 'eastus',
+    azureOpenai:   localStorage.getItem('key_azure_openai')   || '',
+    azureEndpoint: localStorage.getItem('key_azure_endpoint') || 'https://alixonveloz1-6892-resource.services.ai.azure.com',
   };
 }
 function updateApiDot() {
   const k = getKeys();
-  const ok = k.claude && k.gemini && (k.eleven || k.azure || k.google);
+  const ok = k.claude && k.gemini;
   document.getElementById('apiDot').className = 'dot' + (ok ? ' ok' : '');
 }
+
+document.getElementById('btnApis').addEventListener('click', () => {
+  const k = getKeys();
+  openModal(`
+    <div class="modal-title">🔑 API Keys</div>
+
+    <div class="form-group">
+      <label>Claude API Key (guiones)</label>
+      <input type="password" id="mk_claude" value="${k.claude}" placeholder="sk-ant-..." />
+    </div>
+
+    <div class="form-group">
+      <label>Gemini API Key (imágenes)</label>
+      <input type="password" id="mk_gemini" value="${k.gemini}" placeholder="AIza..." />
+    </div>
+
+    <div style="background:rgba(244,162,97,0.07);border:1px solid rgba(244,162,97,0.2);border-radius:10px;padding:12px;margin-bottom:12px">
+      <div style="font-size:11px;color:var(--sunset-amber);font-weight:600;margin-bottom:8px">🎨 AZURE OPENAI — FLUX.2-pro para imágenes</div>
+      <div class="form-group" style="margin-bottom:8px">
+        <label>Azure OpenAI Key</label>
+        <input type="password" id="mk_azure_openai" value="${k.azureOpenai}" placeholder="key de anime-openai..." />
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Azure Endpoint</label>
+        <input type="text" id="mk_azure_endpoint" value="${k.azureEndpoint}" placeholder="https://....services.ai.azure.com" />
+      </div>
+    </div>
+
+    <div style="background:rgba(111,207,151,0.07);border:1px solid rgba(111,207,151,0.2);border-radius:10px;padding:12px;margin-bottom:12px">
+      <div style="font-size:11px;color:#6fcf97;font-weight:600;margin-bottom:8px">🎙️ AZURE SPEECH — Audio gratis</div>
+      <div class="form-group" style="margin-bottom:8px">
+        <label>Azure Speech Key</label>
+        <input type="password" id="mk_azure" value="${k.azure}" placeholder="key de anime-tts..." />
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Región</label>
+        <input type="text" id="mk_azure_region" value="${k.azureRegion}" placeholder="eastus" />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>ElevenLabs API Key (opcional)</label>
+      <input type="password" id="mk_eleven" value="${k.eleven}" placeholder="..." />
+    </div>
+
+    <button class="btn btn-primary" onclick="saveKeys()">💾 Guardar</button>
+  `);
+});
+window.saveKeys = function() {
+  localStorage.setItem('key_claude',         document.getElementById('mk_claude').value.trim());
+  localStorage.setItem('key_gemini',         document.getElementById('mk_gemini').value.trim());
+  localStorage.setItem('key_eleven',         document.getElementById('mk_eleven').value.trim());
+  localStorage.setItem('key_azure',          document.getElementById('mk_azure').value.trim());
+  localStorage.setItem('key_azure_region',   document.getElementById('mk_azure_region').value.trim() || 'eastus');
+  localStorage.setItem('key_azure_openai',   document.getElementById('mk_azure_openai').value.trim());
+  localStorage.setItem('key_azure_endpoint', document.getElementById('mk_azure_endpoint').value.trim());
+  updateApiDot();
+  closeModal();
+  showToast('Keys guardadas', 'success');
+};
 
 document.getElementById('btnApis').addEventListener('click', () => {
   const k = getKeys();
@@ -831,13 +893,26 @@ document.getElementById('btnApis').addEventListener('click', () => {
       <input type="password" id="mk_gemini" value="${k.gemini}" placeholder="AIza..." />
     </div>
 
+    <div style="background:rgba(244,162,97,0.08);border:1px solid rgba(244,162,97,0.2);border-radius:10px;padding:12px;margin-bottom:12px">
+      <div style="font-size:11px;color:var(--sunset-amber);font-weight:600;margin-bottom:6px">🎨 AZURE OPENAI — FLUX.2-pro + gpt-4o-mini-tts (créditos Azure)</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Usa tus $200 de crédito Azure. FLUX.2-pro para imágenes, gpt-4o-mini-tts para audio natural.</div>
+      <div class="form-group" style="margin-bottom:8px">
+        <label>Azure OpenAI API Key</label>
+        <input type="password" id="mk_azure_openai" value="${k.azureOpenai}" placeholder="tu key de anime-openai..." />
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Azure Endpoint</label>
+        <input type="text" id="mk_azure_endpoint" value="${k.azureEndpoint}" placeholder="https://....services.ai.azure.com" />
+      </div>
+    </div>
+
     <div style="background:rgba(66,133,244,0.08);border:1px solid rgba(66,133,244,0.25);border-radius:10px;padding:12px;margin-bottom:12px">
       <div style="font-size:11px;color:#4285f4;font-weight:600;margin-bottom:6px">🆓 GOOGLE NEURAL2 — 1,000,000 chars/mes gratis</div>
-      <div style="font-size:11px;color:var(--text-dim)">✅ Usa automáticamente tu Gemini API Key — no necesitas configurar nada extra.</div>
+      <div style="font-size:11px;color:var(--text-dim)">✅ Usa automáticamente tu Gemini API Key.</div>
     </div>
 
     <div style="background:rgba(111,207,151,0.08);border:1px solid rgba(111,207,151,0.2);border-radius:10px;padding:12px;margin-bottom:12px">
-      <div style="font-size:11px;color:#6fcf97;font-weight:600;margin-bottom:6px">🆓 AZURE NEURAL — 500,000 chars/mes gratis</div>
+      <div style="font-size:11px;color:#6fcf97;font-weight:600;margin-bottom:6px">🆓 AZURE SPEECH — 500,000 chars/mes gratis</div>
       <div class="form-group" style="margin-bottom:8px">
         <label>Azure Speech API Key</label>
         <input type="password" id="mk_azure" value="${k.azure}" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
@@ -856,12 +931,13 @@ document.getElementById('btnApis').addEventListener('click', () => {
   `);
 });
 window.saveKeys = function() {
-  localStorage.setItem('key_claude',        document.getElementById('mk_claude').value.trim());
-  localStorage.setItem('key_gemini',        document.getElementById('mk_gemini').value.trim());
-  localStorage.setItem('key_eleven',        document.getElementById('mk_eleven').value.trim());
-  localStorage.setItem('key_azure',         document.getElementById('mk_azure').value.trim());
-  localStorage.setItem('key_azure_region',  document.getElementById('mk_azure_region').value.trim() || 'eastus');
-  localStorage.setItem('key_google_tts',    document.getElementById('mk_google').value.trim());
+  localStorage.setItem('key_claude',         document.getElementById('mk_claude').value.trim());
+  localStorage.setItem('key_gemini',         document.getElementById('mk_gemini').value.trim());
+  localStorage.setItem('key_eleven',         document.getElementById('mk_eleven').value.trim());
+  localStorage.setItem('key_azure',          document.getElementById('mk_azure').value.trim());
+  localStorage.setItem('key_azure_region',   document.getElementById('mk_azure_region').value.trim() || 'eastus');
+  localStorage.setItem('key_azure_openai',   document.getElementById('mk_azure_openai').value.trim());
+  localStorage.setItem('key_azure_endpoint', document.getElementById('mk_azure_endpoint').value.trim());
   updateApiDot();
   closeModal();
   showToast('Keys guardadas', 'success');
@@ -926,24 +1002,111 @@ async function callClaude(prompt, system) {
 }
 
 // ══════════════════════════════════════════════
-// GEMINI IMAGE
+// FLUX.2-pro IMAGE (Azure OpenAI)
 // ══════════════════════════════════════════════
+async function generateFluxImage(prompt) {
+  const k = getKeys();
+  if (!k.azureOpenai) throw new Error('Azure OpenAI Key no configurada. Ve a APIS.');
+  const endpoint = k.azureEndpoint || 'https://alixonveloz1-6892-resource.services.ai.azure.com';
+  const res = await fetch(`${endpoint}/providers/blackforestlabs/v1/flux-2-pro?api-version=preview`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${k.azureOpenai}`,
+    },
+    body: JSON.stringify({
+      prompt,
+      model: 'FLUX.2-pro',
+      width: 576,
+      height: 1024,
+      n: 1,
+    }),
+    signal: AbortSignal.timeout(120000),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`FLUX.2-pro error ${res.status}: ${err}`);
+  }
+  const data = await res.json();
+  const b64 = data.data?.[0]?.b64_json;
+  if (b64) return b64;
+  // Some responses return URL instead
+  const url = data.data?.[0]?.url;
+  if (url) {
+    const imgRes = await fetch(url);
+    const blob = await imgRes.blob();
+    return await blobToBase64(blob);
+  }
+  throw new Error('FLUX.2-pro: no image in response');
+}
+
+// ══════════════════════════════════════════════
+// gpt-4o-mini-tts AUDIO (Azure OpenAI)
+// ══════════════════════════════════════════════
+async function generateOpenAIAudio(text, act) {
+  const k = getKeys();
+  if (!k.azureOpenai) throw new Error('Azure OpenAI Key no configurada. Ve a APIS.');
+  const endpoint = k.azureEndpoint || 'https://alixonveloz1-6892-resource.services.ai.azure.com';
+
+  const voiceMap = {
+    openai_male:   'onyx',
+    openai_female: 'nova',
+    openai_male2:  'echo',
+    openai_female2:'shimmer',
+  };
+  const gender = document.getElementById('voiceGenderSelect')?.value || 'openai_male';
+  const voice = voiceMap[gender] || 'onyx';
+  const speed = act === 'climax' ? 1.1 : act === 'resolution' ? 0.88 : 0.95;
+
+  const res = await fetch(`${endpoint}/openai/deployments/gpt-4o-mini-tts/audio/speech?api-version=2025-01-01-preview`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api-key': k.azureOpenai,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini-tts',
+      input: text,
+      voice,
+      speed,
+      response_format: 'mp3',
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`gpt-4o-mini-tts error ${res.status}: ${err}`);
+  }
+  const blob = await res.blob();
+  return await blobToBase64(blob);
+}
+
+// ── IMAGE ROUTER ──────────────────────────────
+async function generateImage(prompt, refImageBase64 = null) {
+  const model = document.getElementById('imageModelSelect')?.value || 'gemini';
+  if (model === 'flux2pro') {
+    return await generateFluxImage(prompt);
+  }
+  // Default: Gemini (supports ref image)
+  return await generateGeminiImage(prompt, refImageBase64);
+}
 async function generateGeminiImage(prompt, refImageBase64 = null, retryNeutral = false) {
   const key = getKeys().gemini;
   if (!key) throw new Error('Gemini API Key no configurada');
 
-  // Current working model names (May 2026) — tried in order until one succeeds
+  // MODELOS ORDENADOS POR COSTO (más barato primero)
+  // imagen-3-flash = gratis en free tier / $0.02 en paid
+  // gemini-2.0-flash-exp = experimental, más barato
+  // gemini-2.5-flash-image = $0.039/imagen — EVITAR en batch
   const models = [
-    'gemini-2.5-flash-image',
-    'gemini-2.0-flash-exp-image-generation',
-    'gemini-3.1-flash-image-preview',
+    'imagen-3.0-generate-002',           // Imagen 3 Fast — $0.02/img, mejor calidad/precio
+    'gemini-2.0-flash-exp-image-generation', // Experimental — más barato
+    'gemini-2.5-flash-image',            // Fallback — $0.039/img (cobrado)
   ];
 
   const finalPrompt = retryNeutral
     ? prompt.replace(/kiss|sensual|nude|naked|half-naked/gi, 'close moment, touching foreheads')
     : prompt;
 
-  // Build contents — single user turn with optional reference image
   const parts = [];
   if (refImageBase64) {
     parts.push({ inlineData: { mimeType: 'image/png', data: refImageBase64 } });
@@ -956,45 +1119,66 @@ async function generateGeminiImage(prompt, refImageBase64 = null, retryNeutral =
   let lastError = null;
   for (const model of models) {
     try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents,
-            generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
-          }),
-          signal: AbortSignal.timeout(120000),
-        }
-      );
+      // Imagen 3 usa endpoint diferente
+      let url, body;
+      if (model.startsWith('imagen-')) {
+        url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateImages?key=${key}`;
+        body = JSON.stringify({
+          prompt: { text: finalPrompt },
+          number_of_images: 1,
+          aspect_ratio: '9:16',
+        });
+      } else {
+        url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+        body = JSON.stringify({
+          contents,
+          generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
+        });
+      }
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        signal: AbortSignal.timeout(120000),
+      });
+
       if (!res.ok) {
         const errText = await res.text();
-        // Safety block → retry with neutral phrasing
         if ((errText.includes('SAFETY') || errText.includes('safety')) && !retryNeutral) {
           return generateGeminiImage(prompt, refImageBase64, true);
         }
-        // 404 / model not found → try next model
         if (res.status === 404 || errText.includes('not found') || errText.includes('NOT_FOUND')) {
-          lastError = new Error(`Gemini ${model} 404: model not found`);
+          lastError = new Error(`${model} 404`);
           console.warn(lastError.message);
           continue;
         }
         throw new Error(`Gemini ${model} error ${res.status}: ${errText}`);
       }
+
       const data = await res.json();
+
+      // Imagen 3 response format
+      if (model.startsWith('imagen-')) {
+        const imgBytes = data.generatedImages?.[0]?.image?.imageBytes;
+        if (imgBytes) return imgBytes;
+        lastError = new Error(`${model}: no image bytes`);
+        continue;
+      }
+
+      // Gemini response format
       const parts2 = data.candidates?.[0]?.content?.parts || [];
       for (const part of parts2) {
         if (part.inlineData?.mimeType?.startsWith('image/')) {
-          return part.inlineData.data; // base64 PNG/JPEG
+          return part.inlineData.data;
         }
       }
-      // Response OK but no image → try next
-      lastError = new Error(`Gemini ${model}: response OK but no image part`);
-      console.warn(lastError.message, JSON.stringify(data).substring(0, 200));
+      lastError = new Error(`${model}: no image in response`);
+      console.warn(lastError.message);
+
     } catch(e) {
       lastError = e;
-      if (e.name === 'AbortError') throw new Error(`Gemini timeout (120s) on ${model}`);
+      if (e.name === 'AbortError') throw new Error(`Timeout 120s on ${model}`);
       console.warn(`${model} failed:`, e.message);
     }
   }
@@ -1095,13 +1279,7 @@ function addAudioTags(text, act) {
 async function generateAudio(text, act) {
   const gender = document.getElementById('voiceGenderSelect')?.value || 'azure_male_mx';
 
-  // ── GOOGLE NEURAL2 ────────────────────────────
-  if (gender.startsWith('google_')) {
-    const v = GOOGLE_VOICE_MAP[gender] || GOOGLE_VOICE_MAP.google_male_us;
-    return await generateGoogleAudio(text, act, v.name, v.lang);
-  }
-
-  // ── AZURE NEURAL ──────────────────────────────
+  // ── AZURE SPEECH ──────────────────────────────
   if (gender.startsWith('azure_')) {
     const voiceName = AZURE_VOICE_MAP[gender] || 'es-MX-JorgeNeural';
     return await generateAzureAudio(text, act, voiceName);
@@ -1109,12 +1287,14 @@ async function generateAudio(text, act) {
 
   // ── ELEVENLABS ────────────────────────────────
   const key = getKeys().eleven;
-  if (!key) throw new Error('ElevenLabs API Key no configurada.');
+  if (!key) throw new Error('ElevenLabs API Key no configurada. Ve a APIS.');
   const VOICE_MAP = {
-    female_custom: 'GoUxgLPR8rxnhjBSvxFy',
-    male_custom:   '8mBRP99B2Ng2QwsJMFQl',
+    el_female: 'GoUxgLPR8rxnhjBSvxFy',
+    el_male:   '8mBRP99B2Ng2QwsJMFQl',
   };
-  const voiceId  = (gender === 'custom' && state.voiceId) ? state.voiceId : (VOICE_MAP[gender] || VOICE_MAP.female_custom);
+  const voiceId  = (gender === 'el_custom' && state.voiceId)
+    ? state.voiceId
+    : (VOICE_MAP[gender] || VOICE_MAP.el_female);
   const params   = getVoiceParams(act);
   const taggedTx = addAudioTags(text, act);
   const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
@@ -1455,7 +1635,7 @@ window.generateCharImage = async function(charId) {
   const prompt = `Anime/donghua 2D character portrait, vertical 9:16, full body character reference sheet: ${char.name}, ${char.appearance}. Clean anime art style, vibrant colors, white background, professional character design. High quality illustration.`;
   
   try {
-    const imgData = await generateGeminiImage(prompt);
+    const imgData = await generateImage(prompt);
     await dbSet(imgKey(charId), imgData);
     wrap.innerHTML = `<img src="data:image/png;base64,${imgData}" alt="${char.name}">`;
     showToast('Imagen generada', 'success');
@@ -1532,7 +1712,7 @@ window.generateSceneImage = async function(sceneId) {
   }
   
   try {
-    const imgData = await generateGeminiImage(scene.imagePromptEN, refImage);
+    const imgData = await generateImage(scene.imagePromptEN, refImage);
     await dbSet(sceneImgKey(sceneId), imgData);
     wrap.innerHTML = `<img src="data:image/png;base64,${imgData}" alt="scene ${scene.num}">`;
     renderStats();
@@ -1602,6 +1782,17 @@ window.deleteSceneAudio = async function(sceneId) {
 // ══════════════════════════════════════════════
 document.getElementById('btnAllImages').addEventListener('click', async () => {
   if (!state.scenes.length) return;
+
+  // Count missing images
+  let missing = 0;
+  for (const s of state.scenes) { if (!(await dbGet(sceneImgKey(s.id)))) missing++; }
+  if (missing === 0) { showToast('Todas las imágenes ya están generadas', 'success'); return; }
+
+  // Cost warning
+  const model = document.getElementById('imageModelSelect')?.value || 'flux2pro';
+  const modelName = model === 'flux2pro' ? 'FLUX.2-pro (Azure)' : model === 'gptimage1' ? 'gpt-image-1 (Azure)' : 'Gemini ($0.039/img)';
+  const confirmed = confirm(`⚠️ Vas a generar ${missing} imágenes con ${modelName}.\n\n¿Continuar?`);
+  if (!confirmed) return;
   const btn = document.getElementById('btnAllImages');
   btn.disabled = true;
   const batchProg = document.getElementById('batchProgress');
@@ -1617,7 +1808,7 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
       if (!existing) {
         let refImage = null;
         if (scene.chars && scene.chars.length > 0) refImage = await dbGet(imgKey(scene.chars[0]));
-        const imgData = await generateGeminiImage(scene.imagePromptEN, refImage);
+        const imgData = await generateImage(scene.imagePromptEN, refImage);
         await dbSet(sceneImgKey(scene.id), imgData);
         const wrap = document.getElementById('sceneimg-' + scene.id);
         if (wrap) wrap.innerHTML = `<img src="data:image/png;base64,${imgData}" alt="scene ${scene.num}">`;
