@@ -741,17 +741,20 @@ async function geminiImg(prompt, refImages=[]){
 // ─── ELEVENLABS ───
 async function genVoice(text,voiceId,emotion='narrator'){
   if(!S.apis.eleven) throw new Error('Configura ElevenLabs en APIs');
-  // eleven_multilingual_v2: mejor expresividad y pausas naturales para narración
-  // stability bajo = más variación emocional (evita voz monótona/cortada)
-  // similarity_boost alto = voz consistente y clara
-  // style alto = máxima dramatización para anime
+  // eleven_v3: modelo más expresivo de ElevenLabs, soporta audio tags inline
+  // Tags: [slowly], [whispers], [sad], [excited], [softly], [intensely]
   const vs={
     intense: {stability:0.12,similarity_boost:0.88,style:0.95,use_speaker_boost:true},
     normal:  {stability:0.22,similarity_boost:0.85,style:0.78,use_speaker_boost:true},
     calm:    {stability:0.32,similarity_boost:0.82,style:0.58,use_speaker_boost:true},
     narrator:{stability:0.18,similarity_boost:0.85,style:0.82,use_speaker_boost:true}
   }[emotion]||{stability:0.18,similarity_boost:0.85,style:0.82,use_speaker_boost:true};
-  const r=await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,{method:'POST',headers:{'Content-Type':'application/json','xi-api-key':S.apis.eleven,'Accept':'audio/mpeg'},body:JSON.stringify({text,model_id:'eleven_multilingual_v2',voice_settings:vs})});
+
+  // Add v3 emotion tags based on scene emotion
+  const tagMap={intense:'[intensely] ',normal:'',calm:'[softly] ',narrator:''};
+  const taggedText=(tagMap[emotion]||'')+text;
+
+  const r=await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,{method:'POST',headers:{'Content-Type':'application/json','xi-api-key':S.apis.eleven,'Accept':'audio/mpeg'},body:JSON.stringify({text:taggedText,model_id:'eleven_v3',voice_settings:vs})});
   if(!r.ok){const e=await r.text();if(r.status===401)throw new Error('ElevenLabs: API Key inválida');if(r.status===429)throw new Error('ElevenLabs: demasiadas solicitudes, espera 15s');throw new Error('ElevenLabs '+r.status+': '+e.slice(0,100));}
   const blob=await r.blob();
   return new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=rej;fr.readAsDataURL(blob);});
