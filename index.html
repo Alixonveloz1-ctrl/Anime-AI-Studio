@@ -2,1348 +2,1770 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Anime AI Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@200;300;400&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;600;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400;1,600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-:root{
-  --twilight-deep:#1a2842;
-  --twilight-mid:#2d4870;
-  --twilight-soft:#4a6b9b;
-  --sunset-amber:#f4a261;
-  --sunset-rose:#e76f51;
-  --sunset-coral:#ffb088;
-  --paper-cream:#f5ebe0;
-  --paper-warm:#fdf6ec;
-  --green-grass:#6b8e5a;
-  --comet-gold:#e6c068;
-  --shrine-red:#b84a3d;
-  --night-blue:#0e1729;
-  --mist:#95a3c0;
-  --surface:rgba(253,246,236,0.04);
-  --surface-warm:rgba(244,162,97,0.08);
-  --bdr:rgba(245,235,224,0.12);
-  --bdr-warm:rgba(244,162,97,0.25);
-  --bdr-strong:rgba(245,235,224,0.25);
-  --cream:#f5ebe0;
-  --dim:#95a3c0;
-  --red:#b84a3d;
-  --green:#6b8e5a;
-  --amber:#f4a261;
-  --amber2:#e76f51;
-  --r:12px;
+:root {
+  --twilight-deep: #1a2842;
+  --night-blue: #0e1729;
+  --sunset-amber: #f4a261;
+  --paper-cream: #f5ebe0;
+  --star-gold: #ffd700;
+  --rose-dawn: #e8768a;
+  --mist-blue: #a8c5e8;
+  --deep-navy: #0a1020;
+  --card-bg: rgba(255,255,255,0.04);
+  --card-border: rgba(255,255,255,0.08);
+  --text-main: #e8e0d5;
+  --text-dim: rgba(232,224,213,0.55);
+  --accent: #f4a261;
+  --accent2: #e8768a;
+  --success: #6fcf97;
+  --error: #eb5757;
+  --radius: 16px;
+  --radius-sm: 10px;
 }
-body{font-family:'Inter',sans-serif;background:var(--night-blue);color:var(--paper-cream);min-height:100vh;overflow-x:hidden;padding-bottom:72px}
-*::-webkit-scrollbar{width:3px}
-*::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:2px}
 
-/* ATMOSPHERE */
-.atm{position:fixed;inset:0;z-index:0;background:linear-gradient(180deg,#0e1729 0%,#1a2842 35%,#2d4870 70%,#4a6b9b 100%)}
-.stars{position:fixed;inset:0;z-index:0;
-  background-image:radial-gradient(1px 1px at 15% 20%,rgba(245,235,224,0.5),transparent),
-    radial-gradient(1px 1px at 25% 60%,rgba(245,235,224,0.3),transparent),
-    radial-gradient(1.5px 1.5px at 50% 30%,rgba(230,192,104,0.6),transparent),
-    radial-gradient(1px 1px at 70% 70%,rgba(245,235,224,0.4),transparent),
-    radial-gradient(1px 1px at 85% 15%,rgba(245,235,224,0.5),transparent),
-    radial-gradient(1px 1px at 90% 50%,rgba(230,192,104,0.4),transparent);
-  animation:twinkle 8s ease-in-out infinite;pointer-events:none}
-@keyframes twinkle{0%,100%{opacity:0.6}50%{opacity:1}}
-.sunset-glow{position:fixed;bottom:0;left:0;right:0;height:60vh;z-index:0;
-  background:radial-gradient(ellipse 100% 100% at 50% 100%,rgba(244,162,97,0.18) 0%,rgba(231,111,81,0.10) 30%,transparent 60%);
-  pointer-events:none}
-.comet{position:fixed;top:10%;left:-100px;z-index:0;width:200px;height:2px;
-  background:linear-gradient(90deg,transparent,rgba(230,192,104,0.6),rgba(245,235,224,0.9),transparent);
-  animation:comet 18s linear infinite;pointer-events:none;transform:rotate(15deg)}
-@keyframes comet{0%{left:-200px;opacity:0}10%{opacity:1}60%{opacity:1}100%{left:110%;opacity:0}}
-.app{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
-/* PROGRESS */
-#pb{position:fixed;top:0;left:0;right:0;z-index:9999;background:rgba(14,23,41,0.98);padding:10px 18px 12px;display:none;flex-direction:column;gap:6px;border-bottom:1px solid var(--bdr-warm)}
-#pb.on{display:flex}
-#pb-label{display:flex;justify-content:space-between;font-size:11px;color:var(--paper-cream);letter-spacing:0.06em}
-#pb-track{height:2px;background:var(--bdr);border-radius:2px;overflow:hidden}
-#pb-fill{height:100%;background:linear-gradient(90deg,var(--sunset-amber),var(--sunset-rose));border-radius:2px;transition:width 0.3s ease;width:0%}
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--night-blue);
+  color: var(--text-main);
+  font-family: 'Inter', 'Noto Serif JP', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
 
-/* TOAST */
-#toast{position:fixed;bottom:84px;right:20px;z-index:9998;padding:13px 20px;border-radius:10px;background:var(--twilight-deep);border:1px solid var(--bdr-warm);color:var(--paper-cream);font-size:12px;box-shadow:0 12px 36px rgba(0,0,0,0.5);opacity:0;transition:opacity 0.25s,transform 0.25s;transform:translateY(8px);pointer-events:none;max-width:340px}
-#toast.show{opacity:1;transform:translateY(0)}
-#toast.err{border-color:rgba(184,74,61,0.5);color:#d97757}
+/* ── STARFIELD ── */
+#starfield {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+}
+.star {
+  position: absolute; border-radius: 50%;
+  background: white; animation: twinkle var(--d, 3s) ease-in-out infinite;
+  opacity: var(--o, 0.6);
+}
+@keyframes twinkle {
+  0%,100% { opacity: var(--o); transform: scale(1); }
+  50% { opacity: calc(var(--o) * 0.3); transform: scale(0.7); }
+}
+.comet {
+  position: absolute; width: 120px; height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.9), transparent);
+  border-radius: 2px; animation: comet 2s ease-out forwards;
+  opacity: 0;
+}
+@keyframes comet {
+  0% { opacity: 0; transform: translateX(-200px) translateY(0); }
+  10% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(800px) translateY(300px); }
+}
 
-/* HEADER */
-header{padding:18px 20px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(20px);background:rgba(14,23,41,0.75);position:sticky;top:0;z-index:100}
-.brand{display:flex;flex-direction:column;gap:1px}
-.brand-jp{font-family:'Noto Serif JP',serif;font-weight:300;font-size:9px;color:var(--sunset-amber);letter-spacing:0.4em;opacity:0.85}
-.brand-title{font-family:'Cormorant Garamond',serif;font-weight:500;font-size:22px;letter-spacing:0.04em;color:var(--paper-cream);font-style:italic}
-.header-right{display:flex;align-items:center;gap:10px}
-.api-pill{display:flex;align-items:center;gap:7px;padding:6px 13px;border-radius:20px;background:var(--surface);border:1px solid var(--bdr);font-size:10px;letter-spacing:0.12em;color:var(--dim);text-transform:uppercase;cursor:pointer;transition:all 0.2s}
-.api-pill:hover{border-color:var(--bdr-warm);color:var(--sunset-amber)}
-.api-pill .dot{width:6px;height:6px;border-radius:50%;background:var(--shrine-red)}
-.api-pill .dot.ok{background:var(--green-grass);box-shadow:0 0 7px var(--green-grass)}
+/* ── LAYOUT ── */
+#app {
+  position: fixed; inset: 0; display: flex; flex-direction: column;
+  z-index: 1;
+}
 
-/* NAV */
-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(14,23,41,0.97);border-top:1px solid var(--bdr);display:grid;grid-template-columns:repeat(4,1fr);z-index:100;backdrop-filter:blur(20px)}
-.nb{padding:10px 4px 9px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:9px;letter-spacing:0.09em;text-transform:uppercase;color:var(--dim);border:none;background:none;cursor:pointer;transition:color 0.2s;border-top:2px solid transparent;font-family:'Inter',sans-serif}
-.nb .ic{font-size:20px;line-height:1}
-.nb.on{color:var(--sunset-amber);border-top-color:var(--sunset-amber)}
+/* ── HEADER ── */
+header {
+  flex-shrink: 0;
+  background: linear-gradient(135deg, rgba(10,16,32,0.97) 0%, rgba(26,40,66,0.97) 100%);
+  border-bottom: 1px solid rgba(244,162,97,0.2);
+  padding: 12px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  backdrop-filter: blur(20px);
+  z-index: 100;
+}
+.header-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic; font-weight: 600; font-size: 22px;
+  color: var(--sunset-amber);
+  text-shadow: 0 0 30px rgba(244,162,97,0.5);
+  letter-spacing: 0.02em;
+}
+.header-kanji {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 11px; font-weight: 300; color: rgba(244,162,97,0.6);
+  display: block; letter-spacing: 0.2em; margin-top: -2px;
+}
+.header-actions { display: flex; gap: 8px; }
+.hbtn {
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 8px; padding: 7px 11px; cursor: pointer;
+  font-size: 12px; font-weight: 500; color: var(--text-dim);
+  transition: all 0.2s; display: flex; align-items: center; gap: 5px;
+  white-space: nowrap;
+}
+.hbtn:hover { border-color: rgba(244,162,97,0.4); color: var(--text-main); }
+.hbtn .dot { width: 7px; height: 7px; border-radius: 50%; background: #eb5757; }
+.hbtn .dot.ok { background: #6fcf97; }
 
-/* PANELS */
-.panel{display:none;padding:20px 18px;animation:fi 0.22s ease}
-.panel.on{display:block}
-@keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+/* ── SCROLL AREA ── */
+#main-scroll {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  padding: 16px 16px 88px;
+  -webkit-overflow-scrolling: touch;
+}
+#main-scroll::-webkit-scrollbar { width: 3px; }
+#main-scroll::-webkit-scrollbar-track { background: transparent; }
+#main-scroll::-webkit-scrollbar-thumb { background: rgba(244,162,97,0.3); border-radius: 3px; }
 
-/* TYPOGRAPHY */
-.sec-title{font-family:'Cormorant Garamond',serif;font-size:22px;font-style:italic;margin-bottom:3px;color:var(--paper-cream)}
-.sec-sub{font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--dim);margin-bottom:22px}
+/* ── BOTTOM NAV ── */
+nav {
+  flex-shrink: 0;
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(0deg, rgba(10,16,32,0.99) 0%, rgba(14,23,41,0.97) 100%);
+  border-top: 1px solid rgba(244,162,97,0.15);
+  display: flex; z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.nav-tab {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  padding: 10px 4px 8px; cursor: pointer; transition: all 0.2s;
+  border: none; background: transparent; color: var(--text-dim);
+  font-family: 'Inter', sans-serif; font-size: 10px; gap: 3px;
+}
+.nav-tab .icon { font-size: 20px; transition: transform 0.2s; }
+.nav-tab.active { color: var(--sunset-amber); }
+.nav-tab.active .icon { transform: scale(1.15); }
 
-/* CARDS */
-.card{background:var(--surface);border:1px solid var(--bdr);border-radius:var(--r);padding:16px;margin-bottom:12px}
-.card-warm{background:linear-gradient(90deg,rgba(244,162,97,0.08),transparent);border:1px solid var(--bdr-warm)}
-.card-title{font-size:13px;font-weight:500;margin-bottom:6px;color:var(--paper-cream)}
-.card-meta{font-size:11px;color:var(--dim)}
+/* ── PANELS ── */
+.panel { display: none; animation: fadeIn 0.3s ease; }
+.panel.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
-/* FIELDS */
-.field{margin-bottom:16px}
-label{display:block;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--sunset-amber);margin-bottom:7px;font-weight:500}
-input,textarea,select{width:100%;background:var(--surface);border:1px solid var(--bdr);color:var(--paper-cream);padding:11px 14px;border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;-webkit-appearance:none;outline:none;transition:all 0.2s}
-input:focus,textarea:focus,select:focus{border-color:var(--sunset-amber);background:var(--surface-warm)}
-textarea{resize:vertical;min-height:84px;line-height:1.7}
-select option{background:var(--night-blue);color:var(--paper-cream)}
+/* ── SECTION HEADERS ── */
+.section-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 26px; font-weight: 400; font-style: italic;
+  color: var(--paper-cream);
+  margin-bottom: 4px;
+}
+.section-sub {
+  font-size: 12px; color: var(--text-dim); margin-bottom: 20px;
+}
 
-/* BUTTONS */
-.btn{display:flex;align-items:center;justify-content:center;gap:7px;padding:12px 18px;border-radius:8px;font-size:12px;font-weight:500;letter-spacing:0.05em;cursor:pointer;border:none;transition:all 0.2s;width:100%;font-family:'Inter',sans-serif}
-.btn-p{background:linear-gradient(135deg,var(--sunset-amber),var(--sunset-rose));color:var(--night-blue);font-weight:700}
-.btn-p:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(244,162,97,0.3)}
-.btn-p:active{transform:none}
-.btn-p:disabled{opacity:0.35;cursor:not-allowed;transform:none;box-shadow:none}
-.btn-s{background:var(--surface);border:1px solid var(--bdr-strong);color:var(--paper-cream)}
-.btn-s:hover{border-color:var(--sunset-amber);color:var(--sunset-amber)}
-.btn-s:disabled{opacity:0.35;cursor:not-allowed}
-.btn-g{background:transparent;border:1px solid var(--bdr);color:var(--dim);padding:8px 14px;font-size:11px}
-.btn-g:hover{color:var(--sunset-amber)}
-.btn-row{display:flex;gap:10px}
-.btn-row .btn{flex:1}
+/* ── CARDS ── */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius); padding: 16px; margin-bottom: 12px;
+  backdrop-filter: blur(10px);
+}
+.card-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 15px; font-weight: 600; color: var(--sunset-amber);
+  margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
+}
 
-/* STYLE GRID */
-.style-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}
-.st{background:var(--surface);border:1px solid var(--bdr);border-radius:10px;padding:11px 13px;cursor:pointer;transition:all 0.18s;text-align:left}
-.st:hover{border-color:var(--bdr-warm)}
-.st.on{border-color:var(--sunset-amber);background:var(--surface-warm)}
-.st .sn{font-size:13px;font-weight:500;color:var(--paper-cream)}
-.st .ss{font-size:10px;color:var(--dim);margin-top:2px}
+/* ── FORM ELEMENTS ── */
+label { display: block; font-size: 11px; font-weight: 500; color: var(--text-dim); margin-bottom: 5px; letter-spacing: 0.05em; text-transform: uppercase; }
+input, textarea, select {
+  width: 100%; background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-sm);
+  color: var(--text-main); font-family: inherit; font-size: 14px;
+  padding: 10px 12px; outline: none; transition: border-color 0.2s;
+  -webkit-appearance: none; appearance: none;
+}
+input:focus, textarea:focus, select:focus { border-color: rgba(244,162,97,0.5); }
+textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23f4a261' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+.form-group { margin-bottom: 14px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
-/* SCENE CARD */
-.sc-card{background:var(--surface);border:1px solid var(--bdr-warm);border-radius:var(--r);overflow:hidden;margin-bottom:12px;transition:transform 0.2s}
-.sc-card:hover{transform:translateY(-1px)}
-.sc-img{width:100%;aspect-ratio:9/16;object-fit:cover;display:block}
-.sc-ph{width:100%;aspect-ratio:9/16;background:linear-gradient(135deg,var(--twilight-deep),var(--twilight-mid));display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:30px;opacity:0.3}
-.sc-body{padding:13px}
-.sc-num{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:14px;color:var(--sunset-amber);margin-bottom:3px}
-.sc-title{font-size:13px;font-weight:500;margin-bottom:6px;color:var(--paper-cream)}
-.sc-nar{font-size:11px;color:var(--dim);line-height:1.7;font-style:italic;margin-bottom:10px;border-left:2px solid var(--bdr-warm);padding-left:9px}
-.sc-actions{display:flex;gap:7px}
-.sc-actions .btn{padding:7px 10px;font-size:10px;width:auto;flex:1}
-@keyframes pulse{0%,100%{opacity:0.3}50%{opacity:0.9}}
-.loading{animation:pulse 1.4s infinite}
+/* ── BUTTONS ── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: none; border-radius: var(--radius-sm); cursor: pointer;
+  font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;
+  padding: 11px 16px; transition: all 0.2s; width: 100%; letter-spacing: 0.02em;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--sunset-amber), #e8884a);
+  color: var(--night-blue); box-shadow: 0 4px 20px rgba(244,162,97,0.3);
+}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 25px rgba(244,162,97,0.4); }
+.btn-primary:active { transform: translateY(0); }
+.btn-secondary {
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  color: var(--text-main);
+}
+.btn-secondary:hover { background: rgba(255,255,255,0.09); border-color: rgba(244,162,97,0.3); }
+.btn-danger { background: rgba(235,87,87,0.15); border: 1px solid rgba(235,87,87,0.3); color: #eb8080; }
+.btn-danger:hover { background: rgba(235,87,87,0.25); }
+.btn-sm { padding: 7px 12px; font-size: 12px; width: auto; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; }
+.btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
-/* CHAR CARD */
-.ch-card{display:flex;gap:13px;background:var(--surface);border:1px solid var(--bdr-warm);border-radius:var(--r);padding:13px;margin-bottom:10px}
-.ch-img{width:62px;height:62px;border-radius:10px;object-fit:cover;flex-shrink:0;background:linear-gradient(135deg,var(--twilight-mid),var(--twilight-deep))}
-.ch-ph{width:62px;height:62px;border-radius:10px;flex-shrink:0;background:var(--surface-warm);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-style:italic;font-size:28px;color:var(--sunset-amber)}
-.ch-info{flex:1;min-width:0}
-.ch-role{font-size:9px;color:var(--sunset-amber);text-transform:uppercase;letter-spacing:0.15em;margin-bottom:2px}
-.ch-name{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:17px;margin-bottom:3px;color:var(--paper-cream)}
-.ch-desc{font-size:11px;color:var(--dim);line-height:1.55}
-.ch-actions{display:flex;gap:6px;margin-top:9px}
-.ch-actions .btn{padding:6px 10px;font-size:10px;width:auto}
+/* ── UNIVERSE RESULT ── */
+.universe-card {
+  background: linear-gradient(135deg, rgba(244,162,97,0.08), rgba(232,118,138,0.06));
+  border: 1px solid rgba(244,162,97,0.2); border-radius: var(--radius); padding: 18px;
+  margin-top: 16px;
+}
+.universe-title {
+  font-family: 'Cormorant Garamond', serif; font-size: 28px; font-weight: 600;
+  font-style: italic; color: var(--sunset-amber); margin-bottom: 4px;
+}
+.universe-tagline { font-size: 13px; color: var(--mist-blue); font-style: italic; margin-bottom: 14px; }
+.universe-field { margin-bottom: 10px; }
+.universe-field-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); margin-bottom: 2px; }
+.universe-field-value { font-size: 13px; color: var(--text-main); line-height: 1.55; }
+.hook-badge {
+  background: rgba(244,162,97,0.12); border: 1px solid rgba(244,162,97,0.25);
+  border-radius: 8px; padding: 10px 12px; margin-top: 12px;
+  font-size: 13px; color: var(--sunset-amber); font-style: italic;
+  display: flex; gap: 8px; align-items: flex-start;
+}
 
-/* MODAL */
-.mo{position:fixed;inset:0;background:rgba(14,23,41,0.88);z-index:200;display:none;align-items:flex-end;backdrop-filter:blur(6px)}
-.mo.on{display:flex}
-.mo-box{background:linear-gradient(180deg,var(--twilight-deep),var(--night-blue));border:1px solid var(--bdr-warm);border-radius:18px 18px 0 0;width:100%;max-height:88vh;overflow-y:auto;padding:22px 18px 28px;position:relative}
-.mo-box::before{content:'';position:absolute;top:10px;left:50%;transform:translateX(-50%);width:40px;height:3px;background:rgba(245,235,224,0.2);border-radius:3px}
-.mo-title{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:22px;color:var(--paper-cream);margin-bottom:18px;margin-top:8px}
-.mo-x{position:absolute;right:16px;top:14px;background:none;border:none;color:var(--dim);font-size:22px;cursor:pointer;padding:4px 8px;line-height:1}
+/* ── CHARACTER CARDS ── */
+.char-card {
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: var(--radius); overflow: hidden; margin-bottom: 14px;
+}
+.char-header {
+  display: flex; gap: 12px; padding: 14px; align-items: flex-start;
+}
+.char-img-wrap {
+  width: 72px; height: 96px; flex-shrink: 0; border-radius: 10px;
+  overflow: hidden; background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08); position: relative;
+}
+.char-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+.char-img-placeholder {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  font-size: 28px; color: var(--text-dim);
+}
+.char-info { flex: 1; min-width: 0; }
+.char-name {
+  font-family: 'Noto Serif JP', serif; font-size: 16px; font-weight: 600;
+  color: var(--paper-cream); margin-bottom: 2px;
+}
+.char-role { font-size: 11px; color: var(--sunset-amber); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+.char-detail { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+.char-actions { padding: 0 14px 14px; display: flex; gap: 8px; }
+.char-generating {
+  position: absolute; inset: 0; background: rgba(14,23,41,0.8);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; animation: spin 1.2s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* EMPTY */
-.empty{text-align:center;padding:52px 16px;color:var(--dim)}
-.empty .ei{font-size:44px;margin-bottom:14px;display:block;opacity:0.3}
-.empty .et{font-size:13px;line-height:1.7;margin-bottom:20px}
+/* ── SCENE CARDS ── */
+.scene-card {
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: var(--radius); overflow: hidden; margin-bottom: 12px;
+}
+.scene-header {
+  display: flex; gap: 10px; padding: 12px; align-items: flex-start;
+}
+.scene-img-wrap {
+  width: 56px; height: 75px; flex-shrink: 0; border-radius: 8px;
+  overflow: hidden; background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07); position: relative;
+}
+.scene-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+.scene-img-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--text-dim); }
+.scene-meta { flex: 1; min-width: 0; }
+.scene-num {
+  font-size: 10px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;
+  display: flex; align-items: center; gap: 6px; margin-bottom: 2px;
+}
+.act-badge {
+  background: rgba(244,162,97,0.15); border-radius: 4px; padding: 1px 5px;
+  font-size: 9px; color: var(--sunset-amber);
+}
+.scene-title { font-family: 'Noto Serif JP', serif; font-size: 13px; font-weight: 600; color: var(--paper-cream); margin-bottom: 4px; }
+.scene-narration { font-size: 12px; color: var(--text-dim); line-height: 1.55; font-style: italic; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.scene-actions { padding: 0 12px 12px; display: flex; gap: 6px; flex-wrap: wrap; }
 
-/* INFO */
-.info{background:var(--surface-warm);border:1px solid var(--bdr-warm);border-radius:10px;padding:13px;font-size:12px;color:var(--dim);line-height:1.7;margin-bottom:14px}
-.info strong{color:var(--sunset-amber)}
+/* ── PROGRESS BAR ── */
+.progress-wrap { background: rgba(255,255,255,0.06); border-radius: 100px; height: 6px; overflow: hidden; margin: 10px 0; }
+.progress-bar { height: 100%; border-radius: 100px; background: linear-gradient(90deg, var(--sunset-amber), var(--rose-dawn)); transition: width 0.4s ease; }
+.progress-label { font-size: 11px; color: var(--text-dim); text-align: center; margin-top: 4px; }
 
-/* STATS */
-.stat-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(245,235,224,0.05);font-size:11px}
-.stat-row:last-child{border-bottom:none}
-.stat-label{color:var(--dim)}
-.stat-val{color:var(--sunset-amber);font-weight:600;font-family:'Cormorant Garamond',serif;font-size:14px}
+/* ── STATS GRID ── */
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.stat-box {
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm); padding: 14px 10px; text-align: center;
+}
+.stat-num { font-family: 'Cormorant Garamond', serif; font-size: 28px; font-weight: 600; color: var(--sunset-amber); line-height: 1; }
+.stat-lbl { font-size: 10px; color: var(--text-dim); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.05em; }
 
-/* WORLD OUTPUT */
-.output-section{margin-top:18px;border:1px solid var(--bdr-warm);border-radius:var(--r);overflow:hidden;background:rgba(14,23,41,0.5)}
-.output-header{padding:13px 18px;background:linear-gradient(90deg,rgba(244,162,97,0.12),transparent);border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between}
-.output-title{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:17px;color:var(--paper-cream)}
-.output-body{padding:18px}
-.output-text{white-space:pre-wrap;font-size:12px;line-height:1.9;color:var(--paper-cream);font-weight:300;max-height:400px;overflow-y:auto}
+/* ── MODAL ── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(10,16,32,0.88);
+  backdrop-filter: blur(12px); z-index: 1000;
+  display: flex; align-items: flex-end; justify-content: center;
+  animation: overlayIn 0.2s ease;
+}
+@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  background: linear-gradient(160deg, #1a2842 0%, #0e1729 100%);
+  border: 1px solid rgba(244,162,97,0.2);
+  border-radius: 24px 24px 0 0; padding: 24px 20px 40px;
+  width: 100%; max-width: 500px;
+  max-height: 85vh; overflow-y: auto;
+  animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal-handle { width: 36px; height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; margin: 0 auto 20px; }
+.modal-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-style: italic; color: var(--paper-cream); margin-bottom: 18px; }
 
-/* EPISODE CARD */
-.ep-card{border:1px solid var(--bdr-warm);border-radius:var(--r);overflow:hidden;background:var(--surface);margin-bottom:14px}
-.ep-card-header{padding:14px 16px;background:linear-gradient(90deg,rgba(244,162,97,0.1),transparent);border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
-.ep-num{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:22px;color:var(--sunset-amber)}
-.ep-title-text{font-size:13px;color:var(--paper-cream)}
-.ep-meta{font-size:10px;color:var(--dim);letter-spacing:0.1em;margin-top:2px}
-.ep-card-body{padding:14px 16px}
+/* ── PROJECT LIST ── */
+.project-item {
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-sm); padding: 12px; margin-bottom: 8px; cursor: pointer;
+  transition: all 0.2s;
+}
+.project-item:hover { border-color: rgba(244,162,97,0.3); background: rgba(244,162,97,0.05); }
+.project-item.active { border-color: rgba(244,162,97,0.5); background: rgba(244,162,97,0.08); }
+.project-icon { font-size: 24px; }
+.project-info { flex: 1; min-width: 0; }
+.project-name { font-size: 14px; font-weight: 600; color: var(--text-main); }
+.project-date { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+.project-del { font-size: 18px; padding: 4px; cursor: pointer; color: var(--error); opacity: 0.6; transition: opacity 0.2s; }
+.project-del:hover { opacity: 1; }
 
-/* STATUS PILL */
-.spill{font-size:8px;padding:3px 7px;border-radius:4px;letter-spacing:0.1em;text-transform:uppercase;border:1px solid var(--bdr)}
-.spill.ok{background:rgba(107,142,90,0.15);color:var(--green-grass);border-color:var(--green-grass)}
+/* ── TOAST ── */
+.toast {
+  position: fixed; top: 70px; left: 50%; transform: translateX(-50%) translateY(-20px);
+  background: rgba(30,45,70,0.95); border: 1px solid rgba(244,162,97,0.3);
+  border-radius: 100px; padding: 9px 18px; font-size: 13px; color: var(--text-main);
+  z-index: 2000; opacity: 0; transition: all 0.3s; white-space: nowrap;
+  backdrop-filter: blur(10px); pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.error { border-color: rgba(235,87,87,0.4); color: #ff9090; }
+.toast.success { border-color: rgba(111,207,151,0.4); color: #9ef5c2; }
+
+/* ── LOADING SPINNER ── */
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.2); border-top-color: var(--sunset-amber); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+
+/* ── AUDIO PLAYER ── */
+audio { width: 100%; margin-top: 6px; border-radius: 8px; }
+
+/* ── ERROR DETAIL ── */
+.error-detail { background: rgba(235,87,87,0.1); border: 1px solid rgba(235,87,87,0.2); border-radius: 8px; padding: 10px; font-size: 12px; color: #ff9090; margin-top: 10px; font-family: monospace; word-break: break-all; }
+
+/* ── DIVIDER ── */
+.divider { height: 1px; background: rgba(255,255,255,0.06); margin: 16px 0; }
+
+/* ── BATCH CONTROLS ── */
+.batch-card { background: linear-gradient(135deg, rgba(244,162,97,0.07), rgba(232,118,138,0.05)); border: 1px solid rgba(244,162,97,0.18); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+
+/* ── EMPTY STATE ── */
+.empty-state { text-align: center; padding: 40px 20px; }
+.empty-state .emoji { font-size: 48px; margin-bottom: 12px; }
+.empty-state p { color: var(--text-dim); font-size: 14px; }
 </style>
 </head>
 <body>
-<div class="atm"></div>
-<div class="stars"></div>
-<div class="sunset-glow"></div>
-<div class="comet"></div>
-<div class="app">
 
-<div id="pb"><div id="pb-label"><span id="pb-text">Procesando...</span><span id="pb-pct">0%</span></div><div id="pb-track"><div id="pb-fill"></div></div></div>
-<div id="toast"></div>
+<!-- STARFIELD -->
+<div id="starfield"></div>
 
-<header>
-  <div class="brand">
-    <div class="brand-jp">アニメ · スタジオ</div>
-    <div class="brand-title">Anime AI Studio</div>
-  </div>
-  <div class="header-right">
-    <button onclick="openMo('mo-projects')" style="background:var(--surface);border:1px solid var(--bdr);color:var(--dim);border-radius:20px;padding:6px 13px;font-size:10px;letter-spacing:0.12em;cursor:pointer;text-transform:uppercase;font-family:'Inter',sans-serif">📁 Proyectos</button>
-    <div class="api-pill" onclick="openMo('mo-apis')"><div class="dot" id="api-dot"></div><span id="api-lbl">SIN APIS</span></div>
-  </div>
-</header>
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
 
-<!-- PANEL UNIVERSO -->
-<div class="panel on" id="p-world">
-  <div class="sec-title">Universo</div>
-  <div class="sec-sub">DEFINE EL MUNDO DE TU ANIME</div>
-  <div class="field"><label>Estilo de animación</label><div class="style-grid" id="st-grid"></div></div>
-  <div class="field"><label>Género</label>
-    <select id="w-genre"><option>Acción / Aventura</option><option>Dark Fantasy</option><option>Post-Apocalíptico</option><option>Slice of Life</option><option>Isekai</option><option>Sobrenatural</option><option>Ciencia Ficción</option><option>Romance</option><option>Terror psicológico</option><option>Misterio</option><option>Ecchi / Romance maduro</option></select>
-  </div>
-  <div class="field"><label>Tono emocional</label>
-    <select id="w-tone"><option>Épico y heroico</option><option>Oscuro y opresivo</option><option>Melancólico</option><option>Esperanzador</option><option>Tenso y trepidante</option><option>Íntimo y emotivo</option><option>Caótico y brutal</option></select>
-  </div>
-  <div class="field"><label>Concepto semilla (opcional)</label>
-    <textarea id="w-concept" placeholder="Tu idea. Ej: Una compositora descubre que sus melodías pueden borrar recuerdos..."></textarea>
-  </div>
-  <button class="btn btn-p" id="btn-world" onclick="genWorld()">⚡ Generar Universo</button>
-  <div id="world-out" style="margin-top:16px"></div>
-</div>
-
-<!-- PANEL PERSONAJES -->
-<div class="panel" id="p-chars">
-  <div class="sec-title">Personajes</div>
-  <div class="sec-sub">CREADOS AUTOMÁTICAMENTE DEL EPISODIO</div>
-  <div id="chars-list"></div>
-</div>
-
-<!-- PANEL EPISODIO -->
-<div class="panel" id="p-ep">
-  <div class="sec-title">Episodio</div>
-  <div class="sec-sub">GUIÓN · IMÁGENES · NARRACIÓN</div>
-  <div id="ep-no-world" class="empty" style="display:none">
-    <div class="ei">章</div>
-    <div class="et">Genera el universo primero.</div>
-    <button class="btn btn-s" onclick="switchP('p-world')" style="max-width:180px;margin:0 auto">← Universo</button>
-  </div>
-  <div id="ep-form">
-    <div class="field"><label>Función narrativa</label>
-      <select id="ep-func"><option value="apertura">Apertura — presenta el mundo y personajes</option><option value="escalada">Escalada — las apuestas suben</option><option value="climax">Clímax — el punto de quiebre</option><option value="resolucion">Resolución — consecuencias</option></select>
+<!-- APP -->
+<div id="app">
+  <header>
+    <div>
+      <div class="header-title">Anime AI Studio</div>
+      <span class="header-kanji">アニメ·スタジオ</span>
     </div>
-    <div class="field"><label>Promesa emocional (opcional)</label>
-      <input type="text" id="ep-emotion" placeholder="Ej: El espectador debe sentir que ya nada es igual">
+    <div class="header-actions">
+      <button class="hbtn" id="btnProjects">📁 Proyectos</button>
+      <button class="hbtn" id="btnApis">
+        <span class="dot" id="apiDot"></span> APIS
+      </button>
     </div>
-    <button class="btn btn-p" id="btn-ep" onclick="genEpisode()">🎬 Generar Episodio (30 escenas)</button>
-  </div>
-  <div id="ep-content" style="display:none">
-    <div id="ep-header" class="card"></div>
-    <div class="card">
-      <div class="card-title">🎙 Narración en Off</div>
-      <div class="field" style="margin-bottom:10px">
-        <label>Voice ID del narrador para este anime</label>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input type="text" id="vid-input" placeholder="Ej: pNInz6obpgDQGcFmaJgB" style="font-family:monospace;font-size:12px;flex:1" oninput="saveVoiceId(this.value)">
-          <button class="btn btn-g" style="width:auto;padding:10px 13px;font-size:11px" onclick="window.open('https://elevenlabs.io/app/voice-lab','_blank')">⚡ ElevenLabs</button>
+  </header>
+
+  <div id="main-scroll">
+    <!-- UNIVERSO -->
+    <div class="panel active" id="panel-universo">
+      <div class="section-title">Universo</div>
+      <div class="section-sub">Define el mundo de tu anime</div>
+
+      <div class="card">
+        <div class="card-title">⚙️ Configuración</div>
+        <div class="form-group">
+          <label>Género</label>
+          <select id="generoSelect">
+            <option value="sistema_oculto">Sistema Oculto / Donghua ✨</option>
+            <option value="isekai">Isekai / Otro Mundo 🌀</option>
+            <option value="post_apocaliptico">Post-Apocalíptico ☢️</option>
+            <option value="ecchi">Ecchi / Fan Service 🌸</option>
+            <option value="romance">Romance / Drama</option>
+            <option value="accion">Acción / Aventura</option>
+            <option value="shounen">Shōnen</option>
+            <option value="slice_of_life">Slice of Life</option>
+            <option value="fantasia">Fantasía</option>
+            <option value="misterio">Misterio / Thriller</option>
+            <option value="sci_fi">Sci-Fi</option>
+            <option value="horror">Horror Psicológico</option>
+          </select>
         </div>
-        <div style="font-size:10px;color:var(--dim);margin-top:5px">elevenlabs.io → My Voices → copia el ID. Cada anime puede tener su propia voz.</div>
+        <div class="form-group">
+          <label>Tono narrativo</label>
+          <input type="text" id="tonoInput" placeholder="ej: melancólico con destellos de esperanza" />
+        </div>
+        <div class="form-group">
+          <label>Concepto semilla (opcional)</label>
+          <textarea id="conceptoInput" placeholder="ej: un mecánico que cobra precios imposiblemente bajos pero repara cualquier cosa..."></textarea>
+        </div>
+        <button class="btn btn-primary" id="btnGenerarUniverso">
+          <span>🌟</span> Generar Universo
+        </button>
       </div>
-      <div id="audio-warn" class="info" style="display:none">Configura <strong>ElevenLabs</strong> en el botón APIs y añade un Voice ID arriba.</div>
-      <div id="audio-ok">
-        <div class="stat-row"><span>Narraciones listas</span><span class="stat-val" id="nar-count">0 / 0</span></div>
-        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-          <button class="btn btn-p" onclick="genAllNar()" id="btn-nar" style="flex:1">🎙 Generar Narración Completa</button>
-          <button class="btn" style="background:rgba(220,60,60,0.12);color:#e07070;border:1px solid rgba(220,60,60,0.25);padding:10px 14px;border-radius:8px;font-size:12px;white-space:nowrap" onclick="deleteAllNar()" title="Borrar todos los audios para regenerar con otro narrador">🗑 Borrar audios</button>
+
+      <div id="universoResult" style="display:none"></div>
+    </div>
+
+    <!-- PERSONAJES -->
+    <div class="panel" id="panel-personajes">
+      <div class="section-title">Personajes</div>
+      <div class="section-sub">Elenco de tu historia</div>
+      <div id="personajesContainer">
+        <div class="empty-state">
+          <div class="emoji">👥</div>
+          <p>Los personajes aparecerán después de generar un episodio</p>
         </div>
       </div>
     </div>
-    <div id="scenes-list"></div>
-  </div>
-</div>
 
-<!-- PANEL EXPORTAR -->
-<div class="panel" id="p-export">
-  <div class="sec-title">Exportar</div>
-  <div class="sec-sub">ZIP LISTO PARA CAPCUT</div>
-  <div id="exp-empty" class="empty">
-    <div class="ei">📦</div>
-    <div class="et">Genera un episodio para exportar.</div>
-  </div>
-  <div id="exp-ready" style="display:none">
-    <div class="card">
-      <div class="card-title">Contenido del ZIP</div>
-      <div class="stat-row"><span>Imágenes PNG</span><span class="stat-val" id="exp-imgs">0</span></div>
-      <div class="stat-row"><span>Audios MP3</span><span class="stat-val" id="exp-auds">0</span></div>
-      <div class="stat-row"><span>Subtítulos SRT</span><span class="stat-val" id="exp-srt">—</span></div>
-      <div class="stat-row"><span>Guión TXT</span><span class="stat-val">✓</span></div>
+    <!-- EPISODIO -->
+    <div class="panel" id="panel-episodio">
+      <div class="section-title">Episodio</div>
+      <div class="section-sub">Genera tu historia completa</div>
+
+      <div class="card">
+        <div class="card-title">📝 Parámetros</div>
+        <div class="form-group">
+          <label>Función narrativa</label>
+          <select id="funcionSelect">
+            <option value="primer_encuentro">Primer encuentro</option>
+            <option value="presentacion">Presentación del mundo</option>
+            <option value="conflicto">Conflicto inicial</option>
+            <option value="desarrollo">Desarrollo de personajes</option>
+            <option value="climax">Clímax</option>
+            <option value="resolucion">Resolución</option>
+            <option value="giro">Giro argumental</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Emoción central</label>
+          <input type="text" id="emocionInput" placeholder="ej: asombro mezclado con orgullo silencioso" />
+        </div>
+        <div class="form-group">
+          <label>Voice ID de ElevenLabs</label>
+          <input type="text" id="voiceIdInput" placeholder="ej: JBFqnCBsd6RMkjVDRZzb" />
+        </div>
+        <button class="btn btn-primary" id="btnGenerarEpisodio">
+          <span>✨</span> Generar Episodio (30 escenas)
+        </button>
+        <div id="epProgress" style="display:none; margin-top:12px">
+          <div class="progress-wrap"><div class="progress-bar" id="epBar" style="width:0%"></div></div>
+          <div class="progress-label" id="epLabel">Generando guión...</div>
+        </div>
+      </div>
+
+      <div id="batchControls" style="display:none">
+        <div class="batch-card">
+          <div class="card-title">🎨 Generación Masiva</div>
+          <div class="btn-grid">
+            <button class="btn btn-secondary" id="btnAllImages">🖼️ Todas las Imágenes</button>
+            <button class="btn btn-secondary" id="btnAllAudio">🎙️ Toda la Narración</button>
+          </div>
+          <div id="batchProgress" style="display:none; margin-top:12px">
+            <div class="progress-wrap"><div class="progress-bar" id="batchBar" style="width:0%"></div></div>
+            <div class="progress-label" id="batchLabel">Procesando...</div>
+          </div>
+          <div style="margin-top:8px">
+            <button class="btn btn-danger btn-sm" id="btnClearAudios">🗑️ Borrar todos los audios</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="scenesContainer"></div>
     </div>
-    <div class="info">
-      <strong>Cómo montar en CapCut:</strong><br>
-      1. Importa imágenes en orden (escena01, escena02...)<br>
-      2. Ajusta duración de cada clip al largo de su audio<br>
-      3. Arrastra el MP3 a cada clip de imagen<br>
-      4. Texto → Subtítulos → Importar → subtitulos.srt<br>
-      5. Añade música de fondo a -20dB · Exporta 1080p
+
+    <!-- EXPORTAR -->
+    <div class="panel" id="panel-exportar">
+      <div class="section-title">Exportar</div>
+      <div class="section-sub">Descarga tu anime para edición</div>
+
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-box"><div class="stat-num" id="statImg">0</div><div class="stat-lbl">Imágenes</div></div>
+        <div class="stat-box"><div class="stat-num" id="statAud">0</div><div class="stat-lbl">Audios</div></div>
+        <div class="stat-box"><div class="stat-num" id="statEsc">0</div><div class="stat-lbl">Escenas</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📦 ZIP para CapCut/DaVinci</div>
+        <p style="font-size:12px; color:var(--text-dim); margin-bottom:14px; line-height:1.6">
+          El ZIP incluye: imágenes 9:16, audio completo concatenado, timing para CapCut, subtítulos SRT y guión completo.
+        </p>
+        <button class="btn btn-primary" id="btnDownloadZip">
+          <span>⬇️</span> Descargar ZIP
+        </button>
+        <div id="zipProgress" style="display:none; margin-top:12px">
+          <div class="progress-wrap"><div class="progress-bar" id="zipBar" style="width:0%"></div></div>
+          <div class="progress-label" id="zipLabel">Preparando ZIP...</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📋 Guión Completo</div>
+        <button class="btn btn-secondary" id="btnCopyScript">📋 Copiar al Portapapeles</button>
+      </div>
     </div>
-    <button class="btn btn-p" id="btn-exp" onclick="exportZIP()">📦 Descargar ZIP</button>
   </div>
+
+  <!-- BOTTOM NAV -->
+  <nav>
+    <button class="nav-tab active" data-panel="universo">
+      <span class="icon">🌌</span>
+      <span>Universo</span>
+    </button>
+    <button class="nav-tab" data-panel="personajes">
+      <span class="icon">👥</span>
+      <span>Personajes</span>
+    </button>
+    <button class="nav-tab" data-panel="episodio">
+      <span class="icon">🎬</span>
+      <span>Episodio</span>
+    </button>
+    <button class="nav-tab" data-panel="exportar">
+      <span class="icon">📤</span>
+      <span>Exportar</span>
+    </button>
+  </nav>
 </div>
 
-<nav>
-  <button class="nb on" id="nb-world" onclick="switchP('p-world')"><span class="ic">🌌</span>Universo</button>
-  <button class="nb" id="nb-chars" onclick="switchP('p-chars')"><span class="ic">👤</span>Personajes</button>
-  <button class="nb" id="nb-ep" onclick="switchP('p-ep')"><span class="ic">🎬</span>Episodio</button>
-  <button class="nb" id="nb-export" onclick="switchP('p-export')"><span class="ic">📦</span>Exportar</button>
-</nav>
-
-<!-- MODAL APIs -->
-
-<!-- PROJECTS MODAL -->
-<div class="mo" id="mo-projects">
-  <div class="mo-box">
-    <button class="mo-x" onclick="closeMo('mo-projects')">×</button>
-    <div class="mo-title">📁 Proyectos</div>
-    <div class="btn-row" style="margin-bottom:16px">
-      <button class="btn btn-p" onclick="newProject()">+ Nuevo Anime</button>
-    </div>
-    <div id="projects-list"></div>
-  </div>
-</div>
-<div class="mo" id="mo-apis">
-  <div class="mo-box">
-    <button class="mo-x" onclick="closeMo('mo-apis')">×</button>
-    <div class="mo-title">Configurar APIs</div>
-    <div class="field"><label>Claude — Guiones</label><input type="password" id="in-claude" placeholder="sk-ant-..."></div>
-    <div class="field"><label>Gemini — Imágenes</label><input type="password" id="in-gemini" placeholder="AIza..."></div>
-    <div class="field"><label>ElevenLabs — Narración</label><input type="password" id="in-eleven" placeholder="sk_..."></div>
-
-    <button class="btn btn-p" onclick="saveAPIs()">Guardar</button>
-  </div>
-</div>
-
-<!-- MODAL CHAR DETAIL -->
-<div class="mo" id="mo-char">
-  <div class="mo-box">
-    <button class="mo-x" onclick="closeMo('mo-char')">×</button>
-    <div id="mo-char-body"></div>
-  </div>
-</div>
+<!-- MODAL CONTAINER -->
+<div id="modalContainer"></div>
 
 <script>
-// ─── STATE ───
-const S = { apis:{claude:'',gemini:'',eleven:''}, world:null, episode:null, chars:[], scenes:[] };
-const LS = 'anime_v5';
-const PK = 'anime_projects_v1'; // projects list key
+// ══════════════════════════════════════════════
+// STARFIELD
+// ══════════════════════════════════════════════
+(function() {
+  const sf = document.getElementById('starfield');
+  for (let i = 0; i < 120; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const size = Math.random() * 2.5 + 0.5;
+    s.style.cssText = `
+      left:${Math.random()*100}%;top:${Math.random()*100}%;
+      width:${size}px;height:${size}px;
+      --d:${2+Math.random()*4}s;--o:${0.2+Math.random()*0.7};
+      animation-delay:${Math.random()*5}s;
+    `;
+    sf.appendChild(s);
+  }
+  function fireComet() {
+    const c = document.createElement('div');
+    c.className = 'comet';
+    c.style.cssText = `left:${Math.random()*40}%;top:${Math.random()*40}%;transform:rotate(${30+Math.random()*20}deg)`;
+    sf.appendChild(c);
+    setTimeout(() => c.remove(), 2100);
+    setTimeout(fireComet, 18000 + Math.random()*6000);
+  }
+  setTimeout(fireComet, 5000);
+})();
 
-// ─── INDEXEDDB ───
-let _db;
-async function getDB(){
-  if(_db) return _db;
-  return new Promise((res,rej)=>{
-    const r=indexedDB.open('AnimeStudio2',1);
-    r.onupgradeneeded=e=>e.target.result.createObjectStore('m');
-    r.onsuccess=e=>{_db=e.target.result;res(_db)};
-    r.onerror=()=>rej(r.error);
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let state = {
+  projectId: null,
+  universe: null,
+  characters: [],
+  scenes: [],
+  voiceId: '',
+};
+let projects = [];
+
+// ══════════════════════════════════════════════
+// INDEXEDDB
+// ══════════════════════════════════════════════
+let db = null;
+const DB_NAME = 'AnimeStudio2';
+const DB_VERSION = 2;
+
+function initDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains('blobs')) d.createObjectStore('blobs');
+    };
+    req.onsuccess = e => { db = e.target.result; res(); };
+    req.onerror = e => rej(e);
   });
 }
-async function dbW(k,v){const db=await getDB();return new Promise((res,rej)=>{const t=db.transaction('m','readwrite');t.objectStore('m').put(v,k);t.oncomplete=res;t.onerror=()=>rej(t.error)});}
-async function dbR(k){const db=await getDB();return new Promise(res=>{const r=db.transaction('m','readonly').objectStore('m').get(k);r.onsuccess=()=>res(r.result||null);r.onerror=()=>res(null);});}
 
-// ─── SAVE/LOAD ───
-let _currentProjectId = null;
-
-function getProjects(){
-  try{return JSON.parse(localStorage.getItem(PK)||'[]');}catch{return [];}
+function dbSet(key, value) {
+  return new Promise((res, rej) => {
+    const tx = db.transaction('blobs', 'readwrite');
+    tx.objectStore('blobs').put(value, key);
+    tx.oncomplete = () => res();
+    tx.onerror = e => rej(e);
+  });
 }
-function setProjects(list){
-  localStorage.setItem(PK,JSON.stringify(list));
+function dbGet(key) {
+  return new Promise((res, rej) => {
+    const tx = db.transaction('blobs', 'readonly');
+    const req = tx.objectStore('blobs').get(key);
+    req.onsuccess = () => res(req.result || null);
+    req.onerror = e => rej(e);
+  });
 }
-
-async function save(){
-  try{
-    const meta={apis:S.apis,world:S.world,episode:S.episode,
-      chars:S.chars.map(c=>({...c,imageData:c.imageData?'DB':null})),
-      scenes:S.scenes.map(s=>({...s,imageData:s.imageData?'DB':null,narrationAudio:s.narrationAudio?'DB':null}))};
-    // Save to current project key or default
-    const key = _currentProjectId ? 'anime_p_'+_currentProjectId : LS;
-    localStorage.setItem(key,JSON.stringify(meta));
-    // Update projects index
-    if(_currentProjectId){
-      const projs=getProjects();
-      const idx=projs.findIndex(p=>p.id===_currentProjectId);
-      const entry={id:_currentProjectId,title:S.world?.title||'Sin título',style:S.world?.style||'',updated:Date.now()};
-      if(idx>=0) projs[idx]=entry; else projs.unshift(entry);
-      setProjects(projs);
-    }
-    const _pid=_currentProjectId||'default';
-    for(const c of S.chars) if(c.imageData&&c.imageData!=='DB') await dbW('ci_'+_pid+'_'+c.id,c.imageData);
-    for(const s of S.scenes){
-      if(s.imageData&&s.imageData!=='DB') await dbW('si_'+_pid+'_'+s.id,s.imageData);
-      if(s.narrationAudio&&s.narrationAudio!=='DB') await dbW('sn_'+_pid+'_'+s.id,s.narrationAudio);
-    }
-  }catch(e){console.error('save',e);}
+function dbDel(key) {
+  return new Promise((res) => {
+    const tx = db.transaction('blobs', 'readwrite');
+    tx.objectStore('blobs').delete(key);
+    tx.oncomplete = () => res();
+  });
 }
 
-async function loadProject(pid){
-  try{
-    const key = pid ? 'anime_p_'+pid : LS;
-    const raw=localStorage.getItem(key); if(!raw) return;
-    const m=JSON.parse(raw);
-    if(m.apis) S.apis={...S.apis,...m.apis};
-    S.world=m.world||null; S.episode=m.episode||null;
-    S.chars=m.chars||[]; S.scenes=m.scenes||[];
-    _currentProjectId = pid;
-    const _lpid=pid||'default';
-    for(const c of S.chars) if(c.imageData==='DB') c.imageData=await dbR('ci_'+_lpid+'_'+c.id);
-    for(const s of S.scenes){
-      if(s.imageData==='DB') s.imageData=await dbR('si_'+_lpid+'_'+s.id);
-      if(s.narrationAudio==='DB') s.narrationAudio=await dbR('sn_'+_lpid+'_'+s.id);
-    }
-  }catch(e){console.error('loadProject',e);}
-}
+// ══════════════════════════════════════════════
+// STORAGE HELPERS
+// ══════════════════════════════════════════════
+function imgKey(charId) { return `ci_${state.projectId}_${charId}`; }
+function sceneImgKey(sceneId) { return `si_${state.projectId}_${sceneId}`; }
+function sceneAudKey(sceneId) { return `sn_${state.projectId}_${sceneId}`; }
 
-async function load(){
-  // Load last used project or default
-  const projs=getProjects();
-  const lastId=localStorage.getItem('anime_last_pid');
-  if(lastId && projs.find(p=>p.id===lastId)){
-    await loadProject(lastId);
-  } else {
-    await loadProject(null); // legacy single save
+function saveState() {
+  if (!state.projectId) return;
+  const data = {
+    universe: state.universe,
+    characters: state.characters.map(c => ({ ...c, imageData: undefined })),
+    scenes: state.scenes,
+    voiceId: state.voiceId,
+  };
+  localStorage.setItem(`proj_${state.projectId}`, JSON.stringify(data));
+  // Update project list entry
+  const pi = projects.findIndex(p => p.id === state.projectId);
+  if (pi >= 0) {
+    projects[pi].title = state.universe?.title || 'Nuevo anime';
+    projects[pi].updated = Date.now();
+    saveProjects();
   }
 }
 
-async function newProject(){
-  if(!confirm('¿Crear nuevo anime? El actual se guarda automáticamente.')) return;
-  // Save current project first (await so it completes before clearing)
-  await save();
-  const pid='p_'+Date.now();
-  // Register new project in index immediately so it appears in the list
-  const projs=getProjects();
-  projs.unshift({id:pid,title:'Nuevo anime',style:'',updated:Date.now()});
-  setProjects(projs);
-  _currentProjectId=pid;
-  localStorage.setItem('anime_last_pid',pid);
-  // Fully clear state — no leftover chars/scenes/loading flags
-  S.world=null;S.episode=null;S.chars=[];S.scenes=[];
-  closeMo('mo-projects');
-  switchP('p-world');
+function loadStateFor(pid) {
+  const raw = localStorage.getItem(`proj_${pid}`);
+  if (!raw) return;
+  try {
+    const data = JSON.parse(raw);
+    state.universe = data.universe || null;
+    state.characters = data.characters || [];
+    state.scenes = data.scenes || [];
+    state.voiceId = data.voiceId || '';
+  } catch(e) {}
+}
+
+function saveProjects() {
+  localStorage.setItem('projects_index', JSON.stringify(projects));
+}
+function loadProjects() {
+  try { projects = JSON.parse(localStorage.getItem('projects_index') || '[]'); } catch(e) { projects = []; }
+}
+
+// ══════════════════════════════════════════════
+// PROJECT MANAGEMENT
+// ══════════════════════════════════════════════
+async function newProject() {
+  // Save current first
+  if (state.projectId) { saveState(); }
+  const pid = 'p' + Date.now();
+  const entry = { id: pid, title: 'Nuevo anime', created: Date.now(), updated: Date.now() };
+  projects.push(entry);
+  saveProjects();
+  state.projectId = pid;
+  state.universe = null;
+  state.characters = [];
+  state.scenes = [];
+  state.voiceId = '';
   renderAll();
-  toast('Nuevo anime creado — define el universo');
+  showToast('Nuevo proyecto creado', 'success');
 }
 
-async function switchProject(pid){
-  await save();
-  localStorage.setItem('anime_last_pid',pid);
-  await loadProject(pid);
-  // Clear any stale loading flags from previous session
-  S.scenes.forEach(s=>{ s._loading=false; });
-  S.chars.forEach(c=>{ c._loading=false; });
-  closeMo('mo-projects');
-  // Navigate to appropriate panel
-  if(S.episode) switchP('p-episode');
-  else if(S.world) switchP('p-world');
-  else switchP('p-world');
+function switchProject(pid) {
+  if (state.projectId) saveState();
+  state.projectId = pid;
+  loadStateFor(pid);
   renderAll();
-  toast('Proyecto: '+(S.world?.title||'Sin título'));
+  closeModal();
+  showToast('Proyecto cargado', 'success');
 }
 
-function deleteProject(pid){
-  if(!confirm('¿Eliminar este proyecto? No se puede deshacer.')) return;
-  const projs=getProjects().filter(p=>p.id!==pid);
-  setProjects(projs);
-  localStorage.removeItem('anime_p_'+pid);
-  if(_currentProjectId===pid){
-    // Switch to another or clear
-    if(projs.length>0){ switchProject(projs[0].id); }
-    else { _currentProjectId=null; S.world=null;S.episode=null;S.chars=[];S.scenes=[]; renderAll(); }
+async function deleteProject(pid) {
+  if (!confirm('¿Eliminar este proyecto?')) return;
+  projects = projects.filter(p => p.id !== pid);
+  saveProjects();
+  localStorage.removeItem(`proj_${pid}`);
+  if (state.projectId === pid) {
+    if (projects.length > 0) switchProject(projects[projects.length-1].id);
+    else await newProject();
   }
-  renderProjectsList();
-  toast('Proyecto eliminado');
+  openProjectsModal();
 }
 
-function renderProjectsList(){
-  const list=document.getElementById('projects-list');
-  if(!list) return;
-  const projs=getProjects();
-  if(!projs.length){
-    list.innerHTML='<div class="empty"><span class="ei">📂</span><div class="et">No hay proyectos guardados.<br>Genera un universo para crear el primero.</div></div>';
-    return;
-  }
-  list.innerHTML=projs.map(function(p){
-    const isActive=_currentProjectId===p.id;
-    const cardStyle='display:flex;align-items:center;gap:12px;margin-bottom:8px'+(isActive?';border-color:var(--sunset-amber);background:var(--surface-warm)':'');
-    const date=new Date(p.updated).toLocaleDateString('es-ES');
-    return '<div class="card" style="'+cardStyle+'">'
-      +'<div style="flex:1;cursor:pointer" onclick="switchProject(\''+p.id+'\')">'
-      +'<div style="font-family:\'Cormorant Garamond\',serif;font-style:italic;font-size:16px;color:var(--paper-cream)">'+(p.title||'Sin título')+'</div>'
-      +'<div style="font-size:10px;color:var(--dim);margin-top:2px">'+(p.style||'')+(p.style?' · ':'')+date+'</div>'
-      +'</div>'
-      +(isActive?'<div style="font-size:10px;color:var(--sunset-amber);letter-spacing:0.1em">ACTIVO</div>':'')
-      +'<button onclick="deleteProject(\''+p.id+'\')" style="background:rgba(184,74,61,0.15);border:1px solid rgba(184,74,61,0.3);color:#d97757;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer">🗑</button>'
-      +'</div>';
-  }).join('');
+// ══════════════════════════════════════════════
+// RENDER ALL
+// ══════════════════════════════════════════════
+function renderAll() {
+  renderUniverse();
+  renderCharacters();
+  renderScenes();
+  renderStats();
+  if (state.voiceId) document.getElementById('voiceIdInput').value = state.voiceId;
 }
 
-// ─── PROGRESS ───
-const PB={
-  show(t,p){document.getElementById('pb').classList.add('on');this.set(t,p);},
-  set(t,p){document.getElementById('pb-text').textContent=t;document.getElementById('pb-pct').textContent=Math.round(p||0)+'%';document.getElementById('pb-fill').style.width=Math.min(100,p||0)+'%';},
-  hide(){setTimeout(()=>{document.getElementById('pb').classList.remove('on');document.getElementById('pb-fill').style.width='0%';},500);}
+// ══════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════
+document.querySelectorAll('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+    if (tab.dataset.panel === 'exportar') renderStats();
+  });
+});
+
+// ══════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════
+let toastTimer;
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' '+type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.classList.remove('show'); }, 3000);
+}
+
+// ══════════════════════════════════════════════
+// MODAL
+// ══════════════════════════════════════════════
+function openModal(html, onClose) {
+  closeModal();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `<div class="modal"><div class="modal-handle"></div>${html}</div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+  document.getElementById('modalContainer').appendChild(overlay);
+}
+function closeModal() {
+  document.getElementById('modalContainer').innerHTML = '';
+}
+
+// ══════════════════════════════════════════════
+// API KEYS
+// ══════════════════════════════════════════════
+function getKeys() {
+  return {
+    claude: localStorage.getItem('key_claude') || '',
+    gemini: localStorage.getItem('key_gemini') || '',
+    eleven: localStorage.getItem('key_eleven') || '',
+  };
+}
+function updateApiDot() {
+  const k = getKeys();
+  const ok = k.claude && k.gemini && k.eleven;
+  document.getElementById('apiDot').className = 'dot' + (ok ? ' ok' : '');
+}
+
+document.getElementById('btnApis').addEventListener('click', () => {
+  const k = getKeys();
+  openModal(`
+    <div class="modal-title">🔑 API Keys</div>
+    <div class="form-group">
+      <label>Claude API Key</label>
+      <input type="password" id="mk_claude" value="${k.claude}" placeholder="sk-ant-..." />
+    </div>
+    <div class="form-group">
+      <label>Gemini API Key</label>
+      <input type="password" id="mk_gemini" value="${k.gemini}" placeholder="AIza..." />
+    </div>
+    <div class="form-group">
+      <label>ElevenLabs API Key</label>
+      <input type="password" id="mk_eleven" value="${k.eleven}" placeholder="..." />
+    </div>
+    <button class="btn btn-primary" onclick="saveKeys()">💾 Guardar</button>
+  `);
+});
+window.saveKeys = function() {
+  localStorage.setItem('key_claude', document.getElementById('mk_claude').value.trim());
+  localStorage.setItem('key_gemini', document.getElementById('mk_gemini').value.trim());
+  localStorage.setItem('key_eleven', document.getElementById('mk_eleven').value.trim());
+  updateApiDot();
+  closeModal();
+  showToast('Keys guardadas', 'success');
 };
 
-// ─── TOAST ───
-let _tt;
-let _errModal=null;
-function toast(msg,err){
-  const el=document.getElementById('toast');
-  // For long errors, show a modal instead
-  if(err && msg.length>120){
-    showErrModal(msg);
-    return;
-  }
-  el.textContent=msg; el.className=(err?'err ':''+'show');
-  clearTimeout(_tt); _tt=setTimeout(()=>el.classList.remove('show'),err?6000:3000);
-}
-function showErrModal(msg){
-  let m=document.getElementById('err-modal');
-  if(!m){
-    m=document.createElement('div');
-    m.id='err-modal';
-    m.style.cssText='position:fixed;inset:0;background:rgba(14,23,41,0.9);z-index:300;display:flex;align-items:flex-end;backdrop-filter:blur(4px)';
-    m.innerHTML=`<div style="background:linear-gradient(180deg,#1a2842,#0e1729);border:1px solid rgba(184,74,61,0.4);border-radius:18px 18px 0 0;width:100%;max-height:80vh;overflow-y:auto;padding:20px 18px 28px;position:relative">
-      <button onclick="document.getElementById('err-modal').remove()" style="position:absolute;right:14px;top:12px;background:none;border:none;color:#95a3c0;font-size:22px;cursor:pointer">×</button>
-      <div style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:18px;color:#f5ebe0;margin-bottom:14px;margin-top:6px">⚠ Error al generar imagen</div>
-      <pre id="err-modal-text" style="white-space:pre-wrap;font-size:11px;color:#d97757;line-height:1.7;font-family:'Inter',sans-serif;background:rgba(184,74,61,0.08);border:1px solid rgba(184,74,61,0.2);border-radius:8px;padding:12px"></pre>
-      <div style="font-size:11px;color:#95a3c0;margin-top:12px">Posibles causas: API Key incorrecta · Facturación no activada en Google AI · Gemini no disponible en tu región</div>
-      <div style="display:flex;gap:8px;margin-top:14px">
-        <button onclick="window.open('https://aistudio.google.com/apikey','_blank')" style="flex:1;padding:10px;border-radius:8px;background:rgba(244,162,97,0.15);border:1px solid rgba(244,162,97,0.3);color:#f4a261;font-size:12px;cursor:pointer">Verificar API Key →</button>
-        <button onclick="document.getElementById('err-modal').remove()" style="flex:1;padding:10px;border-radius:8px;background:rgba(245,235,224,0.06);border:1px solid rgba(245,235,224,0.15);color:#f5ebe0;font-size:12px;cursor:pointer">Cerrar</button>
+// ══════════════════════════════════════════════
+// PROJECTS MODAL
+// ══════════════════════════════════════════════
+function openProjectsModal() {
+  const list = projects.map(p => `
+    <div class="project-item${p.id===state.projectId?' active':''}" onclick="switchProject('${p.id}')">
+      <span class="project-icon">🎬</span>
+      <div class="project-info">
+        <div class="project-name">${p.title}</div>
+        <div class="project-date">${new Date(p.updated||p.created).toLocaleDateString('es')}</div>
       </div>
-    </div>`;
-    m.addEventListener('click',e=>{if(e.target===m)m.remove();});
-    document.body.appendChild(m);
-  }
-  document.getElementById('err-modal-text').textContent=msg;
-  m.style.display='flex';
-}
-
-// ─── MODALS ───
-function openMo(id){
-  if(id==='mo-projects'){renderProjectsList();}
-  if(id==='mo-apis'){
-    document.getElementById('in-claude').value=S.apis.claude||'';
-    document.getElementById('in-gemini').value=S.apis.gemini||'';
-    document.getElementById('in-eleven').value=S.apis.eleven||'';
-  }
-  document.getElementById(id).classList.add('on');
-}
-function closeMo(id){document.getElementById(id).classList.remove('on');}
-document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('on');}));
-
-function saveAPIs(){
-  S.apis.claude=document.getElementById('in-claude').value.trim();
-  S.apis.gemini=document.getElementById('in-gemini').value.trim();
-  S.apis.eleven=document.getElementById('in-eleven').value.trim();
-  save(); updateAPI(); closeMo('mo-apis'); toast('APIs guardadas');
-}
-function saveVoiceId(val){
-  if(!S.world) return;
-  S.world.voiceId = val.trim();
-  save();
-  updateAudioSection();
-}
-function updateAudioSection(){
-  const vid = S.world?.voiceId||'';
-  const vinput = document.getElementById('vid-input');
-  if(vinput && vinput!==document.activeElement) vinput.value = vid;
-  const warn=document.getElementById('audio-warn');
-  const ok2=document.getElementById('audio-ok');
-  if(warn&&ok2){
-    warn.style.display=(!S.apis.eleven||!vid)?'block':'none';
-    ok2.style.display=(S.apis.eleven&&vid)?'block':'none';
-  }
-}
-function updateAPI(){
-  const ok=S.apis.claude&&S.apis.gemini;
-  const dot=document.getElementById('api-dot');dot.className='dot';if(ok)dot.classList.add('ok');
-  document.getElementById('api-lbl').textContent=ok?'APIS LISTAS':'SIN APIS';
-  updateAudioSection();
-}
-
-// ─── NAV ───
-function switchP(id){
-  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
-  document.getElementById(id).classList.add('on');
-  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
-  const nb=document.getElementById('nb-'+id.replace('p-',''));
-  if(nb) nb.classList.add('on');
-  if(id==='p-chars') renderChars();
-  if(id==='p-ep') renderEpPanel();
-  if(id==='p-export') renderExport();
-}
-
-// ─── STYLES ───
-const STYLES=[
-  {id:'solo',name:'Solo Leveling',sub:'Oscuro · Épico',tone:'oscuro brutal épico. Tensión constante, poder latente, peligro real. Determinación ante lo imposible, soledad del fuerte.',vis:'dark fantasy anime 2D, deep navy and black palette, electric blue and purple magic glows, dungeon atmospheres, dramatic contrast lighting, sharp angular character art, A-1 Pictures style'},
-  {id:'jjk',name:'Jujutsu Kaisen',sub:'Sobrenatural · MAPPA',tone:'horror oculto bajo normalidad cotidiana. Camaradería intensa antes de la pérdida. Humor negro mezclado con tragedia brutal.',vis:'modern urban Japan anime 2D, dark blacks and deep grays, cursed energy as red and black wisps, eerie blue-green supernatural lighting, MAPPA studio style'},
-  {id:'mushoku',name:'Mushoku Tensei',sub:'Isekai · Literario',tone:'íntimo y literario. Mundo vasto explorado con curiosidad genuina. Redención y crecimiento real. Vínculos que cuestan años construir.',vis:'warm earthy anime 2D, golden sunlight, rich forest greens, soft painterly backgrounds, European medieval fantasy, elemental magic soft glows, Studio Bind style'},
-  {id:'aot',name:'Attack on Titan',sub:'Drama · Brutal',tone:'pesado y opresivo. Libertad como concepto casi inalcanzable. Verdades que destruyen todo. Sacrificio sin garantías. Rabia justa.',vis:'desaturated muted anime 2D, cold grays and military greens, oppressive overcast skies, stark dramatic composition, gritty realistic Wit Studio style'},
-  {id:'demon',name:'Demon Slayer',sub:'Taishō · Ufotable',tone:'emotivo y bello incluso en la violencia. Amor fraternal inquebrantable. Respeto incluso al enemigo. Duelo y determinación.',vis:'rich Taisho era Japan anime 2D, deep indigos and blacks, vivid watercolor-effect technique colors, traditional Japanese aesthetics, ufotable cinematic lighting'},
-  {id:'shinkai',name:'Makoto Shinkai',sub:'Romance · Cinematográfico',tone:'melancólico y hermoso. La distancia como dolor físico. Lo cotidiano cargado de significado. Amor que trasciende pero no puede vencer a la realidad.',vis:'hyper-detailed painterly anime 2D, warm golden hour and twilight, luminous sky colors, soft lens flare, pastel emotional tones, Makoto Shinkai cinematic style'},
-  {id:'ghibli',name:'Studio Ghibli',sub:'Magia · Naturaleza',tone:'maravilloso y profundamente humano. Naturaleza como entidad viva. Asombro puro. Crecimiento doloroso pero necesario. Compasión hacia todo.',vis:'hand-painted anime 2D, warm nostalgic colors, rich natural greens and earthy browns, golden sunlight, soft watercolor textures, Studio Ghibli style'},
-  {id:'cyber',name:'Cyberpunk',sub:'Distópico · Neon',tone:'trágico y veloz. Sistema que tritura individuos. Belleza extraña en la decadencia. Amor desesperado que sabe que no durará. Dignidad en la caída.',vis:'neon cyberpunk anime 2D, electric cyan and magenta, deep purple, wet pavement reflections, harsh neon lighting, Trigger studio style like Edgerunners'},
-  {id:'ecchi',name:'Ecchi / Harem',sub:'Atrevido · Fanservice',tone:'ligero y provocador con tensión romántica real. Situaciones comprometidas naturales. Personajes femeninos atractivos y expresivos. Humor ecchi mezclado con momentos emocionales genuinos. Fanservice integrado en la narrativa.',vis:'bright vibrant anime 2D, clean soft linework, warm skin tones, expressive female characters with detailed clothing and hair, soft natural lighting, high-quality ecchi anime style like Shuumatsu no Harem or Mushoku Tensei, colorful and appealing character designs',ecchi:true},
-];
-
-function renderStyles(){
-  document.getElementById('st-grid').innerHTML=STYLES.map((s,i)=>
-    `<div class="st${i===0?' on':''}" onclick="selStyle('${s.id}',this)" data-id="${s.id}"><div class="sn">${s.name}</div><div class="ss">${s.sub}</div></div>`
-  ).join('');
-}
-function selStyle(id,el){document.querySelectorAll('.st').forEach(t=>t.classList.remove('on'));el.classList.add('on');}
-function getStyle(){return STYLES.find(s=>document.querySelector('.st[data-id="'+s.id+'"]')?.classList.contains('on'))||STYLES[0];}
-
-// ─── CLAUDE ───
-async function claude(sys,usr,tok=8000){
-  if(!S.apis.claude) throw new Error('Configura la API Key de Claude en el botón APIs');
-  let r;
-  try{r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.apis.claude,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:tok,system:sys,messages:[{role:'user',content:usr}]})});}
-  catch(e){throw new Error('Sin conexión a Claude: '+e.message);}
-  if(!r.ok){const t=await r.text().catch(()=>'');if(r.status===401)throw new Error('API Key de Claude inválida');if(r.status===429)throw new Error('Claude: demasiadas solicitudes, espera 30s');throw new Error('Claude '+r.status+': '+t.slice(0,100));}
-  const d=await r.json();
-  if(!d.content?.[0]?.text) throw new Error('Claude devolvió respuesta vacía');
-  return d.content[0].text;
-}
-async function claudeJSON(sys,usr,tok=8000){
-  const txt=await claude(sys,usr,tok);
-  const clean=txt.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
-  const tries=[clean,clean.match(/\{[\s\S]*\}/)?.[0],clean.match(/\[[\s\S]*\]/)?.[0]];
-  for(const t of tries){if(!t) continue;try{return JSON.parse(t);}catch(e){try{return JSON.parse(t.replace(/,\s*}/g,'}').replace(/,\s*]/g,']'));}catch(e2){}}}
-  throw new Error('No se pudo parsear el JSON. Intenta de nuevo.');
-}
-
-// ─── GEMINI IMAGE ───
-async function geminiImg(prompt, refImages=[]){
-  if(!S.apis.gemini) throw new Error('Configura Gemini en APIs');
-  const worldVis = S.world?.visualStyle || 'traditional anime 2D';
-  const isEcchi = S.world?.style === 'ecchi';
-  
-  const full = isEcchi ? [
-    'High quality 2D anime illustration, ecchi anime style. Bright vibrant colors, clean detailed linework:',
-    prompt,
-    '',
-    'ART STYLE: Professional ecchi anime, like Shuumatsu no Harem or Mushoku Tensei. Clean 2D cel-shading, soft warm skin tones, detailed expressive faces, appealing character designs. Natural soft lighting.',
-    'MANDATORY: Traditional 2D anime art. Hand-drawn aesthetic. 9:16 vertical portrait format.',
-    'FORBIDDEN: 3D render, CGI, photorealistic, western cartoon, game screenshot, watermark'
-  ].join('\n') : [
-    'Traditional 2D hand-drawn anime illustration. TV anime broadcast style. This must look like a frame from a real anime series:',
-    prompt,
-    '',
-    'MANDATORY ART STYLE:',
-    '- Hand-drawn 2D cel-shading with clean linework',
-    '- Soft painted backgrounds, natural colors',
-    '- Natural lighting only: sunlight, fire, moonlight, overcast — absolutely NO neon or glowing sci-fi effects',
-    '- Realistic anime proportions',
-    '- 9:16 vertical portrait composition, like a manga page or phone wallpaper',
-    '- Visual reference: ' + worldVis,
-    '',
-    'ABSOLUTELY FORBIDDEN:',
-    '- 3D render, CGI, Unreal Engine, Blender, Unity',
-    '- Neon lights, cyberpunk, futuristic technology, holograms',
-    '- Video game HUD, status bars, game UI',
-    '- Photorealistic faces',
-    '- Western cartoon',
-    '- Watermark, signature'
-  ].join('\n');
-  // Models ordered by cost: cheapest first, best quality as fallback
-  // Google AI Studio image models — verified May 2026
-  // gemini-2.5-flash-image = Nano Banana: 500 RPD free, $0.039/img
-  // gemini-3.1-flash-image-preview = Nano Banana 2: 100 RPM, $0.067/img
-  // NO imagen-4.0 models — those require Vertex AI (Google Cloud), not AI Studio
-  const MODELS=[
-    {name:'gemini-2.5-flash-image',         type:'gemini'},  // Nano Banana, 500/day free
-    {name:'gemini-3.1-flash-image-preview', type:'gemini'},  // Nano Banana 2, fallback
-  ];
-  const errors=[];
-  for(const {name,type} of MODELS){
-    toast('Probando '+name.split('-').slice(0,3).join('-')+'...');
-    try{
-      let url, body;
-      if(type==='imagen'){
-        url=`https://generativelanguage.googleapis.com/v1beta/models/${name}:predict?key=${S.apis.gemini}`;
-        body=JSON.stringify({instances:[{prompt:full}],parameters:{sampleCount:1,aspectRatio:'9:16'}});
-      } else {
-        url=`https://generativelanguage.googleapis.com/v1beta/models/${name}:generateContent?key=${S.apis.gemini}`;
-        // Build parts: text prompt + reference images for character consistency
-        const parts=[{text:full}];
-        for(const ri of refImages){
-          if(ri&&ri.startsWith('data:')){
-            const [meta,data]=ri.split(',');
-            const mime=meta.split(':')[1].split(';')[0];
-            parts.push({inlineData:{mimeType:mime,data}});
-          }
-        }
-        body=JSON.stringify({contents:[{parts}],generationConfig:{responseModalities:['IMAGE','TEXT']}});
-      }
-      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body});
-      if(r.status===429){errors.push(name+': rate limit 429');await new Promise(res=>setTimeout(res,4000));continue;}
-      if(r.status===503){errors.push(name+': servicio no disponible 503');await new Promise(res=>setTimeout(res,3000));continue;}
-      if(!r.ok){
-        const eText=await r.text();
-        let eMsg='';
-        try{const eJson=JSON.parse(eText);eMsg=eJson.error?.message||eText;}catch{eMsg=eText;}
-        errors.push(name+' '+r.status+': '+eMsg.slice(0,200));
-        continue;
-      }
-      const d=await r.json();
-      const finishReason=d.candidates?.[0]?.finishReason;
-      if(finishReason==='SAFETY'||finishReason==='OTHER'){
-        errors.push(name+': bloqueado ('+finishReason+')');continue;
-      }
-      // gemini format
-      const parts=d.candidates?.[0]?.content?.parts||[];
-      for(const p of parts){if(p.inlineData?.mimeType?.startsWith('image/')){return `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`;}}
-      // imagen format
-      const pred=d.predictions?.[0];
-      if(pred?.bytesBase64Encoded) return `data:image/png;base64,${pred.bytesBase64Encoded}`;
-      errors.push(name+': respondió pero sin imagen ('+( finishReason||'razón desconocida')+') resp='+JSON.stringify(d).slice(0,150));
-    }catch(e){errors.push(name+': '+e.message);}
-  }
-  const fullError='Gemini falló en todos los modelos:\n'+errors.map((e,i)=>`${i+1}. ${e}`).join('\n');
-  console.error(fullError);
-  throw new Error(fullError);
-}
-
-// ─── ELEVENLABS ───
-async function genVoice(text,voiceId,emotion='narrator'){
-  if(!S.apis.eleven) throw new Error('Configura ElevenLabs en APIs');
-  // eleven_v3: modelo más expresivo de ElevenLabs, soporta audio tags inline
-  // Tags: [slowly], [whispers], [sad], [excited], [softly], [intensely]
-  const vs={
-    intense: {stability:0.12,similarity_boost:0.88,style:0.95,use_speaker_boost:true},
-    normal:  {stability:0.22,similarity_boost:0.85,style:0.78,use_speaker_boost:true},
-    calm:    {stability:0.32,similarity_boost:0.82,style:0.58,use_speaker_boost:true},
-    narrator:{stability:0.18,similarity_boost:0.85,style:0.82,use_speaker_boost:true}
-  }[emotion]||{stability:0.18,similarity_boost:0.85,style:0.82,use_speaker_boost:true};
-
-  // Add v3 emotion tags based on scene emotion
-  const tagMap={intense:'[intensely] ',normal:'',calm:'[softly] ',narrator:''};
-  const taggedText=(tagMap[emotion]||'')+text;
-
-  const r=await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,{method:'POST',headers:{'Content-Type':'application/json','xi-api-key':S.apis.eleven,'Accept':'audio/mpeg'},body:JSON.stringify({text:taggedText,model_id:'eleven_v3',voice_settings:vs})});
-  if(!r.ok){const e=await r.text();if(r.status===401)throw new Error('ElevenLabs: API Key inválida');if(r.status===429)throw new Error('ElevenLabs: demasiadas solicitudes, espera 15s');throw new Error('ElevenLabs '+r.status+': '+e.slice(0,100));}
-  const blob=await r.blob();
-  return new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=rej;fr.readAsDataURL(blob);});
-}
-
-// ─── GENERATE WORLD ───
-async function genWorld(){
-  if(!S.apis.claude){toast('Configura Claude en APIs',true);openMo('mo-apis');return;}
-  const style=getStyle();
-  const btn=document.getElementById('btn-world');
-  btn.disabled=true;btn.textContent='Generando...';
-  PB.show('Creando universo...',10);
-  try{
-    const result=await claudeJSON(
-      'Eres guionista de anime exitoso. Tu regla de oro: premisa SIMPLE y EMOCIONAL. Los mejores animes se explican en una frase. Evita mundos con sistemas complicados y terminología inventada. La gente se engancha por los PERSONAJES y las EMOCIONES.',
-      `Crea el universo para un anime. Género: ${document.getElementById('w-genre').value}. Tono: ${document.getElementById('w-tone').value}.
-${document.getElementById('w-concept').value.trim() ? 'Idea del usuario (desarrolla esto exactamente): ' + document.getElementById('w-concept').value.trim() : ''}
-
-FILOSOFÍA — qué hace que un anime funcione:
-- Premisa que se entiende en 10 segundos ("un chico sin poderes en un mundo de héroes", "dos rivales que se enamoran sin saberlo")
-- Conflicto PERSONAL y EMOCIONAL, no político ni filosófico abstracto
-- Personajes con un deseo claro y un miedo claro
-- El mundo es CONTEXTO, no el protagonista
-
-EVITA: nombres inventados en idiomas falsos (Aethernam, Kael...), sistemas de magia complejos, conceptos abstractos.
-NOMBRES: todos los personajes y lugares deben tener nombres japoneses reales (Hiro, Yuki, Sora, Aoi, Kaito, Nao, Rin, etc.).
-USA: situaciones que cualquier persona entiende emocionalmente.
-
-Responde SOLO este JSON:
-{"title":"titulo simple","tagline":"frase gancho en 1 linea","concept":"de que trata en 2-3 lineas simples","centralConflict":"que quiere el protagonista y que se lo impide","hook":"por que el espectador querra ver mas","style":"${style.id}","visualStyle":"${style.vis}"}`
-    );
-    PB.set('Listo',100);PB.hide();
-    S.world=result;
-    // Auto-create project entry on first world generation
-    if(!_currentProjectId){ _currentProjectId='p_'+Date.now(); localStorage.setItem('anime_last_pid',_currentProjectId); }
-    await save();
-    renderWorldOut();
-    toast('✓ Universo "'+result.title+'" creado');
-    setTimeout(()=>switchP('p-ep'),1200);
-  }catch(e){PB.hide();toast(e.message,true);}
-  finally{btn.disabled=false;btn.textContent='⚡ Generar Universo';}
-}
-
-function renderWorldOut(){
-  const w=S.world; if(!w){document.getElementById('world-out').innerHTML='';return;}
-  document.getElementById('world-out').innerHTML=`
-    <div class="card card-warm">
-      <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-style:italic;margin-bottom:3px">${w.title}</div>
-      <div style="font-size:11px;color:var(--amber);font-style:italic;margin-bottom:10px">"${w.tagline}"</div>
-      <div style="font-size:12px;color:var(--dim);line-height:1.65;margin-bottom:8px">${w.concept}</div>
-      <div style="font-size:11px;border-top:1px solid var(--bdr);padding-top:8px"><span style="color:var(--amber)">Conflicto: </span>${w.centralConflict}</div>
+      <span class="project-del" onclick="event.stopPropagation();deleteProject('${p.id}')">🗑️</span>
     </div>
-    <button class="btn btn-p" onclick="switchP('p-ep')" style="margin-top:4px">🎬 Crear Episodio →</button>`;
+  `).join('');
+  openModal(`
+    <div class="modal-title">📁 Proyectos</div>
+    ${list || '<p style="color:var(--text-dim);font-size:13px">No hay proyectos aún</p>'}
+    <div style="margin-top:14px">
+      <button class="btn btn-primary" onclick="newProject()">➕ Nuevo Proyecto</button>
+    </div>
+    <div style="margin-top:8px">
+      <button class="btn btn-secondary" onclick="closeModal()">Cerrar</button>
+    </div>
+  `);
+}
+document.getElementById('btnProjects').addEventListener('click', openProjectsModal);
+window.switchProject = switchProject;
+window.deleteProject = deleteProject;
+
+// ══════════════════════════════════════════════
+// CLAUDE API
+// ══════════════════════════════════════════════
+async function callClaude(prompt, system) {
+  const key = getKeys().claude;
+  if (!key) throw new Error('Claude API Key no configurada');
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 8000,
+      system: system,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Claude error ${res.status}: ${err}`);
+  }
+  const data = await res.json();
+  return data.content[0].text;
 }
 
-// ─── GENERATE EPISODE ───
-async function genEpisode(){
-  if(!S.world){toast('Genera el universo primero',true);switchP('p-world');return;}
-  if(!S.apis.claude){toast('Configura Claude en APIs',true);openMo('mo-apis');return;}
-  const btn=document.getElementById('btn-ep');
-  btn.disabled=true;btn.textContent='Generando (puede tardar 1-2 min)...';
-  PB.show('Claude escribiendo el guión...',5);
-  toast('Iniciando...');
-  try{
-    const w=S.world;
-    const style=STYLES.find(s=>s.id===w.style)||STYLES[0];
-    const prevChars=S.chars.length>0?S.chars.map(c=>c.name+' ('+c.role+')').join(', '):'ninguno aún';
-    const isEcchi = style.id === 'ecchi';
-    const epSys = isEcchi
-      ? 'Eres guionista de anime romántico. Escribes narración en off emotiva y directa, como Violet Evergarden o Kimi no Na wa — sin jerga inventada ni palabras abstractas. Los personajes y lugares SIEMPRE tienen nombres japoneses. SOLO JSON válido.'
-      : 'Eres guionista de anime. Escribes narración en off emotiva y directa, como Violet Evergarden o Kimi no Na wa. Sin jerga inventada ni palabras abstractas. Los personajes y lugares SIEMPRE tienen nombres japoneses. SOLO JSON válido.';
-    const result=await claudeJSON(
-      epSys,
-      `Anime: "${w.title}"
-Concepto: ${w.concept}
-Conflicto: ${w.centralConflict}
-Función del episodio: ${document.getElementById('ep-func').value}
-${document.getElementById('ep-emotion').value.trim()?'Emoción central: '+document.getElementById('ep-emotion').value.trim():''}
-Personajes existentes (úsalos): ${prevChars}
+// ══════════════════════════════════════════════
+// GEMINI IMAGE
+// ══════════════════════════════════════════════
+async function generateGeminiImage(prompt, refImageBase64 = null, retryNeutral = false) {
+  const key = getKeys().gemini;
+  if (!key) throw new Error('Gemini API Key no configurada');
+  const models = ['gemini-2.0-flash-preview-image-generation', 'gemini-2.5-flash-preview-05-20'];
+  
+  const finalPrompt = retryNeutral
+    ? prompt.replace(/kiss|kiss|sensual|nude|naked|half-naked/gi, 'close moment, touching foreheads')
+    : prompt;
 
-REGLAS para que funcione en redes sociales:
-1. Narración en off: directa y emotiva, sin palabras inventadas ni abstractas.
-   MAL: "El Eco resonó en las Ciudades Cantoras del Éter"
-   BIEN: "Nadie sabía su nombre. Ni siquiera él."
-2. Cada escena = UN momento visual concreto. Algo visible que ocurre.
-   MAL: "Reflexiona sobre su destino"  BIEN: "Deja caer la foto y no la recoge"
-3. Estructura que engancha: cold_open impactante → tensión creciente → clímax → resolución emotiva
-4. TODOS los personajes y lugares tienen nombres japoneses (Hiro, Yuki, Sora, Akira, Kaito, Nao...)
-${isEcchi?'5. Fanservice: situaciones cotidianas con tensión (rozarse sin querer, malentendidos románticos, quedar atrapados juntos)':''}
+  const contents = [];
+  if (refImageBase64) {
+    contents.push({ parts: [
+      { inlineData: { mimeType: 'image/png', data: refImageBase64 } },
+      { text: 'Reference character appearance (maintain consistently):' }
+    ]});
+  }
+  contents.push({ parts: [{ text: finalPrompt }] });
 
-CONSISTENCIA DE PERSONAJES: cada imagePromptEN debe incluir descripción física EXACTA del personaje (cabello, ojos, ropa).
+  for (const model of models) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents,
+          generationConfig: {
+            responseModalities: ['IMAGE', 'TEXT'],
+          },
+        }),
+        signal: AbortSignal.timeout(120000),
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        if (err.includes('SAFETY') && !retryNeutral) {
+          return generateGeminiImage(prompt, refImageBase64, true);
+        }
+        throw new Error(`Gemini ${model} error ${res.status}: ${err}`);
+      }
+      const data = await res.json();
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      for (const part of parts) {
+        if (part.inlineData?.mimeType?.startsWith('image/')) {
+          return part.inlineData.data; // base64
+        }
+      }
+      throw new Error('No image in response');
+    } catch(e) {
+      if (model === models[models.length - 1]) throw e;
+      console.warn(`${model} failed, trying fallback`, e.message);
+    }
+  }
+}
 
-Genera EXACTAMENTE 30 escenas. Solo narración en off, sin diálogos.
+// ══════════════════════════════════════════════
+// ELEVENLABS
+// ══════════════════════════════════════════════
+function getVoiceParams(act) {
+  if (act === 'climax') return { stability: 0.12, similarity_boost: 0.88, style: 0.95, use_speaker_boost: true };
+  if (act === 'resolution') return { stability: 0.32, similarity_boost: 0.82, style: 0.58, use_speaker_boost: true };
+  if (act === 'cold_open') return { stability: 0.22, similarity_boost: 0.85, style: 0.78, use_speaker_boost: true };
+  return { stability: 0.18, similarity_boost: 0.85, style: 0.82, use_speaker_boost: true };
+}
 
-RESPONDE SOLO ESTE JSON:
+function addAudioTags(text, act) {
+  if (act === 'climax') return `[intensely] ${text}`;
+  if (act === 'resolution') return `[softly] ${text}`;
+  return text;
+}
+
+async function generateAudio(text, act) {
+  const key = getKeys().eleven;
+  const voiceId = state.voiceId || 'JBFqnCBsd6RMkjVDRZzb';
+  if (!key) throw new Error('ElevenLabs API Key no configurada');
+  const params = getVoiceParams(act);
+  const taggedText = addAudioTags(text, act);
+  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'xi-api-key': key },
+    body: JSON.stringify({
+      text: taggedText,
+      model_id: 'eleven_v3',
+      voice_settings: params,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`ElevenLabs error ${res.status}: ${err}`);
+  }
+  const blob = await res.blob();
+  return await blobToBase64(blob);
+}
+
+function blobToBase64(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(blob);
+  });
+}
+
+// ══════════════════════════════════════════════
+// UNIVERSE GENERATION
+// ══════════════════════════════════════════════
+const GENRE_PROMPTS = {
+  sistema_oculto: `Género: Sistema Oculto / Donghua. 
+Características obligatorias:
+- Protagonista con habilidad o sistema sobrenatural que mantiene en SECRETO
+- Cobra precios ridiculamente bajos por trabajos imposibles (ej: 500 yuanes por reparar un satélite)  
+- Deja a todos con la boca abierta sin mostrar emoción (cara de póker absoluta)
+- Contraste entre lo mundano y lo extraordinario como fuente de humor y tensión
+- Escalada constante: cada episodio el protagonista resuelve algo más imposible
+- Personajes secundarios que pasan de incredulidad → shock → respeto
+Tono visual: anime 2D chino moderno, colores vibrantes, expresiones exageradas de secundarios, ambientes urbanos contemporáneos`,
+
+  isekai: `Género: Isekai / Otro Mundo.
+Características obligatorias:
+- Protagonista japonés ordinario que muere o es transportado a un mundo de fantasía/RPG diferente
+- El mundo tiene reglas de sistema RPG: niveles, clases, habilidades, mazmorras, gremios
+- El protagonista tiene alguna habilidad, poder o conocimiento del mundo moderno que lo hace ÚNICO en ese mundo (puede ser una habilidad aparentemente inútil que resulta ser OP, o conocimiento de alquimia/ingeniería/cocina)
+- Mezcla de maravilla genuina ante el nuevo mundo con humor del choque cultural (costumbres, magia, criaturas)
+- Personajes del otro mundo que se asombran de las costumbres del protagonista (ej: concepto de baño caliente, cocina moderna, estrategias militares)
+- Tensión entre querer volver a casa y encontrar un nuevo hogar/propósito en el mundo alternativo
+- Party de aventureros con roles variados: guerrero, maga, curandera, pícaro — cada uno con personalidad distinta
+- Sistema de magia o combate claramente definido con reglas internas consistentes
+Tono visual: fantasía épica colorida, mapas de mundo, mazmorra oscura contrastada con cielos abiertos, diseños de criaturas fantásticas, efectos de magia luminosos`,
+
+  post_apocaliptico: `Género: Post-Apocalíptico.
+Características obligatorias:
+- Mundo destruido por guerra, pandemia, desastre natural, IA o colapso civilizacional — la causa queda en el pasado como misterio que se devela
+- Civilización fragmentada: asentamientos humanos aislados, recursos escasos, facciones con ideologías opuestas sobre cómo reconstruir
+- Protagonista con habilidad de supervivencia especial o conocimiento del mundo anterior que otros no tienen
+- Tensión entre esperanza de reconstrucción y desesperanza de que "así siempre fue y así siempre será"
+- El mundo natural reclamando ciudades abandonadas: plantas entre el asfalto, animales mutados, ruinas de lo familiar (centros comerciales, escuelas, metros)
+- Flashbacks del mundo anterior como contraste emocional poderoso
+- Dilema moral constante: ¿se puede sobrevivir sin perder la humanidad?
+- Antagonista que no es puro villano sino alguien con una visión diferente pero comprensible de lo que "salvar la humanidad" significa
+Tono visual: colores desaturados con toques de color vibrante en la naturaleza recuperada, arquitectura en ruinas con vida creciendo entre los escombros, cielos dramáticos (tormentas de ceniza, auroras post-radiación), contraste entre lo que fue y lo que es`,
+
+  ecchi: `Género: Ecchi / Fan Service.
+Características obligatorias:
+- Protagonista masculino en situaciones socialmente incómodas rodeado de personajes femeninos con personalidades muy marcadas y distintas entre sí
+- Fan service insinuante y sugerente: situaciones de malentendido que crean tensión romántica y contacto físico accidental (caídas, puertas abiertas, cambios de ropa interrumpidos, tallas equivocadas)
+- Cada personaje femenino tiene un arquetipo claro: tsundere (fría/agresiva que oculta afecto), kuudere (estoica), genki (enérgica), dandere (tímida), onee-san (madura y calmada), imouto (hermana menor)
+- Narración del protagonista cargada de pensamientos internos que comenta cada situación embarazosa con humor y vergüenza
+- Escalada de situaciones: cada escena supera en incomodidad y tensión a la anterior
+- Momentos de ternura genuina entre el fan service: las relaciones tienen profundidad emocional real debajo de la comedia romántica
+- Descripción de apariencia física detallada y atractiva de los personajes: ropa ajustada, uniforme escolar o ropa de verano, expresiones faciales exageradas de rubor o sorpresa
+- Narración en primera persona que mezcla el pensamiento deseable del protagonista con su reacción avergonzada externa ("por fuera dije que no había visto nada. Por dentro, mi corazón latía a 200.")
+Tono visual: colores pastel brillantes, diseño de personajes detallado y expresivo, efectos de rubor (líneas rojas en mejillas), sparkles y flores decorativas en momentos románticos, contraluz dramático en escenas sugerentes`,
+
+  romance: `Género: Romance / Drama. Referencia estética: Your Name, Violet Evergarden. Emociones profundas, conexiones imposibles, nostalgia y esperanza.`,
+  accion: `Género: Acción / Aventura. Combates espectaculares, superación personal, vínculos forjados en batalla.`,
+  shounen: `Género: Shōnen. Amistad, esfuerzo, victoria. Protagonista que crece superando límites. Rivales que se vuelven aliados.`,
+  slice_of_life: `Género: Slice of Life. Belleza en lo cotidiano. Momentos pequeños que significan todo. Personajes profundamente humanos.`,
+  fantasia: `Género: Fantasía. Mundo con magia y reglas propias, pero con conflicto emocional genuino en su núcleo.`,
+  misterio: `Género: Misterio / Thriller. Tensión psicológica, verdades ocultas, un misterio que se devela lentamente.`,
+  sci_fi: `Género: Sci-Fi. Tecnología como metáfora de la condición humana. Futuro cercano, preguntas filosóficas.`,
+  horror: `Género: Horror Psicológico. Miedo al yo mismo, al pasado, a la pérdida. Más psychological que gore.`,
+};
+
+document.getElementById('btnGenerarUniverso').addEventListener('click', async () => {
+  const btn = document.getElementById('btnGenerarUniverso');
+  const genero = document.getElementById('generoSelect').value;
+  const tono = document.getElementById('tonoInput').value;
+  const concepto = document.getElementById('conceptoInput').value;
+  
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Generando...';
+  
+  const system = `Eres un escritor experto en anime y donghua viral para TikTok/Reels.
+REGLAS ABSOLUTAS:
+- Todos los personajes y lugares tienen nombres japoneses reales: Hiro, Yuki, Sora, Kaito, Nao, Rin, Kenji, Mei, Taro, Hana, Riku, Aoi, etc.
+- PROHIBIDO: nombres inventados en idiomas falsos (Aethernam, Kael, Zythara, Vael, etc.)
+- Premisa simple que se entiende en 10 segundos
+- Conflicto personal y emocional, NO político ni cosmológico abstracto
+- Responde SOLO en JSON válido, sin markdown backticks`;
+
+  const prompt = `${GENRE_PROMPTS[genero] || ''}
+Tono narrativo: ${tono || 'neutral'}
+${concepto ? `Concepto semilla: ${concepto}` : ''}
+
+Genera un universo de anime. Devuelve EXACTAMENTE este JSON:
 {
-  "number": 1,
-  "title": "título del episodio",
-  "summary": "de qué trata en 1 línea simple",
+  "title": "Título en japonés con subtítulo español",
+  "tagline": "Una frase gancho de máximo 12 palabras",
+  "concepto": "Descripción del mundo en 2-3 frases. Simple y claro.",
+  "conflicto": "El conflicto central emocional en 2 frases",
+  "hook": "El gancho del primer episodio que engancha al espectador",
+  "setting": "Lugar y época del mundo",
+  "genero": "${genero}"
+}`;
+
+  try {
+    const raw = await callClaude(prompt, system);
+    const cleaned = raw.replace(/```json\n?|\n?```/g, '').trim();
+    const universe = JSON.parse(cleaned);
+    state.universe = universe;
+    saveState();
+    renderUniverse();
+    showToast('¡Universo creado!', 'success');
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+    openErrorModal('Error generando universo', e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span>🌟</span> Generar Universo';
+  }
+});
+
+function renderUniverse() {
+  const el = document.getElementById('universoResult');
+  if (!state.universe) { el.style.display = 'none'; return; }
+  const u = state.universe;
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div class="universe-card">
+      <div class="universe-title">${u.title || ''}</div>
+      <div class="universe-tagline">${u.tagline || ''}</div>
+      <div class="universe-field"><div class="universe-field-label">Concepto</div><div class="universe-field-value">${u.concepto || ''}</div></div>
+      <div class="universe-field"><div class="universe-field-label">Conflicto Central</div><div class="universe-field-value">${u.conflicto || ''}</div></div>
+      <div class="universe-field"><div class="universe-field-label">Ambientación</div><div class="universe-field-value">${u.setting || ''}</div></div>
+      <div class="hook-badge">🎣 ${u.hook || ''}</div>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════
+// EPISODE GENERATION
+// ══════════════════════════════════════════════
+document.getElementById('btnGenerarEpisodio').addEventListener('click', async () => {
+  if (!state.universe) { showToast('Genera un universo primero', 'error'); return; }
+  const btn = document.getElementById('btnGenerarEpisodio');
+  const voiceId = document.getElementById('voiceIdInput').value.trim();
+  if (voiceId) { state.voiceId = voiceId; }
+  
+  btn.disabled = true;
+  const progDiv = document.getElementById('epProgress');
+  progDiv.style.display = 'block';
+  setProgress('ep', 0, 'Generando guión...');
+
+  const funcion = document.getElementById('funcionSelect').value;
+  const emocion = document.getElementById('emocionInput').value;
+  const u = state.universe;
+
+  const genrePrompt = GENRE_PROMPTS[u.genero] || '';
+  
+  const system = `Eres un guionista de anime experto. REGLAS:
+- Narración en PRIMERA PERSONA, el protagonista narra sus propios pensamientos
+- 4 a 7 frases por escena, prosa fluida con ritmo natural — NO frases telegráficas
+- Pensamiento interno visible: el narrador comenta lo que siente vs lo que muestra
+- Contraste humorístico si el género es sistema_oculto
+- Ego tranquilo: el protagonista sabe que es el mejor pero actúa como si nada
+- Gancho al final de cada escena
+- Nombres japoneses reales SIEMPRE
+- imagePromptEN: prompt en INGLÉS para generar imagen 9:16 vertical, estilo anime/donghua 2D, muy descriptivo
+- Responde SOLO JSON válido`;
+
+  const prompt = `Universo: ${u.title}
+${genrePrompt}
+Concepto: ${u.concepto}
+Conflicto: ${u.conflicto}
+Función del episodio: ${funcion}
+Emoción central: ${emocion}
+
+NARRACIÓN CORRECTA (así debe sonar):
+"Nunca imaginé que una investigadora del gobierno vendría a mi taller un martes por la mañana. Puso la caja sobre el mostrador sin decir una palabra. La miré. Luego la miré a ella. Le sugerí que intentara en la ferretería de al lado. Solo quería ver su cara."
+
+Genera exactamente 30 escenas. Distribución EXACTA de actos:
+- cold_open: escenas 1-2 (2 escenas)
+- act1: escenas 3-10 (8 escenas)  
+- act2: escenas 11-18 (8 escenas)
+- climax: escenas 19-25 (7 escenas)
+- resolution: escenas 26-29 (4 escenas)
+- post_credits: escena 30 (1 escena)
+
+Devuelve JSON:
+{
+  "characters": [
+    {
+      "id": "c1",
+      "name": "Nombre japonés",
+      "role": "protagonista|deuteragonista|antagonista|apoyo",
+      "appearance": "Descripción detallada: pelo exacto, color de ojos, ropa habitual, rasgos distintivos",
+      "personality": "Personalidad en 2 frases",
+      "backstory": "Historia de fondo en 2-3 frases"
+    }
+  ],
   "scenes": [
     {
       "id": "s1",
       "num": 1,
       "act": "cold_open",
-      "title": "título corto",
-      "location": "lugar",
-      "timeOfDay": "amanecer",
-      "chars": ["NombrePersonaje"],
-      "narration": "narración en off emotiva y directa. Sin jerga inventada. Como un anime real.",
-      "imagePromptEN": "${isEcchi ? 'anime scene, [character name]: [exact hair color+style], [eye color], [specific outfit] — [romantic moment: blushing, close contact, awkward situation] — [location] — soft warm lighting, 9:16 vertical' : '[Character name]: [exact hair color+style], [eye color], [specific clothing] — [one clear visual action] — [location] — [lighting mood] — 9:16 vertical anime'}"
-    }
-  ],
-  "newChars": [
-    {
-      "id": "c1",
-      "name": "nombre japonés (ej: Hiro, Yuki, Sora, Akira)",
-      "role": "protagonista",
-      "age": 17,
-      "gender": "Femenino",
-      "appearance": "pelo [color+estilo exacto], ojos [color], rasgos visibles",
-      "clothing": "ropa específica con colores y detalles",
-      "personality": "2-3 rasgos simples",
-      "backstory": "origen en 1 línea",
-      "imagePromptEN": "Anime character portrait — [exact hair: color, length, style] — [exact eye color] — [exact clothing] — [expression] — clean 2D anime style, white background, 9:16"
+      "title": "Título poético de la escena",
+      "location": "Lugar específico",
+      "timeOfDay": "amanecer|mañana|mediodía|tarde|atardecer|noche",
+      "chars": ["c1"],
+      "narration": "Narración en primera persona, 4-7 frases fluidas con pensamiento interno y gancho final",
+      "imagePromptEN": "Vertical 9:16 anime/donghua 2D scene: [detailed scene description], vibrant colors, cinematic composition, [character appearances if present], [lighting/mood]"
     }
   ]
-}
-DISTRIBUCIÓN 30 escenas: cold_open×2, act1×8, act2×8, climax×7, resolution×4, post_credits×1`,
-      14000
-    );
-    if(!Array.isArray(result.scenes)||result.scenes.length===0) throw new Error('No se generaron escenas. Intenta de nuevo.');
-    S.episode={number:result.number,title:result.title,summary:result.summary};
-    S.scenes=result.scenes.map(s=>({...s,imageData:null,narrationAudio:null}));
-    if(Array.isArray(result.newChars)){
-      const ex=new Set(S.chars.map(c=>c.name.toLowerCase()));
-      for(const c of result.newChars){if(c.name&&!ex.has(c.name.toLowerCase())){S.chars.push({...c,imageData:null});ex.add(c.name.toLowerCase());}}
-    }
-    await save();
-    PB.hide();
-    renderEpPanel();
-    renderChars();
-    renderExport();
-    toast('✓ "'+result.title+'" — '+result.scenes.length+' escenas');
-    if(S.apis.gemini) setTimeout(genAllCharImgs,600);
-  }catch(e){
-    PB.hide();
-    toast(e.message.includes('JSON')||e.message.includes('parse')?'Error de formato — intenta de nuevo':e.message,true);
-    console.error('[genEpisode]',e);
-  }finally{
-    btn.disabled=false;btn.textContent='🎬 Generar Episodio (30 escenas)';
+}`;
+
+  try {
+    setProgress('ep', 20, 'Procesando respuesta...');
+    const raw = await callClaude(prompt, system);
+    setProgress('ep', 60, 'Parseando datos...');
+    const cleaned = raw.replace(/```json\n?|\n?```/g, '').trim();
+    const data = JSON.parse(cleaned);
+    
+    state.characters = data.characters || [];
+    state.scenes = data.scenes || [];
+    
+    setProgress('ep', 90, 'Guardando...');
+    saveState();
+    renderCharacters();
+    renderScenes();
+    renderStats();
+    setProgress('ep', 100, '¡Episodio generado!');
+    showToast(`✅ 30 escenas generadas`, 'success');
+    document.getElementById('batchControls').style.display = 'block';
+    
+    setTimeout(() => { progDiv.style.display = 'none'; }, 2000);
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+    openErrorModal('Error generando episodio', e.message);
+    progDiv.style.display = 'none';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span>✨</span> Generar Episodio (30 escenas)';
   }
-}
+});
 
-// ─── RENDER EPISODE PANEL ───
-function renderAll(){
-  renderChars();
-  renderEpPanel();
-  renderExport();
-  updateAPI();
-}
-function renderEpPanel(){
-  const hasWorld=!!S.world; const hasEp=!!S.episode;
-  document.getElementById('ep-no-world').style.display=!hasWorld?'block':'none';
-  document.getElementById('ep-form').style.display=hasWorld&&!hasEp?'block':'none';
-  document.getElementById('ep-content').style.display=hasEp?'block':'none';
-  if(!hasEp) return;
-  document.getElementById('ep-header').innerHTML=`
-    <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-style:italic">Ep ${S.episode.number}: ${S.episode.title}</div>
-    <div style="font-size:11px;color:var(--dim);margin-top:4px">${S.scenes.length} escenas · ${S.scenes.filter(s=>s.imageData).length} imágenes · ${S.scenes.filter(s=>s.narrationAudio).length} audios</div>
-    <div class="btn-row" style="margin-top:12px">
-      <button class="btn btn-s" onclick="genAllImgs()" ${!S.apis.gemini?'disabled':''} style="font-size:12px">${S.scenes.filter(s=>s.imageData).length>0?'↻ Reimaginar':'🎨 Generar imágenes'}</button>
-      <button class="btn btn-g" onclick="resetEp()" style="font-size:12px">+ Nuevo episodio</button>
-    </div>`;
-  const nc=S.scenes.filter(s=>s.narrationAudio).length;
-  document.getElementById('nar-count').textContent=nc+' / '+S.scenes.length;
-  updateAudioSection();
-  const vi=document.getElementById('vid-input');
-  if(vi) vi.value=S.world?.voiceId||'';
-  renderScenes();
-}
-
-function renderScenes(){
-  const el=document.getElementById('scenes-list'); if(!el) return;
-  if(!S.scenes.length){el.innerHTML='';return;}
-  el.innerHTML=S.scenes.map(s=>`
-    <div class="sc-card" id="sc-${s.id}">
-      ${s.imageData?`<img class="sc-img" src="${s.imageData}" loading="lazy">`:`<div class="sc-ph">${s._loading?'<span class="loading">Generando imagen...</span>':'📷 Sin imagen'}</div>`}
-      <div class="sc-body">
-        <div class="sc-num">${String(s.num).padStart(2,'0')} · ${s.act} · ${s.timeOfDay||''}</div>
-        <div class="sc-title">${s.title}</div>
-        <div class="sc-nar">${s.narration}</div>
-        <div class="sc-actions">
-          <button class="btn btn-g" onclick="regenImg('${s.id}')" ${!S.apis.gemini?'disabled':''}>${s._loading?'⏳':s.imageData?'↻':'🎨'} Imagen</button>
-          ${s.narrationAudio
-            ?`<div style="display:flex;gap:6px">
-                <button class="btn btn-s" onclick="playNar('${s.id}')">▶ Escuchar</button>
-                <button class="btn" style="background:rgba(220,60,60,0.15);color:#e07070;border:1px solid rgba(220,60,60,0.3);padding:6px 10px;border-radius:6px;font-size:11px" onclick="deleteNar('${s.id}')" title="Borrar audio para regenerar">🗑</button>
-              </div>`
-            :`<button class="btn btn-g" onclick="regenNar('${s.id}')" ${!S.apis.eleven||!S.world?.voiceId?'disabled':''}>🎙 Audio</button>`}
-        </div>
-      </div>
-    </div>`).join('');
-}
-
-// ─── IMAGES ───
-function buildScenePrompt(s){
-  const w=S.world||{};
-  const isEcchi=w.style==='ecchi';
-
-  // Inject exact physical description of each character in the scene
-  const sceneCharNames=(s.chars||s.characters||[]);
-  const charDescs=S.chars
-    .filter(ch=>sceneCharNames.some(n=>n&&n.toLowerCase()===ch.name.toLowerCase()))
-    .map(ch=>{
-      const app=ch.appearance||ch.physicalDescription||'';
-      const cloth=ch.clothing||'school uniform';
-      // Keep short — long prompts trigger timeouts
-      return ch.name+': '+app.slice(0,120)+', '+cloth.slice(0,80);
-    })
-    .join('. ');
-
-  const styleRef=isEcchi
-    ? 'romantic anime illustration, soft warm lighting, detailed clean linework, appealing character designs'
-    : (w.visualStyle||'traditional 2D anime, cinematic');
-
-  // Collect reference images from characters in this scene (for consistency)
-  const refChars=S.chars
-    .filter(ch=>sceneCharNames.some(n=>n&&n.toLowerCase()===ch.name.toLowerCase())&&ch.imageData&&ch.imageData.startsWith('data:'))
-    .map(ch=>ch.imageData)
-    .slice(0,3); // max 3 ref images to avoid token limits
-  const refImages=refChars;
-
-  // Safety-friendly ecchi phrasing — no words that trigger IMAGE_SAFETY filter
-  const ecchiNote=isEcchi
-    ? 'Romantic anime art style. Characters in intimate or playful situations. Attractive character designs with expressive emotional reactions, blushing.'
-    : '';
-
-  const prompt=[
-    '2D anime illustration, '+styleRef+':',
-    s.imagePromptEN,
-    charDescs ? 'Characters (draw exactly as described, consistent across scenes): '+charDescs : '',
-    ecchiNote,
-    refChars.length ? 'Use the provided reference images to keep exact character appearance.' : '',
-    'Rules: exactly 2 arms and 2 legs per person, one instance of each character only, correct anatomy.',
-    '9:16 vertical portrait format. No 3D render, no watermark, no extra limbs, no clones.'
-  ].filter(Boolean).join(' | ');
-
-  return {prompt, refImages};
-}
-
-async function genAllImgs(){
-  if(!S.apis.gemini){toast('Configura Gemini en APIs',true);return;}
-  const pending=S.scenes.filter(s=>!s.imageData);
-  if(!pending.length){toast('Todas las imágenes ya existen');return;}
-  if(!confirm('Generar '+pending.length+' imágenes. ¿Continuar?\nPuede tardar varios minutos.')) return;
-  PB.show('Generando imágenes 0/'+pending.length,0);
-  let done=0, errs=0;
-  for(const s of pending){
-    PB.set('Imagen '+(done+1)+'/'+pending.length+': '+s.title,(done/pending.length)*100);
-    s._loading=true; renderScenes();
-    try{
-      // 90 second timeout per image
-      const {prompt:sp1,refImages:ri1}=buildScenePrompt(s);const imgPromise=geminiImg(sp1,ri1);
-      const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout 120s — intenta de nuevo')),120000));
-      s.imageData=await Promise.race([imgPromise,timeout]);
-      s._loading=false; done++; await save(); renderScenes();
-      await new Promise(r=>setTimeout(r,600));
-    }catch(e){
-      s._loading=false; errs++;
-      renderScenes();
-      showErrModal('Escena '+s.num+' ('+s.title+'):\n'+e.message);
-      await new Promise(r=>setTimeout(r,1500));
-    }
-  }
-  PB.hide(); renderEpPanel(); renderExport();
-  toast(errs===0?'✓ '+done+' imágenes generadas':done+' OK · '+errs+' errores',errs>0);
-}
-
-async function regenImg(id){
-  const s=S.scenes.find(x=>x.id===id); if(!s||!S.apis.gemini){toast('Configura Gemini',true);return;}
-  s._loading=true;s.imageData=null;renderScenes();
-  try{
-    const {prompt:sp2,refImages:ri2}=buildScenePrompt(s);const p2=geminiImg(sp2,ri2);
-    const t2=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout 120s')),120000));
-    s.imageData=await Promise.race([p2,t2]);
-    s._loading=false;await save();renderScenes();renderExport();
-  }catch(e){s._loading=false;renderScenes();showErrModal('Error escena '+s.num+':\n'+e.message);}
-}
-
-// ─── CHARACTER IMAGES ───
-async function genAllCharImgs(){
-  const pending=S.chars.filter(c=>!c.imageData&&c.imagePromptEN);
-  for(const c of pending){
-    try{
-      const isEcchi=S.world?.style==='ecchi';
-      const charPrompt=c.imagePromptEN+'\nVISUAL STYLE: '+(isEcchi?'ecchi anime character portrait, attractive design, Shuumatsu no Harem style':S.world?.visualStyle||'cinematic anime character portrait')+'\nANATOMY: exactly 2 arms, 2 legs, correct hand anatomy, single character only\nFORBIDDEN: extra limbs, duplicate person, 3D render';
-      c.imageData=await geminiImg(charPrompt);await save();renderChars();await new Promise(r=>setTimeout(r,1000));}
-    catch(e){console.warn('char img err:',e.message);}
-  }
-}
-async function regenCharImg(id){
-  const c=S.chars.find(x=>x.id===id); if(!c||!S.apis.gemini){toast('Configura Gemini',true);return;}
-  c.imageData=null;renderChars();
-  try{
-    const isEcchi2=S.world?.style==='ecchi';
-    const cp=c.imagePromptEN+'\nVISUAL STYLE: '+(isEcchi2?'ecchi anime character portrait, Shuumatsu no Harem style':S.world?.visualStyle||'cinematic anime')+'\nANATOMY: exactly 2 arms, 2 legs, single character only, no extra limbs\nFORBIDDEN: duplicate, 3D render';
-    c.imageData=await geminiImg(cp);await save();renderChars();}
-  catch(e){toast(e.message,true);}
-}
-
-// ─── NARRATION ───
-async function genAllNar(){
-  if(!S.apis.eleven||!S.world?.voiceId){toast('Configura ElevenLabs y Voice ID en APIs',true);openMo('mo-apis');return;}
-  const pending=S.scenes.filter(s=>!s.narrationAudio&&s.narration);
-  if(!pending.length){toast('Narración ya completa ✓');return;}
-  const cost=(pending.reduce((a,s)=>a+(s.narration||'').length,0)*0.0003).toFixed(3);
-  if(!confirm('Generar '+pending.length+' narraciones.\nCosto aprox: $'+cost+'\nVoice ID: '+S.world?.voiceId.slice(0,16)+'...')) return;
-  PB.show('Generando narración...',0);
-  let done=0;
-  const emap={cold_open:'calm',act1:'normal',act2:'normal',climax:'intense',resolution:'calm',post_credits:'calm'};
-  for(const s of pending){
-    PB.set('Narración '+(done+1)+'/'+pending.length+': '+s.title,(done/pending.length)*100);
-    try{
-      s.narrationAudio=await genVoice(s.narration,S.world?.voiceId,emap[s.act]||'narrator');
-      done++; await save(); renderScenes();
-      document.getElementById('nar-count').textContent=S.scenes.filter(x=>x.narrationAudio).length+' / '+S.scenes.length;
-      await new Promise(r=>setTimeout(r,600));
-    }catch(e){toast('Error sc'+s.num+': '+e.message.slice(0,60),true);await new Promise(r=>setTimeout(r,1200));}
-  }
-  PB.hide(); renderExport(); toast('✓ '+done+' narraciones generadas');
-}
-
-async function regenNar(id){
-  const s=S.scenes.find(x=>x.id===id);
-  if(!s||!S.apis.eleven||!S.world?.voiceId){toast('Configura ElevenLabs y Voice ID',true);openMo('mo-apis');return;}
-  try{
-    const em={cold_open:'calm',climax:'intense',resolution:'calm'}[s.act]||'narrator';
-    s.narrationAudio=await genVoice(s.narration,S.world?.voiceId,em);
-    await save();renderScenes();
-    document.getElementById('nar-count').textContent=S.scenes.filter(x=>x.narrationAudio).length+' / '+S.scenes.length;
-    toast('✓ Audio generado');
-  }catch(e){toast(e.message,true);}
-}
-
-function playNar(id){
-  const s=S.scenes.find(x=>x.id===id); if(!s?.narrationAudio) return;
-  new Audio(s.narrationAudio).play().catch(e=>toast('Error: '+e.message,true));
-}
-
-async function deleteNar(id){
-  const s=S.scenes.find(x=>x.id===id); if(!s) return;
-  if(!confirm('¿Borrar el audio de esta escena?')) return;
-  s.narrationAudio=null;
-  try{const req=indexedDB.open('AnimeStudio2',1);req.onsuccess=e=>{const db=e.target.result;const tx=db.transaction('blobs','readwrite');tx.objectStore('blobs').delete('sn_'+(_currentProjectId||'default')+'_'+id);};}catch(e){}
-  await save(); renderScenes();
-  toast('Audio borrado — cambia el Voice ID y regenera');
-}
-
-async function deleteAllNar(){
-  if(!S.scenes.some(s=>s.narrationAudio)) return;
-  if(!confirm('¿Borrar TODOS los audios del episodio?\nPodrás regenerarlos con otro narrador.')) return;
-  for(const s of S.scenes){
-    s.narrationAudio=null;
-    try{const req=indexedDB.open('AnimeStudio2',1);req.onsuccess=e=>{const db=e.target.result;const tx=db.transaction('blobs','readwrite');tx.objectStore('blobs').delete('sn_'+(_currentProjectId||'default')+'_'+s.id);};}catch(e){}
-  }
-  await save(); renderScenes();
-  toast('Todos los audios borrados');
-}
-
-// ─── CHARS PANEL ───
-function renderChars(){
-  const el=document.getElementById('chars-list');
-  if(!S.chars.length){
-    el.innerHTML='<div class="empty"><div class="ei">👤</div><div class="et">Los personajes se crean automáticamente al generar el episodio.</div><button class="btn btn-s" onclick="switchP(\'p-ep\')" style="max-width:180px;margin:0 auto">→ Episodio</button></div>';
+// ══════════════════════════════════════════════
+// RENDER CHARACTERS
+// ══════════════════════════════════════════════
+async function renderCharacters() {
+  const container = document.getElementById('personajesContainer');
+  if (!state.characters.length) {
+    container.innerHTML = `<div class="empty-state"><div class="emoji">👥</div><p>Los personajes aparecerán después de generar un episodio</p></div>`;
     return;
   }
-  el.innerHTML=S.chars.map(c=>`
-    <div class="ch-card">
-      ${c.imageData?`<img class="ch-img" src="${c.imageData}" loading="lazy">`:`<div class="ch-ph">👤</div>`}
-      <div class="ch-info">
-        <div class="ch-role">${c.role||'personaje'} · ${c.age||'?'} años</div>
-        <div class="ch-name">${c.name}</div>
-        <div class="ch-desc">${(c.personality||c.appearance||'').slice(0,110)}</div>
-        <div class="ch-actions">
-          <button class="btn btn-g" onclick="showChar('${c.id}')">Ver perfil</button>
-          <button class="btn btn-g" onclick="regenCharImg('${c.id}')" ${!S.apis.gemini?'disabled':''}>↻ Imagen</button>
+  
+  const items = await Promise.all(state.characters.map(async c => {
+    const imgData = await dbGet(imgKey(c.id));
+    return { char: c, imgData };
+  }));
+
+  container.innerHTML = items.map(({ char: c, imgData }) => `
+    <div class="char-card" id="char-${c.id}">
+      <div class="char-header">
+        <div class="char-img-wrap" id="charimg-${c.id}">
+          ${imgData ? `<img src="data:image/png;base64,${imgData}" alt="${c.name}">` : `<div class="char-img-placeholder">🧑</div>`}
+        </div>
+        <div class="char-info">
+          <div class="char-name">${c.name}</div>
+          <div class="char-role">${c.role}</div>
+          <div class="char-detail">${c.appearance || ''}</div>
         </div>
       </div>
-    </div>`).join('');
+      <div style="padding:0 14px 4px">
+        <div style="font-size:12px;color:var(--text-dim)">${c.personality || ''}</div>
+      </div>
+      <div class="char-actions">
+        <button class="btn btn-secondary btn-sm" onclick="generateCharImage('${c.id}')">
+          ${imgData ? '🔄 Regenerar' : '🎨 Generar'} imagen
+        </button>
+      </div>
+    </div>
+  `).join('');
 }
 
-function showChar(id){
-  const c=S.chars.find(x=>x.id===id); if(!c) return;
-  document.getElementById('mo-char-body').innerHTML=`
-    ${c.imageData?`<img src="${c.imageData}" style="width:100%;border-radius:10px;margin-bottom:14px;aspect-ratio:9/16;object-fit:cover">`:''}
-    <div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-style:italic">${c.name}</div>
-    <div style="font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:14px">${c.role} · ${c.age} años · ${c.gender}</div>
-    <div class="field"><label>Apariencia</label><div style="font-size:13px;color:var(--dim)">${c.appearance||'—'}</div></div>
-    <div class="field"><label>Personalidad</label><div style="font-size:13px;color:var(--dim)">${c.personality||'—'}</div></div>
-    <div class="field"><label>Historia</label><div style="font-size:13px;color:var(--dim)">${c.backstory||'—'}</div></div>`;
-  openMo('mo-char');
-}
-
-// ─── EXPORT ───
-function renderExport(){
-  const has=!!S.episode;
-  document.getElementById('exp-empty').style.display=has?'none':'block';
-  document.getElementById('exp-ready').style.display=has?'block':'none';
-  if(!has) return;
-  document.getElementById('exp-imgs').textContent=S.scenes.filter(s=>s.imageData).length+' / '+S.scenes.length;
-  document.getElementById('exp-auds').textContent=S.scenes.filter(s=>s.narrationAudio).length+' / '+S.scenes.length;
-  document.getElementById('exp-srt').textContent=S.scenes.some(s=>s.narrationAudio)?'✓':'—';
-}
-
-function ms2srt(ms){const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000),s=Math.floor((ms%60000)/1000),r=ms%1000;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+','+String(r).padStart(3,'0');}
-
-async function getAudDur(url){return new Promise(res=>{const a=new Audio(url);a.onloadedmetadata=()=>res(Math.round(a.duration*1000));a.onerror=()=>res(8000);setTimeout(()=>res(8000),2500);});}
-
-// Concatenate MP3 audio buffers into a single ArrayBuffer
-async function concatAudioBlobs(base64List){
-  const buffers=[];
-  for(const b64 of base64List){
-    const binary=atob(b64.split(',')[1]);
-    const bytes=new Uint8Array(binary.length);
-    for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
-    buffers.push(bytes.buffer);
+window.generateCharImage = async function(charId) {
+  const char = state.characters.find(c => c.id === charId);
+  if (!char) return;
+  const wrap = document.getElementById('charimg-' + charId);
+  if (!wrap) return;
+  
+  const prevContent = wrap.innerHTML;
+  wrap.innerHTML = `<div class="char-generating">⏳</div>`;
+  
+  const prompt = `Anime/donghua 2D character portrait, vertical 9:16, full body character reference sheet: ${char.name}, ${char.appearance}. Clean anime art style, vibrant colors, white background, professional character design. High quality illustration.`;
+  
+  try {
+    const imgData = await generateGeminiImage(prompt);
+    await dbSet(imgKey(charId), imgData);
+    wrap.innerHTML = `<img src="data:image/png;base64,${imgData}" alt="${char.name}">`;
+    showToast('Imagen generada', 'success');
+  } catch(e) {
+    wrap.innerHTML = prevContent;
+    showToast('Error generando imagen', 'error');
+    openErrorModal('Error imagen personaje', e.message);
   }
-  const total=buffers.reduce((a,b)=>a+b.byteLength,0);
-  const out=new Uint8Array(total);
-  let off=0;
-  for(const buf of buffers){out.set(new Uint8Array(buf),off);off+=buf.byteLength;}
-  const blob=new Blob([out],{type:'audio/mpeg'});
-  const url=URL.createObjectURL(blob);
-  return new Promise(res=>{
-    const a=new Audio(url);
-    a.onloadedmetadata=()=>{URL.revokeObjectURL(url);
-      const b64=btoa(String.fromCharCode(...out));
-      res({dataUrl:'data:audio/mpeg;base64,'+b64,durationMs:Math.round(a.duration*1000)});};
-    a.onerror=()=>{URL.revokeObjectURL(url);
-      const b64=btoa(String.fromCharCode(...out));
-      res({dataUrl:'data:audio/mpeg;base64,'+b64,durationMs:base64List.length*8000});};
-    setTimeout(()=>{URL.revokeObjectURL(url);
-      const b64=btoa(String.fromCharCode(...out));
-      res({dataUrl:'data:audio/mpeg;base64,'+b64,durationMs:base64List.length*8000});},3000);
+};
+
+// ══════════════════════════════════════════════
+// RENDER SCENES
+// ══════════════════════════════════════════════
+async function renderScenes() {
+  const container = document.getElementById('scenesContainer');
+  if (!state.scenes.length) {
+    container.innerHTML = '';
+    document.getElementById('batchControls').style.display = 'none';
+    return;
+  }
+  document.getElementById('batchControls').style.display = 'block';
+
+  const items = await Promise.all(state.scenes.map(async s => {
+    const imgData = await dbGet(sceneImgKey(s.id));
+    const audData = await dbGet(sceneAudKey(s.id));
+    return { scene: s, imgData, hasAudio: !!audData };
+  }));
+
+  container.innerHTML = items.map(({ scene: s, imgData, hasAudio }) => `
+    <div class="scene-card" id="scene-${s.id}">
+      <div class="scene-header">
+        <div class="scene-img-wrap" id="sceneimg-${s.id}">
+          ${imgData ? `<img src="data:image/png;base64,${imgData}" alt="scene ${s.num}">` : `<div class="scene-img-placeholder">🎬</div>`}
+        </div>
+        <div class="scene-meta">
+          <div class="scene-num">
+            ${String(s.num).padStart(2,'0')}
+            <span class="act-badge">${s.act}</span>
+          </div>
+          <div class="scene-title">${s.title}</div>
+          <div class="scene-narration">${s.narration}</div>
+        </div>
+      </div>
+      <div class="scene-actions" id="sceneact-${s.id}">
+        <button class="btn btn-secondary btn-sm" onclick="generateSceneImage('${s.id}')">
+          ${imgData ? '🔄' : '🖼️'} Imagen
+        </button>
+        ${hasAudio 
+          ? `<button class="btn btn-secondary btn-sm" onclick="playSceneAudio('${s.id}')">▶️ Audio</button>
+             <button class="btn btn-danger btn-sm" onclick="deleteSceneAudio('${s.id}')">🗑️</button>`
+          : `<button class="btn btn-secondary btn-sm" onclick="generateSceneAudio('${s.id}')">🎙️ Narrar</button>`
+        }
+      </div>
+    </div>
+  `).join('');
+}
+
+// ══════════════════════════════════════════════
+// SCENE IMAGE GENERATION
+// ══════════════════════════════════════════════
+window.generateSceneImage = async function(sceneId) {
+  const scene = state.scenes.find(s => s.id === sceneId);
+  if (!scene) return;
+  const wrap = document.getElementById('sceneimg-' + sceneId);
+  if (!wrap) return;
+  
+  const prevContent = wrap.innerHTML;
+  wrap.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:14px;animation:spin 1.2s linear infinite">⏳</div>`;
+  
+  // Get character reference image
+  let refImage = null;
+  if (scene.chars && scene.chars.length > 0) {
+    refImage = await dbGet(imgKey(scene.chars[0]));
+  }
+  
+  try {
+    const imgData = await generateGeminiImage(scene.imagePromptEN, refImage);
+    await dbSet(sceneImgKey(sceneId), imgData);
+    wrap.innerHTML = `<img src="data:image/png;base64,${imgData}" alt="scene ${scene.num}">`;
+    renderStats();
+    saveState();
+    showToast(`Escena ${scene.num} generada`, 'success');
+  } catch(e) {
+    wrap.innerHTML = prevContent;
+    showToast('Error imagen: ' + e.message.substring(0,50), 'error');
+    openErrorModal(`Error imagen escena ${scene.num}`, e.message);
+  }
+};
+
+// ══════════════════════════════════════════════
+// SCENE AUDIO
+// ══════════════════════════════════════════════
+window.generateSceneAudio = async function(sceneId) {
+  const scene = state.scenes.find(s => s.id === sceneId);
+  if (!scene) return;
+  const actEl = document.getElementById('sceneact-' + sceneId);
+  if (!actEl) return;
+  
+  const btn = actEl.querySelector('button[onclick*="generateSceneAudio"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>'; }
+  
+  try {
+    const audData = await generateAudio(scene.narration, scene.act);
+    await dbSet(sceneAudKey(sceneId), audData);
+    renderStats();
+    // Refresh actions
+    actEl.innerHTML = `
+      <button class="btn btn-secondary btn-sm" onclick="generateSceneImage('${sceneId}')">🔄 Imagen</button>
+      <button class="btn btn-secondary btn-sm" onclick="playSceneAudio('${sceneId}')">▶️ Audio</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteSceneAudio('${sceneId}')">🗑️</button>
+    `;
+    showToast(`Audio escena ${scene.num} listo`, 'success');
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '🎙️ Narrar'; }
+    showToast('Error audio', 'error');
+    openErrorModal(`Error audio escena ${scene.num}`, e.message);
+  }
+};
+
+window.playSceneAudio = async function(sceneId) {
+  const audData = await dbGet(sceneAudKey(sceneId));
+  if (!audData) { showToast('No hay audio', 'error'); return; }
+  const audio = new Audio(`data:audio/mpeg;base64,${audData}`);
+  audio.play();
+  showToast('▶️ Reproduciendo...', '');
+};
+
+window.deleteSceneAudio = async function(sceneId) {
+  await dbDel(sceneAudKey(sceneId));
+  const scene = state.scenes.find(s => s.id === sceneId);
+  const actEl = document.getElementById('sceneact-' + sceneId);
+  if (actEl) {
+    actEl.innerHTML = `
+      <button class="btn btn-secondary btn-sm" onclick="generateSceneImage('${sceneId}')">🔄 Imagen</button>
+      <button class="btn btn-secondary btn-sm" onclick="generateSceneAudio('${sceneId}')">🎙️ Narrar</button>
+    `;
+  }
+  renderStats();
+  showToast('Audio eliminado', '');
+};
+
+// ══════════════════════════════════════════════
+// BATCH GENERATION
+// ══════════════════════════════════════════════
+document.getElementById('btnAllImages').addEventListener('click', async () => {
+  if (!state.scenes.length) return;
+  const btn = document.getElementById('btnAllImages');
+  btn.disabled = true;
+  const batchProg = document.getElementById('batchProgress');
+  batchProg.style.display = 'block';
+  
+  let done = 0;
+  const total = state.scenes.length;
+  
+  for (const scene of state.scenes) {
+    setProgress('batch', (done / total) * 100, `Imagen ${done+1}/${total}: ${scene.title}`);
+    try {
+      const existing = await dbGet(sceneImgKey(scene.id));
+      if (!existing) {
+        let refImage = null;
+        if (scene.chars && scene.chars.length > 0) refImage = await dbGet(imgKey(scene.chars[0]));
+        const imgData = await generateGeminiImage(scene.imagePromptEN, refImage);
+        await dbSet(sceneImgKey(scene.id), imgData);
+        const wrap = document.getElementById('sceneimg-' + scene.id);
+        if (wrap) wrap.innerHTML = `<img src="data:image/png;base64,${imgData}" alt="scene ${scene.num}">`;
+      }
+    } catch(e) {
+      console.warn('Batch image error scene', scene.num, e.message);
+    }
+    done++;
+    setProgress('batch', (done / total) * 100, `Imagen ${done}/${total}`);
+  }
+  
+  renderStats();
+  saveState();
+  btn.disabled = false;
+  showToast('¡Todas las imágenes generadas!', 'success');
+  setTimeout(() => { batchProg.style.display = 'none'; }, 3000);
+});
+
+document.getElementById('btnAllAudio').addEventListener('click', async () => {
+  if (!state.scenes.length) return;
+  const btn = document.getElementById('btnAllAudio');
+  btn.disabled = true;
+  const batchProg = document.getElementById('batchProgress');
+  batchProg.style.display = 'block';
+  
+  let done = 0;
+  const total = state.scenes.length;
+  
+  for (const scene of state.scenes) {
+    setProgress('batch', (done / total) * 100, `Audio ${done+1}/${total}: ${scene.title}`);
+    try {
+      const existing = await dbGet(sceneAudKey(scene.id));
+      if (!existing) {
+        const audData = await generateAudio(scene.narration, scene.act);
+        await dbSet(sceneAudKey(scene.id), audData);
+        const actEl = document.getElementById('sceneact-' + scene.id);
+        if (actEl) {
+          actEl.innerHTML = `
+            <button class="btn btn-secondary btn-sm" onclick="generateSceneImage('${scene.id}')">🔄 Imagen</button>
+            <button class="btn btn-secondary btn-sm" onclick="playSceneAudio('${scene.id}')">▶️ Audio</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteSceneAudio('${scene.id}')">🗑️</button>
+          `;
+        }
+      }
+    } catch(e) {
+      console.warn('Batch audio error scene', scene.num, e.message);
+    }
+    done++;
+    setProgress('batch', (done / total) * 100, `Audio ${done}/${total}`);
+  }
+  
+  renderStats();
+  btn.disabled = false;
+  showToast('¡Toda la narración generada!', 'success');
+  setTimeout(() => { batchProg.style.display = 'none'; }, 3000);
+});
+
+document.getElementById('btnClearAudios').addEventListener('click', async () => {
+  if (!confirm('¿Borrar todos los audios?')) return;
+  for (const scene of state.scenes) {
+    await dbDel(sceneAudKey(scene.id));
+  }
+  await renderScenes();
+  renderStats();
+  showToast('Audios eliminados', '');
+});
+
+// ══════════════════════════════════════════════
+// PROGRESS HELPERS
+// ══════════════════════════════════════════════
+function setProgress(prefix, pct, label) {
+  const bar = document.getElementById(prefix + 'Bar');
+  const lbl = document.getElementById(prefix + 'Label');
+  if (bar) bar.style.width = pct + '%';
+  if (lbl) lbl.textContent = label;
+}
+
+// ══════════════════════════════════════════════
+// STATS
+// ══════════════════════════════════════════════
+async function renderStats() {
+  let imgs = 0, auds = 0;
+  for (const s of state.scenes) {
+    if (await dbGet(sceneImgKey(s.id))) imgs++;
+    if (await dbGet(sceneAudKey(s.id))) auds++;
+  }
+  document.getElementById('statImg').textContent = `${imgs}/${state.scenes.length || 0}`;
+  document.getElementById('statAud').textContent = `${auds}/${state.scenes.length || 0}`;
+  document.getElementById('statEsc').textContent = state.scenes.length || 0;
+}
+
+// ══════════════════════════════════════════════
+// ERROR MODAL
+// ══════════════════════════════════════════════
+function openErrorModal(title, detail) {
+  openModal(`
+    <div class="modal-title">⚠️ ${title}</div>
+    <div class="error-detail">${detail}</div>
+    <div style="margin-top:14px; display:flex; gap:8px;">
+      <button class="btn btn-secondary" onclick="closeModal()">Cerrar</button>
+      <button class="btn btn-primary" onclick="closeModal();document.getElementById('btnApis').click()">🔑 Ver API Keys</button>
+    </div>
+  `);
+}
+
+// ══════════════════════════════════════════════
+// EXPORT ZIP
+// ══════════════════════════════════════════════
+document.getElementById('btnDownloadZip').addEventListener('click', async () => {
+  if (!state.scenes.length) { showToast('No hay episodio generado', 'error'); return; }
+  const btn = document.getElementById('btnDownloadZip');
+  btn.disabled = true;
+  const zipProg = document.getElementById('zipProgress');
+  zipProg.style.display = 'block';
+  setProgress('zip', 5, 'Iniciando...');
+  
+  try {
+    const zip = new JSZip();
+    const title = state.universe?.title || 'anime';
+    const safeTitle = title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+    
+    // Collect scene images & audio
+    const audioBuffers = [];
+    const durations = [];
+    let timingLines = ['ESCENA\tTÍTULO\tDURACIÓN (seg)\tINICIO\tFIN'];
+    let srtLines = [];
+    let scriptLines = [`# ${title}\n`];
+    let srtIndex = 1;
+    let currentTime = 0;
+    
+    setProgress('zip', 15, 'Añadiendo imágenes...');
+    
+    // Character images
+    const charsFolder = zip.folder('personajes');
+    for (const char of state.characters) {
+      const imgData = await dbGet(imgKey(char.id));
+      if (imgData) {
+        charsFolder.file(`${char.id}_${char.name.replace(/\s/g,'_')}.png`, imgData, { base64: true });
+      }
+    }
+    
+    // Scene images + audio
+    for (let i = 0; i < state.scenes.length; i++) {
+      const s = state.scenes[i];
+      const imgData = await dbGet(sceneImgKey(s.id));
+      const audData = await dbGet(sceneAudKey(s.id));
+      const sceneNum = String(s.num).padStart(2, '0');
+      
+      if (imgData) zip.file(`escena${sceneNum}.png`, imgData, { base64: true });
+      if (audData) audioBuffers.push({ num: s.num, data: audData });
+      
+      // Estimate duration from narration word count (~2.5 words/sec)
+      const words = (s.narration || '').split(' ').length;
+      const dur = Math.max(3, Math.ceil(words / 2.5));
+      durations.push(dur);
+      
+      const startTime = currentTime;
+      const endTime = currentTime + dur;
+      timingLines.push(`${sceneNum}\t${s.title}\t${dur}\t${formatTime(startTime)}\t${formatTime(endTime)}`);
+      
+      // SRT
+      srtLines.push(`${srtIndex}`);
+      srtLines.push(`${formatSRT(startTime)} --> ${formatSRT(endTime)}`);
+      srtLines.push(s.narration.substring(0, 120));
+      srtLines.push('');
+      srtIndex++;
+      currentTime = endTime;
+      
+      // Script
+      scriptLines.push(`\n## Escena ${sceneNum} — ${s.title} [${s.act.toUpperCase()}]`);
+      scriptLines.push(`**Lugar:** ${s.location} | **Hora:** ${s.timeOfDay}`);
+      scriptLines.push(`\n${s.narration}`);
+      scriptLines.push(`\n*Image prompt:* ${s.imagePromptEN}`);
+      
+      setProgress('zip', 15 + (i / state.scenes.length) * 50, `Escena ${i+1}/${state.scenes.length}...`);
+    }
+    
+    setProgress('zip', 65, 'Concatenando audio...');
+    
+    // Concatenate audio (simplified: just pack them as data URIs in a playlist)
+    if (audioBuffers.length > 0) {
+      // We'll concatenate using AudioContext
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioCtx();
+        const decoded = [];
+        for (const ab of audioBuffers) {
+          try {
+            const binary = atob(ab.data);
+            const bytes = new Uint8Array(binary.length);
+            for (let j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
+            const buf = await ctx.decodeAudioData(bytes.buffer.slice(0));
+            decoded.push(buf);
+          } catch(e) { console.warn('Audio decode skip', e.message); }
+        }
+        
+        if (decoded.length > 0) {
+          const totalLen = decoded.reduce((sum, b) => sum + b.length, 0);
+          const sr = decoded[0].sampleRate;
+          const ch = decoded[0].numberOfChannels;
+          const out = ctx.createBuffer(ch, totalLen, sr);
+          
+          let offset = 0;
+          for (const buf of decoded) {
+            for (let c = 0; c < ch; c++) {
+              out.getChannelData(c).set(buf.getChannelData(c), offset);
+            }
+            offset += buf.length;
+          }
+          
+          const wav = bufferToWav(out);
+          zip.file('narracion_completa.wav', wav, { binary: true });
+        }
+        ctx.close();
+      } catch(e) {
+        // Fallback: include first audio as mp3
+        if (audioBuffers.length > 0) {
+          zip.file('narracion_01.mp3', audioBuffers[0].data, { base64: true });
+        }
+      }
+    }
+    
+    setProgress('zip', 80, 'Añadiendo archivos de texto...');
+    
+    zip.file('TIMING_CAPCUT.txt', timingLines.join('\n'));
+    zip.file('subtitulos.srt', srtLines.join('\n'));
+    zip.file('guion_completo.txt', scriptLines.join('\n'));
+    
+    // Character info
+    const charInfo = state.characters.map(c => 
+      `## ${c.name} (${c.role})\n**Apariencia:** ${c.appearance}\n**Personalidad:** ${c.personality}\n**Historia:** ${c.backstory}`
+    ).join('\n\n');
+    zip.file('personajes/info_personajes.txt', charInfo);
+    
+    setProgress('zip', 90, 'Comprimiendo...');
+    
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 3 } });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safeTitle}_anime_studio.zip`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    
+    setProgress('zip', 100, '¡ZIP descargado!');
+    showToast('ZIP descargado', 'success');
+    setTimeout(() => { zipProg.style.display = 'none'; }, 3000);
+  } catch(e) {
+    showToast('Error creando ZIP: ' + e.message.substring(0,50), 'error');
+    openErrorModal('Error creando ZIP', e.message);
+    zipProg.style.display = 'none';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60).toString().padStart(2,'0');
+  const s = (seconds % 60).toString().padStart(2,'0');
+  return `${m}:${s}`;
+}
+function formatSRT(seconds) {
+  const h = Math.floor(seconds / 3600).toString().padStart(2,'0');
+  const m = Math.floor((seconds % 3600) / 60).toString().padStart(2,'0');
+  const s = Math.floor(seconds % 60).toString().padStart(2,'0');
+  const ms = '000';
+  return `${h}:${m}:${s},${ms}`;
+}
+
+function bufferToWav(buffer) {
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const numSamples = buffer.length;
+  const bytesPerSample = 2;
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = numSamples * blockAlign;
+  const headerSize = 44;
+  const totalSize = headerSize + dataSize;
+  
+  const arrayBuffer = new ArrayBuffer(totalSize);
+  const view = new DataView(arrayBuffer);
+  
+  // WAV header
+  const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+  writeStr(0, 'RIFF'); view.setUint32(4, totalSize - 8, true);
+  writeStr(8, 'WAVE'); writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, numChannels, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true); view.setUint16(32, blockAlign, true);
+  view.setUint16(34, 16, true); writeStr(36, 'data');
+  view.setUint32(40, dataSize, true);
+  
+  let offset = 44;
+  for (let i = 0; i < numSamples; i++) {
+    for (let ch = 0; ch < numChannels; ch++) {
+      const sample = Math.max(-1, Math.min(1, buffer.getChannelData(ch)[i]));
+      view.setInt16(offset, sample * 0x7FFF, true);
+      offset += 2;
+    }
+  }
+  
+  return arrayBuffer;
+}
+
+// COPY SCRIPT
+document.getElementById('btnCopyScript').addEventListener('click', () => {
+  if (!state.scenes.length) { showToast('No hay episodio', 'error'); return; }
+  const text = state.scenes.map(s => 
+    `[ESCENA ${s.num} — ${s.title}]\n${s.narration}`
+  ).join('\n\n');
+  navigator.clipboard.writeText(text).then(() => showToast('Guión copiado', 'success'));
+});
+
+// ══════════════════════════════════════════════
+// INITIALIZATION
+// ══════════════════════════════════════════════
+async function init() {
+  await initDB();
+  loadProjects();
+  
+  if (projects.length === 0) {
+    await newProject();
+  } else {
+    state.projectId = projects[projects.length - 1].id;
+    loadStateFor(state.projectId);
+  }
+  
+  updateApiDot();
+  renderAll();
+  
+  // Auto-save voice id
+  document.getElementById('voiceIdInput').addEventListener('change', e => {
+    state.voiceId = e.target.value.trim();
+    saveState();
   });
 }
 
-async function exportZIP(){
-  if(!S.episode){toast('Genera un episodio primero',true);return;}
-  const btn=document.getElementById('btn-exp');
-  btn.disabled=true;btn.textContent='Empaquetando...';
-  PB.show('Preparando ZIP...',5);
-  try{
-    const zip=new JSZip();
-    const folder=zip.folder((S.episode.title||'ep').replace(/[^a-zA-Z0-9]/g,'_').slice(0,30));
-    let srt='', srtI=1, timeMs=0;
-    let script=S.episode.title+'\n'+'='.repeat(50)+'\n'+(S.episode.summary||'')+'\n\n';
-
-    // Collect per-scene data + durations
-    const sceneDurs=[];
-    const audioBase64List=[];
-    let hasAudio=false;
-
-    for(const s of S.scenes){
-      const n=String(s.num).padStart(2,'0');
-      PB.set('Midiendo escena '+s.num+'/'+S.scenes.length+'...',(s.num/S.scenes.length)*60);
-
-      if(s.imageData&&s.imageData.startsWith('data:'))
-        folder.file('escena'+n+'.png',s.imageData.split(',')[1],{base64:true});
-
-      let dur=8000;
-      if(s.narrationAudio&&s.narrationAudio.startsWith('data:')){
-        dur=await getAudDur(s.narrationAudio);
-        audioBase64List.push(s.narrationAudio);
-        hasAudio=true;
-      }
-      sceneDurs.push(dur);
-    }
-
-    // Concatenate all audios into one single MP3
-    let totalAudioMs=0;
-    if(hasAudio&&audioBase64List.length>0){
-      PB.set('Uniendo audios en uno solo...',65);
-      const {dataUrl,durationMs}=await concatAudioBlobs(audioBase64List);
-      folder.file('narracion_completa.mp3',dataUrl.split(',')[1],{base64:true});
-      totalAudioMs=durationMs;
-    }
-
-    // Build timing file — seconds per image for CapCut
-    let timingTxt=S.episode.title+'\nTIMING DE IMÁGENES PARA CAPCUT\n'+'='.repeat(40)+'\n\n';
-    timingTxt+='Audio único: narracion_completa.mp3\n\n';
-    timingTxt+='Escena | Imagen           | Duración\n';
-    timingTxt+='-------+-----------------+---------\n';
-
-    for(const s of S.scenes){
-      const n=String(s.num).padStart(2,'0');
-      const sec=(sceneDurs[s.num-1]/1000).toFixed(1);
-      timingTxt+=`  ${n}    | escena${n}.png    | ${sec}s\n`;
-
-      // SRT subtitles
-      if(s.narration){
-        const dur=sceneDurs[s.num-1];
-        const chunks=[];let cur='';
-        for(const word of s.narration.split(' ')){
-          if((cur+' '+word).trim().length<=72) cur=(cur+' '+word).trim();
-          else{if(cur)chunks.push(cur);cur=word;}
-        }
-        if(cur)chunks.push(cur);
-        if(!chunks.length)chunks.push(s.narration.slice(0,72));
-        const perChunk=Math.floor(dur/chunks.length);
-        for(let i=0;i<chunks.length;i++){
-          const t=timeMs+i*perChunk;
-          srt+=srtI+'\n'+ms2srt(t)+' --> '+ms2srt(t+perChunk-80)+'\n'+chunks[i].trim()+'\n\n';
-          srtI++;
-        }
-        script+='[ESCENA '+n+'] '+s.title+'\nActo: '+s.act+' | '+s.location+' | '+s.timeOfDay+'\n\n'+s.narration+'\n\n'+'─'.repeat(38)+'\n\n';
-      }
-      timeMs+=sceneDurs[s.num-1]+200;
-    }
-
-    const totalSec=(sceneDurs.reduce((a,b)=>a+b,0)/1000).toFixed(1);
-    timingTxt+='\nTotal estimado: '+totalSec+'s\n';
-    timingTxt+='\nINSTRUCCIONES CAPCUT:\n';
-    timingTxt+='1. Importa las imágenes en orden\n';
-    timingTxt+='2. Ajusta cada imagen a su duración (columna Duración)\n';
-    timingTxt+='3. Arrastra narracion_completa.mp3 a la pista de audio\n';
-    timingTxt+='4. Texto → Subtítulos → Importar → subtitulos.srt\n';
-    timingTxt+='5. Añade música de fondo a -20dB\n';
-    timingTxt+='6. Exporta 1080x1920 (9:16) 30fps\n';
-    folder.file('TIMING_CAPCUT.txt',timingTxt);
-
-    if(srt) folder.file('subtitulos.srt',srt);
-    folder.file('guion_completo.txt',script);
-
-    if(S.chars.some(c=>c.imageData)){
-      const pf=folder.folder('personajes');
-      for(const c of S.chars)if(c.imageData&&c.imageData.startsWith('data:'))pf.file(c.name.replace(/[^a-zA-Z0-9]/g,'_')+'.png',c.imageData.split(',')[1],{base64:true});
-    }
-
-    PB.set('Comprimiendo...',92);
-    const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
-    PB.hide();
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');a.href=url;a.download=(S.episode.title||'anime').replace(/[^a-zA-Z0-9]/g,'_').slice(0,30)+'_capcut.zip';a.click();URL.revokeObjectURL(url);
-    toast('✓ ZIP — 1 audio completo + timing por imagen');
-  }catch(e){PB.hide();toast('Error: '+e.message,true);}
-  finally{btn.disabled=false;btn.textContent='📦 Descargar ZIP';}
-}
-
-// ─── RESET ───
-function resetEp(){
-  if(!confirm('¿Crear nuevo episodio? Se perderá el episodio actual.')) return;
-  S.episode=null;S.scenes=[];save();
-  document.getElementById('ep-form').style.display='block';
-  document.getElementById('ep-content').style.display='none';
-  renderExport();toast('Listo para nuevo episodio');
-}
-
-// ─── GLOBAL ERROR ───
-window.addEventListener('unhandledrejection',e=>{
-  PB.hide();
-  toast((e.reason?.message||String(e.reason||'Error')).slice(0,120),true);
-  console.error('[Unhandled]',e.reason);
-});
-
-// ─── INIT ───
-async function init(){
-  renderStyles();
-  await load();
-  updateAPI();
-  renderWorldOut();
-  if(S.episode){
-    document.getElementById('ep-form').style.display='none';
-    document.getElementById('ep-content').style.display='block';
-  }
-  renderEpPanel();
-  renderChars();
-  renderExport();
-  if(!S.apis.claude) setTimeout(()=>toast('Configura tus APIs en el botón superior derecho'),900);
-}
-init();
+init().catch(console.error);
 </script>
-</div>
 </body>
 </html>
