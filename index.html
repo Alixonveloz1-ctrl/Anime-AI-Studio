@@ -470,19 +470,23 @@ audio { width: 100%; margin-top: 6px; border-radius: 8px; }
         <div class="form-group">
           <label>Voz narradora</label>
           <select id="voiceGenderSelect">
-            <optgroup label="🆓 AZURE NEURAL — Gratis 500k chars/mes">
-              <option value="azure_male_mx">🇲🇽 Jorge — Masculino mexicano (Azure)</option>
-              <option value="azure_female_mx">🇲🇽 Dalia — Femenino mexicano (Azure)</option>
-              <option value="azure_male_co">🇨🇴 Gonzalo — Masculino colombiano (Azure)</option>
-              <option value="azure_female_co">🇨🇴 Salome — Femenino colombiano (Azure)</option>
-              <option value="azure_male_ar">🇦🇷 Tomas — Masculino argentino (Azure)</option>
-              <option value="azure_female_ar">🇦🇷 Elena — Femenino argentino (Azure)</option>
+            <optgroup label="🆓 GOOGLE NEURAL2 — 1M chars/mes gratis">
+              <option value="google_male_us">🇺🇸 Neural2-B — Masculino latino US</option>
+              <option value="google_female_us">🇺🇸 Neural2-A — Femenino latina US</option>
+              <option value="google_male_es">🌎 Neural2-C — Masculino español</option>
+              <option value="google_female_es">🌎 Neural2-D — Femenino español</option>
             </optgroup>
-            <optgroup label="💳 ElevenLabs (requiere créditos)">
+            <optgroup label="🆓 AZURE NEURAL — 500k chars/mes gratis">
+              <option value="azure_male_mx">🇲🇽 Jorge — Masculino mexicano</option>
+              <option value="azure_female_mx">🇲🇽 Dalia — Femenino mexicano</option>
+              <option value="azure_male_co">🇨🇴 Gonzalo — Masculino colombiano</option>
+              <option value="azure_female_co">🇨🇴 Salomé — Femenino colombiano</option>
+              <option value="azure_male_ar">🇦🇷 Tomas — Masculino argentino</option>
+              <option value="azure_female_ar">🇦🇷 Elena — Femenino argentino</option>
+            </optgroup>
+            <optgroup label="💳 ELEVENLABS (requiere créditos)">
               <option value="female_custom">🎙️ Femenina (tu voz EL)</option>
               <option value="male_custom">🎙️ Masculina (tu voz EL)</option>
-              <option value="female_mx">🇲🇽 Femenina mexicana (EL pública)</option>
-              <option value="male_mx">🇲🇽 Masculino latino (EL pública)</option>
               <option value="custom">🔧 Voice ID personalizado (EL)</option>
             </optgroup>
           </select>
@@ -800,16 +804,17 @@ function closeModal() {
 // ══════════════════════════════════════════════
 function getKeys() {
   return {
-    claude: localStorage.getItem('key_claude') || '',
-    gemini: localStorage.getItem('key_gemini') || '',
-    eleven: localStorage.getItem('key_eleven') || '',
-    azure:  localStorage.getItem('key_azure')  || '',
-    azureRegion: localStorage.getItem('key_azure_region') || 'eastus',
+    claude:      localStorage.getItem('key_claude')        || '',
+    gemini:      localStorage.getItem('key_gemini')        || '',
+    eleven:      localStorage.getItem('key_eleven')        || '',
+    azure:       localStorage.getItem('key_azure')         || '',
+    azureRegion: localStorage.getItem('key_azure_region')  || 'eastus',
+    google:      localStorage.getItem('key_google_tts')    || '',
   };
 }
 function updateApiDot() {
   const k = getKeys();
-  const ok = k.claude && k.gemini && (k.eleven || k.azure);
+  const ok = k.claude && k.gemini && (k.eleven || k.azure || k.google);
   document.getElementById('apiDot').className = 'dot' + (ok ? ' ok' : '');
 }
 
@@ -825,9 +830,18 @@ document.getElementById('btnApis').addEventListener('click', () => {
       <label>Gemini API Key</label>
       <input type="password" id="mk_gemini" value="${k.gemini}" placeholder="AIza..." />
     </div>
+
+    <div style="background:rgba(66,133,244,0.08);border:1px solid rgba(66,133,244,0.25);border-radius:10px;padding:12px;margin-bottom:12px">
+      <div style="font-size:11px;color:#4285f4;font-weight:600;margin-bottom:6px">🆓 GOOGLE NEURAL2 — 1,000,000 chars/mes gratis</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Las mejores voces gratuitas. Activa "Cloud Text-to-Speech API" en console.cloud.google.com → APIs → obtén una API Key.</div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Google Cloud API Key</label>
+        <input type="password" id="mk_google" value="${k.google}" placeholder="AIza..." />
+      </div>
+    </div>
+
     <div style="background:rgba(111,207,151,0.08);border:1px solid rgba(111,207,151,0.2);border-radius:10px;padding:12px;margin-bottom:12px">
-      <div style="font-size:11px;color:#6fcf97;font-weight:600;margin-bottom:8px">🆓 AZURE TTS — 500,000 caracteres/mes GRATIS</div>
-      <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Voces neuronales latinas: Dalia (🇲🇽 femenina), Jorge (🇲🇽 masculino). Regístrate en portal.azure.com → Cognitive Services → Speech.</div>
+      <div style="font-size:11px;color:#6fcf97;font-weight:600;margin-bottom:6px">🆓 AZURE NEURAL — 500,000 chars/mes gratis</div>
       <div class="form-group" style="margin-bottom:8px">
         <label>Azure Speech API Key</label>
         <input type="password" id="mk_azure" value="${k.azure}" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
@@ -837,6 +851,7 @@ document.getElementById('btnApis').addEventListener('click', () => {
         <input type="text" id="mk_azure_region" value="${k.azureRegion}" placeholder="eastus" />
       </div>
     </div>
+
     <div class="form-group">
       <label>ElevenLabs API Key (opcional)</label>
       <input type="password" id="mk_eleven" value="${k.eleven}" placeholder="..." />
@@ -845,11 +860,12 @@ document.getElementById('btnApis').addEventListener('click', () => {
   `);
 });
 window.saveKeys = function() {
-  localStorage.setItem('key_claude', document.getElementById('mk_claude').value.trim());
-  localStorage.setItem('key_gemini', document.getElementById('mk_gemini').value.trim());
-  localStorage.setItem('key_eleven', document.getElementById('mk_eleven').value.trim());
-  localStorage.setItem('key_azure',  document.getElementById('mk_azure').value.trim());
-  localStorage.setItem('key_azure_region', document.getElementById('mk_azure_region').value.trim() || 'eastus');
+  localStorage.setItem('key_claude',        document.getElementById('mk_claude').value.trim());
+  localStorage.setItem('key_gemini',        document.getElementById('mk_gemini').value.trim());
+  localStorage.setItem('key_eleven',        document.getElementById('mk_eleven').value.trim());
+  localStorage.setItem('key_azure',         document.getElementById('mk_azure').value.trim());
+  localStorage.setItem('key_azure_region',  document.getElementById('mk_azure_region').value.trim() || 'eastus');
+  localStorage.setItem('key_google_tts',    document.getElementById('mk_google').value.trim());
   updateApiDot();
   closeModal();
   showToast('Keys guardadas', 'success');
