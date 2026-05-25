@@ -269,8 +269,15 @@ select option{background:var(--night-blue);color:var(--paper-cream)}
     <div id="ep-header" class="card"></div>
     <div class="card">
       <div class="card-title">🎙 Narración en Off</div>
-      <div style="font-size:11px;color:var(--dim);margin-bottom:10px">Voz: <span id="vid-display" style="font-family:monospace;color:var(--amber)">—</span></div>
-      <div id="audio-warn" class="info" style="display:none">Configura el <strong>Voice ID</strong> en el botón APIs (arriba a la derecha).</div>
+      <div class="field" style="margin-bottom:10px">
+        <label>Voice ID del narrador para este anime</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="vid-input" placeholder="Ej: pNInz6obpgDQGcFmaJgB" style="font-family:monospace;font-size:12px;flex:1" oninput="saveVoiceId(this.value)">
+          <button class="btn btn-g" style="width:auto;padding:10px 13px;font-size:11px" onclick="window.open('https://elevenlabs.io/app/voice-lab','_blank')">⚡ ElevenLabs</button>
+        </div>
+        <div style="font-size:10px;color:var(--dim);margin-top:5px">elevenlabs.io → My Voices → copia el ID. Cada anime puede tener su propia voz.</div>
+      </div>
+      <div id="audio-warn" class="info" style="display:none">Configura <strong>ElevenLabs</strong> en el botón APIs y añade un Voice ID arriba.</div>
       <div id="audio-ok">
         <div class="stat-row"><span>Narraciones listas</span><span class="stat-val" id="nar-count">0 / 0</span></div>
         <button class="btn btn-p" onclick="genAllNar()" id="btn-nar" style="margin-top:10px">🎙 Generar Narración Completa</button>
@@ -323,11 +330,7 @@ select option{background:var(--night-blue);color:var(--paper-cream)}
     <div class="field"><label>Claude — Guiones</label><input type="password" id="in-claude" placeholder="sk-ant-..."></div>
     <div class="field"><label>Gemini — Imágenes</label><input type="password" id="in-gemini" placeholder="AIza..."></div>
     <div class="field"><label>ElevenLabs — Narración</label><input type="password" id="in-eleven" placeholder="sk_..."></div>
-    <div class="field">
-      <label>Voice ID del narrador</label>
-      <input type="text" id="in-voice" placeholder="Ej: pNInz6obpgDQGcFmaJgB" style="font-family:monospace;font-size:12px">
-      <div style="font-size:11px;color:var(--dim);margin-top:5px">elevenlabs.io → My Voices → copia el ID debajo del nombre de la voz</div>
-    </div>
+
     <button class="btn btn-p" onclick="saveAPIs()">Guardar</button>
   </div>
 </div>
@@ -342,7 +345,7 @@ select option{background:var(--night-blue);color:var(--paper-cream)}
 
 <script>
 // ─── STATE ───
-const S = { apis:{claude:'',gemini:'',eleven:'',voiceId:''}, world:null, episode:null, chars:[], scenes:[] };
+const S = { apis:{claude:'',gemini:'',eleven:''}, world:null, episode:null, chars:[], scenes:[] };
 const LS = 'anime_v5';
 
 // ─── INDEXEDDB ───
@@ -410,7 +413,6 @@ function openMo(id){
     document.getElementById('in-claude').value=S.apis.claude||'';
     document.getElementById('in-gemini').value=S.apis.gemini||'';
     document.getElementById('in-eleven').value=S.apis.eleven||'';
-    document.getElementById('in-voice').value=S.apis.voiceId||'';
   }
   document.getElementById(id).classList.add('on');
 }
@@ -421,18 +423,30 @@ function saveAPIs(){
   S.apis.claude=document.getElementById('in-claude').value.trim();
   S.apis.gemini=document.getElementById('in-gemini').value.trim();
   S.apis.eleven=document.getElementById('in-eleven').value.trim();
-  S.apis.voiceId=document.getElementById('in-voice').value.trim();
   save(); updateAPI(); closeMo('mo-apis'); toast('APIs guardadas');
+}
+function saveVoiceId(val){
+  if(!S.world) return;
+  S.world.voiceId = val.trim();
+  save();
+  updateAudioSection();
+}
+function updateAudioSection(){
+  const vid = S.world?.voiceId||'';
+  const vinput = document.getElementById('vid-input');
+  if(vinput && vinput!==document.activeElement) vinput.value = vid;
+  const warn=document.getElementById('audio-warn');
+  const ok2=document.getElementById('audio-ok');
+  if(warn&&ok2){
+    warn.style.display=(!S.apis.eleven||!vid)?'block':'none';
+    ok2.style.display=(S.apis.eleven&&vid)?'block':'none';
+  }
 }
 function updateAPI(){
   const ok=S.apis.claude&&S.apis.gemini;
   const dot=document.getElementById('api-dot');dot.className='dot';if(ok)dot.classList.add('ok');
   document.getElementById('api-lbl').textContent=ok?'APIS LISTAS':'SIN APIS';
-  const vid=S.apis.voiceId;
-  document.getElementById('vid-display').textContent=vid?vid.slice(0,14)+'...':'—';
-  const warn=document.getElementById('audio-warn');
-  const ok2=document.getElementById('audio-ok');
-  if(warn&&ok2){warn.style.display=(!S.apis.eleven||!S.apis.voiceId)?'block':'none';ok2.style.display=(S.apis.eleven&&S.apis.voiceId)?'block':'none';}
+  updateAudioSection();
 }
 
 // ─── NAV ───
@@ -520,17 +534,36 @@ async function geminiImg(prompt){
     '- Western cartoon',
     '- Watermark, signature'
   ].join('\n');
-  for(let i=1;i<=3;i++){
-    try{
-      const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${S.apis.gemini}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:full}]}],generationConfig:{responseModalities:['IMAGE','TEXT']}})});
-      if(r.status===503||r.status===429){await new Promise(res=>setTimeout(res,3000*i));continue;}
-      if(!r.ok){const e=await r.text();throw new Error('Gemini '+r.status+': '+e.slice(0,100));}
-      const d=await r.json();
-      const parts=d.candidates?.[0]?.content?.parts||[];
-      for(const p of parts){if(p.inlineData?.mimeType?.startsWith('image/')){return `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`;}}
-      throw new Error('Gemini no devolvió imagen');
-    }catch(e){if(i===3)throw e; await new Promise(res=>setTimeout(res,2000*i));}
+  // Try multiple model names in case one is unavailable
+  const MODELS=['gemini-2.0-flash-preview-image-generation','gemini-2.0-flash-exp','imagen-3.0-generate-002'];
+  let lastErr='Sin respuesta de Gemini';
+  for(const model of MODELS){
+    for(let i=1;i<=2;i++){
+      try{
+        let url, body;
+        if(model.startsWith('imagen')){
+          url=`https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${S.apis.gemini}`;
+          body=JSON.stringify({instances:[{prompt:full}],parameters:{sampleCount:1}});
+        } else {
+          url=`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${S.apis.gemini}`;
+          body=JSON.stringify({contents:[{parts:[{text:full}]}],generationConfig:{responseModalities:['IMAGE','TEXT']}});
+        }
+        const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body});
+        if(r.status===503||r.status===429){await new Promise(res=>setTimeout(res,3000*i));continue;}
+        if(!r.ok){const e=await r.text();lastErr=model+' '+r.status+': '+e.slice(0,120);console.warn(lastErr);break;}
+        const d=await r.json();
+        // gemini format
+        const parts=d.candidates?.[0]?.content?.parts||[];
+        for(const p of parts){if(p.inlineData?.mimeType?.startsWith('image/')){return `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`;}}
+        // imagen format
+        const pred=d.predictions?.[0];
+        if(pred?.bytesBase64Encoded) return `data:image/png;base64,${pred.bytesBase64Encoded}`;
+        lastErr=model+' no devolvió imagen';console.warn(lastErr,JSON.stringify(d).slice(0,200));
+        break;
+      }catch(e){lastErr=e.message;if(i===2)break; await new Promise(res=>setTimeout(res,2000));}
+    }
   }
+  throw new Error('Gemini falló: '+lastErr);
 }
 
 // ─── ELEVENLABS ───
@@ -686,7 +719,9 @@ function renderEpPanel(){
     </div>`;
   const nc=S.scenes.filter(s=>s.narrationAudio).length;
   document.getElementById('nar-count').textContent=nc+' / '+S.scenes.length;
-  updateAPI();
+  updateAudioSection();
+  const vi=document.getElementById('vid-input');
+  if(vi) vi.value=S.world?.voiceId||'';
   renderScenes();
 }
 
@@ -702,7 +737,7 @@ function renderScenes(){
         <div class="sc-nar">${s.narration}</div>
         <div class="sc-actions">
           <button class="btn btn-g" onclick="regenImg('${s.id}')" ${!S.apis.gemini?'disabled':''}>${s._loading?'⏳':s.imageData?'↻':'🎨'} Imagen</button>
-          ${s.narrationAudio?`<button class="btn btn-s" onclick="playNar('${s.id}')">▶ Escuchar</button>`:`<button class="btn btn-g" onclick="regenNar('${s.id}')" ${!S.apis.eleven||!S.apis.voiceId?'disabled':''}>🎙 Audio</button>`}
+          ${s.narrationAudio?`<button class="btn btn-s" onclick="playNar('${s.id}')">▶ Escuchar</button>`:`<button class="btn btn-g" onclick="regenNar('${s.id}')" ${!S.apis.eleven||!S.world?.voiceId?'disabled':''}>🎙 Audio</button>`}
         </div>
       </div>
     </div>`).join('');
@@ -752,18 +787,18 @@ async function regenCharImg(id){
 
 // ─── NARRATION ───
 async function genAllNar(){
-  if(!S.apis.eleven||!S.apis.voiceId){toast('Configura ElevenLabs y Voice ID en APIs',true);openMo('mo-apis');return;}
+  if(!S.apis.eleven||!S.world?.voiceId){toast('Configura ElevenLabs y Voice ID en APIs',true);openMo('mo-apis');return;}
   const pending=S.scenes.filter(s=>!s.narrationAudio&&s.narration);
   if(!pending.length){toast('Narración ya completa ✓');return;}
   const cost=(pending.reduce((a,s)=>a+(s.narration||'').length,0)*0.0003).toFixed(3);
-  if(!confirm('Generar '+pending.length+' narraciones.\nCosto aprox: $'+cost+'\nVoice ID: '+S.apis.voiceId.slice(0,16)+'...')) return;
+  if(!confirm('Generar '+pending.length+' narraciones.\nCosto aprox: $'+cost+'\nVoice ID: '+S.world?.voiceId.slice(0,16)+'...')) return;
   PB.show('Generando narración...',0);
   let done=0;
   const emap={cold_open:'calm',act1:'normal',act2:'normal',climax:'intense',resolution:'calm',post_credits:'calm'};
   for(const s of pending){
     PB.set('Narración '+(done+1)+'/'+pending.length+': '+s.title,(done/pending.length)*100);
     try{
-      s.narrationAudio=await genVoice(s.narration,S.apis.voiceId,emap[s.act]||'narrator');
+      s.narrationAudio=await genVoice(s.narration,S.world?.voiceId,emap[s.act]||'narrator');
       done++; await save(); renderScenes();
       document.getElementById('nar-count').textContent=S.scenes.filter(x=>x.narrationAudio).length+' / '+S.scenes.length;
       await new Promise(r=>setTimeout(r,600));
@@ -774,10 +809,10 @@ async function genAllNar(){
 
 async function regenNar(id){
   const s=S.scenes.find(x=>x.id===id);
-  if(!s||!S.apis.eleven||!S.apis.voiceId){toast('Configura ElevenLabs y Voice ID',true);openMo('mo-apis');return;}
+  if(!s||!S.apis.eleven||!S.world?.voiceId){toast('Configura ElevenLabs y Voice ID',true);openMo('mo-apis');return;}
   try{
     const em={cold_open:'calm',climax:'intense',resolution:'calm'}[s.act]||'narrator';
-    s.narrationAudio=await genVoice(s.narration,S.apis.voiceId,em);
+    s.narrationAudio=await genVoice(s.narration,S.world?.voiceId,em);
     await save();renderScenes();
     document.getElementById('nar-count').textContent=S.scenes.filter(x=>x.narrationAudio).length+' / '+S.scenes.length;
     toast('✓ Audio generado');
