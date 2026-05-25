@@ -468,8 +468,16 @@ audio { width: 100%; margin-top: 6px; border-radius: 8px; }
           <input type="text" id="emocionInput" placeholder="ej: asombro mezclado con orgullo silencioso" />
         </div>
         <div class="form-group">
-          <label>Voice ID de ElevenLabs</label>
-          <input type="text" id="voiceIdInput" placeholder="ej: JBFqnCBsd6RMkjVDRZzb" />
+          <label>Voz narradora</label>
+          <select id="voiceGenderSelect">
+            <option value="female">🎙️ Femenina — Español Latino</option>
+            <option value="male">🎙️ Masculina — Español Latino</option>
+            <option value="custom">🔧 Voice ID personalizado</option>
+          </select>
+        </div>
+        <div class="form-group" id="customVoiceGroup" style="display:none">
+          <label>Voice ID personalizado</label>
+          <input type="text" id="voiceIdInput" placeholder="pega tu Voice ID de ElevenLabs aquí" />
         </div>
         <button class="btn btn-primary" id="btnGenerarEpisodio">
           <span>✨</span> Generar Episodio (30 escenas)
@@ -971,8 +979,19 @@ function addAudioTags(text, act) {
 
 async function generateAudio(text, act) {
   const key = getKeys().eleven;
-  const voiceId = state.voiceId || 'JBFqnCBsd6RMkjVDRZzb';
   if (!key) throw new Error('ElevenLabs API Key no configurada');
+
+  // Determinar voice ID según selector
+  const gender = document.getElementById('voiceGenderSelect')?.value || 'female';
+  let voiceId;
+  if (state.voiceId && gender === 'custom') {
+    voiceId = state.voiceId;
+  } else if (gender === 'male') {
+    voiceId = 'IRHApOXLvnW57QJPQH2P'; // Masculino latino
+  } else {
+    voiceId = 'GoUxgLPR8rxnhjBSvxFy'; // Femenino latino (default)
+  }
+
   const params = getVoiceParams(act);
   const taggedText = addAudioTags(text, act);
   const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
@@ -981,6 +1000,7 @@ async function generateAudio(text, act) {
     body: JSON.stringify({
       text: taggedText,
       model_id: 'eleven_v3',
+      language_code: 'es',
       voice_settings: params,
     }),
   });
@@ -1811,6 +1831,14 @@ async function init() {
   updateApiDot();
   renderAll();
   
+  // Voice gender selector logic
+  const voiceGenderSel = document.getElementById('voiceGenderSelect');
+  const customVoiceGroup = document.getElementById('customVoiceGroup');
+  voiceGenderSel.addEventListener('change', () => {
+    customVoiceGroup.style.display = voiceGenderSel.value === 'custom' ? 'block' : 'none';
+    if (voiceGenderSel.value !== 'custom') { state.voiceId = ''; saveState(); }
+  });
+
   // Auto-save voice id
   document.getElementById('voiceIdInput').addEventListener('change', e => {
     state.voiceId = e.target.value.trim();
