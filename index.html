@@ -1021,6 +1021,7 @@ async function generateFluxImage(prompt) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'api-key': k.azureOpenai,
       'Authorization': `Bearer ${k.azureOpenai}`,
     },
     body: JSON.stringify({
