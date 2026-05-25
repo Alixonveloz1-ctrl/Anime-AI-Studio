@@ -137,8 +137,8 @@ select option{background:var(--night-blue);color:var(--paper-cream)}
 /* SCENE CARD */
 .sc-card{background:var(--surface);border:1px solid var(--bdr-warm);border-radius:var(--r);overflow:hidden;margin-bottom:12px;transition:transform 0.2s}
 .sc-card:hover{transform:translateY(-1px)}
-.sc-img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block}
-.sc-ph{width:100%;aspect-ratio:16/9;background:linear-gradient(135deg,var(--twilight-deep),var(--twilight-mid));display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:30px;opacity:0.3}
+.sc-img{width:100%;aspect-ratio:9/16;object-fit:cover;display:block}
+.sc-ph{width:100%;aspect-ratio:9/16;background:linear-gradient(135deg,var(--twilight-deep),var(--twilight-mid));display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:30px;opacity:0.3}
 .sc-body{padding:13px}
 .sc-num{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:14px;color:var(--sunset-amber);margin-bottom:3px}
 .sc-title{font-size:13px;font-weight:500;margin-bottom:6px;color:var(--paper-cream)}
@@ -657,7 +657,7 @@ async function geminiImg(prompt, refImages=[]){
     prompt,
     '',
     'ART STYLE: Professional ecchi anime, like Shuumatsu no Harem or Mushoku Tensei. Clean 2D cel-shading, soft warm skin tones, detailed expressive faces, appealing character designs. Natural soft lighting.',
-    'MANDATORY: Traditional 2D anime art. Hand-drawn aesthetic. 16:9 widescreen.',
+    'MANDATORY: Traditional 2D anime art. Hand-drawn aesthetic. 9:16 vertical portrait format.',
     'FORBIDDEN: 3D render, CGI, photorealistic, western cartoon, game screenshot, watermark'
   ].join('\n') : [
     'Traditional 2D hand-drawn anime illustration. TV anime broadcast style. This must look like a frame from a real anime series:',
@@ -668,7 +668,7 @@ async function geminiImg(prompt, refImages=[]){
     '- Soft painted backgrounds, natural colors',
     '- Natural lighting only: sunlight, fire, moonlight, overcast — absolutely NO neon or glowing sci-fi effects',
     '- Realistic anime proportions',
-    '- 16:9 widescreen composition',
+    '- 9:16 vertical portrait composition, like a manga page or phone wallpaper',
     '- Visual reference: ' + worldVis,
     '',
     'ABSOLUTELY FORBIDDEN:',
@@ -695,7 +695,7 @@ async function geminiImg(prompt, refImages=[]){
       let url, body;
       if(type==='imagen'){
         url=`https://generativelanguage.googleapis.com/v1beta/models/${name}:predict?key=${S.apis.gemini}`;
-        body=JSON.stringify({instances:[{prompt:full}],parameters:{sampleCount:1,aspectRatio:'16:9'}});
+        body=JSON.stringify({instances:[{prompt:full}],parameters:{sampleCount:1,aspectRatio:'9:16'}});
       } else {
         url=`https://generativelanguage.googleapis.com/v1beta/models/${name}:generateContent?key=${S.apis.gemini}`;
         // Build parts: text prompt + reference images for character consistency
@@ -851,7 +851,7 @@ RESPONDE SOLO ESTE JSON (sin texto antes ni después):
       "timeOfDay": "amanecer",
       "chars": ["NombreExactoDelPersonaje"],
       "narration": "3-5 frases de narración poética en off. Íntima y emotiva.",
-      "imagePromptEN": "${isEcchi ? 'ECCHI ANIME SCENE — [describe fanservice explicitly: wet clothes, blushing, compromising position, etc] — [character name]: [exact hair color+style], [eye color], [specific outfit with ecchi detail] — [scene action and setting] — soft warm lighting, detailed linework, 16:9' : '[Character name]: [exact hair color+style], [eye color], [specific clothing] — [scene action] — [location with specific details] — [lighting] — cinematic anime 16:9'}"
+      "imagePromptEN": "${isEcchi ? 'ECCHI ANIME SCENE — [describe fanservice explicitly: wet clothes, blushing, compromising position, etc] — [character name]: [exact hair color+style], [eye color], [specific outfit with ecchi detail] — [scene action and setting] — soft warm lighting, detailed linework, 9:16' : '[Character name]: [exact hair color+style], [eye color], [specific clothing] — [scene action] — [location with specific details] — [lighting] — vertical portrait anime 9:16'}"
     }
   ],
   "newChars": [
@@ -986,7 +986,7 @@ function buildScenePrompt(s){
     ecchiNote,
     refChars.length ? 'Use the provided reference images to keep exact character appearance.' : '',
     'Rules: exactly 2 arms and 2 legs per person, one instance of each character only, correct anatomy.',
-    '16:9 widescreen. No 3D render, no watermark, no extra limbs, no clones.'
+    '9:16 vertical portrait format. No 3D render, no watermark, no extra limbs, no clones.'
   ].filter(Boolean).join(' | ');
 
   return {prompt, refImages};
@@ -1136,7 +1136,7 @@ function renderChars(){
 function showChar(id){
   const c=S.chars.find(x=>x.id===id); if(!c) return;
   document.getElementById('mo-char-body').innerHTML=`
-    ${c.imageData?`<img src="${c.imageData}" style="width:100%;border-radius:10px;margin-bottom:14px;aspect-ratio:16/9;object-fit:cover">`:''}
+    ${c.imageData?`<img src="${c.imageData}" style="width:100%;border-radius:10px;margin-bottom:14px;aspect-ratio:9/16;object-fit:cover">`:''}
     <div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-style:italic">${c.name}</div>
     <div style="font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:14px">${c.role} · ${c.age} años · ${c.gender}</div>
     <div class="field"><label>Apariencia</label><div style="font-size:13px;color:var(--dim)">${c.appearance||'—'}</div></div>
@@ -1160,6 +1160,35 @@ function ms2srt(ms){const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/600
 
 async function getAudDur(url){return new Promise(res=>{const a=new Audio(url);a.onloadedmetadata=()=>res(Math.round(a.duration*1000));a.onerror=()=>res(8000);setTimeout(()=>res(8000),2500);});}
 
+// Concatenate MP3 audio buffers into a single ArrayBuffer
+async function concatAudioBlobs(base64List){
+  const buffers=[];
+  for(const b64 of base64List){
+    const binary=atob(b64.split(',')[1]);
+    const bytes=new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+    buffers.push(bytes.buffer);
+  }
+  const total=buffers.reduce((a,b)=>a+b.byteLength,0);
+  const out=new Uint8Array(total);
+  let off=0;
+  for(const buf of buffers){out.set(new Uint8Array(buf),off);off+=buf.byteLength;}
+  const blob=new Blob([out],{type:'audio/mpeg'});
+  const url=URL.createObjectURL(blob);
+  return new Promise(res=>{
+    const a=new Audio(url);
+    a.onloadedmetadata=()=>{URL.revokeObjectURL(url);
+      const b64=btoa(String.fromCharCode(...out));
+      res({dataUrl:'data:audio/mpeg;base64,'+b64,durationMs:Math.round(a.duration*1000)});};
+    a.onerror=()=>{URL.revokeObjectURL(url);
+      const b64=btoa(String.fromCharCode(...out));
+      res({dataUrl:'data:audio/mpeg;base64,'+b64,durationMs:base64List.length*8000});};
+    setTimeout(()=>{URL.revokeObjectURL(url);
+      const b64=btoa(String.fromCharCode(...out));
+      res({dataUrl:'data:audio/mpeg;base64,'+b64,durationMs:base64List.length*8000});},3000);
+  });
+}
+
 async function exportZIP(){
   if(!S.episode){toast('Genera un episodio primero',true);return;}
   const btn=document.getElementById('btn-exp');
@@ -1171,29 +1200,57 @@ async function exportZIP(){
     let srt='', srtI=1, timeMs=0;
     let script=S.episode.title+'\n'+'='.repeat(50)+'\n'+(S.episode.summary||'')+'\n\n';
 
+    // Collect per-scene data + durations
+    const sceneDurs=[];
+    const audioBase64List=[];
+    let hasAudio=false;
+
     for(const s of S.scenes){
       const n=String(s.num).padStart(2,'0');
-      PB.set('Empaquetando '+s.num+'/'+S.scenes.length+' ...',(s.num/S.scenes.length)*85);
+      PB.set('Midiendo escena '+s.num+'/'+S.scenes.length+'...',(s.num/S.scenes.length)*60);
 
       if(s.imageData&&s.imageData.startsWith('data:'))
         folder.file('escena'+n+'.png',s.imageData.split(',')[1],{base64:true});
 
       let dur=8000;
       if(s.narrationAudio&&s.narrationAudio.startsWith('data:')){
-        const ext=s.narrationAudio.includes('wav')?'wav':'mp3';
-        folder.file('escena'+n+'_narracion.'+ext,s.narrationAudio.split(',')[1],{base64:true});
         dur=await getAudDur(s.narrationAudio);
+        audioBase64List.push(s.narrationAudio);
+        hasAudio=true;
       }
+      sceneDurs.push(dur);
+    }
 
+    // Concatenate all audios into one single MP3
+    let totalAudioMs=0;
+    if(hasAudio&&audioBase64List.length>0){
+      PB.set('Uniendo audios en uno solo...',65);
+      const {dataUrl,durationMs}=await concatAudioBlobs(audioBase64List);
+      folder.file('narracion_completa.mp3',dataUrl.split(',')[1],{base64:true});
+      totalAudioMs=durationMs;
+    }
+
+    // Build timing file — seconds per image for CapCut
+    let timingTxt=S.episode.title+'\nTIMING DE IMÁGENES PARA CAPCUT\n'+'='.repeat(40)+'\n\n';
+    timingTxt+='Audio único: narracion_completa.mp3\n\n';
+    timingTxt+='Escena | Imagen           | Duración\n';
+    timingTxt+='-------+-----------------+---------\n';
+
+    for(const s of S.scenes){
+      const n=String(s.num).padStart(2,'0');
+      const sec=(sceneDurs[s.num-1]/1000).toFixed(1);
+      timingTxt+=`  ${n}    | escena${n}.png    | ${sec}s\n`;
+
+      // SRT subtitles
       if(s.narration){
-        // Split into ~80 char chunks for readable subtitles
+        const dur=sceneDurs[s.num-1];
         const chunks=[];let cur='';
         for(const word of s.narration.split(' ')){
-          if((cur+' '+word).trim().length<=80) cur=(cur+' '+word).trim();
+          if((cur+' '+word).trim().length<=72) cur=(cur+' '+word).trim();
           else{if(cur)chunks.push(cur);cur=word;}
         }
         if(cur)chunks.push(cur);
-        if(!chunks.length)chunks.push(s.narration.slice(0,80));
+        if(!chunks.length)chunks.push(s.narration.slice(0,72));
         const perChunk=Math.floor(dur/chunks.length);
         for(let i=0;i<chunks.length;i++){
           const t=timeMs+i*perChunk;
@@ -1202,8 +1259,19 @@ async function exportZIP(){
         }
         script+='[ESCENA '+n+'] '+s.title+'\nActo: '+s.act+' | '+s.location+' | '+s.timeOfDay+'\n\n'+s.narration+'\n\n'+'─'.repeat(38)+'\n\n';
       }
-      timeMs+=dur+200;
+      timeMs+=sceneDurs[s.num-1]+200;
     }
+
+    const totalSec=(sceneDurs.reduce((a,b)=>a+b,0)/1000).toFixed(1);
+    timingTxt+='\nTotal estimado: '+totalSec+'s\n';
+    timingTxt+='\nINSTRUCCIONES CAPCUT:\n';
+    timingTxt+='1. Importa las imágenes en orden\n';
+    timingTxt+='2. Ajusta cada imagen a su duración (columna Duración)\n';
+    timingTxt+='3. Arrastra narracion_completa.mp3 a la pista de audio\n';
+    timingTxt+='4. Texto → Subtítulos → Importar → subtitulos.srt\n';
+    timingTxt+='5. Añade música de fondo a -20dB\n';
+    timingTxt+='6. Exporta 1080x1920 (9:16) 30fps\n';
+    folder.file('TIMING_CAPCUT.txt',timingTxt);
 
     if(srt) folder.file('subtitulos.srt',srt);
     folder.file('guion_completo.txt',script);
@@ -1213,14 +1281,12 @@ async function exportZIP(){
       for(const c of S.chars)if(c.imageData&&c.imageData.startsWith('data:'))pf.file(c.name.replace(/[^a-zA-Z0-9]/g,'_')+'.png',c.imageData.split(',')[1],{base64:true});
     }
 
-    folder.file('INSTRUCCIONES_CAPCUT.txt',`CÓMO MONTAR EN CAPCUT\n====================\n1. Importa imágenes en orden (escena01.png, escena02.png...)\n2. Ajusta duración de cada clip al largo de su audio\n3. Arrastra escena01_narracion.mp3 a cada clip\n4. Texto → Subtítulos → Importar → subtitulos.srt\n5. Añade música de fondo a -20dB\n6. Exporta 1080p 30fps\n\nEscenas: ${S.scenes.length} | Imágenes: ${S.scenes.filter(s=>s.imageData).length} | Audios: ${S.scenes.filter(s=>s.narrationAudio).length}\n`);
-
     PB.set('Comprimiendo...',92);
     const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
     PB.hide();
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');a.href=url;a.download=(S.episode.title||'anime').replace(/[^a-zA-Z0-9]/g,'_').slice(0,30)+'_capcut.zip';a.click();URL.revokeObjectURL(url);
-    toast('✓ ZIP descargado — listo para CapCut');
+    toast('✓ ZIP — 1 audio completo + timing por imagen');
   }catch(e){PB.hide();toast('Error: '+e.message,true);}
   finally{btn.disabled=false;btn.textContent='📦 Descargar ZIP';}
 }
