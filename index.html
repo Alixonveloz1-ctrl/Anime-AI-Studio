@@ -677,10 +677,12 @@ async function geminiImg(prompt){
     '- Watermark, signature'
   ].join('\n');
   // Models ordered by cost: cheapest first, best quality as fallback
-  // Google AI Studio models (gemini-3.1-flash-image-preview = $0.067/img)
+  // Google AI Studio models — verified working May 2026
+  // gemini-2.5-flash-image: free tier 500/day, $0.039/img paid
+  // gemini-3.1-flash-image-preview: $0.067/img, best quality
   const MODELS=[
+    {name:'gemini-2.5-flash-image',         type:'gemini'},
     {name:'gemini-3.1-flash-image-preview', type:'gemini'},
-    {name:'gemini-2.5-flash-preview-05-20', type:'gemini'},
   ];
   const errors=[];
   for(const {name,type} of MODELS){
