@@ -405,10 +405,11 @@ async function save(){
       if(idx>=0) projs[idx]=entry; else projs.unshift(entry);
       setProjects(projs);
     }
-    for(const c of S.chars) if(c.imageData&&c.imageData!=='DB') await dbW('ci'+c.id,c.imageData);
+    const _pid=_currentProjectId||'default';
+    for(const c of S.chars) if(c.imageData&&c.imageData!=='DB') await dbW('ci_'+_pid+'_'+c.id,c.imageData);
     for(const s of S.scenes){
-      if(s.imageData&&s.imageData!=='DB') await dbW('si'+s.id,s.imageData);
-      if(s.narrationAudio&&s.narrationAudio!=='DB') await dbW('sn'+s.id,s.narrationAudio);
+      if(s.imageData&&s.imageData!=='DB') await dbW('si_'+_pid+'_'+s.id,s.imageData);
+      if(s.narrationAudio&&s.narrationAudio!=='DB') await dbW('sn_'+_pid+'_'+s.id,s.narrationAudio);
     }
   }catch(e){console.error('save',e);}
 }
@@ -422,10 +423,11 @@ async function loadProject(pid){
     S.world=m.world||null; S.episode=m.episode||null;
     S.chars=m.chars||[]; S.scenes=m.scenes||[];
     _currentProjectId = pid;
-    for(const c of S.chars) if(c.imageData==='DB') c.imageData=await dbR('ci'+c.id);
+    const _lpid=pid||'default';
+    for(const c of S.chars) if(c.imageData==='DB') c.imageData=await dbR('ci_'+_lpid+'_'+c.id);
     for(const s of S.scenes){
-      if(s.imageData==='DB') s.imageData=await dbR('si'+s.id);
-      if(s.narrationAudio==='DB') s.narrationAudio=await dbR('sn'+s.id);
+      if(s.imageData==='DB') s.imageData=await dbR('si_'+_lpid+'_'+s.id);
+      if(s.narrationAudio==='DB') s.narrationAudio=await dbR('sn_'+_lpid+'_'+s.id);
     }
   }catch(e){console.error('loadProject',e);}
 }
@@ -441,22 +443,27 @@ async function load(){
   }
 }
 
-function newProject(){
+async function newProject(){
   if(!confirm('¿Crear nuevo anime? El actual se guarda automáticamente.')) return;
-  save();
+  // Save current project first (await so it completes before clearing)
+  await save();
   const pid='p_'+Date.now();
+  // Register new project in index immediately so it appears in the list
+  const projs=getProjects();
+  projs.unshift({id:pid,title:'Nuevo anime',style:'',updated:Date.now()});
+  setProjects(projs);
   _currentProjectId=pid;
   localStorage.setItem('anime_last_pid',pid);
-  // Fully clear state — no leftover chars/scenes/loading
+  // Fully clear state — no leftover chars/scenes/loading flags
   S.world=null;S.episode=null;S.chars=[];S.scenes=[];
   closeMo('mo-projects');
-  switchP('p-world'); // go to world panel
+  switchP('p-world');
   renderAll();
   toast('Nuevo anime creado — define el universo');
 }
 
 async function switchProject(pid){
-  save();
+  await save();
   localStorage.setItem('anime_last_pid',pid);
   await loadProject(pid);
   // Clear any stale loading flags from previous session
@@ -1108,7 +1115,7 @@ async function deleteNar(id){
   const s=S.scenes.find(x=>x.id===id); if(!s) return;
   if(!confirm('¿Borrar el audio de esta escena?')) return;
   s.narrationAudio=null;
-  try{const req=indexedDB.open('AnimeStudio2',1);req.onsuccess=e=>{const db=e.target.result;const tx=db.transaction('blobs','readwrite');tx.objectStore('blobs').delete('sn'+id);};}catch(e){}
+  try{const req=indexedDB.open('AnimeStudio2',1);req.onsuccess=e=>{const db=e.target.result;const tx=db.transaction('blobs','readwrite');tx.objectStore('blobs').delete('sn_'+(_currentProjectId||'default')+'_'+id);};}catch(e){}
   await save(); renderScenes();
   toast('Audio borrado — cambia el Voice ID y regenera');
 }
@@ -1118,7 +1125,7 @@ async function deleteAllNar(){
   if(!confirm('¿Borrar TODOS los audios del episodio?\nPodrás regenerarlos con otro narrador.')) return;
   for(const s of S.scenes){
     s.narrationAudio=null;
-    try{const req=indexedDB.open('AnimeStudio2',1);req.onsuccess=e=>{const db=e.target.result;const tx=db.transaction('blobs','readwrite');tx.objectStore('blobs').delete('sn'+s.id);};}catch(e){}
+    try{const req=indexedDB.open('AnimeStudio2',1);req.onsuccess=e=>{const db=e.target.result;const tx=db.transaction('blobs','readwrite');tx.objectStore('blobs').delete('sn_'+(_currentProjectId||'default')+'_'+s.id);};}catch(e){}
   }
   await save(); renderScenes();
   toast('Todos los audios borrados');
