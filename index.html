@@ -562,36 +562,48 @@ async function geminiImg(prompt){
     '- Western cartoon',
     '- Watermark, signature'
   ].join('\n');
-  // Try multiple model names in case one is unavailable
-  const MODELS=['gemini-2.0-flash-preview-image-generation','gemini-2.0-flash-exp','gemini-2.0-flash'];
-  let lastErr='Sin respuesta de Gemini';
+  // Models ordered by cost: cheapest first, best quality as fallback
+  // imagen-4.0-fast: $0.02/img · imagen-4.0: $0.04/img · gemini-3.1-flash-image: $0.067/img
+  const MODELS=[
+    {name:'imagen-4.0-fast-generate-001',   type:'imagen'},
+    {name:'imagen-4.0-generate-001',        type:'imagen'},
+    {name:'gemini-3.1-flash-image-preview', type:'gemini'},
+  ];
   const errors=[];
-  for(const model of MODELS){
-    toast('Probando '+model.split('-').slice(0,3).join('-')+'...', false);
+  for(const {name,type} of MODELS){
+    toast('Probando '+name.split('-').slice(0,3).join('-')+'...');
     try{
-      const url=`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${S.apis.gemini}`;
-      const body=JSON.stringify({contents:[{parts:[{text:full}]}],generationConfig:{responseModalities:['IMAGE','TEXT']}});
+      let url, body;
+      if(type==='imagen'){
+        url=`https://generativelanguage.googleapis.com/v1beta/models/${name}:predict?key=${S.apis.gemini}`;
+        body=JSON.stringify({instances:[{prompt:full}],parameters:{sampleCount:1,aspectRatio:'16:9'}});
+      } else {
+        url=`https://generativelanguage.googleapis.com/v1beta/models/${name}:generateContent?key=${S.apis.gemini}`;
+        body=JSON.stringify({contents:[{parts:[{text:full}]}],generationConfig:{responseModalities:['IMAGE','TEXT']}});
+      }
       const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body});
-      if(r.status===429){errors.push(model+': rate limit 429');await new Promise(res=>setTimeout(res,4000));continue;}
-      if(r.status===503){errors.push(model+': servicio no disponible 503');await new Promise(res=>setTimeout(res,3000));continue;}
+      if(r.status===429){errors.push(name+': rate limit 429');await new Promise(res=>setTimeout(res,4000));continue;}
+      if(r.status===503){errors.push(name+': servicio no disponible 503');await new Promise(res=>setTimeout(res,3000));continue;}
       if(!r.ok){
         const eText=await r.text();
         let eMsg='';
         try{const eJson=JSON.parse(eText);eMsg=eJson.error?.message||eText;}catch{eMsg=eText;}
-        errors.push(model+' '+r.status+': '+eMsg.slice(0,200));
+        errors.push(name+' '+r.status+': '+eMsg.slice(0,200));
         continue;
       }
       const d=await r.json();
-      // Check for blocked content
       const finishReason=d.candidates?.[0]?.finishReason;
       if(finishReason==='SAFETY'||finishReason==='OTHER'){
-        errors.push(model+': bloqueado por seguridad ('+finishReason+')');
-        continue;
+        errors.push(name+': bloqueado ('+finishReason+')');continue;
       }
+      // gemini format
       const parts=d.candidates?.[0]?.content?.parts||[];
       for(const p of parts){if(p.inlineData?.mimeType?.startsWith('image/')){return `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`;}}
-      errors.push(model+': respondió pero sin imagen. Razón: '+(finishReason||'desconocida'));
-    }catch(e){errors.push(model+': '+e.message);}
+      // imagen format
+      const pred=d.predictions?.[0];
+      if(pred?.bytesBase64Encoded) return `data:image/png;base64,${pred.bytesBase64Encoded}`;
+      errors.push(name+': respondió pero sin imagen ('+( finishReason||'razón desconocida')+') resp='+JSON.stringify(d).slice(0,150));
+    }catch(e){errors.push(name+': '+e.message);}
   }
   const fullError='Gemini falló en todos los modelos:\n'+errors.map((e,i)=>`${i+1}. ${e}`).join('\n');
   console.error(fullError);
