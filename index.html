@@ -1115,96 +1115,88 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
   const btn = document.getElementById('btnGenerarEpisodio');
   const voiceId = document.getElementById('voiceIdInput').value.trim();
   if (voiceId) { state.voiceId = voiceId; }
-  
+
   btn.disabled = true;
   const progDiv = document.getElementById('epProgress');
   progDiv.style.display = 'block';
-  setProgress('ep', 0, 'Generando guión...');
 
   const funcion = document.getElementById('funcionSelect').value;
   const emocion = document.getElementById('emocionInput').value;
   const u = state.universe;
-
   const genrePrompt = GENRE_PROMPTS[u.genero] || '';
-  
-  const system = `Eres un guionista de anime experto. REGLAS:
-- Narración en PRIMERA PERSONA, el protagonista narra sus propios pensamientos
-- 4 a 7 frases por escena, prosa fluida con ritmo natural — NO frases telegráficas
-- Pensamiento interno visible: el narrador comenta lo que siente vs lo que muestra
-- Contraste humorístico si el género es sistema_oculto
-- Ego tranquilo: el protagonista sabe que es el mejor pero actúa como si nada
-- Gancho al final de cada escena
-- Nombres japoneses reales SIEMPRE
-- imagePromptEN: prompt en INGLÉS para generar imagen 9:16 vertical, estilo anime/donghua 2D, muy descriptivo
-- Responde SOLO JSON válido`;
 
-  const prompt = `Universo: ${u.title}
+  const sysBase = `Eres un guionista de anime experto. REGLAS ABSOLUTAS:
+- Narración en PRIMERA PERSONA, el protagonista narra sus pensamientos internos
+- 4 a 7 frases por escena, prosa fluida — NO frases telegráficas ni palabras sueltas
+- Pensamiento interno visible: comenta lo que siente vs lo que muestra
+- Gancho al final de cada escena que genera curiosidad
+- Nombres japoneses reales SIEMPRE (Hiro, Yuki, Sora, Kaito, Rin, Mei...)
+- imagePromptEN: descripción en INGLÉS para imagen 9:16 anime 2D, muy visual y detallada
+- Responde SOLO JSON válido sin markdown`;
+
+  const contexto = `Universo: ${u.title}
 ${genrePrompt}
 Concepto: ${u.concepto}
 Conflicto: ${u.conflicto}
-Función del episodio: ${funcion}
-Emoción central: ${emocion}
+Función: ${funcion} | Emoción: ${emocion || 'intensa'}`;
 
-NARRACIÓN CORRECTA (así debe sonar):
-"Nunca imaginé que una investigadora del gobierno vendría a mi taller un martes por la mañana. Puso la caja sobre el mostrador sin decir una palabra. La miré. Luego la miré a ella. Le sugerí que intentara en la ferretería de al lado. Solo quería ver su cara."
-
-Genera exactamente 30 escenas. Distribución EXACTA de actos:
-- cold_open: escenas 1-2 (2 escenas)
-- act1: escenas 3-10 (8 escenas)  
-- act2: escenas 11-18 (8 escenas)
-- climax: escenas 19-25 (7 escenas)
-- resolution: escenas 26-29 (4 escenas)
-- post_credits: escena 30 (1 escena)
-
-Devuelve JSON:
-{
-  "characters": [
-    {
-      "id": "c1",
-      "name": "Nombre japonés",
-      "role": "protagonista|deuteragonista|antagonista|apoyo",
-      "appearance": "Descripción detallada: pelo exacto, color de ojos, ropa habitual, rasgos distintivos",
-      "personality": "Personalidad en 2 frases",
-      "backstory": "Historia de fondo en 2-3 frases"
-    }
-  ],
-  "scenes": [
-    {
-      "id": "s1",
-      "num": 1,
-      "act": "cold_open",
-      "title": "Título poético de la escena",
-      "location": "Lugar específico",
-      "timeOfDay": "amanecer|mañana|mediodía|tarde|atardecer|noche",
-      "chars": ["c1"],
-      "narration": "Narración en primera persona, 4-7 frases fluidas con pensamiento interno y gancho final",
-      "imagePromptEN": "Vertical 9:16 anime/donghua 2D scene: [detailed scene description], vibrant colors, cinematic composition, [character appearances if present], [lighting/mood]"
-    }
-  ]
-}`;
+  const sceneSchema = `{"id":"sN","num":N,"act":"ACT","title":"título poético","location":"lugar","timeOfDay":"mañana|tarde|noche|amanecer|atardecer","chars":["c1"],"narration":"narración 4-7 frases primera persona con gancho final","imagePromptEN":"Vertical 9:16 anime 2D: descripción detallada, colores, iluminación, personajes"}`;
 
   try {
-    setProgress('ep', 20, 'Procesando respuesta...');
-    const raw = await callClaude(prompt, system);
-    setProgress('ep', 60, 'Parseando datos...');
-    const cleaned = raw.replace(/```json\n?|\n?```/g, '').trim();
-    const data = JSON.parse(cleaned);
-    
-    state.characters = data.characters || [];
-    state.scenes = data.scenes || [];
-    
-    setProgress('ep', 90, 'Guardando...');
+    // ── LLAMADA 1: Personajes ──────────────────────
+    setProgress('ep', 5, 'Paso 1/3 — Creando personajes...');
+    const raw1 = await callClaude(`${contexto}
+
+Crea los personajes de este anime. Entre 3 y 5 personajes con roles variados.
+Devuelve SOLO este JSON:
+{"characters":[{"id":"c1","name":"nombre japonés","role":"protagonista|deuteragonista|antagonista|apoyo","appearance":"pelo, ojos, ropa, rasgos distintivos detallados","personality":"personalidad en 2 frases","backstory":"historia en 2-3 frases"}]}`, sysBase);
+
+    const chars = JSON.parse(raw1.replace(/```json\n?|\n?```/g,'').trim());
+    state.characters = chars.characters || [];
+    const charRef = state.characters.map(c=>`${c.id}=${c.name}(${c.role}): ${c.appearance}`).join(' | ');
+    setProgress('ep', 25, `✅ ${state.characters.length} personajes — Paso 2/3: Escenas 1-15...`);
+
+    // ── LLAMADA 2: Escenas 1-15 ───────────────────
+    const raw2 = await callClaude(`${contexto}
+Personajes: ${charRef}
+
+NARRACIÓN CORRECTA: "Nunca imaginé que una investigadora del gobierno vendría a mi taller un martes. Puso la caja sobre el mostrador sin decir una palabra. La miré. Luego la miré a ella. Le sugerí que intentara en la ferretería de al lado. Solo quería ver su cara."
+
+Genera EXACTAMENTE las escenas 1 a 15. Actos: cold_open(1-2), act1(3-10), act2(11-15).
+Devuelve SOLO: {"scenes":[${sceneSchema},...]}`, sysBase);
+
+    const data2 = JSON.parse(raw2.replace(/```json\n?|\n?```/g,'').trim());
+    const scenes1 = data2.scenes || [];
+    setProgress('ep', 60, `✅ Escenas 1-15 listas — Paso 3/3: Escenas 16-30...`);
+
+    // ── LLAMADA 3: Escenas 16-30 ──────────────────
+    const lastNarrations = scenes1.slice(-3).map(s=>`Escena ${s.num}: ${s.narration.substring(0,80)}...`).join('\n');
+    const raw3 = await callClaude(`${contexto}
+Personajes: ${charRef}
+
+Continuación del episodio. Las últimas escenas fueron:
+${lastNarrations}
+
+Genera EXACTAMENTE las escenas 16 a 30. Actos: act2(16-18), climax(19-25), resolution(26-29), post_credits(30).
+El clímax debe ser el punto más intenso emocional. La resolución cierra el arco. Post-credits: un giro que deja al espectador con ganas de más.
+Devuelve SOLO: {"scenes":[${sceneSchema},...]}`, sysBase);
+
+    const data3 = JSON.parse(raw3.replace(/```json\n?|\n?```/g,'').trim());
+    const scenes2 = data3.scenes || [];
+
+    state.scenes = [...scenes1, ...scenes2];
+    setProgress('ep', 90, 'Guardando episodio...');
     saveState();
-    renderCharacters();
-    renderScenes();
+    await renderCharacters();
+    await renderScenes();
     renderStats();
-    setProgress('ep', 100, '¡Episodio generado!');
-    showToast(`✅ 30 escenas generadas`, 'success');
+    setProgress('ep', 100, `✅ ¡${state.scenes.length} escenas generadas!`);
+    showToast(`✅ ${state.scenes.length} escenas listas`, 'success');
     document.getElementById('batchControls').style.display = 'block';
-    
-    setTimeout(() => { progDiv.style.display = 'none'; }, 2000);
+    setTimeout(() => { progDiv.style.display = 'none'; }, 2500);
+
   } catch(e) {
-    showToast('Error: ' + e.message, 'error');
+    showToast('Error: ' + e.message.substring(0,60), 'error');
     openErrorModal('Error generando episodio', e.message);
     progDiv.style.display = 'none';
   } finally {
