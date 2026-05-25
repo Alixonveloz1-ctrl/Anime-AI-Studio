@@ -440,25 +440,32 @@ async function load(){
 
 function newProject(){
   if(!confirm('¿Crear nuevo anime? El actual se guarda automáticamente.')) return;
-  // Save current first
   save();
-  // Create new project
   const pid='p_'+Date.now();
   _currentProjectId=pid;
   localStorage.setItem('anime_last_pid',pid);
+  // Fully clear state — no leftover chars/scenes/loading
   S.world=null;S.episode=null;S.chars=[];S.scenes=[];
   closeMo('mo-projects');
+  switchP('p-world'); // go to world panel
   renderAll();
-  toast('Nuevo anime creado');
+  toast('Nuevo anime creado — define el universo');
 }
 
 async function switchProject(pid){
-  save(); // save current first
+  save();
   localStorage.setItem('anime_last_pid',pid);
   await loadProject(pid);
-  renderAll();
+  // Clear any stale loading flags from previous session
+  S.scenes.forEach(s=>{ s._loading=false; });
+  S.chars.forEach(c=>{ c._loading=false; });
   closeMo('mo-projects');
-  toast('Proyecto cargado: '+(S.world?.title||'Sin título'));
+  // Navigate to appropriate panel
+  if(S.episode) switchP('p-episode');
+  else if(S.world) switchP('p-world');
+  else switchP('p-world');
+  renderAll();
+  toast('Proyecto: '+(S.world?.title||'Sin título'));
 }
 
 function deleteProject(pid){
@@ -483,15 +490,19 @@ function renderProjectsList(){
     list.innerHTML='<div class="empty"><span class="ei">📂</span><div class="et">No hay proyectos guardados.<br>Genera un universo para crear el primero.</div></div>';
     return;
   }
-  list.innerHTML=projs.map(p=>`
-    <div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:8px;${_currentProjectId===p.id?'border-color:var(--sunset-amber);background:var(--surface-warm)':''}">
-      <div style="flex:1;cursor:pointer" onclick="switchProject('${p.id}')">
-        <div style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:16px;color:var(--paper-cream)">${p.title||'Sin título'}</div>
-        <div style="font-size:10px;color:var(--dim);margin-top:2px">${p.style||''} · ${new Date(p.updated).toLocaleDateString('es-ES')}</div>
-      </div>
-      ${_currentProjectId===p.id?'<div style="font-size:10px;color:var(--sunset-amber);letter-spacing:0.1em">ACTIVO</div>':''}
-      <button onclick="deleteProject('${p.id}')" style="background:rgba(184,74,61,0.15);border:1px solid rgba(184,74,61,0.3);color:#d97757;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer">🗑</button>
-    </div>`).join('');
+  list.innerHTML=projs.map(function(p){
+    const isActive=_currentProjectId===p.id;
+    const cardStyle='display:flex;align-items:center;gap:12px;margin-bottom:8px'+(isActive?';border-color:var(--sunset-amber);background:var(--surface-warm)':'');
+    const date=new Date(p.updated).toLocaleDateString('es-ES');
+    return '<div class="card" style="'+cardStyle+'">'
+      +'<div style="flex:1;cursor:pointer" onclick="switchProject(\''+p.id+'\')">'
+      +'<div style="font-family:\'Cormorant Garamond\',serif;font-style:italic;font-size:16px;color:var(--paper-cream)">'+(p.title||'Sin título')+'</div>'
+      +'<div style="font-size:10px;color:var(--dim);margin-top:2px">'+(p.style||'')+(p.style?' · ':'')+date+'</div>'
+      +'</div>'
+      +(isActive?'<div style="font-size:10px;color:var(--sunset-amber);letter-spacing:0.1em">ACTIVO</div>':'')
+      +'<button onclick="deleteProject(\''+p.id+'\')" style="background:rgba(184,74,61,0.15);border:1px solid rgba(184,74,61,0.3);color:#d97757;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer">🗑</button>'
+      +'</div>';
+  }).join('');
 }
 
 // ─── PROGRESS ───
@@ -941,24 +952,37 @@ async function genAllImgs(){
   if(!pending.length){toast('Todas las imágenes ya existen');return;}
   if(!confirm('Generar '+pending.length+' imágenes. ¿Continuar?\nPuede tardar varios minutos.')) return;
   PB.show('Generando imágenes 0/'+pending.length,0);
-  let done=0;
+  let done=0, errs=0;
   for(const s of pending){
     PB.set('Imagen '+(done+1)+'/'+pending.length+': '+s.title,(done/pending.length)*100);
     s._loading=true; renderScenes();
     try{
-      s.imageData=await geminiImg(buildScenePrompt(s));
+      // 90 second timeout per image
+      const imgPromise=geminiImg(buildScenePrompt(s));
+      const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout 90s — modelo lento')),90000));
+      s.imageData=await Promise.race([imgPromise,timeout]);
       s._loading=false; done++; await save(); renderScenes();
-      await new Promise(r=>setTimeout(r,800));
-    }catch(e){s._loading=false;toast('Error sc'+s.num+': '+e.message.slice(0,50),true);await new Promise(r=>setTimeout(r,1000));}
+      await new Promise(r=>setTimeout(r,600));
+    }catch(e){
+      s._loading=false; errs++;
+      renderScenes();
+      showErrModal('Escena '+s.num+' ('+s.title+'):\n'+e.message);
+      await new Promise(r=>setTimeout(r,1500));
+    }
   }
-  PB.hide(); renderEpPanel(); renderExport(); toast('✓ '+done+' imágenes generadas');
+  PB.hide(); renderEpPanel(); renderExport();
+  toast(errs===0?'✓ '+done+' imágenes generadas':done+' OK · '+errs+' errores',errs>0);
 }
 
 async function regenImg(id){
   const s=S.scenes.find(x=>x.id===id); if(!s||!S.apis.gemini){toast('Configura Gemini',true);return;}
   s._loading=true;s.imageData=null;renderScenes();
-  try{s.imageData=await geminiImg(buildScenePrompt(s));s._loading=false;await save();renderScenes();renderExport();}
-  catch(e){s._loading=false;toast(e.message,true);renderScenes();}
+  try{
+    const p2=geminiImg(buildScenePrompt(s));
+    const t2=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout 90s')),90000));
+    s.imageData=await Promise.race([p2,t2]);
+    s._loading=false;await save();renderScenes();renderExport();
+  }catch(e){s._loading=false;renderScenes();showErrModal('Error escena '+s.num+':\n'+e.message);}
 }
 
 // ─── CHARACTER IMAGES ───
