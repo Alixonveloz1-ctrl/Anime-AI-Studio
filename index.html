@@ -470,12 +470,13 @@ audio { width: 100%; margin-top: 6px; border-radius: 8px; }
         <div class="form-group">
           <label>Voz narradora</label>
           <select id="voiceGenderSelect">
-            <optgroup label="🆓 GRATIS — Web Speech API">
-              <option value="free_male_mx">🇲🇽 Masculino mexicano (gratis)</option>
-              <option value="free_female_mx">🇲🇽 Femenino mexicano (gratis)</option>
-              <option value="free_male_us">🌎 Masculino latino US (gratis)</option>
-              <option value="free_female_us">🌎 Femenino latino US (gratis)</option>
-              <option value="free_auto">🎲 Mejor voz latina disponible (gratis)</option>
+            <optgroup label="🆓 AZURE NEURAL — Gratis 500k chars/mes">
+              <option value="azure_male_mx">🇲🇽 Jorge — Masculino mexicano (Azure)</option>
+              <option value="azure_female_mx">🇲🇽 Dalia — Femenino mexicano (Azure)</option>
+              <option value="azure_male_co">🇨🇴 Gonzalo — Masculino colombiano (Azure)</option>
+              <option value="azure_female_co">🇨🇴 Salome — Femenino colombiano (Azure)</option>
+              <option value="azure_male_ar">🇦🇷 Tomas — Masculino argentino (Azure)</option>
+              <option value="azure_female_ar">🇦🇷 Elena — Femenino argentino (Azure)</option>
             </optgroup>
             <optgroup label="💳 ElevenLabs (requiere créditos)">
               <option value="female_custom">🎙️ Femenina (tu voz EL)</option>
@@ -802,11 +803,13 @@ function getKeys() {
     claude: localStorage.getItem('key_claude') || '',
     gemini: localStorage.getItem('key_gemini') || '',
     eleven: localStorage.getItem('key_eleven') || '',
+    azure:  localStorage.getItem('key_azure')  || '',
+    azureRegion: localStorage.getItem('key_azure_region') || 'eastus',
   };
 }
 function updateApiDot() {
   const k = getKeys();
-  const ok = k.claude && k.gemini && k.eleven;
+  const ok = k.claude && k.gemini && (k.eleven || k.azure);
   document.getElementById('apiDot').className = 'dot' + (ok ? ' ok' : '');
 }
 
@@ -822,8 +825,20 @@ document.getElementById('btnApis').addEventListener('click', () => {
       <label>Gemini API Key</label>
       <input type="password" id="mk_gemini" value="${k.gemini}" placeholder="AIza..." />
     </div>
+    <div style="background:rgba(111,207,151,0.08);border:1px solid rgba(111,207,151,0.2);border-radius:10px;padding:12px;margin-bottom:12px">
+      <div style="font-size:11px;color:#6fcf97;font-weight:600;margin-bottom:8px">🆓 AZURE TTS — 500,000 caracteres/mes GRATIS</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Voces neuronales latinas: Dalia (🇲🇽 femenina), Jorge (🇲🇽 masculino). Regístrate en portal.azure.com → Cognitive Services → Speech.</div>
+      <div class="form-group" style="margin-bottom:8px">
+        <label>Azure Speech API Key</label>
+        <input type="password" id="mk_azure" value="${k.azure}" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Azure Región</label>
+        <input type="text" id="mk_azure_region" value="${k.azureRegion}" placeholder="eastus" />
+      </div>
+    </div>
     <div class="form-group">
-      <label>ElevenLabs API Key</label>
+      <label>ElevenLabs API Key (opcional)</label>
       <input type="password" id="mk_eleven" value="${k.eleven}" placeholder="..." />
     </div>
     <button class="btn btn-primary" onclick="saveKeys()">💾 Guardar</button>
@@ -833,6 +848,8 @@ window.saveKeys = function() {
   localStorage.setItem('key_claude', document.getElementById('mk_claude').value.trim());
   localStorage.setItem('key_gemini', document.getElementById('mk_gemini').value.trim());
   localStorage.setItem('key_eleven', document.getElementById('mk_eleven').value.trim());
+  localStorage.setItem('key_azure',  document.getElementById('mk_azure').value.trim());
+  localStorage.setItem('key_azure_region', document.getElementById('mk_azure_region').value.trim() || 'eastus');
   updateApiDot();
   closeModal();
   showToast('Keys guardadas', 'success');
@@ -973,188 +990,82 @@ async function generateGeminiImage(prompt, refImageBase64 = null, retryNeutral =
 }
 
 // ══════════════════════════════════════════════
-// AUDIO — WEB SPEECH API (gratis) + ELEVENLABS
+// AUDIO ENGINE — Azure Neural TTS + ElevenLabs
 // ══════════════════════════════════════════════
 
-// Get best available Spanish Latin voice from browser
-function getLatinVoice(gender = 'male', preferredLang = null) {
-  const voices = window.speechSynthesis.getVoices();
-  if (!voices.length) return null;
+// Azure Neural voice map — natural Latin American accents
+const AZURE_VOICE_MAP = {
+  azure_male_mx:   'es-MX-JorgeNeural',
+  azure_female_mx: 'es-MX-DaliaNeural',
+  azure_male_co:   'es-CO-GonzaloNeural',
+  azure_female_co: 'es-CO-SalomeNeural',
+  azure_male_ar:   'es-AR-TomasNeural',
+  azure_female_ar: 'es-AR-ElenaNeural',
+};
 
-  // Priority order of Spanish Latin locales
-  const latinLocales = ['es-MX','es-US','es-CO','es-AR','es-CL','es-PE','es-VE','es-419'];
-  const spainLocales = ['es-ES','es'];
-
-  const isFemale = v => /female|woman|mujer|femenin/i.test(v.name) || v.name.includes('Paulina') || v.name.includes('Monica');
-  const isMale   = v => !isFemale(v);
-  const matchGender = v => gender === 'female' ? isFemale(v) : isMale(v);
-
-  // 1. Exact preferred lang + gender
-  if (preferredLang) {
-    const v = voices.find(v => v.lang === preferredLang && matchGender(v));
-    if (v) return v;
-  }
-  // 2. Any Latin locale + gender
-  for (const loc of latinLocales) {
-    const v = voices.find(v => v.lang === loc && matchGender(v));
-    if (v) return v;
-  }
-  // 3. Any Latin locale (ignore gender)
-  for (const loc of latinLocales) {
-    const v = voices.find(v => v.lang === loc);
-    if (v) return v;
-  }
-  // 4. Any Spanish (avoid Spain accent but accept if nothing else)
-  const anyEs = voices.find(v => v.lang.startsWith('es') && !spainLocales.includes(v.lang));
-  if (anyEs) return anyEs;
-  // 5. Fallback: any Spanish
-  return voices.find(v => v.lang.startsWith('es')) || null;
+// Azure TTS SSML rate/pitch per act
+function azureSSML(text, voiceName, act) {
+  const rate  = act === 'climax' ? '+15%' : act === 'resolution' ? '-12%' : '-5%';
+  const pitch = act === 'climax' ? '+8%'  : act === 'resolution' ? '-6%'  : '+0%';
+  // Escape XML special chars
+  const safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return `<speak version='1.0' xml:lang='es-MX'>
+  <voice name='${voiceName}'>
+    <prosody rate='${rate}' pitch='${pitch}'>${safe}</prosody>
+  </voice>
+</speak>`;
 }
 
-// Convert SpeechSynthesis to base64 WAV via AudioContext + ScriptProcessor
-function speakToBase64(text, voice, rate = 0.88, pitch = 1.0) {
-  return new Promise((resolve, reject) => {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) { reject(new Error('AudioContext no disponible')); return; }
+async function generateAzureAudio(text, act, voiceName) {
+  const k = getKeys();
+  if (!k.azure) throw new Error('Azure Speech Key no configurada. Ve a APIS y añade tu key gratuita.');
 
-    const ctx = new AudioCtx();
-    const sampleRate = ctx.sampleRate;
-    const chunks = [];
+  const region = k.azureRegion || 'eastus';
+  const ssml = azureSSML(text, voiceName, act);
 
-    const dest = ctx.createMediaStreamDestination();
-    const recorder = new MediaRecorder(dest.stream, { mimeType: 'audio/webm;codecs=opus' });
-
-    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-    recorder.onstop = async () => {
-      ctx.close();
-      const blob = new Blob(chunks, { type: 'audio/webm' });
-      const b64 = await blobToBase64(blob);
-      resolve(b64);
-    };
-
-    // Hook oscillator to keep AudioContext alive & capture system audio isn't possible —
-    // use a silent oscillator to keep ctx alive; speech goes through system
-    // Instead: use a simpler approach — record via getUserMedia is blocked without permission
-    // REAL approach: render to offline context isn't possible for TTS
-    // Best working approach: use a silent MediaStream trick
-    ctx.close();
-
-    // Fallback to direct blob approach using a hidden audio element + MediaRecorder
-    // This works in Safari/Chrome by capturing the speechSynthesis output
-    // Actually the most reliable cross-browser approach:
-    speakToBlob(text, voice, rate, pitch).then(blob => blobToBase64(blob)).then(resolve).catch(reject);
+  const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+    method: 'POST',
+    headers: {
+      'Ocp-Apim-Subscription-Key': k.azure,
+      'Content-Type': 'application/ssml+xml',
+      'X-Microsoft-OutputFormat': 'audio-16khz-128kbitrate-mono-mp3',
+      'User-Agent': 'AnimeAIStudio',
+    },
+    body: ssml,
   });
-}
 
-// Primary free TTS: uses SpeechSynthesis + MediaRecorder on a silent stream
-// Returns base64 webm audio
-function speakToBlob(text, voice, rate, pitch) {
-  return new Promise((resolve, reject) => {
-    const utter = new SpeechSynthesisUtterance(text);
-    if (voice) utter.voice = voice;
-    utter.lang = voice?.lang || 'es-MX';
-    utter.rate = rate;
-    utter.pitch = pitch;
-
-    // Create a silent audio context to get a MediaStream we can record
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    const ctx = new AudioCtx({ sampleRate: 22050 });
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    gain.gain.value = 0; // silent
-    osc.connect(gain);
-    const dest = ctx.createMediaStreamDestination();
-    gain.connect(dest);
-    osc.start();
-
-    const recorder = new MediaRecorder(dest.stream);
-    const chunks = [];
-    recorder.ondataavailable = e => chunks.push(e.data);
-    recorder.onstop = () => {
-      osc.stop(); ctx.close();
-      const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
-      resolve(blob);
-    };
-    recorder.start();
-
-    utter.onend = () => { setTimeout(() => recorder.stop(), 300); };
-    utter.onerror = e => { recorder.stop(); reject(new Error('SpeechSynthesis error: ' + e.error)); };
-
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utter);
-
-    // Safety timeout
-    setTimeout(() => {
-      if (recorder.state === 'recording') recorder.stop();
-    }, 60000);
-  });
-}
-
-// Simple Web Speech TTS that plays directly (no recording) — for preview/play buttons
-function speakDirect(text, voice, act) {
-  window.speechSynthesis.cancel();
-  const utter = new SpeechSynthesisUtterance(text);
-  if (voice) utter.voice = voice;
-  utter.lang = voice?.lang || 'es-MX';
-  utter.rate = act === 'climax' ? 1.05 : act === 'resolution' ? 0.82 : 0.88;
-  utter.pitch = act === 'climax' ? 1.1 : act === 'resolution' ? 0.9 : 1.0;
-  utter.volume = 1;
-  window.speechSynthesis.speak(utter);
-  return utter;
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Azure TTS error ${res.status}: ${err}`);
+  }
+  const blob = await res.blob();
+  return await blobToBase64(blob);
 }
 
 function getVoiceParams(act) {
-  if (act === 'climax') return { stability: 0.12, similarity_boost: 0.88, style: 0.95, use_speaker_boost: true };
+  if (act === 'climax')     return { stability: 0.12, similarity_boost: 0.88, style: 0.95, use_speaker_boost: true };
   if (act === 'resolution') return { stability: 0.32, similarity_boost: 0.82, style: 0.58, use_speaker_boost: true };
-  if (act === 'cold_open') return { stability: 0.22, similarity_boost: 0.85, style: 0.78, use_speaker_boost: true };
+  if (act === 'cold_open')  return { stability: 0.22, similarity_boost: 0.85, style: 0.78, use_speaker_boost: true };
   return { stability: 0.18, similarity_boost: 0.85, style: 0.82, use_speaker_boost: true };
 }
 function addAudioTags(text, act) {
-  if (act === 'climax') return `[intensely] ${text}`;
+  if (act === 'climax')     return `[intensely] ${text}`;
   if (act === 'resolution') return `[softly] ${text}`;
   return text;
 }
 
-function isFreeVoice(gender) {
-  return gender && gender.startsWith('free_');
-}
-
 async function generateAudio(text, act) {
-  const gender = document.getElementById('voiceGenderSelect')?.value || 'free_male_mx';
+  const gender = document.getElementById('voiceGenderSelect')?.value || 'azure_male_mx';
 
-  // ── FREE: Web Speech API ──────────────────────
-  if (isFreeVoice(gender)) {
-    // Ensure voices are loaded
-    if (!window.speechSynthesis.getVoices().length) {
-      await new Promise(r => { window.speechSynthesis.onvoiceschanged = r; setTimeout(r, 1500); });
-    }
-
-    let voiceGender = 'male';
-    let preferredLang = null;
-    if (gender === 'free_female_mx' || gender === 'free_female_us') voiceGender = 'female';
-    if (gender === 'free_male_mx' || gender === 'free_female_mx') preferredLang = 'es-MX';
-    if (gender === 'free_male_us' || gender === 'free_female_us') preferredLang = 'es-US';
-
-    const voice = getLatinVoice(voiceGender, preferredLang);
-    if (!voice) throw new Error('No se encontró voz en español en este dispositivo. Ve a Ajustes → Accesibilidad → Contenido Hablado → Voces e instala una voz en español.');
-
-    const rate = act === 'climax' ? 1.05 : act === 'resolution' ? 0.82 : 0.88;
-    const pitch = act === 'climax' ? 1.1 : act === 'resolution' ? 0.9 : 1.0;
-
-    // Try recording; if fails (Safari restriction), store a marker and use direct playback
-    try {
-      const b64 = await speakToBlob(text, voice, rate, pitch).then(blobToBase64);
-      return b64;
-    } catch(e) {
-      // Safari blocks MediaRecorder on silent stream — store special marker
-      // Audio will play directly via speechSynthesis on demand
-      return 'FREE_TTS::' + JSON.stringify({ text, lang: voice.lang, rate, pitch });
-    }
+  // ── AZURE NEURAL (free) ───────────────────────
+  if (gender.startsWith('azure_')) {
+    const voiceName = AZURE_VOICE_MAP[gender] || 'es-MX-JorgeNeural';
+    return await generateAzureAudio(text, act, voiceName);
   }
 
   // ── ELEVENLABS ────────────────────────────────
   const key = getKeys().eleven;
-  if (!key) throw new Error('ElevenLabs API Key no configurada. Usa una opción GRATIS del selector.');
+  if (!key) throw new Error('ElevenLabs API Key no configurada. Usa una opción Azure del selector.');
 
   const VOICE_MAP = {
     female_custom: 'GoUxgLPR8rxnhjBSvxFy',
@@ -1166,12 +1077,12 @@ async function generateAudio(text, act) {
     ? state.voiceId
     : (VOICE_MAP[gender] || VOICE_MAP.female_custom);
 
-  const params = getVoiceParams(act);
-  const taggedText = addAudioTags(text, act);
+  const params   = getVoiceParams(act);
+  const taggedTx = addAudioTags(text, act);
   const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'xi-api-key': key },
-    body: JSON.stringify({ text: taggedText, model_id: 'eleven_v3', language_code: 'es', voice_settings: params }),
+    body: JSON.stringify({ text: taggedTx, model_id: 'eleven_v3', language_code: 'es', voice_settings: params }),
   });
   if (!res.ok) {
     const err = await res.text();
@@ -1631,7 +1542,7 @@ window.playSceneAudio = async function(sceneId) {
   if (!audData) { showToast('No hay audio', 'error'); return; }
   const audio = new Audio(`data:audio/mpeg;base64,${audData}`);
   audio.play();
-  showToast('▶️ Reproduciendo...', '');
+  showToast('▶️ Reproduciendo...');
 };
 
 window.deleteSceneAudio = async function(sceneId) {
