@@ -218,6 +218,7 @@ select option{background:var(--night-blue);color:var(--paper-cream)}
     <div class="brand-title">Anime AI Studio</div>
   </div>
   <div class="header-right">
+    <button onclick="openMo('mo-projects')" style="background:var(--surface);border:1px solid var(--bdr);color:var(--dim);border-radius:20px;padding:6px 13px;font-size:10px;letter-spacing:0.12em;cursor:pointer;text-transform:uppercase;font-family:'Inter',sans-serif">📁 Proyectos</button>
     <div class="api-pill" onclick="openMo('mo-apis')"><div class="dot" id="api-dot"></div><span id="api-lbl">SIN APIS</span></div>
   </div>
 </header>
@@ -323,6 +324,18 @@ select option{background:var(--night-blue);color:var(--paper-cream)}
 </nav>
 
 <!-- MODAL APIs -->
+
+<!-- PROJECTS MODAL -->
+<div class="mo" id="mo-projects">
+  <div class="mo-box">
+    <button class="mo-x" onclick="closeMo('mo-projects')">×</button>
+    <div class="mo-title">📁 Proyectos</div>
+    <div class="btn-row" style="margin-bottom:16px">
+      <button class="btn btn-p" onclick="newProject()">+ Nuevo Anime</button>
+    </div>
+    <div id="projects-list"></div>
+  </div>
+</div>
 <div class="mo" id="mo-apis">
   <div class="mo-box">
     <button class="mo-x" onclick="closeMo('mo-apis')">×</button>
@@ -347,6 +360,7 @@ select option{background:var(--night-blue);color:var(--paper-cream)}
 // ─── STATE ───
 const S = { apis:{claude:'',gemini:'',eleven:''}, world:null, episode:null, chars:[], scenes:[] };
 const LS = 'anime_v5';
+const PK = 'anime_projects_v1'; // projects list key
 
 // ─── INDEXEDDB ───
 let _db;
@@ -363,12 +377,31 @@ async function dbW(k,v){const db=await getDB();return new Promise((res,rej)=>{co
 async function dbR(k){const db=await getDB();return new Promise(res=>{const r=db.transaction('m','readonly').objectStore('m').get(k);r.onsuccess=()=>res(r.result||null);r.onerror=()=>res(null);});}
 
 // ─── SAVE/LOAD ───
+let _currentProjectId = null;
+
+function getProjects(){
+  try{return JSON.parse(localStorage.getItem(PK)||'[]');}catch{return [];}
+}
+function setProjects(list){
+  localStorage.setItem(PK,JSON.stringify(list));
+}
+
 async function save(){
   try{
     const meta={apis:S.apis,world:S.world,episode:S.episode,
       chars:S.chars.map(c=>({...c,imageData:c.imageData?'DB':null})),
       scenes:S.scenes.map(s=>({...s,imageData:s.imageData?'DB':null,narrationAudio:s.narrationAudio?'DB':null}))};
-    localStorage.setItem(LS,JSON.stringify(meta));
+    // Save to current project key or default
+    const key = _currentProjectId ? 'anime_p_'+_currentProjectId : LS;
+    localStorage.setItem(key,JSON.stringify(meta));
+    // Update projects index
+    if(_currentProjectId){
+      const projs=getProjects();
+      const idx=projs.findIndex(p=>p.id===_currentProjectId);
+      const entry={id:_currentProjectId,title:S.world?.title||'Sin título',style:S.world?.style||'',updated:Date.now()};
+      if(idx>=0) projs[idx]=entry; else projs.unshift(entry);
+      setProjects(projs);
+    }
     for(const c of S.chars) if(c.imageData&&c.imageData!=='DB') await dbW('ci'+c.id,c.imageData);
     for(const s of S.scenes){
       if(s.imageData&&s.imageData!=='DB') await dbW('si'+s.id,s.imageData);
@@ -376,20 +409,89 @@ async function save(){
     }
   }catch(e){console.error('save',e);}
 }
-async function load(){
+
+async function loadProject(pid){
   try{
-    const raw=localStorage.getItem(LS); if(!raw) return;
+    const key = pid ? 'anime_p_'+pid : LS;
+    const raw=localStorage.getItem(key); if(!raw) return;
     const m=JSON.parse(raw);
     if(m.apis) S.apis={...S.apis,...m.apis};
     S.world=m.world||null; S.episode=m.episode||null;
-    S.chars=m.chars||[];
-    S.scenes=m.scenes||[];
+    S.chars=m.chars||[]; S.scenes=m.scenes||[];
+    _currentProjectId = pid;
     for(const c of S.chars) if(c.imageData==='DB') c.imageData=await dbR('ci'+c.id);
     for(const s of S.scenes){
       if(s.imageData==='DB') s.imageData=await dbR('si'+s.id);
       if(s.narrationAudio==='DB') s.narrationAudio=await dbR('sn'+s.id);
     }
-  }catch(e){console.error('load',e);}
+  }catch(e){console.error('loadProject',e);}
+}
+
+async function load(){
+  // Load last used project or default
+  const projs=getProjects();
+  const lastId=localStorage.getItem('anime_last_pid');
+  if(lastId && projs.find(p=>p.id===lastId)){
+    await loadProject(lastId);
+  } else {
+    await loadProject(null); // legacy single save
+  }
+}
+
+function newProject(){
+  if(!confirm('¿Crear nuevo anime? El actual se guarda automáticamente.')) return;
+  // Save current first
+  save();
+  // Create new project
+  const pid='p_'+Date.now();
+  _currentProjectId=pid;
+  localStorage.setItem('anime_last_pid',pid);
+  S.world=null;S.episode=null;S.chars=[];S.scenes=[];
+  closeMo('mo-projects');
+  renderAll();
+  toast('Nuevo anime creado');
+}
+
+async function switchProject(pid){
+  save(); // save current first
+  localStorage.setItem('anime_last_pid',pid);
+  await loadProject(pid);
+  renderAll();
+  closeMo('mo-projects');
+  toast('Proyecto cargado: '+(S.world?.title||'Sin título'));
+}
+
+function deleteProject(pid){
+  if(!confirm('¿Eliminar este proyecto? No se puede deshacer.')) return;
+  const projs=getProjects().filter(p=>p.id!==pid);
+  setProjects(projs);
+  localStorage.removeItem('anime_p_'+pid);
+  if(_currentProjectId===pid){
+    // Switch to another or clear
+    if(projs.length>0){ switchProject(projs[0].id); }
+    else { _currentProjectId=null; S.world=null;S.episode=null;S.chars=[];S.scenes=[]; renderAll(); }
+  }
+  renderProjectsList();
+  toast('Proyecto eliminado');
+}
+
+function renderProjectsList(){
+  const list=document.getElementById('projects-list');
+  if(!list) return;
+  const projs=getProjects();
+  if(!projs.length){
+    list.innerHTML='<div class="empty"><span class="ei">📂</span><div class="et">No hay proyectos guardados.<br>Genera un universo para crear el primero.</div></div>';
+    return;
+  }
+  list.innerHTML=projs.map(p=>`
+    <div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:8px;${_currentProjectId===p.id?'border-color:var(--sunset-amber);background:var(--surface-warm)':''}">
+      <div style="flex:1;cursor:pointer" onclick="switchProject('${p.id}')">
+        <div style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:16px;color:var(--paper-cream)">${p.title||'Sin título'}</div>
+        <div style="font-size:10px;color:var(--dim);margin-top:2px">${p.style||''} · ${new Date(p.updated).toLocaleDateString('es-ES')}</div>
+      </div>
+      ${_currentProjectId===p.id?'<div style="font-size:10px;color:var(--sunset-amber);letter-spacing:0.1em">ACTIVO</div>':''}
+      <button onclick="deleteProject('${p.id}')" style="background:rgba(184,74,61,0.15);border:1px solid rgba(184,74,61,0.3);color:#d97757;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer">🗑</button>
+    </div>`).join('');
 }
 
 // ─── PROGRESS ───
@@ -437,6 +539,7 @@ function showErrModal(msg){
 
 // ─── MODALS ───
 function openMo(id){
+  if(id==='mo-projects'){renderProjectsList();}
   if(id==='mo-apis'){
     document.getElementById('in-claude').value=S.apis.claude||'';
     document.getElementById('in-gemini').value=S.apis.gemini||'';
@@ -639,7 +742,10 @@ Responde SOLO este JSON:
 {"title":"título","tagline":"frase memorable de 1 línea","concept":"descripción del mundo y conflicto en 3-4 líneas apasionantes","centralConflict":"el conflicto que mueve la historia en 2 líneas","worldRules":"2-3 reglas únicas de este mundo","style":"${style.id}","visualStyle":"${style.vis}"}`
     );
     PB.set('Listo',100);PB.hide();
-    S.world=result; await save();
+    S.world=result;
+    // Auto-create project entry on first world generation
+    if(!_currentProjectId){ _currentProjectId='p_'+Date.now(); localStorage.setItem('anime_last_pid',_currentProjectId); }
+    await save();
     renderWorldOut();
     toast('✓ Universo "'+result.title+'" creado');
     setTimeout(()=>switchP('p-ep'),1200);
@@ -753,6 +859,12 @@ DISTRIBUCIÓN 30 escenas: cold_open×2, act1×8, act2×8, climax×7, resolution�
 }
 
 // ─── RENDER EPISODE PANEL ───
+function renderAll(){
+  renderChars();
+  renderEpPanel();
+  renderExport();
+  updateAPI();
+}
 function renderEpPanel(){
   const hasWorld=!!S.world; const hasEp=!!S.episode;
   document.getElementById('ep-no-world').style.display=!hasWorld?'block':'none';
