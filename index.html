@@ -1110,6 +1110,43 @@ function renderUniverse() {
 // ══════════════════════════════════════════════
 // EPISODE GENERATION
 // ══════════════════════════════════════════════
+
+// Defensive JSON parser: extracts scenes array even from truncated responses
+function safeParseScenes(raw) {
+  const cleaned = raw.replace(/```json\n?|\n?```/g, '').trim();
+  try {
+    return JSON.parse(cleaned).scenes || [];
+  } catch(e) {
+    // Try to extract partial scenes array
+    const match = cleaned.match(/"scenes"\s*:\s*(\[[\s\S]*)/);
+    if (!match) throw new Error('JSON Parse error: no scenes array found');
+    let arr = match[1];
+    // Find the last complete object by counting braces
+    let depth = 0, lastGood = -1;
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i] === '{') depth++;
+      if (arr[i] === '}') { depth--; if (depth === 0) lastGood = i; }
+    }
+    if (lastGood === -1) throw new Error('JSON Parse error: no complete scene found');
+    const repaired = arr.substring(0, lastGood + 1) + ']';
+    try {
+      return JSON.parse(repaired);
+    } catch(e2) {
+      throw new Error('JSON Parse error: ' + e2.message + ' | Raw start: ' + cleaned.substring(0, 80));
+    }
+  }
+}
+
+function safeParseChars(raw) {
+  const cleaned = raw.replace(/```json\n?|\n?```/g, '').trim();
+  try {
+    const obj = JSON.parse(cleaned);
+    return obj.characters || obj;
+  } catch(e) {
+    throw new Error('JSON personajes inválido: ' + e.message);
+  }
+}
+
 document.getElementById('btnGenerarEpisodio').addEventListener('click', async () => {
   if (!state.universe) { showToast('Genera un universo primero', 'error'); return; }
   const btn = document.getElementById('btnGenerarEpisodio');
@@ -1125,67 +1162,71 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
   const u = state.universe;
   const genrePrompt = GENRE_PROMPTS[u.genero] || '';
 
-  const sysBase = `Eres un guionista de anime experto. REGLAS ABSOLUTAS:
-- Narración en PRIMERA PERSONA, el protagonista narra sus pensamientos internos
-- 4 a 7 frases por escena, prosa fluida — NO frases telegráficas ni palabras sueltas
-- Pensamiento interno visible: comenta lo que siente vs lo que muestra
-- Gancho al final de cada escena que genera curiosidad
-- Nombres japoneses reales SIEMPRE (Hiro, Yuki, Sora, Kaito, Rin, Mei...)
-- imagePromptEN: descripción en INGLÉS para imagen 9:16 anime 2D, muy visual y detallada
-- Responde SOLO JSON válido sin markdown`;
+  const sysBase = `Eres un guionista de anime experto. REGLAS:
+- Narración PRIMERA PERSONA, 4-5 frases fluidas por escena, con gancho final
+- Pensamiento interno visible, nombres japoneses reales
+- imagePromptEN en INGLÉS, 9:16 anime 2D, muy visual
+- Responde SOLO JSON válido sin markdown ni texto extra`;
 
-  const contexto = `Universo: ${u.title}
-${genrePrompt}
-Concepto: ${u.concepto}
-Conflicto: ${u.conflicto}
+  const ctx = `Universo: ${u.title} | Género: ${u.genero}
+Concepto: ${u.concepto} | Conflicto: ${u.conflicto}
 Función: ${funcion} | Emoción: ${emocion || 'intensa'}`;
 
-  const sceneSchema = `{"id":"sN","num":N,"act":"ACT","title":"título poético","location":"lugar","timeOfDay":"mañana|tarde|noche|amanecer|atardecer","chars":["c1"],"narration":"narración 4-7 frases primera persona con gancho final","imagePromptEN":"Vertical 9:16 anime 2D: descripción detallada, colores, iluminación, personajes"}`;
+  // Compact scene schema to save tokens
+  const sceneShape = `{"id":"sN","num":N,"act":"ACT","title":"titulo","location":"lugar","timeOfDay":"mañana","chars":["c1"],"narration":"4-5 frases primera persona","imagePromptEN":"9:16 anime 2D scene description in english"}`;
 
   try {
     // ── LLAMADA 1: Personajes ──────────────────────
-    setProgress('ep', 5, 'Paso 1/3 — Creando personajes...');
-    const raw1 = await callClaude(`${contexto}
+    setProgress('ep', 5, 'Paso 1/5 — Personajes...');
+    const raw1 = await callClaude(
+      `${ctx}\n\nCrea 3-4 personajes. Devuelve SOLO:\n{"characters":[{"id":"c1","name":"nombre japonés","role":"protagonista","appearance":"descripción fisica detallada","personality":"2 frases","backstory":"2 frases"}]}`,
+      sysBase
+    );
+    state.characters = safeParseChars(raw1);
+    const charRef = state.characters.map(c=>`${c.id}=${c.name}(${c.role})`).join(', ');
+    const charDesc = state.characters.map(c=>`${c.id}: ${c.name} — ${c.appearance}`).join(' | ');
+    saveState();
+    setProgress('ep', 18, `✅ ${state.characters.length} personajes — Paso 2/5: Escenas 1-8...`);
 
-Crea los personajes de este anime. Entre 3 y 5 personajes con roles variados.
-Devuelve SOLO este JSON:
-{"characters":[{"id":"c1","name":"nombre japonés","role":"protagonista|deuteragonista|antagonista|apoyo","appearance":"pelo, ojos, ropa, rasgos distintivos detallados","personality":"personalidad en 2 frases","backstory":"historia en 2-3 frases"}]}`, sysBase);
+    // ── LLAMADA 2: Escenas 1-8 ────────────────────
+    const raw2 = await callClaude(
+      `${ctx}\nPersonajes: ${charDesc}\n\nGenera escenas 1-8. Actos: cold_open(1-2), act1(3-8).\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con exactamente 8 objetos.`,
+      sysBase
+    );
+    const scenes_1_8 = safeParseScenes(raw2);
+    setProgress('ep', 36, `✅ Escenas 1-8 — Paso 3/5: Escenas 9-16...`);
 
-    const chars = JSON.parse(raw1.replace(/```json\n?|\n?```/g,'').trim());
-    state.characters = chars.characters || [];
-    const charRef = state.characters.map(c=>`${c.id}=${c.name}(${c.role}): ${c.appearance}`).join(' | ');
-    setProgress('ep', 25, `✅ ${state.characters.length} personajes — Paso 2/3: Escenas 1-15...`);
+    // ── LLAMADA 3: Escenas 9-16 ───────────────────
+    const last2 = scenes_1_8.slice(-2).map(s=>`E${s.num}: ${s.narration.substring(0,60)}`).join(' | ');
+    const raw3 = await callClaude(
+      `${ctx}\nPersonajes: ${charRef}\nContinuación — últimas escenas: ${last2}\n\nGenera escenas 9-16. Actos: act1(9-10), act2(11-16).\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con exactamente 8 objetos numerados del 9 al 16.`,
+      sysBase
+    );
+    const scenes_9_16 = safeParseScenes(raw3);
+    setProgress('ep', 55, `✅ Escenas 9-16 — Paso 4/5: Escenas 17-24...`);
 
-    // ── LLAMADA 2: Escenas 1-15 ───────────────────
-    const raw2 = await callClaude(`${contexto}
-Personajes: ${charRef}
+    // ── LLAMADA 4: Escenas 17-24 ──────────────────
+    const last2b = scenes_9_16.slice(-2).map(s=>`E${s.num}: ${s.narration.substring(0,60)}`).join(' | ');
+    const raw4 = await callClaude(
+      `${ctx}\nPersonajes: ${charRef}\nContinuación — últimas escenas: ${last2b}\n\nGenera escenas 17-24. Actos: act2(17-18), climax(19-24). El clímax debe ser el punto de máxima tensión emocional.\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con exactamente 8 objetos numerados del 17 al 24.`,
+      sysBase
+    );
+    const scenes_17_24 = safeParseScenes(raw4);
+    setProgress('ep', 74, `✅ Escenas 17-24 — Paso 5/5: Escenas 25-30...`);
 
-NARRACIÓN CORRECTA: "Nunca imaginé que una investigadora del gobierno vendría a mi taller un martes. Puso la caja sobre el mostrador sin decir una palabra. La miré. Luego la miré a ella. Le sugerí que intentara en la ferretería de al lado. Solo quería ver su cara."
+    // ── LLAMADA 5: Escenas 25-30 ──────────────────
+    const last2c = scenes_17_24.slice(-2).map(s=>`E${s.num}: ${s.narration.substring(0,60)}`).join(' | ');
+    const raw5 = await callClaude(
+      `${ctx}\nPersonajes: ${charRef}\nContinuación — últimas escenas: ${last2c}\n\nGenera escenas 25-30. Actos: climax(25), resolution(26-29), post_credits(30). La resolución cierra el arco emocional. Post-credits: giro que deja intriga para el siguiente episodio.\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con exactamente 6 objetos numerados del 25 al 30.`,
+      sysBase
+    );
+    const scenes_25_30 = safeParseScenes(raw5);
 
-Genera EXACTAMENTE las escenas 1 a 15. Actos: cold_open(1-2), act1(3-10), act2(11-15).
-Devuelve SOLO: {"scenes":[${sceneSchema},...]}`, sysBase);
+    // Merge all scenes, fix numbering if needed
+    state.scenes = [...scenes_1_8, ...scenes_9_16, ...scenes_17_24, ...scenes_25_30]
+      .map((s, i) => ({ ...s, num: i + 1, id: `s${i + 1}` }));
 
-    const data2 = JSON.parse(raw2.replace(/```json\n?|\n?```/g,'').trim());
-    const scenes1 = data2.scenes || [];
-    setProgress('ep', 60, `✅ Escenas 1-15 listas — Paso 3/3: Escenas 16-30...`);
-
-    // ── LLAMADA 3: Escenas 16-30 ──────────────────
-    const lastNarrations = scenes1.slice(-3).map(s=>`Escena ${s.num}: ${s.narration.substring(0,80)}...`).join('\n');
-    const raw3 = await callClaude(`${contexto}
-Personajes: ${charRef}
-
-Continuación del episodio. Las últimas escenas fueron:
-${lastNarrations}
-
-Genera EXACTAMENTE las escenas 16 a 30. Actos: act2(16-18), climax(19-25), resolution(26-29), post_credits(30).
-El clímax debe ser el punto más intenso emocional. La resolución cierra el arco. Post-credits: un giro que deja al espectador con ganas de más.
-Devuelve SOLO: {"scenes":[${sceneSchema},...]}`, sysBase);
-
-    const data3 = JSON.parse(raw3.replace(/```json\n?|\n?```/g,'').trim());
-    const scenes2 = data3.scenes || [];
-
-    state.scenes = [...scenes1, ...scenes2];
-    setProgress('ep', 90, 'Guardando episodio...');
+    setProgress('ep', 92, 'Guardando...');
     saveState();
     await renderCharacters();
     await renderScenes();
@@ -1196,7 +1237,7 @@ Devuelve SOLO: {"scenes":[${sceneSchema},...]}`, sysBase);
     setTimeout(() => { progDiv.style.display = 'none'; }, 2500);
 
   } catch(e) {
-    showToast('Error: ' + e.message.substring(0,60), 'error');
+    showToast('Error: ' + e.message.substring(0, 60), 'error');
     openErrorModal('Error generando episodio', e.message);
     progDiv.style.display = 'none';
   } finally {
