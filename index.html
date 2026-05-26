@@ -493,12 +493,33 @@ function safeParseJSON(raw) {
 async function generateImage(prompt, characterRefs = null, forceModel = null) {
   const modelSel = document.getElementById('imageModelSelect');
   const model = forceModel || (modelSel ? modelSel.value : 'auto');
+
+  // Sanitize prompt: strip any chars that can break JSON serialization
+  const cleanPrompt = String(prompt || '')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')  // control chars
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Sanitize character refs: strip data: prefix if present, validate base64
+  let cleanRefs = null;
+  if (characterRefs && Array.isArray(characterRefs) && characterRefs.length > 0) {
+    cleanRefs = characterRefs
+      .filter(r => r && r.img && typeof r.img === 'string')
+      .map(r => ({
+        name: String(r.name || 'character').replace(/[\u0000-\u001F\u007F]/g, ''),
+        role: String(r.role || '').replace(/[\u0000-\u001F\u007F]/g, ''),
+        img: r.img.replace(/^data:image\/[a-z]+;base64,/i, '').replace(/\s/g, ''),
+      }))
+      .filter(r => r.img.length > 100); // skip tiny/invalid
+    if (!cleanRefs.length) cleanRefs = null;
+  }
+
   const res = await fetch('/api/image', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      prompt,
-      characterRefs: characterRefs || null,
+      prompt: cleanPrompt,
+      characterRefs: cleanRefs,
       model: model === 'auto' ? null : model,
     }),
   });
