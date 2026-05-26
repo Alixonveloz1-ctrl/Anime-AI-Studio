@@ -202,6 +202,16 @@
   <div class="panel" id="panel-episodio">
     <div class="card">
       <h2>🎬 Episodio</h2>
+      <label>Modelo de imagen</label>
+      <select id="imageModelSelect">
+        <option value="auto">⚡ Auto (mejor disponible)</option>
+        <option value="gemini-3.1-pro-preview">🌟 Gemini 3.1 Pro (recomendado para continuidad)</option>
+        <option value="gemini-3.1-flash-lite-preview">⚡ Gemini 3.1 Flash Lite (más rápido)</option>
+        <option value="imagen-4.0-generate-001">🎨 Imagen 4.0</option>
+        <option value="imagen-4.0-fast-generate-001">🎨 Imagen 4.0 Fast</option>
+        <option value="imagen-3.0-generate-002">🎨 Imagen 3.0</option>
+      </select>
+
       <label>Voz de narración</label>
       <select id="voiceSelect">
         <optgroup label="🔮 Gemini TTS (HD)">
@@ -467,11 +477,13 @@ function safeParseJSON(raw) {
 // ════════════════════════════════════════════════════════════════
 // IMAGE GENERATION (via /api/image proxy → Vertex AI)
 // ════════════════════════════════════════════════════════════════
-async function generateImage(prompt, refImageBase64 = null) {
+async function generateImage(prompt, refImageBase64 = null, forceModel = null) {
+  const modelSel = document.getElementById('imageModelSelect');
+  const model = forceModel || (modelSel ? modelSel.value : 'auto');
   const res = await fetch('/api/image', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, refImageBase64: refImageBase64 || null }),
+    body: JSON.stringify({ prompt, refImageBase64: refImageBase64 || null, model: model === 'auto' ? null : model }),
   });
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error || `Image proxy ${res.status}`);
@@ -809,11 +821,8 @@ window.generateSceneImage = async function(sceneId) {
   if (!s) return;
   showToast(`Generando imagen escena ${s.num}...`, 'success');
   try {
-    // Try to get the first character reference image as anchor
-    let refImg = null;
-    if (state.characters.length) {
-      refImg = await dbGet(charImgKey(state.characters[0].id));
-    }
+    // Find which character is most likely in this scene
+    const refImg = await getSceneCharacterRef(s);
     const imgB64 = await generateImage(s.imagePromptEN || s.narration, refImg);
     await dbSet(sceneImgKey(s.id), imgB64);
     renderScenes();
@@ -822,6 +831,24 @@ window.generateSceneImage = async function(sceneId) {
     openErrorModal(`Error imagen escena ${s.num}`, e.message);
   }
 };
+
+// Try to find the character mentioned in the scene's prompt/narration and use their image as reference
+async function getSceneCharacterRef(scene) {
+  if (!state.characters.length) return null;
+  const text = ((scene.imagePromptEN || '') + ' ' + (scene.narration || '')).toLowerCase();
+
+  // Try to find a character by name match
+  for (const c of state.characters) {
+    if (!c.name) continue;
+    const firstName = c.name.split(' ')[0].toLowerCase();
+    if (text.includes(firstName)) {
+      const img = await dbGet(charImgKey(c.id));
+      if (img) return img;
+    }
+  }
+  // Fallback: use protagonist (first character)
+  return await dbGet(charImgKey(state.characters[0].id));
+}
 
 window.generateSceneAudio = async function(sceneId) {
   const s = state.scenes.find(x => x.id === sceneId);
@@ -857,9 +884,6 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   const bp = document.getElementById('bulkProgress'); bp.style.display = 'block';
   const bt = document.getElementById('bulkText'), bb = document.getElementById('bulkBar');
 
-  let refImg = null;
-  if (state.characters.length) refImg = await dbGet(charImgKey(state.characters[0].id));
-
   for (let i = 0; i < state.scenes.length; i++) {
     const s = state.scenes[i];
     const pct = Math.round((i / state.scenes.length) * 100);
@@ -868,6 +892,7 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
     try {
       const existing = await dbGet(sceneImgKey(s.id));
       if (!existing) {
+        const refImg = await getSceneCharacterRef(s);
         const imgB64 = await generateImage(s.imagePromptEN || s.narration, refImg);
         await dbSet(sceneImgKey(s.id), imgB64);
       }
