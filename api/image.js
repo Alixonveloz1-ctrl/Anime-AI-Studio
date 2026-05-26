@@ -33,22 +33,23 @@ async function callGemini(model, prompt, characterRefs, projectId, token) {
   const parts = [];
 
   if (characterRefs && characterRefs.length > 0) {
-    // Add each character reference image with their name as label
+    // Add each character reference image labeled with their name
     for (const ref of characterRefs) {
       parts.push({ inlineData: { mimeType: 'image/png', data: ref.img } });
-      parts.push({ text: `↑ This is ${ref.name} (${ref.role || 'character'})` });
+      parts.push({ text: `↑ Character reference: ${ref.name}${ref.role ? ' (' + ref.role + ')' : ''}` });
     }
 
-    const names = characterRefs.map(r => r.name).join(' and ');
     parts.push({
-      text: `IMPORTANT INSTRUCTIONS:
-- Use the EXACT characters shown in the reference images above (${names})
-- Keep their SAME face, hair color, hair style, eye color and outfit style
-- Each character must look IDENTICAL to their reference image
-- Only change pose, expression, action and environment
+      text: `These are the official character designs for this anime series. Above are ${characterRefs.length} character${characterRefs.length > 1 ? 's' : ''}.
 
-Generate a 9:16 vertical anime 2D scene image with these characters.
-Scene: ${prompt}`
+CRITICAL RULES:
+- For ANY character from the references that appears in the scene below, you MUST keep their EXACT design: same face, same hair color, same hair style, same eye color, same outfit.
+- If a character is not mentioned in the scene, do not include them.
+- Style: 9:16 vertical anime 2D illustration, professional quality.
+- Maintain consistent art style across scenes.
+
+Scene to generate:
+${prompt}`
     });
   } else {
     parts.push({ text: `9:16 vertical anime 2D illustration. ${prompt}` });
@@ -84,6 +85,19 @@ export default async function handler(req) {
     let characterRefs = body.characterRefs;
     if (!characterRefs && body.refImageBase64) {
       characterRefs = [{ name: 'main character', role: '', img: body.refImageBase64 }];
+    }
+
+    // Clean refs: strip data: prefix, whitespace, validate
+    if (characterRefs && Array.isArray(characterRefs)) {
+      characterRefs = characterRefs
+        .filter(r => r && r.img && typeof r.img === 'string')
+        .map(r => ({
+          name: String(r.name || 'character'),
+          role: String(r.role || ''),
+          img: r.img.replace(/^data:image\/[a-z]+;base64,/i, '').replace(/\s/g, ''),
+        }))
+        .filter(r => r.img.length > 100);
+      if (!characterRefs.length) characterRefs = null;
     }
 
     if (!prompt) return new Response(JSON.stringify({ error:'prompt required' }), { status:400, headers:CORS });
