@@ -2,1429 +2,991 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0a0a18">
 <title>Anime AI Studio</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;600;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400;1,600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
-:root {
-  --twilight-deep: #1a2842;
-  --night-blue: #0e1729;
-  --sunset-amber: #f4a261;
-  --paper-cream: #f5ebe0;
-  --star-gold: #ffd700;
-  --rose-dawn: #e8768a;
-  --mist-blue: #a8c5e8;
-  --deep-navy: #0a1020;
-  --card-bg: rgba(255,255,255,0.04);
-  --card-border: rgba(255,255,255,0.08);
-  --text-main: #e8e0d5;
-  --text-dim: rgba(232,224,213,0.55);
-  --accent: #f4a261;
-  --accent2: #e8768a;
-  --success: #6fcf97;
-  --error: #eb5757;
-  --radius: 16px;
-  --radius-sm: 10px;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-html, body { height: 100%; overflow: hidden; background: var(--night-blue); color: var(--text-main); font-family: 'Inter', 'Noto Serif JP', sans-serif; font-size: 14px; line-height: 1.6; }
+  :root {
+    --bg-deep: #0a0a18;
+    --bg-card: #14142b;
+    --bg-soft: #1a1a35;
+    --accent: #ff8c42;
+    --accent-soft: rgba(255, 140, 66, 0.15);
+    --text-main: #f0f0f5;
+    --text-dim: #8e8eaf;
+    --border: rgba(255, 255, 255, 0.08);
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--bg-deep); color: var(--text-main); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow-x: hidden; min-height: 100vh; }
 
-/* STARFIELD */
-#starfield { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-.star { position: absolute; border-radius: 50%; background: white; animation: twinkle var(--d, 3s) ease-in-out infinite; opacity: var(--o, 0.6); }
-@keyframes twinkle { 0%,100% { opacity: var(--o); transform: scale(1); } 50% { opacity: calc(var(--o) * 0.3); transform: scale(0.7); } }
-.comet { position: absolute; width: 120px; height: 2px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.9), transparent); border-radius: 2px; animation: comet 2s ease-out forwards; opacity: 0; }
-@keyframes comet { 0% { opacity: 0; transform: translateX(-200px) translateY(0); } 10% { opacity: 1; } 100% { opacity: 0; transform: translateX(800px) translateY(300px); } }
+  /* ───────── Starfield ───────── */
+  #starfield { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .star { position: absolute; background: white; border-radius: 50%; opacity: 0.6; animation: twinkle 4s infinite; }
+  @keyframes twinkle { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.9; } }
+  .comet { position: absolute; width: 2px; height: 2px; background: white; box-shadow: 0 0 4px white, 0 0 8px rgba(255,140,66,0.6); }
+  @keyframes shoot { 0% { transform: translate(-10vw, 100vh); opacity: 0; } 10% { opacity: 1; } 100% { transform: translate(110vw, -10vh); opacity: 0; } }
 
-/* LAYOUT */
-#app { position: fixed; inset: 0; display: flex; flex-direction: column; z-index: 1; }
+  /* ───────── Layout ───────── */
+  .app { position: relative; z-index: 1; padding: 16px 14px 100px; max-width: 720px; margin: 0 auto; }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; padding-top: env(safe-area-inset-top); }
+  .brand h1 { margin: 0; font-family: 'Times New Roman', serif; font-style: italic; font-size: 22px; }
+  .brand .jp { font-size: 11px; color: var(--text-dim); letter-spacing: 4px; }
+  .header-btns { display: flex; gap: 6px; }
+  .header-btn { padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; color: var(--text-main); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+  .header-btn .dot { width: 7px; height: 7px; border-radius: 50%; background: #888; }
+  .header-btn .dot.ok { background: #4ade80; }
 
-/* HEADER */
-header { flex-shrink: 0; background: linear-gradient(135deg, rgba(10,16,32,0.97) 0%, rgba(26,40,66,0.97) 100%); border-bottom: 1px solid rgba(244,162,97,0.2); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; backdrop-filter: blur(20px); z-index: 100; }
-.header-title { font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 600; font-size: 22px; color: var(--sunset-amber); text-shadow: 0 0 30px rgba(244,162,97,0.5); letter-spacing: 0.02em; }
-.header-kanji { font-family: 'Noto Serif JP', serif; font-size: 11px; font-weight: 300; color: rgba(244,162,97,0.6); display: block; letter-spacing: 0.2em; margin-top: -2px; }
-.header-actions { display: flex; gap: 8px; }
-.hbtn { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 7px 11px; cursor: pointer; font-size: 12px; font-weight: 500; color: var(--text-dim); transition: all 0.2s; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
-.hbtn:hover { border-color: rgba(244,162,97,0.4); color: var(--text-main); }
-.hbtn .dot { width: 7px; height: 7px; border-radius: 50%; background: #eb5757; }
-.hbtn .dot.ok { background: #6fcf97; }
+  /* ───────── Panels ───────── */
+  .panel { display: none; }
+  .panel.active { display: block; animation: fadeIn 0.3s; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
-/* SCROLL */
-#main-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 16px 16px 88px; -webkit-overflow-scrolling: touch; }
-#main-scroll::-webkit-scrollbar { width: 3px; }
-#main-scroll::-webkit-scrollbar-track { background: transparent; }
-#main-scroll::-webkit-scrollbar-thumb { background: rgba(244,162,97,0.3); border-radius: 3px; }
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .card h2 { margin: 0 0 12px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  .card h3 { margin: 14px 0 6px; font-size: 13px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
 
-/* NAV */
-nav { flex-shrink: 0; position: fixed; bottom: 0; left: 0; right: 0; background: linear-gradient(0deg, rgba(10,16,32,0.99) 0%, rgba(14,23,41,0.97) 100%); border-top: 1px solid rgba(244,162,97,0.15); display: flex; z-index: 100; padding-bottom: env(safe-area-inset-bottom, 0); }
-.nav-tab { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 10px 4px 8px; cursor: pointer; transition: all 0.2s; border: none; background: transparent; color: var(--text-dim); font-family: 'Inter', sans-serif; font-size: 10px; gap: 3px; }
-.nav-tab .icon { font-size: 20px; transition: transform 0.2s; }
-.nav-tab.active { color: var(--sunset-amber); }
-.nav-tab.active .icon { transform: scale(1.15); }
+  label { display: block; font-size: 12px; color: var(--text-dim); margin: 10px 0 4px; text-transform: uppercase; letter-spacing: 1px; }
+  input, textarea, select {
+    width: 100%; background: var(--bg-soft); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text-main); font-family: inherit;
+    font-size: 14px; padding: 11px 12px; outline: none; transition: border-color 0.2s;
+    -webkit-appearance: none; appearance: none;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  textarea { min-height: 70px; resize: vertical; }
+  select { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='%238e8eaf' d='M2 4l4 4 4-4z'/></svg>"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
 
-/* PANELS */
-.panel { display: none; animation: fadeIn 0.3s ease; }
-.panel.active { display: block; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  button { font-family: inherit; cursor: pointer; }
+  .btn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--accent), #ff6b1a); color: white; border: none; border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; box-shadow: 0 6px 20px rgba(255,140,66,0.25); display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+  .btn-sec { width: 100%; padding: 11px; background: var(--bg-soft); color: var(--text-main); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; }
+  .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .btn-danger { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #f87171; }
 
-/* SECTION HEADERS */
-.section-title { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 400; font-style: italic; color: var(--paper-cream); margin-bottom: 4px; }
-.section-sub { font-size: 12px; color: var(--text-dim); margin-bottom: 20px; }
+  /* ───────── Bottom Nav ───────── */
+  .nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(20,20,43,0.95); backdrop-filter: blur(12px); border-top: 1px solid var(--border); display: flex; justify-content: space-around; padding: 8px 0 calc(8px + env(safe-area-inset-bottom)); z-index: 50; }
+  .nav-tab { background: none; border: none; color: var(--text-dim); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 10px; font-size: 11px; }
+  .nav-tab.active { color: var(--accent); }
+  .nav-tab .icon { font-size: 22px; }
 
-/* CARDS */
-.card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; backdrop-filter: blur(10px); }
-.card-title { font-family: 'Cormorant Garamond', serif; font-size: 15px; font-weight: 600; color: var(--sunset-amber); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+  /* ───────── Modal ───────── */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; display: flex; align-items: flex-end; justify-content: center; animation: fadeIn 0.2s; }
+  .modal { background: var(--bg-card); border-radius: var(--radius) var(--radius) 0 0; padding: 20px 18px calc(24px + env(safe-area-inset-bottom)); width: 100%; max-width: 720px; max-height: 88vh; overflow-y: auto; animation: slideUp 0.25s; }
+  @keyframes slideUp { from { transform: translateY(40px); } to { transform: translateY(0); } }
+  .modal h3 { margin: 0 0 16px; font-size: 18px; }
+  .modal-handle { width: 36px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; margin: -8px auto 14px; }
 
-/* FORMS */
-label { display: block; font-size: 11px; font-weight: 500; color: var(--text-dim); margin-bottom: 5px; letter-spacing: 0.05em; text-transform: uppercase; }
-input, textarea, select { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-sm); color: var(--text-main); font-family: inherit; font-size: 14px; padding: 10px 12px; outline: none; transition: border-color 0.2s; -webkit-appearance: none; appearance: none; }
-input:focus, textarea:focus, select:focus { border-color: rgba(244,162,97,0.5); }
-textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
-select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23f4a261' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
-.form-group { margin-bottom: 14px; }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  /* ───────── Toast ───────── */
+  .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: rgba(20,20,43,0.95); color: var(--text-main); padding: 12px 20px; border-radius: 24px; border: 1px solid var(--border); font-size: 13px; z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.3s, transform 0.3s; }
+  .toast.show { opacity: 1; transform: translate(-50%, -8px); }
+  .toast.error { border-color: rgba(239,68,68,0.5); }
+  .toast.success { border-color: rgba(34,197,94,0.5); }
 
-/* BUTTONS */
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: none; border-radius: var(--radius-sm); cursor: pointer; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; padding: 11px 16px; transition: all 0.2s; width: 100%; letter-spacing: 0.02em; }
-.btn-primary { background: linear-gradient(135deg, var(--sunset-amber), #e8884a); color: var(--night-blue); box-shadow: 0 4px 20px rgba(244,162,97,0.3); }
-.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 25px rgba(244,162,97,0.4); }
-.btn-primary:active { transform: translateY(0); }
-.btn-secondary { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: var(--text-main); }
-.btn-secondary:hover { background: rgba(255,255,255,0.09); border-color: rgba(244,162,97,0.3); }
-.btn-danger { background: rgba(235,87,87,0.15); border: 1px solid rgba(235,87,87,0.3); color: #eb8080; }
-.btn-danger:hover { background: rgba(235,87,87,0.25); }
-.btn-sm { padding: 7px 12px; font-size: 12px; width: auto; }
-.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; }
-.btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  /* ───────── Spinner ───────── */
+  .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
-/* UNIVERSE */
-.universe-card { background: linear-gradient(135deg, rgba(244,162,97,0.08), rgba(232,118,138,0.06)); border: 1px solid rgba(244,162,97,0.2); border-radius: var(--radius); padding: 18px; margin-top: 16px; }
-.universe-title { font-family: 'Cormorant Garamond', serif; font-size: 28px; font-weight: 600; font-style: italic; color: var(--sunset-amber); margin-bottom: 4px; }
-.universe-tagline { font-size: 13px; color: var(--mist-blue); font-style: italic; margin-bottom: 14px; }
-.universe-field { margin-bottom: 10px; }
-.universe-field-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); margin-bottom: 2px; }
-.universe-field-value { font-size: 13px; color: var(--text-main); line-height: 1.55; }
-.hook-badge { background: rgba(244,162,97,0.12); border: 1px solid rgba(244,162,97,0.25); border-radius: 8px; padding: 10px 12px; margin-top: 12px; font-size: 13px; color: var(--sunset-amber); font-style: italic; display: flex; gap: 8px; align-items: flex-start; }
+  /* ───────── Progress ───────── */
+  .progress { background: var(--bg-soft); border-radius: var(--radius-sm); overflow: hidden; height: 8px; margin: 8px 0 4px; }
+  .progress-bar { background: linear-gradient(90deg, var(--accent), #ff6b1a); height: 100%; transition: width 0.3s; }
+  .progress-text { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
 
-/* CHARACTERS */
-.char-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius); overflow: hidden; margin-bottom: 14px; }
-.char-header { display: flex; gap: 12px; padding: 14px; align-items: flex-start; }
-.char-img-wrap { width: 72px; height: 96px; flex-shrink: 0; border-radius: 10px; overflow: hidden; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); position: relative; }
-.char-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
-.char-img-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 28px; color: var(--text-dim); }
-.char-info { flex: 1; min-width: 0; }
-.char-name { font-family: 'Noto Serif JP', serif; font-size: 16px; font-weight: 600; color: var(--paper-cream); margin-bottom: 2px; }
-.char-role { font-size: 11px; color: var(--sunset-amber); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
-.char-detail { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
-.char-actions { padding: 0 14px 14px; display: flex; gap: 8px; }
-.char-generating { position: absolute; inset: 0; background: rgba(14,23,41,0.8); display: flex; align-items: center; justify-content: center; font-size: 18px; animation: spin 1.2s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+  /* ───────── Universe Display ───────── */
+  .universe-display { background: var(--bg-soft); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; margin-top: 12px; }
+  .universe-display h4 { margin: 0 0 4px; font-size: 17px; color: var(--accent); }
+  .universe-display .tag { color: var(--text-dim); font-size: 13px; font-style: italic; margin-bottom: 10px; }
+  .universe-display .field { margin-top: 10px; font-size: 13px; }
+  .universe-display .field-label { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
 
-/* SCENES */
-.scene-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; }
-.scene-header { display: flex; gap: 10px; padding: 12px; align-items: flex-start; }
-.scene-img-wrap { width: 56px; height: 75px; flex-shrink: 0; border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); position: relative; }
-.scene-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
-.scene-img-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--text-dim); }
-.scene-meta { flex: 1; min-width: 0; }
-.scene-num { font-size: 10px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
-.act-badge { background: rgba(244,162,97,0.15); border-radius: 4px; padding: 1px 5px; font-size: 9px; color: var(--sunset-amber); }
-.scene-title { font-family: 'Noto Serif JP', serif; font-size: 13px; font-weight: 600; color: var(--paper-cream); margin-bottom: 4px; }
-.scene-narration { font-size: 12px; color: var(--text-dim); line-height: 1.55; font-style: italic; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.scene-actions { padding: 0 12px 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+  /* ───────── Character Cards ───────── */
+  .char-card { background: var(--bg-soft); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+  .char-header { display: flex; gap: 12px; margin-bottom: 10px; }
+  .char-img { width: 80px; height: 100px; border-radius: var(--radius-sm); background: var(--bg-deep); overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 32px; flex-shrink: 0; }
+  .char-img img { width: 100%; height: 100%; object-fit: cover; }
+  .char-info h4 { margin: 0 0 2px; font-size: 16px; }
+  .char-role { font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; }
+  .char-detail { font-size: 12px; color: var(--text-dim); line-height: 1.5; margin-top: 6px; }
 
-/* PROGRESS */
-.progress-wrap { background: rgba(255,255,255,0.06); border-radius: 100px; height: 6px; overflow: hidden; margin: 10px 0; }
-.progress-bar { height: 100%; border-radius: 100px; background: linear-gradient(90deg, var(--sunset-amber), var(--rose-dawn)); transition: width 0.4s ease; }
-.progress-label { font-size: 11px; color: var(--text-dim); text-align: center; margin-top: 4px; }
+  /* ───────── Scene Cards ───────── */
+  .scene-card { background: var(--bg-soft); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-bottom: 10px; }
+  .scene-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .scene-num { font-size: 11px; color: var(--accent); font-weight: 600; }
+  .scene-act { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+  .scene-img { width: 100%; aspect-ratio: 9/16; max-height: 400px; background: var(--bg-deep); border-radius: var(--radius-sm); overflow: hidden; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; color: var(--text-dim); font-size: 12px; }
+  .scene-img img { width: 100%; height: 100%; object-fit: cover; }
+  .scene-narration { font-size: 13px; line-height: 1.5; margin-bottom: 8px; }
+  .scene-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 
-/* STATS */
-.stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 16px; }
-.stat-box { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 14px 10px; text-align: center; }
-.stat-num { font-family: 'Cormorant Garamond', serif; font-size: 28px; font-weight: 600; color: var(--sunset-amber); line-height: 1; }
-.stat-lbl { font-size: 10px; color: var(--text-dim); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.05em; }
+  /* ───────── Empty state ───────── */
+  .empty { text-align: center; padding: 40px 20px; color: var(--text-dim); }
+  .empty .emoji { font-size: 48px; margin-bottom: 10px; }
+  .empty p { margin: 4px 0; font-size: 14px; }
 
-/* MODAL */
-.modal-overlay { position: fixed; inset: 0; background: rgba(10,16,32,0.88); backdrop-filter: blur(12px); z-index: 1000; display: flex; align-items: flex-end; justify-content: center; animation: overlayIn 0.2s ease; }
-@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
-.modal { background: linear-gradient(160deg, #1a2842 0%, #0e1729 100%); border: 1px solid rgba(244,162,97,0.2); border-radius: 24px 24px 0 0; padding: 24px 20px 40px; width: 100%; max-width: 500px; max-height: 85vh; overflow-y: auto; animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
-@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-.modal-handle { width: 36px; height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; margin: 0 auto 20px; }
-.modal-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-style: italic; color: var(--paper-cream); margin-bottom: 18px; }
-
-/* PROJECTS */
-.project-item { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
-.project-item:hover { border-color: rgba(244,162,97,0.3); background: rgba(244,162,97,0.05); }
-.project-item.active { border-color: rgba(244,162,97,0.5); background: rgba(244,162,97,0.08); }
-.project-icon { font-size: 24px; }
-.project-info { flex: 1; min-width: 0; }
-.project-name { font-size: 14px; font-weight: 600; color: var(--text-main); }
-.project-date { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
-.project-del { font-size: 18px; padding: 4px; cursor: pointer; color: var(--error); opacity: 0.6; transition: opacity 0.2s; }
-.project-del:hover { opacity: 1; }
-
-/* TOAST */
-.toast { position: fixed; top: 70px; left: 50%; transform: translateX(-50%) translateY(-20px); background: rgba(30,45,70,0.95); border: 1px solid rgba(244,162,97,0.3); border-radius: 100px; padding: 9px 18px; font-size: 13px; color: var(--text-main); z-index: 2000; opacity: 0; transition: all 0.3s; white-space: nowrap; backdrop-filter: blur(10px); pointer-events: none; }
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-.toast.error { border-color: rgba(235,87,87,0.4); color: #ff9090; }
-.toast.success { border-color: rgba(111,207,151,0.4); color: #9ef5c2; }
-
-/* SPINNER */
-.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.2); border-top-color: var(--sunset-amber); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
-
-/* ERROR */
-.error-detail { background: rgba(235,87,87,0.1); border: 1px solid rgba(235,87,87,0.2); border-radius: 8px; padding: 10px; font-size: 12px; color: #ff9090; margin-top: 10px; font-family: monospace; word-break: break-all; }
-
-/* MISC */
-.divider { height: 1px; background: rgba(255,255,255,0.06); margin: 16px 0; }
-.batch-card { background: linear-gradient(135deg, rgba(244,162,97,0.07), rgba(232,118,138,0.05)); border: 1px solid rgba(244,162,97,0.18); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
-.empty-state { text-align: center; padding: 40px 20px; }
-.empty-state .emoji { font-size: 48px; margin-bottom: 12px; }
-.empty-state p { color: var(--text-dim); font-size: 14px; }
-audio { width: 100%; margin-top: 6px; border-radius: 8px; }
+  /* ───────── API Modal ───────── */
+  .api-row { margin-bottom: 12px; }
+  .api-row label { display: flex; justify-content: space-between; align-items: center; }
+  .api-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+  .api-status.ok { background: rgba(34,197,94,0.2); color: #4ade80; }
+  .api-status.no { background: rgba(239,68,68,0.2); color: #f87171; }
 </style>
 </head>
 <body>
+
 <div id="starfield"></div>
-<div class="toast" id="toast"></div>
 
-<div id="app">
-  <header>
-    <div>
-      <div class="header-title">Anime AI Studio</div>
-      <span class="header-kanji">アニメ·スタジオ</span>
+<div class="app">
+  <div class="header">
+    <div class="brand">
+      <h1>Anime AI Studio</h1>
+      <div class="jp">アニメ・スタジオ</div>
     </div>
-    <div class="header-actions">
-      <button class="hbtn" id="btnProjects">📁 Proyectos</button>
-      <button class="hbtn" id="btnApis">
-        <span class="dot" id="apiDot"></span> APIS
-      </button>
-    </div>
-  </header>
-
-  <div id="main-scroll">
-    <!-- UNIVERSO -->
-    <div class="panel active" id="panel-universo">
-      <div class="section-title">Universo</div>
-      <div class="section-sub">Define el mundo de tu anime</div>
-      <div class="card">
-        <div class="card-title">⚙️ Configuración</div>
-        <div class="form-group">
-          <label>Género</label>
-          <select id="generoSelect">
-            <option value="sistema_oculto">Sistema Oculto / Donghua ✨</option>
-            <option value="isekai">Isekai / Otro Mundo 🌀</option>
-            <option value="post_apocaliptico">Post-Apocalíptico ☢️</option>
-            <option value="ecchi">Ecchi / Fan Service 🌸</option>
-            <option value="romance">Romance / Drama</option>
-            <option value="accion">Acción / Aventura</option>
-            <option value="shounen">Shōnen</option>
-            <option value="slice_of_life">Slice of Life</option>
-            <option value="fantasia">Fantasía</option>
-            <option value="misterio">Misterio / Thriller</option>
-            <option value="sci_fi">Sci-Fi</option>
-            <option value="horror">Horror Psicológico</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Tono narrativo</label>
-          <input type="text" id="tonoInput" placeholder="ej: melancólico con destellos de esperanza" />
-        </div>
-        <div class="form-group">
-          <label>Concepto semilla (opcional)</label>
-          <textarea id="conceptoInput" placeholder="ej: un mecánico que cobra precios imposiblemente bajos pero repara cualquier cosa..."></textarea>
-        </div>
-        <button class="btn btn-primary" id="btnGenerarUniverso">
-          <span>🌟</span> Generar Universo
-        </button>
-      </div>
-      <div id="universoResult" style="display:none"></div>
-    </div>
-
-    <!-- PERSONAJES -->
-    <div class="panel" id="panel-personajes">
-      <div class="section-title">Personajes</div>
-      <div class="section-sub">Elenco de tu historia</div>
-      <div id="personajesContainer">
-        <div class="empty-state"><div class="emoji">👥</div><p>Los personajes aparecerán después de generar un episodio</p></div>
-      </div>
-    </div>
-
-    <!-- EPISODIO -->
-    <div class="panel" id="panel-episodio">
-      <div class="section-title">Episodio</div>
-      <div class="section-sub">Genera tu historia completa</div>
-      <div class="card">
-        <div class="card-title">📝 Parámetros</div>
-        <div class="form-group">
-          <label>Función narrativa</label>
-          <select id="funcionSelect">
-            <option value="primer_encuentro">Primer encuentro</option>
-            <option value="presentacion">Presentación del mundo</option>
-            <option value="conflicto">Conflicto inicial</option>
-            <option value="desarrollo">Desarrollo de personajes</option>
-            <option value="climax">Clímax</option>
-            <option value="resolucion">Resolución</option>
-            <option value="giro">Giro argumental</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Emoción central</label>
-          <input type="text" id="emocionInput" placeholder="ej: asombro mezclado con orgullo silencioso" />
-        </div>
-        <div class="form-group">
-          <label>Motor de imágenes</label>
-          <select id="imageModelSelect">
-            <option value="auto">⚡ Auto — FLUX (normal) / Gemini (ecchi)</option>
-            <option value="flux2pro">🎨 FLUX.2-pro — Forzar siempre</option>
-            <option value="gemini">🔮 Gemini — Forzar siempre</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Voz narradora</label>
-          <select id="voiceGenderSelect">
-            <optgroup label="🔮 GEMINI TTS — Usa tus $300">
-              <option value="gemini_male">🎙️ Charon — Masculino profundo</option>
-              <option value="gemini_female">🎙️ Kore — Femenino natural</option>
-              <option value="gemini_male2">🎙️ Fenrir — Masculino dramático</option>
-              <option value="gemini_female2">🎙️ Aoede — Femenino expresivo</option>
-            </optgroup>
-            <optgroup label="🆓 AZURE SPEECH — Gratis (backup)">
-              <option value="azure_male_mx">🇲🇽 Jorge — Masculino mexicano</option>
-              <option value="azure_female_mx">🇲🇽 Dalia — Femenino mexicano</option>
-              <option value="azure_male_co">🇨🇴 Gonzalo — Masculino colombiano</option>
-              <option value="azure_female_co">🇨🇴 Salomé — Femenino colombiano</option>
-              <option value="azure_male_ar">🇦🇷 Tomas — Masculino argentino</option>
-              <option value="azure_female_ar">🇦🇷 Elena — Femenino argentino</option>
-            </optgroup>
-          </select>
-        </div>
-        <button class="btn btn-primary" id="btnGenerarEpisodio">
-          <span>✨</span> Generar Episodio (30 escenas)
-        </button>
-        <div id="epProgress" style="display:none; margin-top:12px">
-          <div class="progress-wrap"><div class="progress-bar" id="epBar" style="width:0%"></div></div>
-          <div class="progress-label" id="epLabel">Generando guión...</div>
-        </div>
-      </div>
-
-      <div id="batchControls" style="display:none">
-        <div class="batch-card">
-          <div class="card-title">🎨 Generación Masiva</div>
-          <div class="btn-grid">
-            <button class="btn btn-secondary" id="btnAllImages">🖼️ Todas las Imágenes</button>
-            <button class="btn btn-secondary" id="btnAllAudio">🎙️ Toda la Narración</button>
-          </div>
-          <div id="batchProgress" style="display:none; margin-top:12px">
-            <div class="progress-wrap"><div class="progress-bar" id="batchBar" style="width:0%"></div></div>
-            <div class="progress-label" id="batchLabel">Procesando...</div>
-          </div>
-          <div style="margin-top:8px">
-            <button class="btn btn-danger btn-sm" id="btnClearAudios">🗑️ Borrar todos los audios</button>
-          </div>
-        </div>
-      </div>
-
-      <div id="scenesContainer"></div>
-    </div>
-
-    <!-- EXPORTAR -->
-    <div class="panel" id="panel-exportar">
-      <div class="section-title">Exportar</div>
-      <div class="section-sub">Descarga tu anime para edición</div>
-      <div class="stats-grid" id="statsGrid">
-        <div class="stat-box"><div class="stat-num" id="statImg">0</div><div class="stat-lbl">Imágenes</div></div>
-        <div class="stat-box"><div class="stat-num" id="statAud">0</div><div class="stat-lbl">Audios</div></div>
-        <div class="stat-box"><div class="stat-num" id="statEsc">0</div><div class="stat-lbl">Escenas</div></div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">🎬 Video con Veo 3.1 Lite</div>
-        <p style="font-size:12px; color:var(--text-dim); margin-bottom:8px; line-height:1.6">
-          Anima cada escena (imagen → clip 8 seg). Usa tu Gemini API Key.<br>
-          <span style="color:var(--sunset-amber)">⚠️ Costo: ~$0.24/escena · Episodio completo ~$7.20</span>
-        </p>
-        <div class="form-group" style="margin-bottom:10px">
-          <label>Escenas a generar</label>
-          <select id="veoScenesSelect">
-            <option value="1">Solo escena 1 (prueba — $0.24)</option>
-            <option value="5">Primeras 5 escenas (~$1.20)</option>
-            <option value="10">Primeras 10 escenas (~$2.40)</option>
-            <option value="30">Episodio completo 30 escenas (~$7.20)</option>
-          </select>
-        </div>
-        <button class="btn btn-primary" id="btnGenerateVideo"><span>🎬</span> Generar Video</button>
-        <div id="videoProgress" style="display:none; margin-top:12px">
-          <div class="progress-wrap"><div class="progress-bar" id="videoBar" style="width:0%"></div></div>
-          <div class="progress-label" id="videoLabel">Iniciando Veo 3.1 Lite...</div>
-        </div>
-        <div id="videoResults" style="margin-top:12px"></div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">📦 ZIP para CapCut/DaVinci</div>
-        <p style="font-size:12px; color:var(--text-dim); margin-bottom:14px; line-height:1.6">
-          El ZIP incluye: imágenes 9:16, audio completo concatenado, timing para CapCut, subtítulos SRT y guión completo.
-        </p>
-        <button class="btn btn-primary" id="btnDownloadZip"><span>⬇️</span> Descargar ZIP</button>
-        <div id="zipProgress" style="display:none; margin-top:12px">
-          <div class="progress-wrap"><div class="progress-bar" id="zipBar" style="width:0%"></div></div>
-          <div class="progress-label" id="zipLabel">Preparando ZIP...</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">📋 Guión Completo</div>
-        <button class="btn btn-secondary" id="btnCopyScript">📋 Copiar al Portapapeles</button>
-      </div>
+    <div class="header-btns">
+      <button class="header-btn" id="btnProjects">📁 Proyectos</button>
+      <button class="header-btn" id="btnApis"><span class="dot" id="apiDot"></span> APIS</button>
     </div>
   </div>
 
-  <nav>
-    <button class="nav-tab active" data-panel="universo"><span class="icon">🌌</span><span>Universo</span></button>
-    <button class="nav-tab" data-panel="personajes"><span class="icon">👥</span><span>Personajes</span></button>
-    <button class="nav-tab" data-panel="episodio"><span class="icon">🎬</span><span>Episodio</span></button>
-    <button class="nav-tab" data-panel="exportar"><span class="icon">📤</span><span>Exportar</span></button>
-  </nav>
+  <!-- ───────── UNIVERSE PANEL ───────── -->
+  <div class="panel active" id="panel-universo">
+    <div class="card">
+      <h2>🌌 Crear Universo</h2>
+      <label>Género</label>
+      <select id="generoSelect">
+        <option value="sistema_oculto">Sistema Oculto / Donghua</option>
+        <option value="isekai">Isekai</option>
+        <option value="ecchi">Ecchi / Fan Service</option>
+        <option value="romance">Romance / Drama</option>
+        <option value="accion">Acción / Aventura</option>
+        <option value="shounen">Shōnen</option>
+        <option value="slice_of_life">Slice of Life</option>
+        <option value="post_apocaliptico">Post-Apocalíptico</option>
+        <option value="fantasia">Fantasía</option>
+        <option value="misterio">Misterio / Thriller</option>
+        <option value="sci_fi">Sci-Fi</option>
+        <option value="horror">Horror Psicológico</option>
+      </select>
+
+      <label>Tono narrativo (opcional)</label>
+      <input id="tonoInput" placeholder="ej: oscuro, esperanzador, irónico">
+
+      <label>Concepto semilla (opcional)</label>
+      <textarea id="conceptoInput" placeholder="Una idea base que quieras explorar..."></textarea>
+
+      <button class="btn" id="btnGenerarUniverso" style="margin-top:14px">🌌 Generar Universo</button>
+
+      <div id="universoDisplay"></div>
+    </div>
+
+    <div class="card" id="cardGenerarEpisodio" style="display:none">
+      <h2>🎬 Generar Episodio</h2>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 10px">Esto creará personajes y 30 escenas con narración e imágenes.</p>
+      <div id="epProgress" style="display:none">
+        <div class="progress-text" id="epProgressText">Iniciando...</div>
+        <div class="progress"><div class="progress-bar" id="epProgressBar" style="width:0%"></div></div>
+      </div>
+      <button class="btn" id="btnGenerarEpisodio">✨ Generar Episodio Completo</button>
+    </div>
+  </div>
+
+  <!-- ───────── CHARACTERS PANEL ───────── -->
+  <div class="panel" id="panel-personajes">
+    <div class="card">
+      <h2>👥 Personajes</h2>
+      <div id="charactersList"></div>
+    </div>
+  </div>
+
+  <!-- ───────── EPISODE PANEL ───────── -->
+  <div class="panel" id="panel-episodio">
+    <div class="card">
+      <h2>🎬 Episodio</h2>
+      <label>Voz de narración</label>
+      <select id="voiceSelect">
+        <optgroup label="🔮 Gemini TTS (HD)">
+          <option value="gemini_male">🎙️ Charon — Masculino profundo</option>
+          <option value="gemini_female">🎙️ Kore — Femenino natural</option>
+          <option value="gemini_male2">🎙️ Fenrir — Masculino dramático</option>
+          <option value="gemini_female2">🎙️ Aoede — Femenino expresivo</option>
+        </optgroup>
+      </select>
+
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn-sec" id="btnAllImages">🖼️ Todas las Imágenes</button>
+        <button class="btn-sec" id="btnAllAudio">🎙️ Toda la Narración</button>
+      </div>
+
+      <div id="bulkProgress" style="display:none;margin-top:10px">
+        <div class="progress-text" id="bulkText">...</div>
+        <div class="progress"><div class="progress-bar" id="bulkBar" style="width:0%"></div></div>
+      </div>
+
+      <div id="scenesList" style="margin-top:14px"></div>
+    </div>
+  </div>
+
+  <!-- ───────── EXPORT PANEL ───────── -->
+  <div class="panel" id="panel-exportar">
+    <div class="card">
+      <h2>📤 Exportar</h2>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px">Descarga todo el proyecto como ZIP con imágenes, audios y guión.</p>
+      <button class="btn" id="btnExportZip">📦 Descargar ZIP</button>
+    </div>
+  </div>
+
 </div>
 
+<nav class="nav">
+  <button class="nav-tab active" data-panel="universo"><span class="icon">🌌</span><span>Universo</span></button>
+  <button class="nav-tab" data-panel="personajes"><span class="icon">👥</span><span>Personajes</span></button>
+  <button class="nav-tab" data-panel="episodio"><span class="icon">🎬</span><span>Episodio</span></button>
+  <button class="nav-tab" data-panel="exportar"><span class="icon">📤</span><span>Exportar</span></button>
+</nav>
+
+<div id="toast" class="toast"></div>
 <div id="modalContainer"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
 <script>
-// ══════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
 // STARFIELD
-// ══════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
 (function() {
   const sf = document.getElementById('starfield');
-  for (let i = 0; i < 120; i++) {
+  for (let i=0; i<60; i++) {
     const s = document.createElement('div');
     s.className = 'star';
-    const size = Math.random() * 2.5 + 0.5;
-    s.style.cssText = `left:${Math.random()*100}%;top:${Math.random()*100}%;width:${size}px;height:${size}px;--d:${2+Math.random()*4}s;--o:${0.2+Math.random()*0.7};animation-delay:${Math.random()*5}s;`;
+    const sz = Math.random()*2 + 0.5;
+    s.style.cssText = `width:${sz}px;height:${sz}px;left:${Math.random()*100}%;top:${Math.random()*100}%;animation-delay:${Math.random()*4}s`;
     sf.appendChild(s);
   }
-  function fireComet() {
+  setInterval(() => {
     const c = document.createElement('div');
     c.className = 'comet';
-    c.style.cssText = `left:${Math.random()*40}%;top:${Math.random()*40}%;transform:rotate(${30+Math.random()*20}deg)`;
+    c.style.animation = 'shoot 3s linear';
     sf.appendChild(c);
-    setTimeout(() => c.remove(), 2100);
-    setTimeout(fireComet, 18000 + Math.random()*6000);
-  }
-  setTimeout(fireComet, 5000);
+    setTimeout(() => c.remove(), 3000);
+  }, 8000);
 })();
 
-// ══════════════════════════════════════════════
-// STATE
-// ══════════════════════════════════════════════
-let state = { projectId: null, universe: null, characters: [], scenes: [], voiceId: '' };
+// ════════════════════════════════════════════════════════════════
+// STATE & STORAGE
+// ════════════════════════════════════════════════════════════════
+let state = { projectId: null, universe: null, characters: [], scenes: [] };
 let projects = [];
-
-// ══════════════════════════════════════════════
-// INDEXEDDB
-// ══════════════════════════════════════════════
 let db = null;
+
 function initDB() {
   return new Promise((res, rej) => {
-    const req = indexedDB.open('AnimeStudio2', 2);
-    req.onupgradeneeded = e => { const d = e.target.result; if (!d.objectStoreNames.contains('blobs')) d.createObjectStore('blobs'); };
+    const req = indexedDB.open('AnimeStudio', 1);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains('blobs')) d.createObjectStore('blobs');
+    };
     req.onsuccess = e => { db = e.target.result; res(); };
     req.onerror = e => rej(e);
   });
 }
-function dbSet(key, value) {
-  return new Promise((res, rej) => { const tx = db.transaction('blobs', 'readwrite'); tx.objectStore('blobs').put(value, key); tx.oncomplete = () => res(); tx.onerror = e => rej(e); });
-}
-function dbGet(key) {
-  return new Promise((res, rej) => { const tx = db.transaction('blobs', 'readonly'); const req = tx.objectStore('blobs').get(key); req.onsuccess = () => res(req.result || null); req.onerror = e => rej(e); });
-}
-function dbDel(key) {
-  return new Promise((res) => { const tx = db.transaction('blobs', 'readwrite'); tx.objectStore('blobs').delete(key); tx.oncomplete = () => res(); });
-}
+function dbSet(k, v) { return new Promise((res, rej) => { const tx = db.transaction('blobs','readwrite'); tx.objectStore('blobs').put(v, k); tx.oncomplete = res; tx.onerror = rej; }); }
+function dbGet(k)    { return new Promise((res, rej) => { const tx = db.transaction('blobs','readonly'); const r = tx.objectStore('blobs').get(k); r.onsuccess = () => res(r.result || null); r.onerror = rej; }); }
+function dbDel(k)    { return new Promise(res => { const tx = db.transaction('blobs','readwrite'); tx.objectStore('blobs').delete(k); tx.oncomplete = res; }); }
 
-// ══════════════════════════════════════════════
-// STORAGE HELPERS
-// ══════════════════════════════════════════════
-function imgKey(charId)       { return `ci_${state.projectId}_${charId}`; }
-function sceneImgKey(sceneId) { return `si_${state.projectId}_${sceneId}`; }
-function sceneAudKey(sceneId) { return `sn_${state.projectId}_${sceneId}`; }
+const charImgKey   = id => `ci_${state.projectId}_${id}`;
+const sceneImgKey  = id => `si_${state.projectId}_${id}`;
+const sceneAudKey  = id => `sa_${state.projectId}_${id}`;
 
 function saveState() {
   if (!state.projectId) return;
-  const data = { universe: state.universe, characters: state.characters.map(c => ({ ...c, imageData: undefined })), scenes: state.scenes, voiceId: state.voiceId };
+  const data = { universe: state.universe, characters: state.characters, scenes: state.scenes };
   localStorage.setItem(`proj_${state.projectId}`, JSON.stringify(data));
-  const pi = projects.findIndex(p => p.id === state.projectId);
-  if (pi >= 0) { projects[pi].title = state.universe?.title || 'Nuevo anime'; projects[pi].updated = Date.now(); saveProjects(); }
+  const i = projects.findIndex(p => p.id === state.projectId);
+  if (i >= 0) { projects[i].name = state.universe?.title || projects[i].name; projects[i].updated = Date.now(); saveProjects(); }
 }
 function loadStateFor(pid) {
   const raw = localStorage.getItem(`proj_${pid}`);
+  state = { projectId: pid, universe: null, characters: [], scenes: [] };
   if (!raw) return;
-  try { const data = JSON.parse(raw); state.universe = data.universe || null; state.characters = data.characters || []; state.scenes = data.scenes || []; state.voiceId = data.voiceId || ''; } catch(e) {}
+  try { const d = JSON.parse(raw); state.universe = d.universe; state.characters = d.characters || []; state.scenes = d.scenes || []; } catch(e) {}
 }
 function saveProjects() { localStorage.setItem('projects_index', JSON.stringify(projects)); }
 function loadProjects() { try { projects = JSON.parse(localStorage.getItem('projects_index') || '[]'); } catch(e) { projects = []; } }
 
-// ══════════════════════════════════════════════
-// PROJECTS
-// ══════════════════════════════════════════════
 async function newProject() {
-  if (state.projectId) saveState();
   const pid = 'p' + Date.now();
-  projects.push({ id: pid, title: 'Nuevo anime', created: Date.now(), updated: Date.now() });
+  projects.push({ id: pid, name: 'Nuevo proyecto', updated: Date.now() });
   saveProjects();
-  state.projectId = pid; state.universe = null; state.characters = []; state.scenes = []; state.voiceId = '';
+  state = { projectId: pid, universe: null, characters: [], scenes: [] };
+  saveState();
   renderAll();
-  showToast('Nuevo proyecto creado', 'success');
 }
 function switchProject(pid) {
-  if (state.projectId) saveState();
-  state.projectId = pid; loadStateFor(pid); renderAll(); closeModal();
+  loadStateFor(pid);
+  renderAll();
+  closeModal();
   showToast('Proyecto cargado', 'success');
 }
 async function deleteProject(pid) {
   if (!confirm('¿Eliminar este proyecto?')) return;
-  projects = projects.filter(p => p.id !== pid); saveProjects(); localStorage.removeItem(`proj_${pid}`);
-  if (state.projectId === pid) { if (projects.length > 0) switchProject(projects[projects.length-1].id); else await newProject(); }
+  localStorage.removeItem(`proj_${pid}`);
+  projects = projects.filter(p => p.id !== pid);
+  saveProjects();
+  if (state.projectId === pid) {
+    if (projects.length) switchProject(projects[0].id);
+    else { await newProject(); }
+  }
   openProjectsModal();
 }
 
-// ══════════════════════════════════════════════
-// RENDER ALL
-// ══════════════════════════════════════════════
-function renderAll() { renderUniverse(); renderCharacters(); renderScenes(); renderStats(); }
+// ════════════════════════════════════════════════════════════════
+// UI HELPERS
+// ════════════════════════════════════════════════════════════════
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 2500);
+}
+function openModal(html) {
+  const c = document.getElementById('modalContainer');
+  c.innerHTML = `<div class="modal-overlay"><div class="modal"><div class="modal-handle"></div>${html}</div></div>`;
+  c.querySelector('.modal-overlay').addEventListener('click', e => { if (e.target === c.querySelector('.modal-overlay')) closeModal(); });
+}
+function closeModal() { document.getElementById('modalContainer').innerHTML = ''; }
 
-// ══════════════════════════════════════════════
-// NAVIGATION
-// ══════════════════════════════════════════════
+function openErrorModal(title, msg) {
+  openModal(`
+    <h3>⚠️ ${title}</h3>
+    <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px;font-family:monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;margin-bottom:14px">${msg}</div>
+    <div class="btn-row">
+      <button class="btn-sec" onclick="closeModal()">Cerrar</button>
+      <button class="btn-sec" onclick="closeModal();document.getElementById('btnApis').click()">🔑 Ver APIs</button>
+    </div>
+  `);
+}
+
+// ════════════════════════════════════════════════════════════════
+// API KEYS
+// ════════════════════════════════════════════════════════════════
+function getKeys() {
+  return {
+    claude: localStorage.getItem('key_claude') || '',
+    azure:  localStorage.getItem('key_azure')  || '',
+  };
+}
+function updateApiDot() {
+  const k = getKeys();
+  const ok = k.claude.length > 10;
+  document.getElementById('apiDot').className = ok ? 'dot ok' : 'dot';
+}
+document.getElementById('btnApis').addEventListener('click', () => {
+  const k = getKeys();
+  openModal(`
+    <h3>🔑 API Keys</h3>
+    <div class="api-row">
+      <label>Claude API Key <span class="api-status ${k.claude?'ok':'no'}">${k.claude?'Configurado':'Falta'}</span></label>
+      <input id="kClaude" type="password" placeholder="sk-ant-..." value="${k.claude}">
+    </div>
+    <div class="api-row">
+      <label>Azure Speech Key (opcional) <span class="api-status ${k.azure?'ok':'no'}">${k.azure?'OK':'Opcional'}</span></label>
+      <input id="kAzure" type="password" placeholder="azure key (backup TTS español)" value="${k.azure}">
+    </div>
+    <div style="font-size:11px;color:var(--text-dim);margin:10px 0 14px;line-height:1.5">
+      • <strong>Claude</strong>: necesaria para generar guiones<br>
+      • <strong>Imágenes y audio</strong>: usan los $300 de Google Cloud (no requieren key aquí)<br>
+      • <strong>Azure</strong>: opcional, voces en español como backup
+    </div>
+    <button class="btn" onclick="saveKeys()">💾 Guardar</button>
+  `);
+});
+window.saveKeys = function() {
+  localStorage.setItem('key_claude', document.getElementById('kClaude').value.trim());
+  localStorage.setItem('key_azure',  document.getElementById('kAzure').value.trim());
+  updateApiDot();
+  closeModal();
+  showToast('Keys guardadas', 'success');
+};
+
+// ════════════════════════════════════════════════════════════════
+// PROJECTS MODAL
+// ════════════════════════════════════════════════════════════════
+function openProjectsModal() {
+  const list = projects.length ? projects.map(p => `
+    <div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+      <div style="flex:1;cursor:pointer" onclick="switchProject('${p.id}')">
+        <div style="font-weight:600;font-size:14px">${p.name}</div>
+        <div style="font-size:11px;color:var(--text-dim)">${new Date(p.updated).toLocaleString()}</div>
+      </div>
+      <button class="btn-sec btn-danger" style="width:auto;padding:6px 10px;font-size:11px" onclick="deleteProject('${p.id}')">🗑️</button>
+    </div>
+  `).join('') : '<p style="color:var(--text-dim);text-align:center">Sin proyectos</p>';
+
+  openModal(`
+    <h3>📁 Proyectos</h3>
+    ${list}
+    <button class="btn" style="margin-top:10px" onclick="newProject();closeModal();showToast('Proyecto creado','success')">➕ Nuevo Proyecto</button>
+  `);
+}
+document.getElementById('btnProjects').addEventListener('click', openProjectsModal);
+
+// ════════════════════════════════════════════════════════════════
+// CLAUDE API
+// ════════════════════════════════════════════════════════════════
+async function callClaude(prompt, system) {
+  const key = getKeys().claude;
+  if (!key) throw new Error('Falta Claude API key. Toca el botón APIS para configurarla.');
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 8000,
+      system,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || `Claude ${res.status}`);
+  return data.content[0].text;
+}
+
+function safeParseJSON(raw) {
+  let s = raw.replace(/```json\n?|\n?```/g, '').trim();
+  const start = s.indexOf('{');
+  const end = s.lastIndexOf('}');
+  if (start >= 0 && end > start) s = s.substring(start, end + 1);
+  return JSON.parse(s);
+}
+
+// ════════════════════════════════════════════════════════════════
+// IMAGE GENERATION (via /api/image proxy → Vertex AI)
+// ════════════════════════════════════════════════════════════════
+async function generateImage(prompt, refImageBase64 = null) {
+  const res = await fetch('/api/image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, refImageBase64: refImageBase64 || null }),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || `Image proxy ${res.status}`);
+  if (!data.imageData) throw new Error('Imagen: respuesta sin datos');
+  return data.imageData;
+}
+
+// ════════════════════════════════════════════════════════════════
+// AUDIO GENERATION (via /api/audio → Vertex AI Gemini TTS)
+// ════════════════════════════════════════════════════════════════
+async function generateAudio(text, voice, act) {
+  if (voice && voice.startsWith('azure_')) {
+    return await generateAzureAudio(text, voice);
+  }
+  const res = await fetch('/api/audio', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, voice, act }),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || `Audio proxy ${res.status}`);
+  return { audioData: data.audioData, mimeType: data.mimeType || 'audio/wav' };
+}
+
+async function generateAzureAudio(text, voice) {
+  const key = getKeys().azure;
+  if (!key) throw new Error('Falta Azure key');
+  const voiceMap = { azure_male: 'es-MX-JorgeNeural', azure_female: 'es-MX-DaliaNeural' };
+  const voiceName = voiceMap[voice] || 'es-MX-JorgeNeural';
+  const ssml = `<speak version='1.0' xml:lang='es-MX'><voice name='${voiceName}'>${text}</voice></speak>`;
+  const res = await fetch('https://eastus.tts.speech.microsoft.com/cognitiveservices/v1', {
+    method: 'POST',
+    headers: {
+      'Ocp-Apim-Subscription-Key': key,
+      'Content-Type': 'application/ssml+xml',
+      'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
+    },
+    body: ssml,
+  });
+  if (!res.ok) throw new Error(`Azure ${res.status}`);
+  const buf = await res.arrayBuffer();
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  return { audioData: b64, mimeType: 'audio/mpeg' };
+}
+
+// ════════════════════════════════════════════════════════════════
+// GENRE PROMPTS
+// ════════════════════════════════════════════════════════════════
+const GENRE_PROMPTS = {
+  sistema_oculto: `Género: Sistema Oculto / Donghua.
+- Protagonista con habilidad sobrenatural OCULTA al mundo
+- Resuelve problemas imposibles sin revelar su poder real
+- Contraste entre apariencia ordinaria y capacidades extraordinarias
+- Escalada constante en cada episodio
+- ORIGINAL: nunca repetir premisas comunes (tiendas baratas, reparaciones, restaurantes)
+- El protagonista puede ser cualquier profesión: estudiante, chef, médico, artista, mensajero, guardia, mecánico, librero, etc.
+- Setting único cada vez: ciudad moderna, pueblo costero, academia, hospital, etc.
+- Reparto BALANCEADO: al menos 2 personajes femeninos y 2 masculinos
+- Personajes femeninos: apariencia limpia y atractiva, SIN cicatrices, SIN ojeras, SIN heridas visibles`,
+
+  isekai: `Género: Isekai.
+- Japonés ordinario transportado a mundo de fantasía/RPG
+- Niveles, clases, habilidades, mazmorras
+- Habilidad aparentemente inútil que resulta OP
+- Reparto BALANCEADO: al menos 2 personajes femeninos y 2 masculinos
+- Party de aventureros con roles variados`,
+
+  ecchi: `Género: Ecchi / Fan Service.
+- Protagonista masculino rodeado de personajes femeninos con personalidades marcadas
+- Arquetipos: tsundere, kuudere, genki, dandere, onee-san
+- Personajes femeninos HERMOSAS y atractivas: rasgos suaves, sin cicatrices, sin daño visible
+- Situaciones de malentendido con tensión romántica
+- Tono ligero, humorístico, con momentos de ternura`,
+
+  romance: `Género: Romance. Emociones profundas, conexiones humanas, momentos significativos.`,
+  accion: `Género: Acción. Combates espectaculares, superación, vínculos forjados en batalla.`,
+  shounen: `Género: Shōnen. Amistad, esfuerzo, victoria. Crecimiento del protagonista.`,
+  slice_of_life: `Género: Slice of Life. Belleza en lo cotidiano, personajes humanos.`,
+  post_apocaliptico: `Género: Post-Apocalíptico. Mundo destruido, supervivencia, esperanza fragmentada.`,
+  fantasia: `Género: Fantasía. Mundo con magia y reglas propias, conflicto emocional.`,
+  misterio: `Género: Misterio. Tensión psicológica, verdades ocultas, suspense.`,
+  sci_fi: `Género: Sci-Fi. Tecnología como metáfora, preguntas filosóficas.`,
+  horror: `Género: Horror Psicológico. Miedo interno, pérdida, más psicológico que gore.`,
+};
+
+// ════════════════════════════════════════════════════════════════
+// UNIVERSE GENERATION
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btnGenerarUniverso').addEventListener('click', async () => {
+  const btn = document.getElementById('btnGenerarUniverso');
+  const genero = document.getElementById('generoSelect').value;
+  const tono = document.getElementById('tonoInput').value.trim();
+  const concepto = document.getElementById('conceptoInput').value.trim();
+
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Generando...';
+
+  try {
+    const system = `Eres un guionista de anime/donghua viral para TikTok/Reels.
+REGLAS ABSOLUTAS:
+- Nombres japoneses REALES (Hiro, Yuki, Rin, Kaito, Mei, Sora, Aoi, Riku, Hana, Taro, Kenji, Nao)
+- NUNCA nombres inventados (nada de Aethernam, Kael, Zythara, etc.)
+- Premisa simple, conflicto emocional personal
+- Responde SOLO JSON válido sin markdown`;
+
+    const prompt = `${GENRE_PROMPTS[genero] || ''}
+Tono: ${tono || 'neutral'}
+${concepto ? 'Concepto semilla: ' + concepto : ''}
+
+Crea un universo ORIGINAL y único. Devuelve JSON:
+{
+  "title": "Título japonés con subtítulo español",
+  "tagline": "Frase gancho (máx 12 palabras)",
+  "concepto": "Mundo en 2-3 frases",
+  "conflicto": "Conflicto emocional central en 2 frases",
+  "hook": "Gancho del primer episodio",
+  "setting": "Lugar y época",
+  "genero": "${genero}"
+}`;
+
+    const raw = await callClaude(prompt, system);
+    state.universe = safeParseJSON(raw);
+    state.characters = [];
+    state.scenes = [];
+    saveState();
+    renderUniverse();
+    document.getElementById('cardGenerarEpisodio').style.display = 'block';
+    showToast('¡Universo creado!', 'success');
+  } catch(e) {
+    openErrorModal('Error generando universo', e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🌌 Generar Universo';
+  }
+});
+
+function renderUniverse() {
+  const el = document.getElementById('universoDisplay');
+  if (!state.universe) { el.innerHTML = ''; document.getElementById('cardGenerarEpisodio').style.display = 'none'; return; }
+  const u = state.universe;
+  el.innerHTML = `
+    <div class="universe-display">
+      <h4>${u.title || 'Universo'}</h4>
+      <div class="tag">${u.tagline || ''}</div>
+      <div class="field"><div class="field-label">Concepto</div>${u.concepto || ''}</div>
+      <div class="field"><div class="field-label">Conflicto</div>${u.conflicto || ''}</div>
+      <div class="field"><div class="field-label">Setting</div>${u.setting || ''}</div>
+      <div class="field"><div class="field-label">Hook</div>${u.hook || ''}</div>
+    </div>
+  `;
+  document.getElementById('cardGenerarEpisodio').style.display = 'block';
+}
+
+// ════════════════════════════════════════════════════════════════
+// EPISODE GENERATION (Characters + 30 Scenes)
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btnGenerarEpisodio').addEventListener('click', async () => {
+  if (!state.universe) { showToast('Crea un universo primero', 'error'); return; }
+  const btn = document.getElementById('btnGenerarEpisodio');
+  const progress = document.getElementById('epProgress');
+  const progressText = document.getElementById('epProgressText');
+  const progressBar = document.getElementById('epProgressBar');
+
+  btn.disabled = true;
+  progress.style.display = 'block';
+  const setProg = (pct, msg) => { progressBar.style.width = pct + '%'; progressText.textContent = msg; };
+
+  try {
+    const u = state.universe;
+    const sysBase = `Eres un guionista de anime experto.
+REGLAS:
+- Narración en PRIMERA PERSONA del protagonista, 4-5 frases por escena
+- Pensamientos internos visibles
+- Nombres japoneses REALES (sin inventos)
+- imagePromptEN en INGLÉS describiendo visualmente la escena, 9:16 vertical anime 2D
+- Para escenas: incluir personajes presentes, ambiente, acción, expresión
+- Responde SOLO JSON válido sin markdown`;
+
+    const genreExtra = u.genero === 'ecchi'
+      ? '\\nPara ecchi: imagePromptEN refleja fan service (ropa atractiva, expresiones de rubor) acorde a la escena'
+      : (u.genero === 'sistema_oculto' || u.genero === 'isekai')
+      ? '\\nReparto balanceado, personajes femeninos atractivos y limpios'
+      : '';
+
+    const ctx = `Universo: ${u.title}
+Género: ${u.genero}
+Concepto: ${u.concepto}
+Conflicto: ${u.conflicto}
+Setting: ${u.setting}`;
+
+    // ─── Step 1: Characters ───
+    setProg(5, 'Paso 1/5: Creando personajes...');
+    const charRules = u.genero === 'ecchi'
+      ? 'REGLAS: Personajes femeninos atractivos, sin cicatrices ni heridas, sin ojeras pronunciadas'
+      : (u.genero === 'sistema_oculto' || u.genero === 'isekai')
+      ? 'REGLAS: Reparto balanceado de género (al menos 2 femeninos y 2 masculinos), personajes femeninos con apariencia limpia y atractiva'
+      : 'REGLAS: Apariencias coherentes con el género';
+
+    const chRaw = await callClaude(
+      `${ctx}\\n\\n${charRules}\\n\\nCrea 4 personajes únicos. Devuelve SOLO:
+{"characters":[{"id":"c1","name":"nombre japonés","role":"protagonista o rol","appearance":"descripción física detallada","personality":"2 frases","backstory":"2 frases"}]}`,
+      sysBase + genreExtra
+    );
+    state.characters = safeParseJSON(chRaw).characters || [];
+    saveState();
+    renderCharacters();
+
+    setProg(20, '✅ Personajes — Paso 2/5: Escenas 1-8...');
+
+    const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título","narration":"4-5 frases primera persona","imagePromptEN":"prompt visual en inglés"}`;
+    const charRef = state.characters.map(c => `${c.id}=${c.name}(${c.role}): ${c.appearance}`).join(' | ');
+
+    // ─── Step 2-5: Scenes in batches ───
+    const r2 = await callClaude(
+      `${ctx}\\nPersonajes: ${charRef}\\n\\nGenera escenas 1-8. Actos: cold_open (1-2), act1 (3-8).\\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con 8 objetos.`,
+      sysBase + genreExtra
+    );
+    let scenes = safeParseJSON(r2).scenes || [];
+
+    setProg(40, '✅ 1-8 — Paso 3/5: Escenas 9-16...');
+    const r3 = await callClaude(
+      `${ctx}\\nPersonajes: ${charRef}\\nÚltima: ${scenes[scenes.length-1]?.narration || ''}\\n\\nGenera escenas 9-16. Actos: act1 (9-10), act2 (11-16).\\nDevuelve SOLO: {"scenes":[...]} con 8 objetos numerados 9-16.`,
+      sysBase + genreExtra
+    );
+    scenes = scenes.concat(safeParseJSON(r3).scenes || []);
+
+    setProg(60, '✅ 9-16 — Paso 4/5: Escenas 17-24...');
+    const r4 = await callClaude(
+      `${ctx}\\nPersonajes: ${charRef}\\nÚltima: ${scenes[scenes.length-1]?.narration || ''}\\n\\nGenera escenas 17-24. Actos: act2 (17-18), climax (19-24).\\nDevuelve SOLO: {"scenes":[...]} con 8 objetos numerados 17-24.`,
+      sysBase + genreExtra
+    );
+    scenes = scenes.concat(safeParseJSON(r4).scenes || []);
+
+    setProg(80, '✅ 17-24 — Paso 5/5: Escenas 25-30...');
+    const r5 = await callClaude(
+      `${ctx}\\nPersonajes: ${charRef}\\nÚltima: ${scenes[scenes.length-1]?.narration || ''}\\n\\nGenera escenas 25-30. Actos: climax (25), resolution (26-29), post_credits (30).\\nDevuelve SOLO: {"scenes":[...]} con 6 objetos numerados 25-30.`,
+      sysBase + genreExtra
+    );
+    scenes = scenes.concat(safeParseJSON(r5).scenes || []);
+
+    state.scenes = scenes;
+    saveState();
+    renderScenes();
+    setProg(100, '✅ ¡Episodio completo!');
+    showToast(`${state.characters.length} personajes y ${state.scenes.length} escenas creadas`, 'success');
+    setTimeout(() => { progress.style.display = 'none'; setProg(0, ''); }, 2000);
+
+  } catch(e) {
+    openErrorModal('Error generando episodio', e.message);
+    progress.style.display = 'none';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
+// RENDER: CHARACTERS
+// ════════════════════════════════════════════════════════════════
+async function renderCharacters() {
+  const c = document.getElementById('charactersList');
+  if (!state.characters.length) {
+    c.innerHTML = `<div class="empty"><div class="emoji">👥</div><p>Genera un episodio para ver los personajes</p></div>`;
+    return;
+  }
+  const items = await Promise.all(state.characters.map(async ch => {
+    const imgB64 = await dbGet(charImgKey(ch.id));
+    return { ch, imgB64 };
+  }));
+  c.innerHTML = items.map(({ ch, imgB64 }) => `
+    <div class="char-card">
+      <div class="char-header">
+        <div class="char-img">
+          ${imgB64 ? `<img src="data:image/png;base64,${imgB64}">` : (ch.role || '').includes('femenino') || ch.appearance?.toLowerCase().includes('mujer') ? '👩' : '👤'}
+        </div>
+        <div class="char-info">
+          <h4>${ch.name}</h4>
+          <div class="char-role">${ch.role}</div>
+          <div class="char-detail">${ch.appearance || ''}</div>
+        </div>
+      </div>
+      <button class="btn-sec" onclick="generateCharImage('${ch.id}')">🎨 Generar Imagen</button>
+    </div>
+  `).join('');
+}
+
+window.generateCharImage = async function(charId) {
+  const ch = state.characters.find(c => c.id === charId);
+  if (!ch) return;
+  showToast('Generando imagen de personaje...', 'success');
+  try {
+    const prompt = `Anime 2D character portrait, vertical 9:16, full body reference sheet of ${ch.name}: ${ch.appearance}. Clean anime art style, vibrant colors, white background, professional character design.`;
+    const imgB64 = await generateImage(prompt);
+    await dbSet(charImgKey(ch.id), imgB64);
+    renderCharacters();
+    showToast('Imagen generada', 'success');
+  } catch(e) {
+    openErrorModal('Error imagen personaje', e.message);
+  }
+};
+
+// ════════════════════════════════════════════════════════════════
+// RENDER: SCENES
+// ════════════════════════════════════════════════════════════════
+async function renderScenes() {
+  const c = document.getElementById('scenesList');
+  if (!state.scenes.length) {
+    c.innerHTML = `<div class="empty"><div class="emoji">🎬</div><p>Genera un episodio primero</p></div>`;
+    return;
+  }
+  const items = await Promise.all(state.scenes.map(async s => {
+    const imgB64 = await dbGet(sceneImgKey(s.id));
+    const audData = await dbGet(sceneAudKey(s.id));
+    return { s, imgB64, audData };
+  }));
+  c.innerHTML = items.map(({ s, imgB64, audData }) => `
+    <div class="scene-card">
+      <div class="scene-header">
+        <div class="scene-num">Escena ${s.num}</div>
+        <div class="scene-act">${s.act}</div>
+      </div>
+      <div class="scene-img">
+        ${imgB64 ? `<img src="data:image/png;base64,${imgB64}">` : '<span>Sin imagen</span>'}
+      </div>
+      <div class="scene-narration">${s.narration}</div>
+      <div class="scene-actions">
+        <button class="btn-sec" onclick="generateSceneImage('${s.id}')">🖼️ ${imgB64 ? 'Regenerar' : 'Imagen'}</button>
+        <button class="btn-sec" onclick="${audData ? `playSceneAudio('${s.id}')` : `generateSceneAudio('${s.id}')`}">${audData ? '▶️ Reproducir' : '🎙️ Audio'}</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.generateSceneImage = async function(sceneId) {
+  const s = state.scenes.find(x => x.id === sceneId);
+  if (!s) return;
+  showToast(`Generando imagen escena ${s.num}...`, 'success');
+  try {
+    // Try to get the first character reference image as anchor
+    let refImg = null;
+    if (state.characters.length) {
+      refImg = await dbGet(charImgKey(state.characters[0].id));
+    }
+    const imgB64 = await generateImage(s.imagePromptEN || s.narration, refImg);
+    await dbSet(sceneImgKey(s.id), imgB64);
+    renderScenes();
+    showToast(`Escena ${s.num} lista`, 'success');
+  } catch(e) {
+    openErrorModal(`Error imagen escena ${s.num}`, e.message);
+  }
+};
+
+window.generateSceneAudio = async function(sceneId) {
+  const s = state.scenes.find(x => x.id === sceneId);
+  if (!s) return;
+  const voice = document.getElementById('voiceSelect').value;
+  showToast(`Generando audio escena ${s.num}...`, 'success');
+  try {
+    const result = await generateAudio(s.narration, voice, s.act);
+    await dbSet(sceneAudKey(s.id), result.audioData);
+    renderScenes();
+    showToast(`Audio ${s.num} listo`, 'success');
+  } catch(e) {
+    openErrorModal(`Error audio escena ${s.num}`, e.message);
+  }
+};
+
+window.playSceneAudio = async function(sceneId) {
+  const data = await dbGet(sceneAudKey(sceneId));
+  if (!data) { showToast('Sin audio', 'error'); return; }
+  try {
+    const a = new Audio(`data:audio/wav;base64,${data}`);
+    await a.play();
+  } catch(e) {
+    showToast('No se pudo reproducir: ' + e.message, 'error');
+  }
+};
+
+// ════════════════════════════════════════════════════════════════
+// BULK GENERATION
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btnAllImages').addEventListener('click', async () => {
+  if (!state.scenes.length) { showToast('Genera escenas primero', 'error'); return; }
+  const bp = document.getElementById('bulkProgress'); bp.style.display = 'block';
+  const bt = document.getElementById('bulkText'), bb = document.getElementById('bulkBar');
+
+  let refImg = null;
+  if (state.characters.length) refImg = await dbGet(charImgKey(state.characters[0].id));
+
+  for (let i = 0; i < state.scenes.length; i++) {
+    const s = state.scenes[i];
+    const pct = Math.round((i / state.scenes.length) * 100);
+    bb.style.width = pct + '%';
+    bt.textContent = `Imagen ${i+1}/${state.scenes.length} (escena ${s.num})...`;
+    try {
+      const existing = await dbGet(sceneImgKey(s.id));
+      if (!existing) {
+        const imgB64 = await generateImage(s.imagePromptEN || s.narration, refImg);
+        await dbSet(sceneImgKey(s.id), imgB64);
+      }
+    } catch(e) {
+      console.error(`Escena ${s.num}:`, e.message);
+    }
+  }
+  bb.style.width = '100%';
+  bt.textContent = '✅ Imágenes completadas';
+  renderScenes();
+  setTimeout(() => bp.style.display = 'none', 2000);
+});
+
+document.getElementById('btnAllAudio').addEventListener('click', async () => {
+  if (!state.scenes.length) { showToast('Genera escenas primero', 'error'); return; }
+  const voice = document.getElementById('voiceSelect').value;
+  const bp = document.getElementById('bulkProgress'); bp.style.display = 'block';
+  const bt = document.getElementById('bulkText'), bb = document.getElementById('bulkBar');
+
+  for (let i = 0; i < state.scenes.length; i++) {
+    const s = state.scenes[i];
+    const pct = Math.round((i / state.scenes.length) * 100);
+    bb.style.width = pct + '%';
+    bt.textContent = `Audio ${i+1}/${state.scenes.length} (escena ${s.num})...`;
+    try {
+      const existing = await dbGet(sceneAudKey(s.id));
+      if (!existing) {
+        const result = await generateAudio(s.narration, voice, s.act);
+        await dbSet(sceneAudKey(s.id), result.audioData);
+      }
+    } catch(e) {
+      console.error(`Audio ${s.num}:`, e.message);
+    }
+  }
+  bb.style.width = '100%';
+  bt.textContent = '✅ Audios completados';
+  renderScenes();
+  setTimeout(() => bp.style.display = 'none', 2000);
+});
+
+// ════════════════════════════════════════════════════════════════
+// EXPORT ZIP
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btnExportZip').addEventListener('click', async () => {
+  if (!state.universe) { showToast('Nada que exportar', 'error'); return; }
+  const btn = document.getElementById('btnExportZip');
+  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Empacando...';
+
+  try {
+    const zip = new JSZip();
+    const u = state.universe;
+    const sn = (u.title || 'proyecto').replace(/[^\w]+/g, '_').substring(0, 40);
+
+    // Universe + characters info
+    zip.file('universo.txt', `${u.title}\n${u.tagline}\n\nCONCEPTO:\n${u.concepto}\n\nCONFLICTO:\n${u.conflicto}\n\nSETTING:\n${u.setting}\n\nHOOK:\n${u.hook}`);
+    zip.file('personajes.txt', state.characters.map(c => `## ${c.name} (${c.role})\n\nApariencia: ${c.appearance}\n\nPersonalidad: ${c.personality}\n\nBackstory: ${c.backstory}`).join('\n\n---\n\n'));
+    zip.file('guion.txt', state.scenes.map(s => `=== Escena ${s.num} [${s.act}] ===\n${s.title || ''}\n\n${s.narration}`).join('\n\n'));
+
+    // Character images
+    for (const c of state.characters) {
+      const img = await dbGet(charImgKey(c.id));
+      if (img) zip.file(`personajes/${c.name.replace(/[^\w]+/g, '_')}.png`, img, { base64: true });
+    }
+
+    // Scene images + audios
+    for (const s of state.scenes) {
+      const img = await dbGet(sceneImgKey(s.id));
+      const aud = await dbGet(sceneAudKey(s.id));
+      const pad = String(s.num).padStart(2, '0');
+      if (img) zip.file(`escenas/escena_${pad}.png`, img, { base64: true });
+      if (aud) zip.file(`audios/escena_${pad}.wav`, aud, { base64: true });
+    }
+
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${sn}.zip`; a.click();
+    URL.revokeObjectURL(url);
+    showToast('ZIP descargado', 'success');
+  } catch(e) {
+    openErrorModal('Error al exportar', e.message);
+  } finally {
+    btn.disabled = false; btn.innerHTML = '📦 Descargar ZIP';
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
+// NAV TABS
+// ════════════════════════════════════════════════════════════════
 document.querySelectorAll('.nav-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
-    if (tab.dataset.panel === 'exportar') renderStats();
   });
 });
 
-// ══════════════════════════════════════════════
-// TOAST
-// ══════════════════════════════════════════════
-let toastTimer;
-function showToast(msg, type='') {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.className = 'toast show' + (type ? ' '+type : '');
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.classList.remove('show'); }, 3000);
+function renderAll() {
+  renderUniverse();
+  renderCharacters();
+  renderScenes();
 }
 
-// ══════════════════════════════════════════════
-// MODAL
-// ══════════════════════════════════════════════
-function openModal(html) {
-  closeModal();
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay';
-  overlay.innerHTML = `<div class="modal"><div class="modal-handle"></div>${html}</div>`;
-  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
-  document.getElementById('modalContainer').appendChild(overlay);
-}
-function closeModal() { document.getElementById('modalContainer').innerHTML = ''; }
-
-// ══════════════════════════════════════════════
-// API KEYS
-// ══════════════════════════════════════════════
-function getKeys() {
-  return {
-    claude:        localStorage.getItem('key_claude')         || '',
-    gemini:        localStorage.getItem('key_gemini')         || '',
-    azure:         localStorage.getItem('key_azure')          || '',
-    azureRegion:   localStorage.getItem('key_azure_region')   || 'eastus',
-    azureOpenai:   localStorage.getItem('key_azure_openai')   || '',
-    azureEndpoint: localStorage.getItem('key_azure_endpoint') || 'https://alixonveloz1-6892-resource.services.ai.azure.com',
-  };
-}
-function updateApiDot() {
-  const k = getKeys();
-  document.getElementById('apiDot').className = 'dot' + (k.claude ? ' ok' : '');
-}
-
-document.getElementById('btnApis').addEventListener('click', () => {
-  const k = getKeys();
-  openModal(`
-    <div class="modal-title">🔑 API Keys</div>
-
-    <div class="form-group">
-      <label>Claude API Key (guiones)</label>
-      <input type="password" id="mk_claude" value="${k.claude}" placeholder="sk-ant-..." />
-    </div>
-
-    <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.25);border-radius:10px;padding:12px;margin-bottom:12px">
-      <div style="font-size:11px;color:#a855f7;font-weight:600;margin-bottom:6px">🔮 GEMINI — Audio TTS + Video Veo</div>
-      <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Para imágenes Gemini se usa la variable de Vercel (no necesitas ponerla aquí).</div>
-      <div class="form-group" style="margin-bottom:0">
-        <label>Gemini API Key (TTS + Video)</label>
-        <input type="password" id="mk_gemini" value="${k.gemini}" placeholder="AIza..." />
-      </div>
-    </div>
-
-    <div style="background:rgba(244,162,97,0.07);border:1px solid rgba(244,162,97,0.2);border-radius:10px;padding:12px;margin-bottom:12px">
-      <div style="font-size:11px;color:var(--sunset-amber);font-weight:600;margin-bottom:6px">🎨 AZURE OPENAI — FLUX.2-pro (imágenes alternativas)</div>
-      <div class="form-group" style="margin-bottom:8px">
-        <label>Azure OpenAI Key</label>
-        <input type="password" id="mk_azure_openai" value="${k.azureOpenai}" placeholder="key del deploy de FLUX..." />
-      </div>
-      <div class="form-group" style="margin-bottom:0">
-        <label>Azure Endpoint</label>
-        <input type="text" id="mk_azure_endpoint" value="${k.azureEndpoint}" placeholder="https://....services.ai.azure.com" />
-      </div>
-    </div>
-
-    <div style="background:rgba(111,207,151,0.07);border:1px solid rgba(111,207,151,0.2);border-radius:10px;padding:12px;margin-bottom:12px">
-      <div style="font-size:11px;color:#6fcf97;font-weight:600;margin-bottom:6px">🎙️ AZURE SPEECH — Audio gratis (backup voz)</div>
-      <div class="form-group" style="margin-bottom:8px">
-        <label>Azure Speech Key</label>
-        <input type="password" id="mk_azure" value="${k.azure}" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
-      </div>
-      <div class="form-group" style="margin-bottom:0">
-        <label>Región</label>
-        <input type="text" id="mk_azure_region" value="${k.azureRegion}" placeholder="eastus" />
-      </div>
-    </div>
-
-    <button class="btn btn-primary" onclick="saveKeys()">💾 Guardar</button>
-  `);
-});
-
-window.saveKeys = function() {
-  localStorage.setItem('key_claude',         document.getElementById('mk_claude').value.trim());
-  localStorage.setItem('key_gemini',         document.getElementById('mk_gemini').value.trim());
-  localStorage.setItem('key_azure',          document.getElementById('mk_azure').value.trim());
-  localStorage.setItem('key_azure_region',   document.getElementById('mk_azure_region').value.trim() || 'eastus');
-  localStorage.setItem('key_azure_openai',   document.getElementById('mk_azure_openai').value.trim());
-  localStorage.setItem('key_azure_endpoint', document.getElementById('mk_azure_endpoint').value.trim());
-  updateApiDot();
-  closeModal();
-  showToast('Keys guardadas', 'success');
-};
-
-// ══════════════════════════════════════════════
-// PROJECTS MODAL
-// ══════════════════════════════════════════════
-function openProjectsModal() {
-  const list = projects.map(p => `
-    <div class="project-item${p.id===state.projectId?' active':''}" onclick="switchProject('${p.id}')">
-      <span class="project-icon">🎬</span>
-      <div class="project-info">
-        <div class="project-name">${p.title}</div>
-        <div class="project-date">${new Date(p.updated||p.created).toLocaleDateString('es')}</div>
-      </div>
-      <span class="project-del" onclick="event.stopPropagation();deleteProject('${p.id}')">🗑️</span>
-    </div>
-  `).join('');
-  openModal(`
-    <div class="modal-title">📁 Proyectos</div>
-    ${list || '<p style="color:var(--text-dim);font-size:13px">No hay proyectos aún</p>'}
-    <div style="margin-top:14px"><button class="btn btn-primary" onclick="newProject()">➕ Nuevo Proyecto</button></div>
-    <div style="margin-top:8px"><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
-  `);
-}
-document.getElementById('btnProjects').addEventListener('click', openProjectsModal);
-window.switchProject = switchProject;
-window.deleteProject = deleteProject;
-
-// ══════════════════════════════════════════════
-// CLAUDE API
-// ══════════════════════════════════════════════
-async function callClaude(prompt, system) {
-  const key = getKeys().claude;
-  if (!key) throw new Error('Claude API Key no configurada');
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 16000, system, messages: [{ role: 'user', content: prompt }] }),
-  });
-  if (!res.ok) { const err = await res.text(); throw new Error(`Claude error ${res.status}: ${err}`); }
-  const data = await res.json();
-  return data.content[0].text;
-}
-
-// ══════════════════════════════════════════════
-// GEMINI IMAGE — VÍA PROXY VERCEL (/api/image)
-// La API key vive en variable de entorno GEMINI_API_KEY en Vercel
-// Nunca se expone en el cliente
-// ══════════════════════════════════════════════
-async function generateGeminiImage(prompt, refImageBase64 = null, retryNeutral = false) {
-  const isEcchi = state.universe?.genero === 'ecchi';
-  const finalPrompt = retryNeutral
-    ? prompt.replace(/nude|naked|explicit/gi, 'revealing outfit, suggestive pose')
-    : prompt;
-
-  try {
-    const res = await fetch('/api/image', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: finalPrompt, refImageBase64: refImageBase64 || null }),
-      signal: AbortSignal.timeout(120000),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok || data.error) {
-      if ((data.error || '').includes('SAFETY') && !retryNeutral) {
-        return generateGeminiImage(prompt, refImageBase64, true);
-      }
-      throw new Error(data.error || `Proxy error ${res.status}`);
-    }
-
-    if (data.imageData) return data.imageData;
-    throw new Error('Proxy: no imageData in response');
-
-  } catch(e) {
-    if (e.name === 'AbortError') throw new Error('Timeout 120s generando imagen');
-    throw e;
-  }
-}
-
-// ══════════════════════════════════════════════
-// FLUX.2-pro IMAGE (Azure OpenAI)
-// ══════════════════════════════════════════════
-async function generateFluxImage(prompt) {
-  const k = getKeys();
-  if (!k.azureOpenai) throw new Error('Azure OpenAI Key no configurada. Ve a APIS.');
-  const endpoint = k.azureEndpoint || 'https://alixonveloz1-6892-resource.services.ai.azure.com';
-  const res = await fetch(`${endpoint}/providers/blackforestlabs/v1/flux-2-pro?api-version=preview`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'api-key': k.azureOpenai, 'Authorization': `Bearer ${k.azureOpenai}` },
-    body: JSON.stringify({ prompt, model: 'FLUX.2-pro', width: 576, height: 1024, n: 1 }),
-    signal: AbortSignal.timeout(120000),
-  });
-  if (!res.ok) { const err = await res.text(); throw new Error(`FLUX.2-pro error ${res.status}: ${err}`); }
-  const data = await res.json();
-  const b64 = data.data?.[0]?.b64_json;
-  if (b64) return b64;
-  const url = data.data?.[0]?.url;
-  if (url) { const imgRes = await fetch(url); const blob = await imgRes.blob(); return await blobToBase64(blob); }
-  throw new Error('FLUX.2-pro: no image in response');
-}
-
-// ── IMAGE ROUTER ──────────────────────────────
-async function generateImage(prompt, refImageBase64 = null) {
-  const manualModel = document.getElementById('imageModelSelect')?.value || 'auto';
-  const genre = state.universe?.genero || '';
-
-  if (genre === 'ecchi' && manualModel !== 'flux2pro') return await generateGeminiImage(prompt, refImageBase64);
-  if (manualModel === 'gemini') return await generateGeminiImage(prompt, refImageBase64);
-
-  const k = getKeys();
-  if (k.azureOpenai) return await generateFluxImage(prompt);
-  return await generateGeminiImage(prompt, refImageBase64);
-}
-
-// ══════════════════════════════════════════════
-// GEMINI TTS
-// ══════════════════════════════════════════════
-const GEMINI_VOICE_MAP = { gemini_male: 'Charon', gemini_female: 'Kore', gemini_male2: 'Fenrir', gemini_female2: 'Aoede' };
-
-async function generateGeminiAudio(text, act) {
-  const gender = document.getElementById('voiceGenderSelect')?.value || 'gemini_male';
-
-  // Usa el proxy Vertex AI — no necesita API key en el cliente
-  const res = await fetch('/api/audio', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, voice: gender, act }),
-    signal: AbortSignal.timeout(60000),
-  });
-
-  const data = await res.json();
-  if (!res.ok || data.error) throw new Error(data.error || `Audio proxy error ${res.status}`);
-  if (data.audioData) return { audioData: data.audioData, mimeType: data.mimeType || 'audio/mpeg' };
-  throw new Error('Audio proxy: no audioData in response');
-}
-
-// ══════════════════════════════════════════════
-// AZURE SPEECH TTS
-// ══════════════════════════════════════════════
-const AZURE_VOICE_MAP = {
-  azure_male_mx: 'es-MX-JorgeNeural', azure_female_mx: 'es-MX-DaliaNeural',
-  azure_male_co: 'es-CO-GonzaloNeural', azure_female_co: 'es-CO-SalomeNeural',
-  azure_male_ar: 'es-AR-TomasNeural', azure_female_ar: 'es-AR-ElenaNeural',
-};
-
-function azureSSML(text, voiceName, act) {
-  const rate  = act === 'climax' ? '+15%' : act === 'resolution' ? '-12%' : '-5%';
-  const pitch = act === 'climax' ? '+8%'  : act === 'resolution' ? '-6%'  : '+0%';
-  const safe  = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  return `<speak version='1.0' xml:lang='es-MX'><voice name='${voiceName}'><prosody rate='${rate}' pitch='${pitch}'>${safe}</prosody></voice></speak>`;
-}
-
-async function generateAzureAudio(text, act, voiceName) {
-  const k = getKeys();
-  if (!k.azure) throw new Error('Azure Speech Key no configurada.');
-  const region = k.azureRegion || 'eastus';
-  const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
-    method: 'POST',
-    headers: { 'Ocp-Apim-Subscription-Key': k.azure, 'Content-Type': 'application/ssml+xml', 'X-Microsoft-OutputFormat': 'audio-16khz-128kbitrate-mono-mp3', 'User-Agent': 'AnimeAIStudio' },
-    body: azureSSML(text, voiceName, act),
-  });
-  if (!res.ok) { const err = await res.text(); throw new Error(`Azure TTS error ${res.status}: ${err}`); }
-  const blob = await res.blob();
-  return await blobToBase64(blob);
-}
-
-async function generateAudio(text, act) {
-  const gender = document.getElementById('voiceGenderSelect')?.value || 'gemini_male';
-  if (gender.startsWith('gemini_')) {
-    const result = await generateGeminiAudio(text, act);
-    if (typeof result === 'object' && result.audioData) return result.audioData;
-    return result;
-  }
-  if (gender.startsWith('azure_')) { const voiceName = AZURE_VOICE_MAP[gender] || 'es-MX-JorgeNeural'; return await generateAzureAudio(text, act, voiceName); }
-  throw new Error('Voz no soportada: ' + gender);
-}
-
-// ══════════════════════════════════════════════
-// VEO 3.1 LITE
-// ══════════════════════════════════════════════
-async function generateVeoVideo(imageBase64, prompt) {
-  const key = getKeys().gemini;
-  if (!key) throw new Error('Gemini API Key no configurada. Ve a APIS.');
-  const submitRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-lite-generate-001:predictLongRunning?key=${key}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        instances: [{ prompt: prompt + ', anime 2D style, 9:16 vertical, cinematic motion', image: { bytesBase64Encoded: imageBase64, mimeType: 'image/png' } }],
-        parameters: { aspectRatio: '9:16', durationSeconds: 8, enhancePrompt: true, generateAudio: false },
-      }),
-    }
-  );
-  if (!submitRes.ok) { const err = await submitRes.text(); throw new Error(`Veo submit error ${submitRes.status}: ${err}`); }
-  const submitData = await submitRes.json();
-  const operationName = submitData.name;
-  if (!operationName) throw new Error('Veo: no operation name in response');
-
-  const pollUrl = `https://generativelanguage.googleapis.com/v1beta/${operationName}?key=${key}`;
-  for (let i = 0; i < 36; i++) {
-    await new Promise(r => setTimeout(r, 5000));
-    const pollRes = await fetch(pollUrl);
-    if (!pollRes.ok) continue;
-    const pollData = await pollRes.json();
-    if (pollData.done) {
-      const videoB64 = pollData.response?.predictions?.[0]?.bytesBase64Encoded;
-      if (videoB64) return videoB64;
-      throw new Error('Veo: video done but no bytes in response');
-    }
-  }
-  throw new Error('Veo: timeout después de 3 minutos');
-}
-
-document.getElementById('btnGenerateVideo').addEventListener('click', async () => {
-  if (!state.scenes.length) { showToast('Genera un episodio primero', 'error'); return; }
-  const btn = document.getElementById('btnGenerateVideo');
-  const progDiv = document.getElementById('videoProgress');
-  const resultsDiv = document.getElementById('videoResults');
-  const count = parseInt(document.getElementById('veoScenesSelect').value);
-  const scenes = state.scenes.slice(0, count);
-  btn.disabled = true; progDiv.style.display = 'block'; resultsDiv.innerHTML = '';
-  let done = 0;
-  for (const scene of scenes) {
-    setProgress('video', (done / scenes.length) * 100, `Video ${done + 1}/${scenes.length}: ${scene.title}`);
-    try {
-      const imgData = await dbGet(sceneImgKey(scene.id));
-      if (!imgData) { showToast(`Escena ${scene.num} sin imagen — omitida`, 'error'); done++; continue; }
-      const videoB64 = await generateVeoVideo(imgData, scene.imagePromptEN);
-      await dbSet(`${state.projectId}_vid_${scene.id}`, videoB64);
-      const blob = b64ToBlob(videoB64, 'video/mp4');
-      const url = URL.createObjectURL(blob);
-      resultsDiv.innerHTML += `<div style="margin-bottom:8px;padding:8px;background:rgba(255,255,255,0.05);border-radius:8px;font-size:12px"><div style="margin-bottom:4px">🎬 Escena ${scene.num}: ${scene.title}</div><a href="${url}" download="escena_${String(scene.num).padStart(2,'0')}.mp4" style="color:var(--sunset-amber);text-decoration:none">⬇️ Descargar MP4</a><video src="${url}" controls style="width:100%;border-radius:6px;margin-top:6px;max-height:200px"></video></div>`;
-    } catch(e) {
-      resultsDiv.innerHTML += `<div style="color:#ff6b6b;font-size:11px;margin-bottom:4px">❌ Escena ${scene.num}: ${e.message.substring(0, 80)}</div>`;
-    }
-    done++;
-    setProgress('video', (done / scenes.length) * 100, `${done}/${scenes.length} videos generados`);
-  }
-  btn.disabled = false;
-  showToast(`${done} videos generados con Veo 3.1 Lite`, 'success');
-});
-
-// ══════════════════════════════════════════════
-// GENRE PROMPTS
-// ══════════════════════════════════════════════
-const GENRE_PROMPTS = {
-  sistema_oculto: `Género: Sistema Oculto / Donghua.
-Características obligatorias:
-- Protagonista con habilidad o sistema sobrenatural que mantiene en SECRETO
-- Cobra precios ridiculamente bajos por trabajos imposibles (ej: 500 yuanes por reparar un satélite)
-- Deja a todos con la boca abierta sin mostrar emoción (cara de póker absoluta)
-- Contraste entre lo mundano y lo extraordinario como fuente de humor y tensión
-- Escalada constante: cada episodio el protagonista resuelve algo más imposible
-- Personajes secundarios que pasan de incredulidad → shock → respeto
-Tono visual: anime 2D chino moderno, colores vibrantes, expresiones exageradas de secundarios`,
-
-  isekai: `Género: Isekai / Otro Mundo.
-Características obligatorias:
-- Protagonista japonés ordinario transportado a un mundo de fantasía/RPG
-- El mundo tiene reglas RPG: niveles, clases, habilidades, mazmorras, gremios
-- Habilidad aparentemente inútil que resulta OP, o conocimiento moderno único
-- Mezcla de maravilla ante el nuevo mundo con humor del choque cultural
-- Party de aventureros con roles variados y personalidades distintas
-- Sistema de magia o combate claramente definido
-Tono visual: fantasía épica colorida, efectos de magia luminosos`,
-
-  post_apocaliptico: `Género: Post-Apocalíptico.
-Características obligatorias:
-- Mundo destruido, causa como misterio que se devela gradualmente
-- Civilización fragmentada: asentamientos, recursos escasos, facciones opuestas
-- Protagonista con habilidad de supervivencia especial
-- Tensión entre esperanza de reconstrucción y desesperanza
-- El mundo natural reclamando ciudades abandonadas
-- Dilema moral: ¿se puede sobrevivir sin perder la humanidad?
-Tono visual: colores desaturados, arquitectura en ruinas, cielos dramáticos`,
-
-  ecchi: `Género: Ecchi / Fan Service.
-Características obligatorias:
-- Protagonista masculino en situaciones incómodas rodeado de personajes femeninos con personalidades marcadas
-- Fan service sugerente: situaciones de malentendido, contacto físico accidental
-- Arquetipos: tsundere, kuudere, genki, dandere, onee-san, imouto
-- Narración interna del protagonista comentando cada situación con humor y vergüenza
-- Momentos de ternura genuina entre el fan service
-- Descripción física detallada y atractiva de los personajes
-Tono visual: colores pastel brillantes, expresiones exageradas, efectos de rubor`,
-
-  romance: `Género: Romance / Drama. Referencia: Your Name, Violet Evergarden. Emociones profundas, conexiones imposibles, nostalgia y esperanza.`,
-  accion: `Género: Acción / Aventura. Combates espectaculares, superación personal, vínculos forjados en batalla.`,
-  shounen: `Género: Shōnen. Amistad, esfuerzo, victoria. Protagonista que crece superando límites. Rivales que se vuelven aliados.`,
-  slice_of_life: `Género: Slice of Life. Belleza en lo cotidiano. Momentos pequeños que significan todo. Personajes profundamente humanos.`,
-  fantasia: `Género: Fantasía. Mundo con magia y reglas propias, conflicto emocional genuino en su núcleo.`,
-  misterio: `Género: Misterio / Thriller. Tensión psicológica, verdades ocultas, misterio que se devela lentamente.`,
-  sci_fi: `Género: Sci-Fi. Tecnología como metáfora de la condición humana. Futuro cercano, preguntas filosóficas.`,
-  horror: `Género: Horror Psicológico. Miedo al yo mismo, al pasado, a la pérdida. Más psychological que gore.`,
-};
-
-// ══════════════════════════════════════════════
-// UNIVERSE GENERATION
-// ══════════════════════════════════════════════
-document.getElementById('btnGenerarUniverso').addEventListener('click', async () => {
-  const btn = document.getElementById('btnGenerarUniverso');
-  const genero = document.getElementById('generoSelect').value;
-  const tono = document.getElementById('tonoInput').value;
-  const concepto = document.getElementById('conceptoInput').value;
-  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Generando...';
-
-  const system = `Eres un escritor experto en anime y donghua viral para TikTok/Reels.
-REGLAS ABSOLUTAS:
-- Todos los personajes tienen nombres japoneses reales: Hiro, Yuki, Sora, Kaito, Nao, Rin, Kenji, Mei, Taro, Hana, Riku, Aoi, etc.
-- PROHIBIDO: nombres inventados (Aethernam, Kael, Zythara, etc.)
-- Premisa simple que se entiende en 10 segundos
-- Conflicto personal y emocional, NO político ni abstracto
-- Responde SOLO en JSON válido, sin markdown backticks`;
-
-  const prompt = `${GENRE_PROMPTS[genero] || ''}
-Tono narrativo: ${tono || 'neutral'}
-${concepto ? `Concepto semilla: ${concepto}` : ''}
-
-Genera un universo de anime. Devuelve EXACTAMENTE este JSON:
-{
-  "title": "Título en japonés con subtítulo español",
-  "tagline": "Una frase gancho de máximo 12 palabras",
-  "concepto": "Descripción del mundo en 2-3 frases. Simple y claro.",
-  "conflicto": "El conflicto central emocional en 2 frases",
-  "hook": "El gancho del primer episodio que engancha al espectador",
-  "setting": "Lugar y época del mundo",
-  "genero": "${genero}"
-}`;
-
-  try {
-    const raw = await callClaude(prompt, system);
-    const cleaned = raw.replace(/```json\n?|\n?```/g, '').trim();
-    state.universe = JSON.parse(cleaned);
-    saveState(); renderUniverse();
-    showToast('¡Universo creado!', 'success');
-  } catch(e) {
-    showToast('Error: ' + e.message, 'error');
-    openErrorModal('Error generando universo', e.message);
-  } finally {
-    btn.disabled = false; btn.innerHTML = '<span>🌟</span> Generar Universo';
-  }
-});
-
-function renderUniverse() {
-  const el = document.getElementById('universoResult');
-  if (!state.universe) { el.style.display = 'none'; return; }
-  const u = state.universe;
-  el.style.display = 'block';
-  el.innerHTML = `
-    <div class="universe-card">
-      <div class="universe-title">${u.title || ''}</div>
-      <div class="universe-tagline">${u.tagline || ''}</div>
-      <div class="universe-field"><div class="universe-field-label">Concepto</div><div class="universe-field-value">${u.concepto || ''}</div></div>
-      <div class="universe-field"><div class="universe-field-label">Conflicto Central</div><div class="universe-field-value">${u.conflicto || ''}</div></div>
-      <div class="universe-field"><div class="universe-field-label">Ambientación</div><div class="universe-field-value">${u.setting || ''}</div></div>
-      <div class="hook-badge">🎣 ${u.hook || ''}</div>
-    </div>`;
-}
-
-// ══════════════════════════════════════════════
-// JSON PARSERS
-// ══════════════════════════════════════════════
-function safeParseScenes(raw) {
-  const cleaned = raw.replace(/```json\n?|\n?```/g, '').trim();
-  try { return JSON.parse(cleaned).scenes || []; } catch(e) {
-    const match = cleaned.match(/"scenes"\s*:\s*(\[[\s\S]*)/);
-    if (!match) throw new Error('JSON Parse error: no scenes array found');
-    let arr = match[1]; let depth = 0, lastGood = -1;
-    for (let i = 0; i < arr.length; i++) { if (arr[i] === '{') depth++; if (arr[i] === '}') { depth--; if (depth === 0) lastGood = i; } }
-    if (lastGood === -1) throw new Error('JSON Parse error: no complete scene found');
-    try { return JSON.parse(arr.substring(0, lastGood + 1) + ']'); } catch(e2) { throw new Error('JSON Parse error: ' + e2.message); }
-  }
-}
-function safeParseChars(raw) {
-  const cleaned = raw.replace(/```json\n?|\n?```/g, '').trim();
-  try { const obj = JSON.parse(cleaned); return obj.characters || obj; } catch(e) { throw new Error('JSON personajes inválido: ' + e.message); }
-}
-
-// ══════════════════════════════════════════════
-// EPISODE GENERATION
-// ══════════════════════════════════════════════
-document.getElementById('btnGenerarEpisodio').addEventListener('click', async () => {
-  if (!state.universe) { showToast('Genera un universo primero', 'error'); return; }
-  const btn = document.getElementById('btnGenerarEpisodio');
-  btn.disabled = true;
-  const progDiv = document.getElementById('epProgress');
-  progDiv.style.display = 'block';
-
-  const funcion = document.getElementById('funcionSelect').value;
-  const emocion = document.getElementById('emocionInput').value;
-  const u = state.universe;
-  const isEcchi = u.genero === 'ecchi';
-
-  const sysBase = `Eres un guionista de anime experto. REGLAS:
-- Narración PRIMERA PERSONA, 4-5 frases fluidas por escena, con gancho final
-- Pensamiento interno visible, nombres japoneses reales
-- imagePromptEN en INGLÉS, 9:16 anime 2D, basado en la narración y personajes de esa escena${isEcchi ? `
-- Para ecchi: el imagePromptEN debe reflejar el fan service del género — ropa sugerente, poses atractivas, expresiones de rubor, tensión romántica — acorde a lo que ocurre en la escena` : ''}
-- Responde SOLO JSON válido sin markdown ni texto extra`;
-
-  const ctx = `Universo: ${u.title} | Género: ${u.genero}
-Concepto: ${u.concepto} | Conflicto: ${u.conflicto}
-Función: ${funcion} | Emoción: ${emocion || 'intensa'}`;
-
-  const sceneShape = `{"id":"sN","num":N,"act":"ACT","title":"titulo","location":"lugar","timeOfDay":"mañana","chars":["c1"],"narration":"4-5 frases primera persona","imagePromptEN":"9:16 anime 2D scene description in english"}`;
-
-  try {
-    setProgress('ep', 5, 'Paso 1/5 — Personajes...');
-    const raw1 = await callClaude(
-      `${ctx}\n\nCrea 3-4 personajes. Devuelve SOLO:\n{"characters":[{"id":"c1","name":"nombre japonés","role":"protagonista","appearance":"descripción fisica detallada","personality":"2 frases","backstory":"2 frases"}]}`,
-      sysBase
-    );
-    state.characters = safeParseChars(raw1);
-    const charRef = state.characters.map(c=>`${c.id}=${c.name}(${c.role})`).join(', ');
-    const charDesc = state.characters.map(c=>`${c.id}: ${c.name} — ${c.appearance}`).join(' | ');
-    saveState();
-    setProgress('ep', 18, `✅ ${state.characters.length} personajes — Paso 2/5: Escenas 1-8...`);
-
-    const raw2 = await callClaude(`${ctx}\nPersonajes: ${charDesc}\n\nGenera escenas 1-8. Actos: cold_open(1-2), act1(3-8).\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con exactamente 8 objetos.`, sysBase);
-    const scenes_1_8 = safeParseScenes(raw2);
-    setProgress('ep', 36, `✅ Escenas 1-8 — Paso 3/5: Escenas 9-16...`);
-
-    const last2 = scenes_1_8.slice(-2).map(s=>`E${s.num}: ${s.narration.substring(0,60)}`).join(' | ');
-    const raw3 = await callClaude(`${ctx}\nPersonajes: ${charRef}\nContinuación: ${last2}\n\nGenera escenas 9-16. Actos: act1(9-10), act2(11-16).\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con exactamente 8 objetos numerados del 9 al 16.`, sysBase);
-    const scenes_9_16 = safeParseScenes(raw3);
-    setProgress('ep', 55, `✅ Escenas 9-16 — Paso 4/5: Escenas 17-24...`);
-
-    const last2b = scenes_9_16.slice(-2).map(s=>`E${s.num}: ${s.narration.substring(0,60)}`).join(' | ');
-    const raw4 = await callClaude(`${ctx}\nPersonajes: ${charRef}\nContinuación: ${last2b}\n\nGenera escenas 17-24. Actos: act2(17-18), climax(19-24).\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con exactamente 8 objetos numerados del 17 al 24.`, sysBase);
-    const scenes_17_24 = safeParseScenes(raw4);
-    setProgress('ep', 74, `✅ Escenas 17-24 — Paso 5/5: Escenas 25-30...`);
-
-    const last2c = scenes_17_24.slice(-2).map(s=>`E${s.num}: ${s.narration.substring(0,60)}`).join(' | ');
-    const raw5 = await callClaude(`${ctx}\nPersonajes: ${charRef}\nContinuación: ${last2c}\n\nGenera escenas 25-30. Actos: climax(25), resolution(26-29), post_credits(30).\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con exactamente 6 objetos numerados del 25 al 30.`, sysBase);
-    const scenes_25_30 = safeParseScenes(raw5);
-
-    state.scenes = [...scenes_1_8, ...scenes_9_16, ...scenes_17_24, ...scenes_25_30].map((s, i) => ({ ...s, num: i + 1, id: `s${i + 1}` }));
-    setProgress('ep', 92, 'Guardando...');
-    saveState();
-    await renderCharacters();
-    await renderScenes();
-    renderStats();
-    setProgress('ep', 100, `✅ ¡${state.scenes.length} escenas generadas!`);
-    showToast(`✅ ${state.scenes.length} escenas listas`, 'success');
-    document.getElementById('batchControls').style.display = 'block';
-    setTimeout(() => { progDiv.style.display = 'none'; }, 2500);
-  } catch(e) {
-    showToast('Error: ' + e.message.substring(0, 60), 'error');
-    openErrorModal('Error generando episodio', e.message);
-    progDiv.style.display = 'none';
-  } finally {
-    btn.disabled = false; btn.innerHTML = '<span>✨</span> Generar Episodio (30 escenas)';
-  }
-});
-
-// ══════════════════════════════════════════════
-// RENDER CHARACTERS
-// ══════════════════════════════════════════════
-async function renderCharacters() {
-  const container = document.getElementById('personajesContainer');
-  if (!state.characters.length) { container.innerHTML = `<div class="empty-state"><div class="emoji">👥</div><p>Los personajes aparecerán después de generar un episodio</p></div>`; return; }
-  const items = await Promise.all(state.characters.map(async c => ({ char: c, imgData: await dbGet(imgKey(c.id)) })));
-  container.innerHTML = items.map(({ char: c, imgData }) => `
-    <div class="char-card" id="char-${c.id}">
-      <div class="char-header">
-        <div class="char-img-wrap" id="charimg-${c.id}">
-          ${imgData ? `<img src="data:image/png;base64,${imgData}" alt="${c.name}">` : `<div class="char-img-placeholder">🧑</div>`}
-        </div>
-        <div class="char-info">
-          <div class="char-name">${c.name}</div>
-          <div class="char-role">${c.role}</div>
-          <div class="char-detail">${c.appearance || ''}</div>
-        </div>
-      </div>
-      <div style="padding:0 14px 4px"><div style="font-size:12px;color:var(--text-dim)">${c.personality || ''}</div></div>
-      <div class="char-actions">
-        <button class="btn btn-secondary btn-sm" onclick="generateCharImage('${c.id}')">${imgData ? '🔄 Regenerar' : '🎨 Generar'} imagen</button>
-      </div>
-    </div>`).join('');
-}
-
-window.generateCharImage = async function(charId) {
-  const char = state.characters.find(c => c.id === charId);
-  if (!char) return;
-  const wrap = document.getElementById('charimg-' + charId);
-  if (!wrap) return;
-  const prevContent = wrap.innerHTML;
-  wrap.innerHTML = `<div class="char-generating">⏳</div>`;
-  try {
-    const charPrompt = `Anime/donghua 2D character portrait, vertical 9:16, full body character reference sheet: ${char.name}, ${char.appearance}. Clean anime art style, vibrant colors, white background, professional character design. High quality illustration.`;
-    const imgData = await generateImage(charPrompt);
-    await dbSet(imgKey(charId), imgData);
-    wrap.innerHTML = `<img src="data:image/png;base64,${imgData}" alt="${char.name}">`;
-    showToast('Imagen generada', 'success');
-  } catch(e) {
-    wrap.innerHTML = prevContent;
-    showToast('Error generando imagen', 'error');
-    openErrorModal('Error imagen personaje', e.message);
-  }
-};
-
-// ══════════════════════════════════════════════
-// RENDER SCENES
-// ══════════════════════════════════════════════
-async function renderScenes() {
-  const container = document.getElementById('scenesContainer');
-  if (!state.scenes.length) { container.innerHTML = ''; document.getElementById('batchControls').style.display = 'none'; return; }
-  document.getElementById('batchControls').style.display = 'block';
-  const items = await Promise.all(state.scenes.map(async s => ({ scene: s, imgData: await dbGet(sceneImgKey(s.id)), hasAudio: !!(await dbGet(sceneAudKey(s.id))) })));
-  container.innerHTML = items.map(({ scene: s, imgData, hasAudio }) => `
-    <div class="scene-card" id="scene-${s.id}">
-      <div class="scene-header">
-        <div class="scene-img-wrap" id="sceneimg-${s.id}">
-          ${imgData ? `<img src="data:image/png;base64,${imgData}" alt="scene ${s.num}">` : `<div class="scene-img-placeholder">🎬</div>`}
-        </div>
-        <div class="scene-meta">
-          <div class="scene-num">${String(s.num).padStart(2,'0')}<span class="act-badge">${s.act}</span></div>
-          <div class="scene-title">${s.title}</div>
-          <div class="scene-narration">${s.narration}</div>
-        </div>
-      </div>
-      <div class="scene-actions" id="sceneact-${s.id}">
-        <button class="btn btn-secondary btn-sm" onclick="generateSceneImage('${s.id}')">${imgData ? '🔄' : '🖼️'} Imagen</button>
-        ${hasAudio
-          ? `<button class="btn btn-secondary btn-sm" onclick="playSceneAudio('${s.id}')">▶️ Audio</button><button class="btn btn-danger btn-sm" onclick="deleteSceneAudio('${s.id}')">🗑️</button>`
-          : `<button class="btn btn-secondary btn-sm" onclick="generateSceneAudio('${s.id}')">🎙️ Narrar</button>`}
-      </div>
-    </div>`).join('');
-}
-
-// ══════════════════════════════════════════════
-// SCENE IMAGE
-// ══════════════════════════════════════════════
-window.generateSceneImage = async function(sceneId) {
-  const scene = state.scenes.find(s => s.id === sceneId);
-  if (!scene) return;
-  const wrap = document.getElementById('sceneimg-' + sceneId);
-  if (!wrap) return;
-  const prevContent = wrap.innerHTML;
-  wrap.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:14px;animation:spin 1.2s linear infinite">⏳</div>`;
-  let refImage = null;
-  if (scene.chars && scene.chars.length > 0) refImage = await dbGet(imgKey(scene.chars[0]));
-  try {
-    const imgData = await generateImage(scene.imagePromptEN, refImage);
-    await dbSet(sceneImgKey(sceneId), imgData);
-    wrap.innerHTML = `<img src="data:image/png;base64,${imgData}" alt="scene ${scene.num}">`;
-    renderStats(); saveState();
-    showToast(`Escena ${scene.num} generada`, 'success');
-  } catch(e) {
-    wrap.innerHTML = prevContent;
-    showToast('Error imagen: ' + e.message.substring(0,50), 'error');
-    openErrorModal(`Error imagen escena ${scene.num}`, e.message);
-  }
-};
-
-// ══════════════════════════════════════════════
-// SCENE AUDIO
-// ══════════════════════════════════════════════
-window.generateSceneAudio = async function(sceneId) {
-  const scene = state.scenes.find(s => s.id === sceneId);
-  if (!scene) return;
-  const actEl = document.getElementById('sceneact-' + sceneId);
-  if (!actEl) return;
-  const btn = actEl.querySelector('button[onclick*="generateSceneAudio"]');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>'; }
-  try {
-    const audData = await generateAudio(scene.narration, scene.act);
-    await dbSet(sceneAudKey(sceneId), audData);
-    renderStats();
-    actEl.innerHTML = `
-      <button class="btn btn-secondary btn-sm" onclick="generateSceneImage('${sceneId}')">🔄 Imagen</button>
-      <button class="btn btn-secondary btn-sm" onclick="playSceneAudio('${sceneId}')">▶️ Audio</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteSceneAudio('${sceneId}')">🗑️</button>`;
-    showToast(`Audio escena ${scene.num} listo`, 'success');
-  } catch(e) {
-    if (btn) { btn.disabled = false; btn.innerHTML = '🎙️ Narrar'; }
-    showToast('Error audio', 'error');
-    openErrorModal(`Error audio escena ${scene.num}`, e.message);
-  }
-};
-window.playSceneAudio = async function(sceneId) {
-  const audData = await dbGet(sceneAudKey(sceneId));
-  if (!audData) { showToast('No hay audio', 'error'); return; }
-  new Audio(`data:audio/wav;base64,${audData}`).play();
-  showToast('▶️ Reproduciendo...');
-};
-window.deleteSceneAudio = async function(sceneId) {
-  await dbDel(sceneAudKey(sceneId));
-  const actEl = document.getElementById('sceneact-' + sceneId);
-  if (actEl) actEl.innerHTML = `<button class="btn btn-secondary btn-sm" onclick="generateSceneImage('${sceneId}')">🔄 Imagen</button><button class="btn btn-secondary btn-sm" onclick="generateSceneAudio('${sceneId}')">🎙️ Narrar</button>`;
-  renderStats(); showToast('Audio eliminado');
-};
-
-// ══════════════════════════════════════════════
-// BATCH
-// ══════════════════════════════════════════════
-document.getElementById('btnAllImages').addEventListener('click', async () => {
-  if (!state.scenes.length) return;
-  let missing = 0;
-  for (const s of state.scenes) { if (!(await dbGet(sceneImgKey(s.id)))) missing++; }
-  if (missing === 0) { showToast('Todas las imágenes ya están generadas', 'success'); return; }
-  if (!confirm(`⚠️ Vas a generar ${missing} imágenes.\n¿Continuar?`)) return;
-  const btn = document.getElementById('btnAllImages');
-  btn.disabled = true;
-  const batchProg = document.getElementById('batchProgress');
-  batchProg.style.display = 'block';
-  let done = 0;
-  for (const scene of state.scenes) {
-    setProgress('batch', (done / state.scenes.length) * 100, `Imagen ${done+1}/${state.scenes.length}: ${scene.title}`);
-    try {
-      if (!(await dbGet(sceneImgKey(scene.id)))) {
-        let refImage = null;
-        if (scene.chars && scene.chars.length > 0) refImage = await dbGet(imgKey(scene.chars[0]));
-        const imgData = await generateImage(scene.imagePromptEN, refImage);
-        await dbSet(sceneImgKey(scene.id), imgData);
-        const wrap = document.getElementById('sceneimg-' + scene.id);
-        if (wrap) wrap.innerHTML = `<img src="data:image/png;base64,${imgData}" alt="scene ${scene.num}">`;
-      }
-    } catch(e) { console.warn('Batch image error scene', scene.num, e.message); }
-    done++;
-    setProgress('batch', (done / state.scenes.length) * 100, `${done}/${state.scenes.length} imágenes`);
-  }
-  renderStats(); saveState(); btn.disabled = false;
-  showToast('¡Todas las imágenes generadas!', 'success');
-  setTimeout(() => { batchProg.style.display = 'none'; }, 3000);
-});
-
-document.getElementById('btnAllAudio').addEventListener('click', async () => {
-  if (!state.scenes.length) return;
-  const btn = document.getElementById('btnAllAudio');
-  btn.disabled = true;
-  const batchProg = document.getElementById('batchProgress');
-  batchProg.style.display = 'block';
-  let done = 0;
-  for (const scene of state.scenes) {
-    setProgress('batch', (done / state.scenes.length) * 100, `Audio ${done+1}/${state.scenes.length}: ${scene.title}`);
-    try {
-      if (!(await dbGet(sceneAudKey(scene.id)))) {
-        const audData = await generateAudio(scene.narration, scene.act);
-        await dbSet(sceneAudKey(scene.id), audData);
-        const actEl = document.getElementById('sceneact-' + scene.id);
-        if (actEl) actEl.innerHTML = `<button class="btn btn-secondary btn-sm" onclick="generateSceneImage('${scene.id}')">🔄 Imagen</button><button class="btn btn-secondary btn-sm" onclick="playSceneAudio('${scene.id}')">▶️ Audio</button><button class="btn btn-danger btn-sm" onclick="deleteSceneAudio('${scene.id}')">🗑️</button>`;
-      }
-    } catch(e) { console.warn('Batch audio error scene', scene.num, e.message); }
-    done++;
-    setProgress('batch', (done / state.scenes.length) * 100, `${done}/${state.scenes.length} audios`);
-  }
-  renderStats(); btn.disabled = false;
-  showToast('¡Toda la narración generada!', 'success');
-  setTimeout(() => { batchProg.style.display = 'none'; }, 3000);
-});
-
-document.getElementById('btnClearAudios').addEventListener('click', async () => {
-  if (!confirm('¿Borrar todos los audios?')) return;
-  for (const scene of state.scenes) await dbDel(sceneAudKey(scene.id));
-  await renderScenes(); renderStats(); showToast('Audios eliminados');
-});
-
-// ══════════════════════════════════════════════
-// PROGRESS & UTILS
-// ══════════════════════════════════════════════
-function setProgress(prefix, pct, label) {
-  const bar = document.getElementById(prefix + 'Bar');
-  const lbl = document.getElementById(prefix + 'Label');
-  if (bar) bar.style.width = pct + '%';
-  if (lbl) lbl.textContent = label;
-}
-function blobToBase64(blob) {
-  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(blob); });
-}
-function b64ToBlob(b64, mimeType) {
-  const bytes = atob(b64); const arr = new Uint8Array(bytes.length);
-  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-  return new Blob([arr], { type: mimeType });
-}
-
-// ══════════════════════════════════════════════
-// STATS
-// ══════════════════════════════════════════════
-async function renderStats() {
-  let imgs = 0, auds = 0;
-  for (const s of state.scenes) {
-    if (await dbGet(sceneImgKey(s.id))) imgs++;
-    if (await dbGet(sceneAudKey(s.id))) auds++;
-  }
-  document.getElementById('statImg').textContent = `${imgs}/${state.scenes.length || 0}`;
-  document.getElementById('statAud').textContent = `${auds}/${state.scenes.length || 0}`;
-  document.getElementById('statEsc').textContent = state.scenes.length || 0;
-}
-
-// ══════════════════════════════════════════════
-// ERROR MODAL
-// ══════════════════════════════════════════════
-function openErrorModal(title, detail) {
-  openModal(`
-    <div class="modal-title">⚠️ ${title}</div>
-    <div class="error-detail">${detail}</div>
-    <div style="margin-top:14px;display:flex;gap:8px;">
-      <button class="btn btn-secondary" onclick="closeModal()">Cerrar</button>
-      <button class="btn btn-primary" onclick="closeModal();document.getElementById('btnApis').click()">🔑 Ver API Keys</button>
-    </div>`);
-}
-
-// ══════════════════════════════════════════════
-// EXPORT ZIP
-// ══════════════════════════════════════════════
-document.getElementById('btnDownloadZip').addEventListener('click', async () => {
-  if (!state.scenes.length) { showToast('No hay episodio generado', 'error'); return; }
-  const btn = document.getElementById('btnDownloadZip');
-  btn.disabled = true;
-  const zipProg = document.getElementById('zipProgress');
-  zipProg.style.display = 'block';
-  setProgress('zip', 5, 'Iniciando...');
-  try {
-    const zip = new JSZip();
-    const title = state.universe?.title || 'anime';
-    const safeTitle = title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
-    let timingLines = ['ESCENA\tTÍTULO\tDURACIÓN (seg)\tINICIO\tFIN'];
-    let srtLines = [], scriptLines = [`# ${title}\n`], srtIndex = 1, currentTime = 0;
-    const audioBuffers = [];
-    setProgress('zip', 15, 'Añadiendo imágenes...');
-    const charsFolder = zip.folder('personajes');
-    for (const char of state.characters) {
-      const imgData = await dbGet(imgKey(char.id));
-      if (imgData) charsFolder.file(`${char.id}_${char.name.replace(/\s/g,'_')}.png`, imgData, { base64: true });
-    }
-    for (let i = 0; i < state.scenes.length; i++) {
-      const s = state.scenes[i];
-      const imgData = await dbGet(sceneImgKey(s.id));
-      const audData = await dbGet(sceneAudKey(s.id));
-      const sceneNum = String(s.num).padStart(2, '0');
-      if (imgData) zip.file(`escena${sceneNum}.png`, imgData, { base64: true });
-      if (audData) audioBuffers.push({ num: s.num, data: audData });
-      const dur = Math.max(3, Math.ceil((s.narration || '').split(' ').length / 2.5));
-      const startTime = currentTime, endTime = currentTime + dur;
-      timingLines.push(`${sceneNum}\t${s.title}\t${dur}\t${formatTime(startTime)}\t${formatTime(endTime)}`);
-      srtLines.push(`${srtIndex}`, `${formatSRT(startTime)} --> ${formatSRT(endTime)}`, s.narration.substring(0, 120), '');
-      srtIndex++; currentTime = endTime;
-      scriptLines.push(`\n## Escena ${sceneNum} — ${s.title} [${s.act.toUpperCase()}]`, `**Lugar:** ${s.location} | **Hora:** ${s.timeOfDay}`, `\n${s.narration}`, `\n*Image prompt:* ${s.imagePromptEN}`);
-      setProgress('zip', 15 + (i / state.scenes.length) * 50, `Escena ${i+1}/${state.scenes.length}...`);
-    }
-    setProgress('zip', 65, 'Concatenando audio...');
-    if (audioBuffers.length > 0) {
-      try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        const ctx = new AudioCtx();
-        const decoded = [];
-        for (const ab of audioBuffers) {
-          try {
-            const binary = atob(ab.data); const bytes = new Uint8Array(binary.length);
-            for (let j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
-            decoded.push(await ctx.decodeAudioData(bytes.buffer.slice(0)));
-          } catch(e) { console.warn('Audio decode skip', e.message); }
-        }
-        if (decoded.length > 0) {
-          const totalLen = decoded.reduce((sum, b) => sum + b.length, 0);
-          const sr = decoded[0].sampleRate, ch = decoded[0].numberOfChannels;
-          const out = ctx.createBuffer(ch, totalLen, sr);
-          let offset = 0;
-          for (const buf of decoded) { for (let c = 0; c < ch; c++) out.getChannelData(c).set(buf.getChannelData(c), offset); offset += buf.length; }
-          zip.file('narracion_completa.wav', bufferToWav(out), { binary: true });
-        }
-        ctx.close();
-      } catch(e) { if (audioBuffers.length > 0) zip.file('narracion_01.mp3', audioBuffers[0].data, { base64: true }); }
-    }
-    setProgress('zip', 80, 'Añadiendo archivos de texto...');
-    zip.file('TIMING_CAPCUT.txt', timingLines.join('\n'));
-    zip.file('subtitulos.srt', srtLines.join('\n'));
-    zip.file('guion_completo.txt', scriptLines.join('\n'));
-    zip.file('personajes/info_personajes.txt', state.characters.map(c => `## ${c.name} (${c.role})\n**Apariencia:** ${c.appearance}\n**Personalidad:** ${c.personality}\n**Historia:** ${c.backstory}`).join('\n\n'));
-    setProgress('zip', 90, 'Comprimiendo...');
-    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 3 } });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `${safeTitle}_anime_studio.zip`; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    setProgress('zip', 100, '¡ZIP descargado!');
-    showToast('ZIP descargado', 'success');
-    setTimeout(() => { zipProg.style.display = 'none'; }, 3000);
-  } catch(e) {
-    showToast('Error creando ZIP: ' + e.message.substring(0,50), 'error');
-    openErrorModal('Error creando ZIP', e.message);
-    zipProg.style.display = 'none';
-  } finally { btn.disabled = false; }
-});
-
-function formatTime(s) { return `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`; }
-function formatSRT(s) { return `${Math.floor(s/3600).toString().padStart(2,'0')}:${Math.floor((s%3600)/60).toString().padStart(2,'0')}:${Math.floor(s%60).toString().padStart(2,'0')},000`; }
-function bufferToWav(buffer) {
-  const nc = buffer.numberOfChannels, sr = buffer.sampleRate, ns = buffer.length;
-  const ab = new ArrayBuffer(44 + ns * nc * 2); const view = new DataView(ab);
-  const ws = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o+i, s.charCodeAt(i)); };
-  ws(0,'RIFF'); view.setUint32(4,36+ns*nc*2,true); ws(8,'WAVE'); ws(12,'fmt ');
-  view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,nc,true);
-  view.setUint32(24,sr,true); view.setUint32(28,sr*nc*2,true); view.setUint16(32,nc*2,true);
-  view.setUint16(34,16,true); ws(36,'data'); view.setUint32(40,ns*nc*2,true);
-  let offset = 44;
-  for (let i = 0; i < ns; i++) for (let c = 0; c < nc; c++) { view.setInt16(offset, Math.max(-1,Math.min(1,buffer.getChannelData(c)[i]))*0x7FFF, true); offset+=2; }
-  return ab;
-}
-
-document.getElementById('btnCopyScript').addEventListener('click', () => {
-  if (!state.scenes.length) { showToast('No hay episodio', 'error'); return; }
-  navigator.clipboard.writeText(state.scenes.map(s => `[ESCENA ${s.num} — ${s.title}]\n${s.narration}`).join('\n\n')).then(() => showToast('Guión copiado', 'success'));
-});
-
-// ══════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
 // INIT
-// ══════════════════════════════════════════════
-async function init() {
+// ════════════════════════════════════════════════════════════════
+(async function init() {
   await initDB();
   loadProjects();
-  if (projects.length === 0) await newProject();
-  else { state.projectId = projects[projects.length-1].id; loadStateFor(state.projectId); }
+  if (!projects.length) {
+    await newProject();
+  } else {
+    loadStateFor(projects[projects.length - 1].id);
+  }
   updateApiDot();
   renderAll();
-}
-init().catch(console.error);
+})();
+
 </script>
 </body>
 </html>
