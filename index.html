@@ -140,7 +140,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.9 (jorge fluido)</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.10 (zoom video)</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -264,8 +264,19 @@
   <div class="panel" id="panel-exportar">
     <div class="card">
       <h2>📤 Exportar</h2>
-      <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px">Descarga todo el proyecto como ZIP con imágenes, audios y guión.</p>
-      <button class="btn" id="btnExportZip">📦 Descargar ZIP</button>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px">Descarga todo el proyecto.</p>
+
+      <button class="btn" id="btnExportZip" style="margin-bottom:10px">📦 Descargar ZIP</button>
+
+      <button class="btn" id="btnExportVideo" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);margin-bottom:10px">🎬 Exportar Video (imagen+audio sincronizados)</button>
+
+      <div id="videoProgress" style="display:none;margin-top:10px">
+        <div class="progress-text" id="videoProgressText">Preparando...</div>
+        <div class="progress"><div class="progress-bar" id="videoProgressBar" style="width:0%"></div></div>
+      </div>
+      <p id="videoNote" style="font-size:12px;color:var(--text-dim);margin-top:8px;display:none">
+        ⚠️ Solo escenas con imagen Y audio generados serán incluidas. El video puede tardar 1-2 min en procesarse.
+      </p>
     </div>
   </div>
 
@@ -1802,9 +1813,172 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
 });
 
 // ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// VIDEO EXPORT — Canvas + MediaRecorder + Ken Burns zoom
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btnExportVideo').addEventListener('click', async () => {
+  if (!state.scenes.length) { showToast('Genera escenas primero', 'error'); return; }
+
+  const btn = document.getElementById('btnExportVideo');
+  const vp = document.getElementById('videoProgress');
+  const vt = document.getElementById('videoProgressText');
+  const vb = document.getElementById('videoProgressBar');
+  const note = document.getElementById('videoNote');
+
+  btn.disabled = true;
+  vp.style.display = 'block';
+  note.style.display = 'block';
+
+  try {
+    vt.textContent = 'Cargando datos...';
+    const sceneData = [];
+    for (const s of state.scenes) {
+      const img = await dbGet(sceneImgKey(s.id));
+      const audStored = await dbGet(sceneAudKey(s.id));
+      if (!img || !audStored) continue;
+      let mime = 'audio/wav', audData = audStored;
+      if (audStored.includes('|')) {
+        const idx = audStored.indexOf('|');
+        mime = audStored.slice(0, idx);
+        audData = audStored.slice(idx + 1);
+      }
+      sceneData.push({ s, img, audData, mime });
+    }
+
+    if (!sceneData.length) {
+      showToast('Ninguna escena tiene imagen Y audio. Genera ambos primero.', 'error');
+      btn.disabled = false; vp.style.display = 'none'; return;
+    }
+
+    if (!window.MediaRecorder) {
+      throw new Error('Tu navegador no soporta grabación de video. Intenta actualizar Chrome.');
+    }
+
+    const W = 540, H = 960;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx2d = canvas.getContext('2d');
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioDestination = audioCtx.createMediaStreamDestination();
+    const canvasStream = canvas.captureStream(30);
+    const combinedStream = new MediaStream([
+      ...canvasStream.getVideoTracks(),
+      ...audioDestination.stream.getAudioTracks(),
+    ]);
+
+    const mimeTypes = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+    const supportedMime = mimeTypes.find(m => MediaRecorder.isTypeSupported(m));
+    if (!supportedMime) throw new Error('Tu navegador no soporta grabación de video.');
+
+    const recorder = new MediaRecorder(combinedStream, { mimeType: supportedMime, videoBitsPerSecond: 3000000 });
+    const chunks = [];
+    recorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+    recorder.start(200);
+
+    // Load all images
+    vt.textContent = 'Cargando imágenes...';
+    const images = await Promise.all(sceneData.map(({ img }) => new Promise((res, rej) => {
+      const image = new Image();
+      image.onload = () => res(image);
+      image.onerror = rej;
+      image.src = 'data:image/png;base64,' + img;
+    })));
+
+    // Decode all audios
+    vt.textContent = 'Decodificando audios...';
+    const audioBuffers = await Promise.all(sceneData.map(async ({ audData }) => {
+      try {
+        const buf = base64ToArrayBuffer(audData);
+        return await audioCtx.decodeAudioData(buf.slice(0));
+      } catch(e) { return null; }
+    }));
+
+    // Draw frame with Ken Burns zoom (1.0 → 1.04)
+    function drawFrame(image, zoom) {
+      ctx2d.fillStyle = '#000';
+      ctx2d.fillRect(0, 0, W, H);
+      const scale = Math.max(W / image.width, H / image.height) * zoom;
+      const sw = image.width * scale;
+      const sh = image.height * scale;
+      ctx2d.drawImage(image, (W - sw) / 2, (H - sh) / 2, sw, sh);
+    }
+
+    // Render scenes
+    for (let i = 0; i < sceneData.length; i++) {
+      const { s } = sceneData[i];
+      const image = images[i];
+      const audioBuffer = audioBuffers[i];
+      const duration = audioBuffer ? audioBuffer.duration : 3;
+
+      vb.style.width = Math.round((i / sceneData.length) * 90) + '%';
+      vt.textContent = `Escena ${s.num} (${i+1}/${sceneData.length}) — ${duration.toFixed(1)}s`;
+
+      // Start audio
+      if (audioBuffer) {
+        const src = audioCtx.createBufferSource();
+        src.buffer = audioBuffer;
+        src.connect(audioDestination);
+        src.start(audioCtx.currentTime);
+      }
+
+      // Animate zoom frame by frame
+      const fps = 30;
+      const totalFrames = Math.ceil(duration * fps);
+      const frameDuration = 1000 / fps;
+      const frameStart = performance.now();
+
+      for (let f = 0; f < totalFrames; f++) {
+        const progress = f / totalFrames;
+        const zoom = 1.0 + 0.04 * progress; // 1.0 → 1.04
+        drawFrame(image, zoom);
+        const elapsed = performance.now() - frameStart;
+        const wait = Math.max(0, f * frameDuration - elapsed);
+        if (wait > 1) await new Promise(r => setTimeout(r, wait));
+      }
+
+      // Wait remaining audio time
+      const totalElapsed = (performance.now() - frameStart) / 1000;
+      const remaining = duration - totalElapsed;
+      if (remaining > 0.05) await new Promise(r => setTimeout(r, remaining * 1000));
+
+      // Cut directly to next scene (no black frame)
+    }
+
+    // Finalize
+    vt.textContent = 'Finalizando video...';
+    vb.style.width = '95%';
+
+    await new Promise(resolve => { recorder.onstop = resolve; recorder.stop(); });
+    await audioCtx.close();
+
+    const blob = new Blob(chunks, { type: supportedMime });
+    const url = URL.createObjectURL(blob);
+    const title = (state.universe?.title || 'anime').replace(/[^\w]+/g, '_').substring(0, 30);
+
+    // Try download link first
+    const a = document.createElement('a');
+    a.href = url; a.download = `${title}.webm`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+
+    // iOS fallback: open in new tab so user can long-press to save
+    setTimeout(() => window.open(url, '_blank'), 800);
+
+    vb.style.width = '100%';
+    vt.textContent = `✅ ${sceneData.length} escenas — si no se descargó, mantén presionado el video y guárdalo`;
+    showToast('¡Video listo! En iPhone: mantén presionado el video que se abrió → Guardar video', 'success');
+
+  } catch(e) {
+    openErrorModal('Error exportando video', e.message);
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { vp.style.display = 'none'; note.style.display = 'none'; }, 10000);
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
 // NAV TABS
 // ════════════════════════════════════════════════════════════════
-document.querySelectorAll('.nav-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
