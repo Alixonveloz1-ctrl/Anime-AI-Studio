@@ -52,8 +52,7 @@ async function callGemini(model, prompt, refImg, projectId, token) {
 }
 
 const ALLOWED_MODELS = new Set([
-  'gemini-3.1-flash-image',  // Nano Banana 2 — mejor calidad
-  'gemini-2.5-flash-image',  // Nano Banana 1 — backup
+  'gemini-2.5-flash-image',  // Nano Banana — el único disponible en este proyecto
 ]);
 
 export default async function handler(req) {
@@ -77,8 +76,8 @@ export default async function handler(req) {
       return new Response(JSON.stringify({ error: result.error || 'Model failed' }), { status:500, headers:CORS });
     }
 
-    // Auto: Nano Banana 2 → Nano Banana 1
-    const pipeline = ['gemini-3.1-flash-image', 'gemini-2.5-flash-image'];
+    // Auto: Nano Banana
+    const pipeline = ['gemini-2.5-flash-image'];
 
     let lastError = null;
     for (const m of pipeline) {
