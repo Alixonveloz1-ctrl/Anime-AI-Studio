@@ -36,9 +36,22 @@ function extractB64(data) {
   return null;
 }
 
-// Gemini 3.1 image generation via Vertex AI
-async function tryGemini(model, prompt, projectId, location, accessToken) {
+async function tryGemini(model, prompt, refImageBase64, projectId, location, accessToken) {
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
+
+  // Build parts — include reference image if available
+  const parts = [];
+  if (refImageBase64) {
+    parts.push({
+      inlineData: { mimeType: 'image/png', data: refImageBase64 }
+    });
+    parts.push({
+      text: `This is the reference character image. Generate a new scene image keeping this exact character appearance, face, hair color, eye color and outfit style consistent. Scene: ${prompt}`
+    });
+  } else {
+    parts.push({ text: prompt });
+  }
+
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -47,7 +60,7 @@ async function tryGemini(model, prompt, projectId, location, accessToken) {
       'X-Goog-User-Project': projectId,
     },
     body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      contents: [{ role: 'user', parts }],
       generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
     }),
   });
@@ -60,7 +73,6 @@ async function tryGemini(model, prompt, projectId, location, accessToken) {
   return { success: false, error: `${model}: ${data.error?.message || res.status}` };
 }
 
-// Imagen models via Vertex AI
 async function tryImagen(model, prompt, projectId, location, accessToken) {
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predict`;
   const res = await fetch(url, {
@@ -93,7 +105,7 @@ export default async function handler(req) {
   const CORS = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
 
   try {
-    const { prompt } = await req.json();
+    const { prompt, refImageBase64 } = await req.json();
     const saJson = process.env.GCP_SERVICE_ACCOUNT;
     if (!saJson) return new Response(JSON.stringify({ error: 'GCP_SERVICE_ACCOUNT not configured' }), { status: 500, headers: CORS });
 
@@ -104,19 +116,19 @@ export default async function handler(req) {
 
     let result;
 
-    // 1. Gemini 3.1 Pro — mejor calidad
-    result = await tryGemini('gemini-3.1-pro-preview', prompt, projectId, location, accessToken);
+    // 1. Gemini 3.1 Pro — mejor calidad, acepta imagen de referencia
+    result = await tryGemini('gemini-3.1-pro-preview', prompt, refImageBase64, projectId, location, accessToken);
     if (result.success) return new Response(JSON.stringify({ imageData: result.imageData, model: 'gemini-3.1-pro' }), { status: 200, headers: CORS });
 
     // 2. Gemini 3.1 Flash Lite — rápido
-    result = await tryGemini('gemini-3.1-flash-lite-preview', prompt, projectId, location, accessToken);
+    result = await tryGemini('gemini-3.1-flash-lite-preview', prompt, refImageBase64, projectId, location, accessToken);
     if (result.success) return new Response(JSON.stringify({ imageData: result.imageData, model: 'gemini-3.1-flash-lite' }), { status: 200, headers: CORS });
 
-    // 3. Imagen 4.0 — fallback
+    // 3. Imagen 4.0 — fallback (sin referencia)
     result = await tryImagen('imagen-4.0-generate-001', prompt, projectId, location, accessToken);
     if (result.success) return new Response(JSON.stringify({ imageData: result.imageData, model: 'imagen-4.0' }), { status: 200, headers: CORS });
 
-    // 4. Imagen 4.0 Fast — fallback
+    // 4. Imagen 4.0 Fast
     result = await tryImagen('imagen-4.0-fast-generate-001', prompt, projectId, location, accessToken);
     if (result.success) return new Response(JSON.stringify({ imageData: result.imageData, model: 'imagen-4.0-fast' }), { status: 200, headers: CORS });
 
