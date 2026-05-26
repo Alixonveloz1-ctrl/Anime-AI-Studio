@@ -823,11 +823,19 @@ ${MOD_PROMPTS[mod] || ''}`;
 - Personajes femeninos: apariencia limpia y atractiva, sin cicatrices, sin heridas, sin ojeras pronunciadas
 - Nombres japoneses reales y coherentes con la demografía y época del setting
 - Variedad visual: distintos colores de cabello, ojos, estilos de ropa
-- Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${mod === 'harem' || mod === 'ecchi' ? '\\n- Personajes femeninos con arquetipos marcados (tsundere, kuudere, genki, dandere, onee-san, etc)' : ''}${mod === 'harem_inverso' ? '\\n- Personajes masculinos con arquetipos marcados (cool, principesco, deportista, intelectual, salvaje, etc)' : ''}`;
+- Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${mod === 'harem' || mod === 'ecchi' ? '\\n- Personajes femeninos con arquetipos marcados (tsundere, kuudere, genki, dandere, onee-san, etc)' : ''}${mod === 'harem_inverso' ? '\\n- Personajes masculinos con arquetipos marcados (cool, principesco, deportista, intelectual, salvaje, etc)' : ''}
+
+REGLAS DE DESCRIPCIÓN VISUAL (CRÍTICO — para que los filtros del generador de imágenes no bloqueen):
+- Describir la apariencia de forma NEUTRA y DESCRIPTIVA, NO sugerente ni sexualizada
+- USAR palabras como: elegante, lindo, atractivo, encantador, vestido, uniforme, traje, blusa, falda, pantalón, chaqueta
+- NO USAR palabras como: voluptuosa, sensual, seductora, escote, abertura que revela, translúcida, ajustado que realza, curvas, busto, piel desnuda, provocador
+- Si necesitas ropa atractiva, describe el ESTILO (ej: "vestido de fiesta corto", "uniforme escolar", "kimono moderno") sin enfocarte en partes del cuerpo
+- Las descripciones deben enfocarse en: rostro, ojos, peinado, color de cabello, estilo de ropa general, accesorios, expresión
+- Edad mínima: TODOS los personajes deben tener 18+ años. Especificar edad en la descripción`;
 
     const chRaw = await callClaude(
-      `${ctx}\\n\\n${charRules}\\n\\nCrea ${numChars} personajes únicos (${numFemales} mujeres + ${numMales} hombre${numMales > 1 ? 's' : ''}) que pertenezcan al género "${genero}" — sus profesiones, vestimenta y trasfondos deben encajar con ese género. Devuelve SOLO:
-{"characters":[{"id":"c1","name":"nombre japonés","role":"protagonista o rol","gender":"female o male","appearance":"descripción física detallada","personality":"2 frases","backstory":"2 frases"}]}`,
+      `${ctx}\\n\\n${charRules}\\n\\nCrea ${numChars} personajes únicos (${numFemales} mujeres + ${numMales} hombre${numMales > 1 ? 's' : ''}) que pertenezcan al género "${genero}" — sus profesiones, vestimenta y trasfondos deben encajar con ese género. RECUERDA: descripciones visuales NEUTRAS, sin palabras sugerentes. Devuelve SOLO:
+{"characters":[{"id":"c1","name":"nombre japonés","role":"protagonista o rol","gender":"female o male","age":"edad numérica (18+)","appearance":"descripción visual neutra y descriptiva","personality":"2 frases","backstory":"2 frases"}]}`,
       sysBase + genreExtra
     );
     state.characters = safeParseJSON(chRaw).characters || [];
@@ -917,7 +925,7 @@ window.generateCharImage = async function(charId) {
   if (!ch) return;
   showToast('Generando imagen de personaje...', 'success');
   try {
-    const prompt = `Anime 2D character portrait, vertical 9:16, full body reference sheet of ${ch.name}: ${ch.appearance}. Clean anime art style, vibrant colors, white background, professional character design.`;
+    const prompt = `Anime 2D character reference sheet, vertical 9:16, full body design of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. Clean professional anime art style, vibrant colors, white background, character turnaround design.`;
     const imgB64 = await generateImage(prompt);
     await dbSet(charImgKey(ch.id), imgB64);
     renderCharacters();
