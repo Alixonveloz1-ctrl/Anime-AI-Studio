@@ -32,7 +32,7 @@ async function callGemini(model, prompt, refImg, projectId, token) {
   const parts = [];
   if (refImg) {
     parts.push({ inlineData: { mimeType:'image/png', data: refImg } });
-    parts.push({ text: `Reference character above. Generate a new 9:16 vertical anime 2D scene image keeping this EXACT character's face, hair color, hair style, eye color and outfit. New scene: ${prompt}` });
+    parts.push({ text: `IMPORTANT: Use the character shown in the reference image above. Generate a new 9:16 vertical anime 2D scene image keeping the EXACT same character — same face, same hair color, same hair style, same eye color, same outfit style. Only the pose, expression, action and environment should change. New scene: ${prompt}` });
   } else {
     parts.push({ text: `9:16 vertical anime 2D illustration. ${prompt}` });
   }
@@ -70,6 +70,16 @@ async function callImagen(model, prompt, projectId, token) {
   return { error: `${model}: no bytes` };
 }
 
+// ───────── Pipeline definitions ─────────
+const GEMINI_MODELS = new Set(['gemini-3.1-pro-preview', 'gemini-3.1-flash-lite-preview']);
+const IMAGEN_MODELS = new Set(['imagen-4.0-generate-001', 'imagen-4.0-fast-generate-001', 'imagen-3.0-generate-002']);
+
+async function tryModel(model, prompt, refImg, projectId, token) {
+  if (GEMINI_MODELS.has(model)) return await callGemini(model, prompt, refImg, projectId, token);
+  if (IMAGEN_MODELS.has(model)) return await callImagen(model, prompt, projectId, token);
+  return { error: `Unknown model: ${model}` };
+}
+
 // ───────── Handler ─────────
 export default async function handler(req) {
   const CORS = { 'Content-Type':'application/json', 'Access-Control-Allow-Origin':'*' };
@@ -77,7 +87,7 @@ export default async function handler(req) {
   if (req.method !== 'POST')    return new Response('Method not allowed', { status:405 });
 
   try {
-    const { prompt, refImageBase64 } = await req.json();
+    const { prompt, refImageBase64, model: forceModel } = await req.json();
     if (!prompt) return new Response(JSON.stringify({ error:'prompt required' }), { status:400, headers:CORS });
 
     const saJson = process.env.GCP_SERVICE_ACCOUNT;
@@ -86,18 +96,25 @@ export default async function handler(req) {
     const projectId = sa.project_id;
     const token = await getAccessToken(sa);
 
-    // Pipeline de modelos en orden de preferencia
-    const attempts = [
-      () => callGemini('gemini-3.1-pro-preview',         prompt, refImageBase64, projectId, token),
-      () => callGemini('gemini-3.1-flash-lite-preview',  prompt, refImageBase64, projectId, token),
-      () => callImagen('imagen-4.0-generate-001',        prompt, projectId, token),
-      () => callImagen('imagen-4.0-fast-generate-001',   prompt, projectId, token),
-      () => callImagen('imagen-3.0-generate-002',        prompt, projectId, token),
+    // If a specific model is forced, try just that one
+    if (forceModel) {
+      const result = await tryModel(forceModel, prompt, refImageBase64, projectId, token);
+      if (result.imageData) return new Response(JSON.stringify(result), { status:200, headers:CORS });
+      return new Response(JSON.stringify({ error: result.error || 'Model failed' }), { status:500, headers:CORS });
+    }
+
+    // Auto mode: pipeline of fallbacks
+    const pipeline = [
+      'gemini-3.1-pro-preview',
+      'gemini-3.1-flash-lite-preview',
+      'imagen-4.0-generate-001',
+      'imagen-4.0-fast-generate-001',
+      'imagen-3.0-generate-002',
     ];
 
     let lastError = null;
-    for (const attempt of attempts) {
-      const result = await attempt();
+    for (const m of pipeline) {
+      const result = await tryModel(m, prompt, refImageBase64, projectId, token);
       if (result.imageData) return new Response(JSON.stringify(result), { status:200, headers:CORS });
       lastError = result.error;
     }
