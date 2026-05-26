@@ -540,14 +540,12 @@ const GENRE_PROMPTS = {
 - ORIGINAL: nunca repetir premisas comunes (tiendas baratas, reparaciones, restaurantes)
 - El protagonista puede ser cualquier profesión: estudiante, chef, médico, artista, mensajero, guardia, mecánico, librero, etc.
 - Setting único cada vez: ciudad moderna, pueblo costero, academia, hospital, etc.
-- Reparto BALANCEADO: al menos 2 personajes femeninos y 2 masculinos
 - Personajes femeninos: apariencia limpia y atractiva, SIN cicatrices, SIN ojeras, SIN heridas visibles`,
 
   isekai: `Género: Isekai.
 - Japonés ordinario transportado a mundo de fantasía/RPG
 - Niveles, clases, habilidades, mazmorras
 - Habilidad aparentemente inútil que resulta OP
-- Reparto BALANCEADO: al menos 2 personajes femeninos y 2 masculinos
 - Party de aventureros con roles variados`,
 
   ecchi: `Género: Ecchi / Fan Service.
@@ -663,8 +661,6 @@ REGLAS:
 
     const genreExtra = u.genero === 'ecchi'
       ? '\\nPara ecchi: imagePromptEN refleja fan service (ropa atractiva, expresiones de rubor) acorde a la escena'
-      : (u.genero === 'sistema_oculto' || u.genero === 'isekai')
-      ? '\\nReparto balanceado, personajes femeninos atractivos y limpios'
       : '';
 
     const ctx = `Universo: ${u.title}
@@ -675,22 +671,33 @@ Setting: ${u.setting}`;
 
     // ─── Step 1: Characters ───
     setProg(5, 'Paso 1/5: Creando personajes...');
-    const charRules = u.genero === 'ecchi'
-      ? 'REGLAS: Personajes femeninos atractivos, sin cicatrices ni heridas, sin ojeras pronunciadas'
-      : (u.genero === 'sistema_oculto' || u.genero === 'isekai')
-      ? 'REGLAS: Reparto balanceado de género (al menos 2 femeninos y 2 masculinos), personajes femeninos con apariencia limpia y atractiva'
-      : 'REGLAS: Apariencias coherentes con el género';
+
+    // Random number of characters 3-5
+    const numChars = 3 + Math.floor(Math.random() * 3); // 3, 4, or 5
+
+    // Always more females than males
+    let numFemales, numMales;
+    if (numChars === 3) { numFemales = 2; numMales = 1; }
+    else if (numChars === 4) { numFemales = 3; numMales = 1; }
+    else { numFemales = 3; numMales = 2; } // 5 chars
+
+    const charRules = `REGLAS OBLIGATORIAS:
+- Crear EXACTAMENTE ${numChars} personajes: ${numFemales} femeninos + ${numMales} masculino${numMales > 1 ? 's' : ''}
+- Los personajes femeninos deben tener apariencia limpia y atractiva (sin cicatrices, sin heridas, sin ojeras pronunciadas)
+- Nombres japoneses reales y coherentes
+- Variedad visual: distintos colores de cabello, ojos, estilos
+- Cada personaje debe tener un rol claro en la trama${u.genero === 'ecchi' ? '\\n- Personajes femeninos con personalidades marcadas (tsundere, kuudere, genki, dandere, onee-san, etc)' : ''}`;
 
     const chRaw = await callClaude(
-      `${ctx}\\n\\n${charRules}\\n\\nCrea 4 personajes únicos. Devuelve SOLO:
-{"characters":[{"id":"c1","name":"nombre japonés","role":"protagonista o rol","appearance":"descripción física detallada","personality":"2 frases","backstory":"2 frases"}]}`,
+      `${ctx}\\n\\n${charRules}\\n\\nCrea ${numChars} personajes únicos (${numFemales} mujeres + ${numMales} hombre${numMales > 1 ? 's' : ''}). Devuelve SOLO:
+{"characters":[{"id":"c1","name":"nombre japonés","role":"protagonista o rol","gender":"female o male","appearance":"descripción física detallada","personality":"2 frases","backstory":"2 frases"}]}`,
       sysBase + genreExtra
     );
     state.characters = safeParseJSON(chRaw).characters || [];
     saveState();
     renderCharacters();
 
-    setProg(20, '✅ Personajes — Paso 2/5: Escenas 1-8...');
+    setProg(20, `✅ ${state.characters.length} personajes — Paso 2/5: Escenas 1-8...`);
 
     const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título","narration":"4-5 frases primera persona","imagePromptEN":"prompt visual en inglés"}`;
     const charRef = state.characters.map(c => `${c.id}=${c.name}(${c.role}): ${c.appearance}`).join(' | ');
@@ -820,7 +827,7 @@ window.generateSceneImage = async function(sceneId) {
   if (!s) return;
   showToast(`Generando imagen escena ${s.num}...`, 'success');
   try {
-    const refs = await getSceneCharacterRefs(s);
+    const refs = await getAllCharacterRefs();
     let imgB64 = null;
     let lastErr = null;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -847,30 +854,16 @@ window.generateSceneImage = async function(sceneId) {
   }
 };
 
-// Find ALL characters mentioned in the scene and return their reference images
-async function getSceneCharacterRefs(scene) {
+// Return ALL character reference images (so Nano Banana keeps consistency for whoever appears)
+async function getAllCharacterRefs() {
   if (!state.characters.length) return [];
-  const text = ((scene.imagePromptEN || '') + ' ' + (scene.narration || '')).toLowerCase();
-
-  const found = [];
+  const refs = [];
   for (const c of state.characters) {
-    if (!c.name) continue;
-    const firstName = c.name.split(' ')[0].toLowerCase();
-    const lastName = c.name.split(' ').slice(-1)[0].toLowerCase();
-    if (text.includes(firstName) || (lastName !== firstName && text.includes(lastName))) {
-      const img = await dbGet(charImgKey(c.id));
-      if (img) found.push({ name: c.name, role: c.role, img });
-    }
+    const img = await dbGet(charImgKey(c.id));
+    if (img) refs.push({ name: c.name, role: c.role, img });
   }
-
-  // If no character detected by name but there are characters, use protagonist
-  if (!found.length && state.characters.length) {
-    const proto = state.characters[0];
-    const img = await dbGet(charImgKey(proto.id));
-    if (img) found.push({ name: proto.name, role: proto.role, img });
-  }
-
-  return found;
+  console.log(`Referencias disponibles: ${refs.length} personajes`);
+  return refs;
 }
 
 window.generateSceneAudio = async function(sceneId) {
@@ -892,7 +885,14 @@ window.playSceneAudio = async function(sceneId) {
   const data = await dbGet(sceneAudKey(sceneId));
   if (!data) { showToast('Sin audio', 'error'); return; }
   try {
-    const a = new Audio(`data:audio/wav;base64,${data}`);
+    // Convert base64 to Blob for reliable playback
+    const binary = atob(data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'audio/wav' });
+    const url = URL.createObjectURL(blob);
+    const a = new Audio(url);
+    a.onended = () => URL.revokeObjectURL(url);
     await a.play();
   } catch(e) {
     showToast('No se pudo reproducir: ' + e.message, 'error');
@@ -920,7 +920,7 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
     let success = false;
     for (let attempt = 0; attempt < 3 && !success; attempt++) {
       try {
-        const refs = await getSceneCharacterRefs(s);
+        const refs = await getAllCharacterRefs();
         const imgB64 = await generateImage(s.imagePromptEN || s.narration, refs);
         await dbSet(sceneImgKey(s.id), imgB64);
         success = true;
