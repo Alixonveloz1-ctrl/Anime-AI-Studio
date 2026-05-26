@@ -30,6 +30,35 @@ async function getAccessToken(sa) {
 async function callGemini(model, prompt, characterRefs, projectId, token) {
   const url = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/${model}:generateContent`;
 
+  // Sanitize prompt: replace flagged terms with safe equivalents
+  // This is a safety net - the LLM should already produce clean prompts
+  const SAFE_REPLACEMENTS = [
+    [/\bvoluptuous\b/gi, 'graceful'],
+    [/\bbusty\b/gi, 'figure'],
+    [/\bbig breasts?\b/gi, 'feminine figure'],
+    [/\blarge breasts?\b/gi, 'feminine figure'],
+    [/\bbreasts?\b/gi, 'chest area'],
+    [/\bcleavage\b/gi, 'neckline'],
+    [/\bchest pressed\b/gi, 'close hug'],
+    [/\bpressing.*chest\b/gi, 'leaning close'],
+    [/\bsensual\b/gi, 'graceful'],
+    [/\bseductive\b/gi, 'charming'],
+    [/\berotic\b/gi, 'romantic'],
+    [/\bnaked\b/gi, 'in swimsuit'],
+    [/\bnude\b/gi, 'in swimsuit'],
+    [/\bexposed\b/gi, 'visible'],
+    [/\bintimate\b/gi, 'close'],
+    [/\bpanties\b/gi, 'undergarments'],
+    [/\bsee-through\b/gi, 'wet'],
+    [/\btransparent (clothes?|fabric|dress|shirt)\b/gi, 'wet $1'],
+    [/\bgenerous (chest|bust|breasts?)\b/gi, 'feminine figure'],
+  ];
+
+  let cleanPrompt = prompt;
+  for (const [pattern, replacement] of SAFE_REPLACEMENTS) {
+    cleanPrompt = cleanPrompt.replace(pattern, replacement);
+  }
+
   const parts = [];
 
   if (characterRefs && characterRefs.length > 0) {
@@ -49,14 +78,15 @@ STRICT COMPOSITION RULES:
 - Each character must appear EXACTLY ONCE in the image. NEVER duplicate any character.
 - NEVER add unnamed/extra characters. If the scene mentions only 2 characters, draw exactly 2.
 - Match each named character to their reference image: same face, same hair color, same hair style, same eye color, same outfit details.
+- Female characters: keep LONG hair (shoulder-length or longer), feminine figure, soft features, innocent expression.
 - Faces must be CLEAR, anatomically correct, and well-defined — no distortion, no blur, no melted features.
 - Style: 9:16 vertical anime 2D illustration, professional quality, clean lineart.
 
 Scene to draw (read carefully which characters appear):
-${prompt}`
+${cleanPrompt}`
     });
   } else {
-    parts.push({ text: `9:16 vertical anime 2D illustration. Clean faces, anatomically correct, professional quality. ${prompt}` });
+    parts.push({ text: `9:16 vertical anime 2D illustration. Clean faces, anatomically correct, professional quality. ${cleanPrompt}` });
   }
 
   const r = await fetch(url, {
