@@ -692,11 +692,14 @@ const MOD_PROMPTS = {
 - Protagonista FEMENINA rodeada de 3 o más personajes masculinos con interés amoroso en ella
 - Cada chico tiene personalidad y arquetipo distinto
 - Tensión romántica con múltiples candidatos`,
-  ecchi: `MODIFICADOR: Ecchi / Fan Service.
-- Situaciones SUGERENTES, humor pícaro, desnudez parcial NO explícita
-- Ángulos de cámara que insinúan, ropa atractiva, malentendidos comprometedores
-- Erotismo LEVE, no pornográfico
-- Personajes femeninos hermosas, sin cicatrices ni heridas`,
+  ecchi: `MODIFICADOR: Ecchi / Fan Service. ACTIVO.
+- Situaciones SUGERENTES y fan service VISIBLES en las escenas
+- Personajes femeninos con apariencia ATRACTIVA y SENSUAL (curvas marcadas, busto generoso, piernas largas)
+- Ropa que enfatiza la figura: faldas cortas, ajustadas, escotes pronunciados, medias, lencería, trajes de baño según la escena
+- Ángulos de cámara que insinúan (low angle, primeros planos, ropa mojada, viento levantando faldas, malentendidos comprometedores como caídas accidentales)
+- Expresiones de rubor (blush), miradas tímidas, momentos íntimos
+- Tono pícaro y humorístico, NO oscuro ni violento
+- ECCHI = erotismo LEVE pero VISIBLE — la frontera es desnudez parcial sin partes íntimas explícitas`,
 };
 
 // ════════════════════════════════════════════════════════════════
@@ -803,13 +806,14 @@ REGLAS:
 - Pensamientos internos visibles
 - Nombres japoneses REALES (sin inventos)
 - imagePromptEN en INGLÉS describiendo visualmente la escena, 9:16 vertical anime 2D
-- Para escenas: incluir personajes presentes, ambiente, acción, expresión
+- FORMATO OBLIGATORIO de imagePromptEN: empezar con "Scene with [character names present]:" y luego describir entorno, acción, expresión. Ejemplo: "Scene with Hiro and Aelina: They stand in a magical library, Hiro looks shocked while Aelina points at a glowing rune. Soft lamp light, dust particles." Si solo aparece el protagonista, escribir "Scene with Hiro alone: ..."
+- NO mencionar personajes que no estén físicamente presentes en la escena visual
 - ESTRICTAMENTE FIEL al género: si es isekai DEBE ocurrir transición a otro mundo en escenas tempranas; si es mecha DEBE haber robots gigantes; si es deportes DEBE ser sobre ese deporte
 - NO mezclar géneros no pedidos
 - Responde SOLO JSON válido sin markdown`;
 
     const genreExtra = mod === 'ecchi'
-      ? '\\nPara ecchi: imagePromptEN refleja fan service (ropa atractiva, expresiones de rubor) acorde a la escena'
+      ? '\\n\\nMODIFICADOR ECCHI ACTIVO — IMPORTANTE PARA LAS ESCENAS:\\n- imagePromptEN debe incluir fan service VISIBLE: posturas insinuantes, ropa que enfatiza figura, situaciones comprometedoras\\n- Vocabulario permitido en imagePromptEN: "cleavage", "thigh-high stockings", "short skirt", "tight outfit", "wet clothes", "blushing", "low angle shot", "swimsuit", "lingerie scene", "panchira accident", "tsundere blush"\\n- Ejemplos de escenas: ducha accidental, caída con ropa subida, prueba de trajes de baño, masaje torpe, despertar abrazados por error, ropa mojada en lluvia\\n- Mantener tono pícaro y humorístico, NO oscuro'
       : '';
 
     const ctx = `Universo: ${u.title}
@@ -853,25 +857,30 @@ ${MOD_PROMPTS[mod] || ''}`;
       protagonistGender = 'libre (el que mejor sirva al género)';
     }
 
+    const isEcchi = mod === 'ecchi';
+
     const charRules = `REGLAS OBLIGATORIAS DE REPARTO:
 - Crear EXACTAMENTE ${numChars} personajes: ${numFemales} femeninos + ${numMales} masculino${numMales > 1 ? 's' : ''}
 - Protagonista: ${protagonistGender}
-- Personajes femeninos: apariencia limpia y atractiva, sin cicatrices, sin heridas, sin ojeras pronunciadas
 - Nombres japoneses reales y coherentes con la demografía y época del setting
 - Variedad visual: distintos colores de cabello, ojos, estilos de ropa
 - Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${mod === 'harem' || mod === 'ecchi' ? '\\n- Personajes femeninos con arquetipos marcados (tsundere, kuudere, genki, dandere, onee-san, etc)' : ''}${mod === 'harem_inverso' ? '\\n- Personajes masculinos con arquetipos marcados (cool, principesco, deportista, intelectual, salvaje, etc)' : ''}
 
-REGLAS DE DESCRIPCIÓN VISUAL (CRÍTICO — para que los filtros del generador de imágenes no bloqueen):
-- Describir la apariencia de forma NEUTRA y DESCRIPTIVA, NO sugerente ni sexualizada
-- USAR palabras como: elegante, lindo, atractivo, encantador, vestido, uniforme, traje, blusa, falda, pantalón, chaqueta
-- NO USAR palabras como: voluptuosa, sensual, seductora, escote, abertura que revela, translúcida, ajustado que realza, curvas, busto, piel desnuda, provocador
-- Si necesitas ropa atractiva, describe el ESTILO (ej: "vestido de fiesta corto", "uniforme escolar", "kimono moderno") sin enfocarte en partes del cuerpo
-- Las descripciones deben enfocarse en: rostro, ojos, peinado, color de cabello, estilo de ropa general, accesorios, expresión
-- Edad mínima: TODOS los personajes deben tener 18+ años. Especificar edad en la descripción`;
+${isEcchi ? `REGLAS DE DESCRIPCIÓN VISUAL (ECCHI ACTIVO):
+- Personajes femeninos: descripciones VISUALMENTE ATRACTIVAS y sensuales
+- USAR libremente: figura curvilínea, busto generoso, piernas largas, cintura estrecha, sensual, atractiva, voluptuosa
+- Ropa que enfatice la figura: uniforme escolar con falda corta, vestido ajustado, blusa con escote, traje de baño, ropa entallada
+- Detalles sugerentes: medias, ligueros, escotes pronunciados, ropa que se transparente con el agua, faldas cortas con vista al viento
+- Edad: TODOS los personajes 18+ años. Especificar edad en la descripción` : `REGLAS DE DESCRIPCIÓN VISUAL (estilo limpio):
+- Describir apariencia de forma neutra y descriptiva
+- Enfocarse en: rostro, ojos, peinado, color de cabello, estilo de ropa general, accesorios
+- Describir el ESTILO de ropa (vestido de fiesta, uniforme escolar, kimono moderno, traje formal)
+- Personajes femeninos: apariencia limpia y atractiva, sin cicatrices, sin heridas, sin ojeras pronunciadas
+- Edad: TODOS los personajes 18+ años. Especificar edad en la descripción`}`;
 
     const chRaw = await callClaude(
-      `${ctx}\\n\\n${charRules}\\n\\nCrea ${numChars} personajes únicos (${numFemales} mujeres + ${numMales} hombre${numMales > 1 ? 's' : ''}) que pertenezcan al género "${genero}" — sus profesiones, vestimenta y trasfondos deben encajar con ese género. RECUERDA: descripciones visuales NEUTRAS, sin palabras sugerentes. Devuelve SOLO:
-{"characters":[{"id":"c1","name":"nombre japonés","role":"protagonista o rol","gender":"female o male","age":"edad numérica (18+)","appearance":"descripción visual neutra y descriptiva","personality":"2 frases","backstory":"2 frases"}]}`,
+      `${ctx}\\n\\n${charRules}\\n\\nCrea ${numChars} personajes únicos (${numFemales} mujeres + ${numMales} hombre${numMales > 1 ? 's' : ''}) que pertenezcan al género "${genero}" — sus profesiones, vestimenta y trasfondos deben encajar con ese género${isEcchi ? ' y con el tono ecchi (ropa que muestre su atractivo)' : ''}. Devuelve SOLO:
+{"characters":[{"id":"c1","name":"nombre japonés","role":"protagonista o rol","gender":"female o male","age":"edad numérica (18+)","appearance":"descripción visual ${isEcchi ? 'atractiva y sugerente (figura, ropa que enfatiza)' : 'neutra y descriptiva'}","personality":"2 frases","backstory":"2 frases"}]}`,
       sysBase + genreExtra
     );
     state.characters = safeParseJSON(chRaw).characters || [];
