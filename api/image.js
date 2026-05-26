@@ -48,7 +48,7 @@ async function getAccessToken(serviceAccount) {
   return tokenData.access_token;
 }
 
-function extractImagenB64(data) {
+function extractB64(data) {
   if (data.predictions?.[0]?.bytesBase64Encoded) return data.predictions[0].bytesBase64Encoded;
   if (data.predictions?.[0]?.image?.bytesBase64Encoded) return data.predictions[0].image.bytesBase64Encoded;
   return null;
@@ -59,7 +59,6 @@ export default async function handler(req) {
     return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } });
   }
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
-
   const CORS = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
 
   try {
@@ -71,37 +70,22 @@ export default async function handler(req) {
     const serviceAccount = JSON.parse(saJson);
     const projectId = serviceAccount.project_id;
     const location = 'us-central1';
-
     const accessToken = await getAccessToken(serviceAccount);
 
     let imageData = null;
     let lastError = null;
 
-    // Try 1: Imagen 3.0 generate 002
-    try {
-      const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/imagen-3.0-generate-002:predict`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-        body: JSON.stringify({
-          instances: [{ prompt }],
-          parameters: { sampleCount: 1, aspectRatio: '9:16', safetySetting: 'block_only_high' },
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        const b64 = extractImagenB64(data);
-        if (b64) imageData = b64;
-        else lastError = `imagen-3.0-002: no bytes. ${JSON.stringify(data).substring(0,150)}`;
-      } else {
-        lastError = `imagen-3.0-002: ${data.error?.message || res.status}`;
-      }
-    } catch(e) { lastError = 'imagen-3.0-002: ' + e.message; }
+    // Model list — Imagen 3 quality models only
+    const models = [
+      'imagen-3.0-generate-002',
+      'imagen-3.0-fast-generate-001',
+      'imagen-3.0-generate-001',
+    ];
 
-    // Try 2: Imagen 3.0 fast
-    if (!imageData) {
+    for (const model of models) {
+      if (imageData) break;
       try {
-        const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/imagen-3.0-fast-generate-001:predict`;
+        const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predict`;
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
@@ -112,36 +96,13 @@ export default async function handler(req) {
         });
         const data = await res.json();
         if (res.ok) {
-          const b64 = extractImagenB64(data);
+          const b64 = extractB64(data);
           if (b64) imageData = b64;
-          else lastError = `imagen-3-fast: no bytes. ${JSON.stringify(data).substring(0,150)}`;
+          else lastError = `${model}: no bytes — ${JSON.stringify(data).substring(0,120)}`;
         } else {
-          lastError = `imagen-3-fast: ${data.error?.message || res.status}`;
+          lastError = `${model}: ${data.error?.message || res.status}`;
         }
-      } catch(e) { lastError = 'imagen-3-fast: ' + e.message; }
-    }
-
-    // Try 3: Imagen 3.0 generate 001
-    if (!imageData) {
-      try {
-        const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/imagen-3.0-generate-001:predict`;
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-          body: JSON.stringify({
-            instances: [{ prompt }],
-            parameters: { sampleCount: 1, aspectRatio: '9:16', safetySetting: 'block_only_high' },
-          }),
-        });
-        const data = await res.json();
-        if (res.ok) {
-          const b64 = extractImagenB64(data);
-          if (b64) imageData = b64;
-          else lastError = `imagen-3.0-001: no bytes. ${JSON.stringify(data).substring(0,150)}`;
-        } else {
-          lastError = `imagen-3.0-001: ${data.error?.message || res.status}`;
-        }
-      } catch(e) { lastError = 'imagen-3.0-001: ' + e.message; }
+      } catch(e) { lastError = `${model}: ${e.message}`; }
     }
 
     if (imageData) return new Response(JSON.stringify({ imageData }), { status: 200, headers: CORS });
