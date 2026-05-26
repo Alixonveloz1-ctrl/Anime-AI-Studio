@@ -1008,15 +1008,16 @@ window.generateSceneImage = async function(sceneId) {
     const refs = await getAllCharacterRefs();
     let imgB64 = null;
     let lastErr = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 5; attempt++) {
       try {
         imgB64 = await generateImage(s.imagePromptEN || s.narration, refs);
         break;
       } catch(e) {
         lastErr = e;
-        if (e.message.includes('429') || e.message.toLowerCase().includes('exhausted')) {
-          const waitSec = (attempt + 1) * 15;
-          showToast(`⏳ Rate limit — esperando ${waitSec}s...`, 'error');
+        const isRateLimit = e.message.includes('429') || e.message.toLowerCase().includes('exhausted') || e.message.toLowerCase().includes('resource');
+        if (isRateLimit) {
+          const waitSec = [30, 60, 90, 120, 180][attempt];
+          showToast(`⏳ Rate limit — esperando ${waitSec}s (${attempt+1}/5)...`, 'error');
           await new Promise(r => setTimeout(r, waitSec * 1000));
         } else {
           throw e;
@@ -1094,18 +1095,20 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
     const existing = await dbGet(sceneImgKey(s.id));
     if (existing) continue;
 
-    // Retry hasta 3 veces con espera exponencial en caso de rate limit
+    // Retry hasta 5 veces con espera más larga en rate limit
     let success = false;
-    for (let attempt = 0; attempt < 3 && !success; attempt++) {
+    for (let attempt = 0; attempt < 5 && !success; attempt++) {
       try {
         const refs = await getAllCharacterRefs();
         const imgB64 = await generateImage(s.imagePromptEN || s.narration, refs);
         await dbSet(sceneImgKey(s.id), imgB64);
         success = true;
       } catch(e) {
-        if (e.message.includes('429') || e.message.toLowerCase().includes('exhausted') || e.message.toLowerCase().includes('resource')) {
-          const waitSec = (attempt + 1) * 15;
-          bt.textContent = `⏳ Rate limit — esperando ${waitSec}s (intento ${attempt+1}/3)...`;
+        const isRateLimit = e.message.includes('429') || e.message.toLowerCase().includes('exhausted') || e.message.toLowerCase().includes('resource');
+        if (isRateLimit) {
+          // Espera escalada: 30s, 60s, 90s, 120s, 180s
+          const waitSec = [30, 60, 90, 120, 180][attempt];
+          bt.textContent = `⏳ Rate limit — esperando ${waitSec}s (intento ${attempt+1}/5)...`;
           await new Promise(r => setTimeout(r, waitSec * 1000));
         } else {
           console.error(`Escena ${s.num}:`, e.message);
@@ -1114,9 +1117,9 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
       }
     }
 
-    // Espera de 6s entre imágenes para no saturar el rate limit
+    // Espera de 12s entre imágenes (Vertex AI free/paid limita ~5/min para Nano Banana)
     if (i < state.scenes.length - 1) {
-      await new Promise(r => setTimeout(r, 6000));
+      await new Promise(r => setTimeout(r, 12000));
     }
   }
 
