@@ -664,7 +664,7 @@ async function generateGeminiImage(prompt, refImageBase64 = null, retryNeutral =
     const res = await fetch('/api/image', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: finalPrompt, refImageBase64: refImageBase64 || null, isEcchi }),
+      body: JSON.stringify({ prompt: finalPrompt, refImageBase64: refImageBase64 || null }),
       signal: AbortSignal.timeout(120000),
     });
 
