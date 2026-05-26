@@ -140,7 +140,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ</div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.1</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -902,9 +902,11 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
     const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título","narration":"4-5 frases primera persona","imagePromptEN":"prompt visual en inglés"}`;
     const charRef = state.characters.map(c => `${c.id}=${c.name}(${c.role}): ${c.appearance}`).join(' | ');
 
-    // Helper: generate a batch with retry + validation
+    // Helper: generate a batch with retry + validation. Accepts partial results.
     async function generateSceneBatch(batchPrompt, expectedCount, startNum, batchName) {
-      for (let attempt = 0; attempt < 3; attempt++) {
+      let bestResult = [];
+
+      for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callClaude(batchPrompt, sysBase + genreExtra);
           const parsed = safeParseJSON(raw);
@@ -913,8 +915,12 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
           // Validate each scene has required fields
           const valid = arr.filter(s => s && s.narration && s.imagePromptEN && s.title);
 
+          // Keep best partial result so far
+          if (valid.length > bestResult.length) {
+            bestResult = valid;
+          }
+
           if (valid.length >= expectedCount) {
-            // Renumber + assign IDs in case Claude messed up
             return valid.slice(0, expectedCount).map((s, i) => ({
               ...s,
               id: `s${startNum + i}`,
@@ -927,10 +933,50 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
           await new Promise(r => setTimeout(r, 3000));
         } catch(e) {
           console.error(`${batchName} intento ${attempt+1} error:`, e.message);
-          if (attempt < 2) await new Promise(r => setTimeout(r, 3000));
+          if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
         }
       }
-      throw new Error(`No se pudieron generar las escenas ${batchName} después de 3 intentos`);
+
+      // Accept best partial result if we have at least some valid scenes
+      if (bestResult.length > 0) {
+        console.warn(`${batchName}: usando resultado parcial (${bestResult.length}/${expectedCount}) — rellenando con placeholders`);
+        const result = bestResult.slice(0, expectedCount).map((s, i) => ({
+          ...s,
+          id: `s${startNum + i}`,
+          num: startNum + i,
+          act: s.act || 'act1',
+        }));
+
+        // Fill missing with placeholders (user can repair later)
+        while (result.length < expectedCount) {
+          const num = startNum + result.length;
+          result.push({
+            id: `s${num}`,
+            num: num,
+            act: 'act1',
+            title: `Escena ${num} (pendiente)`,
+            narration: '',
+            imagePromptEN: '',
+          });
+        }
+        return result;
+      }
+
+      // Total failure: return placeholders so user can repair
+      console.error(`${batchName}: fallo total, generando ${expectedCount} placeholders reparables`);
+      const placeholders = [];
+      for (let i = 0; i < expectedCount; i++) {
+        const num = startNum + i;
+        placeholders.push({
+          id: `s${num}`,
+          num: num,
+          act: 'act1',
+          title: `Escena ${num} (pendiente)`,
+          narration: '',
+          imagePromptEN: '',
+        });
+      }
+      return placeholders;
     }
 
     // ─── Step 2-5: Scenes in batches with retry ───
@@ -955,7 +1001,7 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
 
     setProg(80, '✅ 17-24 — Paso 5/5: Escenas 25-30...');
     const batch4 = await generateSceneBatch(
-      `${ctx}\\nPersonajes: ${charRef}\\nÚltima escena: "${scenes[scenes.length-1]?.narration || ''}"\\n\\nGenera escenas 25-30 cerrando la trama. Actos: climax (25), resolution (26-29), post_credits (30).\\nCada escena DEBE tener narration (4-5 frases) e imagePromptEN.\\nDevuelve SOLO: {"scenes":[...]} con 6 objetos numerados 25-30.`,
+      `Universo: ${u.title} (${u.genero}${mod !== 'none' ? ', ' + mod : ''})\\nPersonajes principales: ${state.characters.map(c => c.name).join(', ')}\\nEscena 24 terminó así: "${scenes[scenes.length-1]?.narration || ''}"\\n\\nGenera las 6 escenas FINALES del episodio (25-30):\\n- Escena 25: clímax final\\n- Escenas 26-29: resolución y consecuencias\\n- Escena 30: post-créditos (gancho para próximo episodio)\\n\\nCada escena con narration (4-5 frases) e imagePromptEN.\\nDevuelve SOLO: {"scenes":[{"num":25,"act":"climax","title":"...","narration":"...","imagePromptEN":"Scene with X: ..."},...]} con 6 objetos.`,
       6, 25, 'Escenas 25-30'
     );
     scenes = scenes.concat(batch4);
@@ -963,9 +1009,18 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
     state.scenes = scenes;
     saveState();
     renderScenes();
-    setProg(100, '✅ ¡Episodio completo!');
-    showToast(`${state.characters.length} personajes y ${state.scenes.length} escenas creadas`, 'success');
-    setTimeout(() => { progress.style.display = 'none'; setProg(0, ''); }, 2000);
+
+    // Detect pending placeholder scenes
+    const pendingCount = scenes.filter(s => !s.narration || !s.imagePromptEN).length;
+
+    if (pendingCount > 0) {
+      setProg(100, `⚠️ ${state.scenes.length - pendingCount}/${state.scenes.length} escenas — ${pendingCount} pendientes`);
+      showToast(`${pendingCount} escenas no se generaron. Usa el botón "Reparar escenas vacías" para completarlas.`, 'error');
+    } else {
+      setProg(100, '✅ ¡Episodio completo!');
+      showToast(`${state.characters.length} personajes y ${state.scenes.length} escenas creadas`, 'success');
+    }
+    setTimeout(() => { progress.style.display = 'none'; setProg(0, ''); }, 3000);
 
   } catch(e) {
     openErrorModal('Error generando episodio', e.message);
