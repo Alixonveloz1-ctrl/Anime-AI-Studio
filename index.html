@@ -992,7 +992,27 @@ window.generateCharImage = async function(charId) {
   showToast('Generando imagen de personaje...', 'success');
   try {
     const prompt = `Anime 2D character reference sheet, vertical 9:16, full body design of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. Clean professional anime art style, vibrant colors, white background, character turnaround design.`;
-    const imgB64 = await generateImage(prompt);
+
+    let imgB64 = null;
+    let lastErr = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        imgB64 = await generateImage(prompt);
+        break;
+      } catch(e) {
+        lastErr = e;
+        const isRateLimit = e.message.includes('429') || e.message.toLowerCase().includes('exhausted') || e.message.toLowerCase().includes('resource');
+        if (isRateLimit) {
+          const waitSec = [30, 60, 90, 120, 180][attempt];
+          showToast(`⏳ Rate limit — esperando ${waitSec}s (${attempt+1}/5)...`, 'error');
+          await new Promise(r => setTimeout(r, waitSec * 1000));
+        } else {
+          throw e;
+        }
+      }
+    }
+    if (!imgB64) throw lastErr || new Error('No se pudo generar');
+
     await dbSet(charImgKey(ch.id), imgB64);
     renderCharacters();
     showToast('Imagen generada', 'success');
@@ -1131,51 +1151,142 @@ window.playSceneAudio = async function(sceneId) {
 // ════════════════════════════════════════════════════════════════
 document.getElementById('btnAllImages').addEventListener('click', async () => {
   if (!state.scenes.length) { showToast('Genera escenas primero', 'error'); return; }
+  const btn = document.getElementById('btnAllImages');
+  btn.disabled = true;
   const bp = document.getElementById('bulkProgress'); bp.style.display = 'block';
   const bt = document.getElementById('bulkText'), bb = document.getElementById('bulkBar');
 
+  // Cache refs ONCE (avoid re-compressing same images 30 times)
+  bt.textContent = 'Preparando referencias de personajes...';
+  const refs = await getAllCharacterRefs();
+
+  // Pre-compress all refs once
+  const cachedRefs = [];
+  for (const r of refs.slice(0, 3)) {
+    if (!r.img) continue;
+    const compressed = await compressBase64Image(r.img.replace(/^data:image\/[a-z]+;base64,/i, ''), 768, 0.85);
+    cachedRefs.push({ name: r.name, role: r.role, img: compressed, mimeType: 'image/jpeg' });
+  }
+  console.log(`Refs cacheadas: ${cachedRefs.length}`);
+
+  let completed = 0;
+  let failed = 0;
+  const failedIds = [];
+  const total = state.scenes.length;
+
+  // Count already-existing
+  for (const s of state.scenes) {
+    if (await dbGet(sceneImgKey(s.id))) completed++;
+  }
+
   for (let i = 0; i < state.scenes.length; i++) {
     const s = state.scenes[i];
-    const pct = Math.round((i / state.scenes.length) * 100);
-    bb.style.width = pct + '%';
-    bt.textContent = `Imagen ${i+1}/${state.scenes.length} (escena ${s.num})...`;
 
     const existing = await dbGet(sceneImgKey(s.id));
     if (existing) continue;
 
-    // Retry hasta 5 veces con espera más larga en rate limit
+    if (!s.imagePromptEN && !s.narration) {
+      console.warn(`Escena ${s.num} sin prompt — saltando`);
+      failed++;
+      failedIds.push(s.num);
+      continue;
+    }
+
+    const pct = Math.round((completed / total) * 100);
+    bb.style.width = pct + '%';
+    bt.textContent = `Imagen ${completed+1}/${total} (escena ${s.num})...`;
+
+    // Retry up to 8 times with progressive waits — never give up on rate limit
     let success = false;
-    for (let attempt = 0; attempt < 5 && !success; attempt++) {
+    let attempt = 0;
+    const maxAttempts = 8;
+
+    while (!success && attempt < maxAttempts) {
       try {
-        const refs = await getAllCharacterRefs();
-        const imgB64 = await generateImage(s.imagePromptEN || s.narration, refs);
+        const imgB64 = await generateImageRaw(s.imagePromptEN || s.narration, cachedRefs);
         await dbSet(sceneImgKey(s.id), imgB64);
         success = true;
+        completed++;
+
+        // Live update — render after each successful image so user sees progress
+        if (completed % 3 === 0 || completed === total) renderScenes();
       } catch(e) {
+        attempt++;
         const isRateLimit = e.message.includes('429') || e.message.toLowerCase().includes('exhausted') || e.message.toLowerCase().includes('resource');
+
         if (isRateLimit) {
-          // Espera escalada: 30s, 60s, 90s, 120s, 180s
-          const waitSec = [30, 60, 90, 120, 180][attempt];
-          bt.textContent = `⏳ Rate limit — esperando ${waitSec}s (intento ${attempt+1}/5)...`;
+          // 30s, 45s, 60s, 90s, 120s, 180s, 240s, 300s
+          const waits = [30, 45, 60, 90, 120, 180, 240, 300];
+          const waitSec = waits[Math.min(attempt - 1, waits.length - 1)];
+          bt.textContent = `⏳ Escena ${s.num}: rate limit, esperando ${waitSec}s (intento ${attempt}/${maxAttempts})...`;
           await new Promise(r => setTimeout(r, waitSec * 1000));
-        } else {
-          console.error(`Escena ${s.num}:`, e.message);
+        } else if (e.message.toLowerCase().includes('safety') || e.message.toLowerCase().includes('block')) {
+          // Safety block: no point retrying, move on
+          console.error(`Escena ${s.num} bloqueada:`, e.message);
+          bt.textContent = `⚠️ Escena ${s.num} bloqueada por filtros, continuando...`;
+          await new Promise(r => setTimeout(r, 2000));
           break;
+        } else {
+          // Other errors: short wait + retry
+          console.error(`Escena ${s.num} intento ${attempt}:`, e.message);
+          bt.textContent = `⚠️ Escena ${s.num} error, reintentando (${attempt}/${maxAttempts})...`;
+          await new Promise(r => setTimeout(r, 5000));
         }
       }
     }
 
-    // Espera de 12s entre imágenes (Vertex AI free/paid limita ~5/min para Nano Banana)
+    if (!success) {
+      failed++;
+      failedIds.push(s.num);
+      console.error(`Escena ${s.num} FALLÓ después de ${maxAttempts} intentos`);
+    }
+
+    // Pause between scenes — 12s normal, more if recently rate limited
     if (i < state.scenes.length - 1) {
-      await new Promise(r => setTimeout(r, 12000));
+      const pauseMs = attempt > 0 ? 15000 : 12000;
+      await new Promise(r => setTimeout(r, pauseMs));
     }
   }
 
   bb.style.width = '100%';
-  bt.textContent = '✅ Imágenes completadas';
+  if (failed === 0) {
+    bt.textContent = `✅ ${completed}/${total} imágenes completadas`;
+    showToast(`¡Todas las imágenes generadas!`, 'success');
+  } else {
+    bt.textContent = `⚠️ ${completed}/${total} completadas — fallaron escenas: ${failedIds.join(', ')}`;
+    showToast(`${failed} escenas fallaron — vuelve a darle al botón para reintentar`, 'error');
+  }
   renderScenes();
-  setTimeout(() => bp.style.display = 'none', 2000);
+  btn.disabled = false;
+  setTimeout(() => bp.style.display = 'none', 5000);
 });
+
+// Generate image with cached refs (skip re-compression inside generateImage)
+async function generateImageRaw(prompt, preCompressedRefs) {
+  const modelSel = document.getElementById('imageModelSelect');
+  const model = modelSel ? modelSel.value : 'auto';
+
+  const cleanPrompt = String(prompt || '')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const bodyObj = {
+    prompt: cleanPrompt,
+    characterRefs: (preCompressedRefs && preCompressedRefs.length) ? preCompressedRefs : null,
+    model: model === 'auto' ? null : model,
+  };
+
+  const res = await fetch('/api/image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(bodyObj),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || `Image proxy ${res.status}`);
+  if (!data.imageData) throw new Error('Imagen: respuesta sin datos');
+  return data.imageData;
+}
 
 document.getElementById('btnAllAudio').addEventListener('click', async () => {
   if (!state.scenes.length) { showToast('Genera escenas primero', 'error'); return; }
