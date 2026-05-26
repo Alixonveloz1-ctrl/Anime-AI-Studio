@@ -36,23 +36,27 @@ async function callGemini(model, prompt, characterRefs, projectId, token) {
     // Add each character reference image labeled with their name
     for (const ref of characterRefs) {
       parts.push({ inlineData: { mimeType: ref.mimeType || 'image/png', data: ref.img } });
-      parts.push({ text: `↑ Character reference: ${ref.name}${ref.role ? ' (' + ref.role + ')' : ''}` });
+      parts.push({ text: `↑ This is ${ref.name}${ref.role ? ' (' + ref.role + ')' : ''}. Use this EXACT design for ${ref.name} only.` });
     }
 
+    const namesList = characterRefs.map(r => r.name).join(', ');
+
     parts.push({
-      text: `These are the official character designs for this anime series. Above are ${characterRefs.length} character${characterRefs.length > 1 ? 's' : ''}.
+      text: `Above are ${characterRefs.length} official character design${characterRefs.length > 1 ? 's' : ''}: ${namesList}.
 
-CRITICAL RULES:
-- For ANY character from the references that appears in the scene below, you MUST keep their EXACT design: same face, same hair color, same hair style, same eye color, same outfit.
-- If a character is not mentioned in the scene, do not include them.
-- Style: 9:16 vertical anime 2D illustration, professional quality.
-- Maintain consistent art style across scenes.
+STRICT COMPOSITION RULES:
+- ONLY draw the characters whose names are EXPLICITLY MENTIONED in the scene description below.
+- Each character must appear EXACTLY ONCE in the image. NEVER duplicate any character.
+- NEVER add unnamed/extra characters. If the scene mentions only 2 characters, draw exactly 2.
+- Match each named character to their reference image: same face, same hair color, same hair style, same eye color, same outfit details.
+- Faces must be CLEAR, anatomically correct, and well-defined — no distortion, no blur, no melted features.
+- Style: 9:16 vertical anime 2D illustration, professional quality, clean lineart.
 
-Scene to generate:
+Scene to draw (read carefully which characters appear):
 ${prompt}`
     });
   } else {
-    parts.push({ text: `9:16 vertical anime 2D illustration. ${prompt}` });
+    parts.push({ text: `9:16 vertical anime 2D illustration. Clean faces, anatomically correct, professional quality. ${prompt}` });
   }
 
   const r = await fetch(url, {
