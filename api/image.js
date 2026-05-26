@@ -1,9 +1,9 @@
 // ════════════════════════════════════════════════════════════════
-// IMAGE GENERATION PROXY — Vertex AI (Gemini 3.1 + Imagen 4.0)
+// IMAGE GENERATION PROXY — Vertex AI Gemini Image (Nano Banana)
+// Solo modelos que soportan continuidad de personajes vía referencia
 // ════════════════════════════════════════════════════════════════
 export const config = { runtime: 'edge' };
 
-// ───────── OAuth: Service Account → Access Token ─────────
 async function getAccessToken(sa) {
   const now = Math.floor(Date.now() / 1000);
   const b64 = o => btoa(JSON.stringify(o)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
@@ -26,13 +26,13 @@ async function getAccessToken(sa) {
   return d.access_token;
 }
 
-// ───────── Gemini 3.1 (acepta imagen de referencia) ─────────
+// ───────── Gemini Flash Image (acepta referencia de personaje) ─────────
 async function callGemini(model, prompt, refImg, projectId, token) {
   const url = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/${model}:generateContent`;
   const parts = [];
   if (refImg) {
     parts.push({ inlineData: { mimeType:'image/png', data: refImg } });
-    parts.push({ text: `IMPORTANT: Use the character shown in the reference image above. Generate a new 9:16 vertical anime 2D scene image keeping the EXACT same character — same face, same hair color, same hair style, same eye color, same outfit style. Only the pose, expression, action and environment should change. New scene: ${prompt}` });
+    parts.push({ text: `IMPORTANT: Use the EXACT character shown in the reference image above. Generate a new 9:16 vertical anime 2D scene image keeping the SAME character — same face, same hair color, same hair style, same eye color, same outfit. Only change pose, expression, action and environment. New scene: ${prompt}` });
   } else {
     parts.push({ text: `9:16 vertical anime 2D illustration. ${prompt}` });
   }
@@ -51,36 +51,11 @@ async function callGemini(model, prompt, refImg, projectId, token) {
   return { error: `${model}: no image returned` };
 }
 
-// ───────── Imagen 4.0 / 3.0 (fallback, sin referencia) ─────────
-async function callImagen(model, prompt, projectId, token) {
-  const url = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/${model}:predict`;
-  const r = await fetch(url, {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, 'X-Goog-User-Project':projectId },
-    body: JSON.stringify({
-      instances:[{ prompt }],
-      parameters:{ sampleCount:1, aspectRatio:'9:16', safetySetting:'block_only_high' },
-    }),
-  });
-  const d = await r.json();
-  if (!r.ok) return { error: `${model}: ${d.error?.message || r.status}` };
-  const b64 = d.predictions?.[0]?.bytesBase64Encoded || d.predictions?.[0]?.image?.bytesBase64Encoded;
-  if (b64) return { imageData: b64, model };
-  if (d.predictions?.[0]?.raiFilteredReason) return { error: `${model}: safety block` };
-  return { error: `${model}: no bytes` };
-}
+const ALLOWED_MODELS = new Set([
+  'gemini-3.1-flash-image',  // Nano Banana 2 — mejor calidad
+  'gemini-2.5-flash-image',  // Nano Banana 1 — backup
+]);
 
-// ───────── Pipeline definitions ─────────
-const GEMINI_MODELS = new Set(['gemini-3.1-pro-preview', 'gemini-3.1-flash-lite-preview']);
-const IMAGEN_MODELS = new Set(['imagen-4.0-generate-001', 'imagen-4.0-fast-generate-001', 'imagen-3.0-generate-002']);
-
-async function tryModel(model, prompt, refImg, projectId, token) {
-  if (GEMINI_MODELS.has(model)) return await callGemini(model, prompt, refImg, projectId, token);
-  if (IMAGEN_MODELS.has(model)) return await callImagen(model, prompt, projectId, token);
-  return { error: `Unknown model: ${model}` };
-}
-
-// ───────── Handler ─────────
 export default async function handler(req) {
   const CORS = { 'Content-Type':'application/json', 'Access-Control-Allow-Origin':'*' };
   if (req.method === 'OPTIONS') return new Response(null, { headers:{ ...CORS, 'Access-Control-Allow-Methods':'POST, OPTIONS', 'Access-Control-Allow-Headers':'Content-Type' } });
@@ -96,25 +71,18 @@ export default async function handler(req) {
     const projectId = sa.project_id;
     const token = await getAccessToken(sa);
 
-    // If a specific model is forced, try just that one
-    if (forceModel) {
-      const result = await tryModel(forceModel, prompt, refImageBase64, projectId, token);
+    if (forceModel && ALLOWED_MODELS.has(forceModel)) {
+      const result = await callGemini(forceModel, prompt, refImageBase64, projectId, token);
       if (result.imageData) return new Response(JSON.stringify(result), { status:200, headers:CORS });
       return new Response(JSON.stringify({ error: result.error || 'Model failed' }), { status:500, headers:CORS });
     }
 
-    // Auto mode: pipeline of fallbacks
-    const pipeline = [
-      'gemini-3.1-pro-preview',
-      'gemini-3.1-flash-lite-preview',
-      'imagen-4.0-generate-001',
-      'imagen-4.0-fast-generate-001',
-      'imagen-3.0-generate-002',
-    ];
+    // Auto: Nano Banana 2 → Nano Banana 1
+    const pipeline = ['gemini-3.1-flash-image', 'gemini-2.5-flash-image'];
 
     let lastError = null;
     for (const m of pipeline) {
-      const result = await tryModel(m, prompt, refImageBase64, projectId, token);
+      const result = await callGemini(m, prompt, refImageBase64, projectId, token);
       if (result.imageData) return new Response(JSON.stringify(result), { status:200, headers:CORS });
       lastError = result.error;
     }
