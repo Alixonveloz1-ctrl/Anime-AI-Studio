@@ -472,13 +472,17 @@ function safeParseJSON(raw) {
 // ════════════════════════════════════════════════════════════════
 // IMAGE GENERATION (via /api/image proxy → Vertex AI)
 // ════════════════════════════════════════════════════════════════
-async function generateImage(prompt, refImageBase64 = null, forceModel = null) {
+async function generateImage(prompt, characterRefs = null, forceModel = null) {
   const modelSel = document.getElementById('imageModelSelect');
   const model = forceModel || (modelSel ? modelSel.value : 'auto');
   const res = await fetch('/api/image', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, refImageBase64: refImageBase64 || null, model: model === 'auto' ? null : model }),
+    body: JSON.stringify({
+      prompt,
+      characterRefs: characterRefs || null,
+      model: model === 'auto' ? null : model,
+    }),
   });
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error || `Image proxy ${res.status}`);
@@ -816,12 +820,12 @@ window.generateSceneImage = async function(sceneId) {
   if (!s) return;
   showToast(`Generando imagen escena ${s.num}...`, 'success');
   try {
-    const refImg = await getSceneCharacterRef(s);
+    const refs = await getSceneCharacterRefs(s);
     let imgB64 = null;
     let lastErr = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        imgB64 = await generateImage(s.imagePromptEN || s.narration, refImg);
+        imgB64 = await generateImage(s.imagePromptEN || s.narration, refs);
         break;
       } catch(e) {
         lastErr = e;
@@ -837,28 +841,36 @@ window.generateSceneImage = async function(sceneId) {
     if (!imgB64) throw lastErr || new Error('No se pudo generar');
     await dbSet(sceneImgKey(s.id), imgB64);
     renderScenes();
-    showToast(`Escena ${s.num} lista`, 'success');
+    showToast(`Escena ${s.num} lista (${refs.length} pers.)`, 'success');
   } catch(e) {
     openErrorModal(`Error imagen escena ${s.num}`, e.message);
   }
 };
 
-// Try to find the character mentioned in the scene's prompt/narration and use their image as reference
-async function getSceneCharacterRef(scene) {
-  if (!state.characters.length) return null;
+// Find ALL characters mentioned in the scene and return their reference images
+async function getSceneCharacterRefs(scene) {
+  if (!state.characters.length) return [];
   const text = ((scene.imagePromptEN || '') + ' ' + (scene.narration || '')).toLowerCase();
 
-  // Try to find a character by name match
+  const found = [];
   for (const c of state.characters) {
     if (!c.name) continue;
     const firstName = c.name.split(' ')[0].toLowerCase();
-    if (text.includes(firstName)) {
+    const lastName = c.name.split(' ').slice(-1)[0].toLowerCase();
+    if (text.includes(firstName) || (lastName !== firstName && text.includes(lastName))) {
       const img = await dbGet(charImgKey(c.id));
-      if (img) return img;
+      if (img) found.push({ name: c.name, role: c.role, img });
     }
   }
-  // Fallback: use protagonist (first character)
-  return await dbGet(charImgKey(state.characters[0].id));
+
+  // If no character detected by name but there are characters, use protagonist
+  if (!found.length && state.characters.length) {
+    const proto = state.characters[0];
+    const img = await dbGet(charImgKey(proto.id));
+    if (img) found.push({ name: proto.name, role: proto.role, img });
+  }
+
+  return found;
 }
 
 window.generateSceneAudio = async function(sceneId) {
@@ -908,8 +920,8 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
     let success = false;
     for (let attempt = 0; attempt < 3 && !success; attempt++) {
       try {
-        const refImg = await getSceneCharacterRef(s);
-        const imgB64 = await generateImage(s.imagePromptEN || s.narration, refImg);
+        const refs = await getSceneCharacterRefs(s);
+        const imgB64 = await generateImage(s.imagePromptEN || s.narration, refs);
         await dbSet(sceneImgKey(s.id), imgB64);
         success = true;
       } catch(e) {
