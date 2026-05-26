@@ -140,7 +140,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.2 (azure)</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.3 (regen audio)</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1181,7 +1181,11 @@ async function renderScenes() {
       <div class="scene-narration">${s.narration}</div>
       <div class="scene-actions">
         <button class="btn-sec" onclick="generateSceneImage('${s.id}')">🖼️ ${imgB64 ? 'Regenerar' : 'Imagen'}</button>
-        <button class="btn-sec" onclick="${audData ? `playSceneAudio('${s.id}')` : `generateSceneAudio('${s.id}')`}">${audData ? '▶️ Reproducir' : '🎙️ Audio'}</button>
+        ${audData
+          ? `<button class="btn-sec" onclick="playSceneAudio('${s.id}')">▶️ Reproducir</button>
+             <button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🔄 Regenerar</button>`
+          : `<button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🎙️ Audio</button>`
+        }
       </div>
     </div>
   `).join('');
