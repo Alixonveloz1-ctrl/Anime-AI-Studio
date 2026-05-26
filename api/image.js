@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════════
 // IMAGE GENERATION PROXY — Vertex AI Gemini Image (Nano Banana)
-// Solo modelos que soportan continuidad de personajes vía referencia
+// Soporta MÚLTIPLES imágenes de referencia para continuidad de personajes
 // ════════════════════════════════════════════════════════════════
 export const config = { runtime: 'edge' };
 
@@ -26,16 +26,34 @@ async function getAccessToken(sa) {
   return d.access_token;
 }
 
-// ───────── Gemini Flash Image (acepta referencia de personaje) ─────────
-async function callGemini(model, prompt, refImg, projectId, token) {
+// ───────── Gemini Flash Image — soporta múltiples referencias ─────────
+async function callGemini(model, prompt, characterRefs, projectId, token) {
   const url = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/${model}:generateContent`;
+
   const parts = [];
-  if (refImg) {
-    parts.push({ inlineData: { mimeType:'image/png', data: refImg } });
-    parts.push({ text: `IMPORTANT: Use the EXACT character shown in the reference image above. Generate a new 9:16 vertical anime 2D scene image keeping the SAME character — same face, same hair color, same hair style, same eye color, same outfit. Only change pose, expression, action and environment. New scene: ${prompt}` });
+
+  if (characterRefs && characterRefs.length > 0) {
+    // Add each character reference image with their name as label
+    for (const ref of characterRefs) {
+      parts.push({ inlineData: { mimeType: 'image/png', data: ref.img } });
+      parts.push({ text: `↑ This is ${ref.name} (${ref.role || 'character'})` });
+    }
+
+    const names = characterRefs.map(r => r.name).join(' and ');
+    parts.push({
+      text: `IMPORTANT INSTRUCTIONS:
+- Use the EXACT characters shown in the reference images above (${names})
+- Keep their SAME face, hair color, hair style, eye color and outfit style
+- Each character must look IDENTICAL to their reference image
+- Only change pose, expression, action and environment
+
+Generate a 9:16 vertical anime 2D scene image with these characters.
+Scene: ${prompt}`
+    });
   } else {
     parts.push({ text: `9:16 vertical anime 2D illustration. ${prompt}` });
   }
+
   const r = await fetch(url, {
     method:'POST',
     headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, 'X-Goog-User-Project':projectId },
@@ -51,9 +69,7 @@ async function callGemini(model, prompt, refImg, projectId, token) {
   return { error: `${model}: no image returned` };
 }
 
-const ALLOWED_MODELS = new Set([
-  'gemini-2.5-flash-image',  // Nano Banana — el único disponible en este proyecto
-]);
+const ALLOWED_MODELS = new Set(['gemini-2.5-flash-image']);
 
 export default async function handler(req) {
   const CORS = { 'Content-Type':'application/json', 'Access-Control-Allow-Origin':'*' };
@@ -61,7 +77,15 @@ export default async function handler(req) {
   if (req.method !== 'POST')    return new Response('Method not allowed', { status:405 });
 
   try {
-    const { prompt, refImageBase64, model: forceModel } = await req.json();
+    const body = await req.json();
+    const { prompt, model: forceModel } = body;
+
+    // Backward compat: accept either characterRefs[] OR single refImageBase64
+    let characterRefs = body.characterRefs;
+    if (!characterRefs && body.refImageBase64) {
+      characterRefs = [{ name: 'main character', role: '', img: body.refImageBase64 }];
+    }
+
     if (!prompt) return new Response(JSON.stringify({ error:'prompt required' }), { status:400, headers:CORS });
 
     const saJson = process.env.GCP_SERVICE_ACCOUNT;
@@ -70,22 +94,10 @@ export default async function handler(req) {
     const projectId = sa.project_id;
     const token = await getAccessToken(sa);
 
-    if (forceModel && ALLOWED_MODELS.has(forceModel)) {
-      const result = await callGemini(forceModel, prompt, refImageBase64, projectId, token);
-      if (result.imageData) return new Response(JSON.stringify(result), { status:200, headers:CORS });
-      return new Response(JSON.stringify({ error: result.error || 'Model failed' }), { status:500, headers:CORS });
-    }
-
-    // Auto: Nano Banana
-    const pipeline = ['gemini-2.5-flash-image'];
-
-    let lastError = null;
-    for (const m of pipeline) {
-      const result = await callGemini(m, prompt, refImageBase64, projectId, token);
-      if (result.imageData) return new Response(JSON.stringify(result), { status:200, headers:CORS });
-      lastError = result.error;
-    }
-    return new Response(JSON.stringify({ error: lastError || 'All models failed' }), { status:500, headers:CORS });
+    const modelToUse = (forceModel && ALLOWED_MODELS.has(forceModel)) ? forceModel : 'gemini-2.5-flash-image';
+    const result = await callGemini(modelToUse, prompt, characterRefs, projectId, token);
+    if (result.imageData) return new Response(JSON.stringify(result), { status:200, headers:CORS });
+    return new Response(JSON.stringify({ error: result.error || 'Failed' }), { status:500, headers:CORS });
 
   } catch(e) {
     return new Response(JSON.stringify({ error: e.message }), { status:500, headers:CORS });
