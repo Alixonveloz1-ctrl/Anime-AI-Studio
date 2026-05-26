@@ -239,6 +239,9 @@
         <button class="btn-sec" id="btnAllImages">🖼️ Todas las Imágenes</button>
         <button class="btn-sec" id="btnAllAudio">🎙️ Toda la Narración</button>
       </div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn-sec" id="btnRepairScenes" style="display:none">🔧 Reparar escenas vacías</button>
+      </div>
 
       <div id="bulkProgress" style="display:none;margin-top:10px">
         <div class="progress-text" id="bulkText">...</div>
@@ -880,33 +883,63 @@ REGLAS DE DESCRIPCIÓN VISUAL (CRÍTICO — para que los filtros del generador d
     const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título","narration":"4-5 frases primera persona","imagePromptEN":"prompt visual en inglés"}`;
     const charRef = state.characters.map(c => `${c.id}=${c.name}(${c.role}): ${c.appearance}`).join(' | ');
 
-    // ─── Step 2-5: Scenes in batches ───
-    const r2 = await callClaude(
-      `${ctx}\\nPersonajes: ${charRef}\\n\\nGenera escenas 1-8. Actos: cold_open (1-2), act1 (3-8).\\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con 8 objetos.`,
-      sysBase + genreExtra
+    // Helper: generate a batch with retry + validation
+    async function generateSceneBatch(batchPrompt, expectedCount, startNum, batchName) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const raw = await callClaude(batchPrompt, sysBase + genreExtra);
+          const parsed = safeParseJSON(raw);
+          const arr = parsed.scenes || [];
+
+          // Validate each scene has required fields
+          const valid = arr.filter(s => s && s.narration && s.imagePromptEN && s.title);
+
+          if (valid.length >= expectedCount) {
+            // Renumber + assign IDs in case Claude messed up
+            return valid.slice(0, expectedCount).map((s, i) => ({
+              ...s,
+              id: `s${startNum + i}`,
+              num: startNum + i,
+              act: s.act || 'act1',
+            }));
+          }
+
+          console.warn(`${batchName} intento ${attempt+1}: solo ${valid.length}/${expectedCount} válidas, reintentando...`);
+          await new Promise(r => setTimeout(r, 3000));
+        } catch(e) {
+          console.error(`${batchName} intento ${attempt+1} error:`, e.message);
+          if (attempt < 2) await new Promise(r => setTimeout(r, 3000));
+        }
+      }
+      throw new Error(`No se pudieron generar las escenas ${batchName} después de 3 intentos`);
+    }
+
+    // ─── Step 2-5: Scenes in batches with retry ───
+    let scenes = await generateSceneBatch(
+      `${ctx}\\nPersonajes: ${charRef}\\n\\nGenera escenas 1-8. Actos: cold_open (1-2), act1 (3-8).\\nCada escena DEBE tener narration (4-5 frases) e imagePromptEN (descripción visual en inglés).\\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con 8 objetos numerados 1-8.`,
+      8, 1, 'Escenas 1-8'
     );
-    let scenes = safeParseJSON(r2).scenes || [];
 
     setProg(40, '✅ 1-8 — Paso 3/5: Escenas 9-16...');
-    const r3 = await callClaude(
-      `${ctx}\\nPersonajes: ${charRef}\\nÚltima: ${scenes[scenes.length-1]?.narration || ''}\\n\\nGenera escenas 9-16. Actos: act1 (9-10), act2 (11-16).\\nDevuelve SOLO: {"scenes":[...]} con 8 objetos numerados 9-16.`,
-      sysBase + genreExtra
+    const batch2 = await generateSceneBatch(
+      `${ctx}\\nPersonajes: ${charRef}\\nÚltima escena: "${scenes[scenes.length-1]?.narration || ''}"\\n\\nGenera escenas 9-16 continuando la trama. Actos: act1 (9-10), act2 (11-16).\\nCada escena DEBE tener narration (4-5 frases) e imagePromptEN.\\nDevuelve SOLO: {"scenes":[...]} con 8 objetos numerados 9-16.`,
+      8, 9, 'Escenas 9-16'
     );
-    scenes = scenes.concat(safeParseJSON(r3).scenes || []);
+    scenes = scenes.concat(batch2);
 
     setProg(60, '✅ 9-16 — Paso 4/5: Escenas 17-24...');
-    const r4 = await callClaude(
-      `${ctx}\\nPersonajes: ${charRef}\\nÚltima: ${scenes[scenes.length-1]?.narration || ''}\\n\\nGenera escenas 17-24. Actos: act2 (17-18), climax (19-24).\\nDevuelve SOLO: {"scenes":[...]} con 8 objetos numerados 17-24.`,
-      sysBase + genreExtra
+    const batch3 = await generateSceneBatch(
+      `${ctx}\\nPersonajes: ${charRef}\\nÚltima escena: "${scenes[scenes.length-1]?.narration || ''}"\\n\\nGenera escenas 17-24 continuando la trama. Actos: act2 (17-18), climax (19-24).\\nCada escena DEBE tener narration (4-5 frases) e imagePromptEN.\\nDevuelve SOLO: {"scenes":[...]} con 8 objetos numerados 17-24.`,
+      8, 17, 'Escenas 17-24'
     );
-    scenes = scenes.concat(safeParseJSON(r4).scenes || []);
+    scenes = scenes.concat(batch3);
 
     setProg(80, '✅ 17-24 — Paso 5/5: Escenas 25-30...');
-    const r5 = await callClaude(
-      `${ctx}\\nPersonajes: ${charRef}\\nÚltima: ${scenes[scenes.length-1]?.narration || ''}\\n\\nGenera escenas 25-30. Actos: climax (25), resolution (26-29), post_credits (30).\\nDevuelve SOLO: {"scenes":[...]} con 6 objetos numerados 25-30.`,
-      sysBase + genreExtra
+    const batch4 = await generateSceneBatch(
+      `${ctx}\\nPersonajes: ${charRef}\\nÚltima escena: "${scenes[scenes.length-1]?.narration || ''}"\\n\\nGenera escenas 25-30 cerrando la trama. Actos: climax (25), resolution (26-29), post_credits (30).\\nCada escena DEBE tener narration (4-5 frases) e imagePromptEN.\\nDevuelve SOLO: {"scenes":[...]} con 6 objetos numerados 25-30.`,
+      6, 25, 'Escenas 25-30'
     );
-    scenes = scenes.concat(safeParseJSON(r5).scenes || []);
+    scenes = scenes.concat(batch4);
 
     state.scenes = scenes;
     saveState();
@@ -973,10 +1006,25 @@ window.generateCharImage = async function(charId) {
 // ════════════════════════════════════════════════════════════════
 async function renderScenes() {
   const c = document.getElementById('scenesList');
+  const repairBtn = document.getElementById('btnRepairScenes');
+
   if (!state.scenes.length) {
     c.innerHTML = `<div class="empty"><div class="emoji">🎬</div><p>Genera un episodio primero</p></div>`;
+    if (repairBtn) repairBtn.style.display = 'none';
     return;
   }
+
+  // Detect broken scenes (no narration, title or num)
+  const brokenCount = state.scenes.filter(s => !s.narration || !s.title || !s.imagePromptEN || s.num === undefined || s.num === null).length;
+  if (repairBtn) {
+    if (brokenCount > 0) {
+      repairBtn.style.display = 'inline-flex';
+      repairBtn.innerHTML = `🔧 Reparar ${brokenCount} escena${brokenCount > 1 ? 's' : ''} vacía${brokenCount > 1 ? 's' : ''}`;
+    } else {
+      repairBtn.style.display = 'none';
+    }
+  }
+
   const items = await Promise.all(state.scenes.map(async s => {
     const imgB64 = await dbGet(sceneImgKey(s.id));
     const audData = await dbGet(sceneAudKey(s.id));
@@ -1154,6 +1202,104 @@ document.getElementById('btnAllAudio').addEventListener('click', async () => {
   bt.textContent = '✅ Audios completados';
   renderScenes();
   setTimeout(() => bp.style.display = 'none', 2000);
+});
+
+// ════════════════════════════════════════════════════════════════
+// REPAIR EMPTY/UNDEFINED SCENES
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btnRepairScenes').addEventListener('click', async () => {
+  if (!state.universe || !state.scenes.length) { showToast('No hay episodio', 'error'); return; }
+  const u = state.universe;
+
+  // Find broken scenes (no narration, no title, or num is undefined)
+  const brokenIndices = [];
+  state.scenes.forEach((s, idx) => {
+    if (!s.narration || !s.title || !s.imagePromptEN || s.num === undefined || s.num === null) {
+      brokenIndices.push(idx);
+    }
+  });
+
+  if (!brokenIndices.length) { showToast('No hay escenas que reparar', 'success'); return; }
+
+  const btn = document.getElementById('btnRepairScenes');
+  btn.disabled = true;
+  btn.innerHTML = `<div class="spinner"></div> Reparando ${brokenIndices.length} escenas...`;
+
+  try {
+    const sysBase = `Eres un guionista de anime experto.
+REGLAS:
+- Narración en PRIMERA PERSONA del protagonista, 4-5 frases por escena
+- Pensamientos internos visibles
+- Nombres japoneses REALES (sin inventos)
+- imagePromptEN en INGLÉS describiendo visualmente la escena, 9:16 vertical anime 2D
+- Responde SOLO JSON válido sin markdown`;
+
+    const charRef = state.characters.map(c => `${c.id}=${c.name}(${c.role}): ${c.appearance}`).join(' | ');
+    const ctx = `Universo: ${u.title}\nGénero: ${u.genero}\nConcepto: ${u.concepto}\nConflicto: ${u.conflicto}\nSetting: ${u.setting}`;
+
+    // Get last good scene before broken range for continuity
+    const firstBroken = brokenIndices[0];
+    const lastGood = firstBroken > 0 ? state.scenes[firstBroken - 1] : null;
+    const totalScenes = state.scenes.length;
+    const startNum = firstBroken + 1; // 1-indexed
+    const endNum = brokenIndices[brokenIndices.length - 1] + 1;
+    const count = brokenIndices.length;
+
+    let act = 'act2';
+    if (startNum <= 2) act = 'cold_open';
+    else if (startNum <= 10) act = 'act1';
+    else if (startNum <= 18) act = 'act2';
+    else if (startNum <= 25) act = 'climax';
+    else if (startNum <= 29) act = 'resolution';
+    else act = 'post_credits';
+
+    const prompt = `${ctx}\nPersonajes: ${charRef}\n${lastGood ? 'Escena anterior (' + lastGood.num + '): "' + lastGood.narration + '"' : ''}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: ${totalScenes} escenas.\nCada escena DEBE tener narration (4-5 frases primera persona) e imagePromptEN (descripción visual en inglés).\nDevuelve SOLO: {"scenes":[{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"...","imagePromptEN":"..."}, ...]}`;
+
+    let newScenes = [];
+    for (let attempt = 0; attempt < 3 && newScenes.length < count; attempt++) {
+      try {
+        const raw = await callClaude(prompt, sysBase);
+        const parsed = safeParseJSON(raw);
+        const arr = (parsed.scenes || []).filter(s => s && s.narration && s.imagePromptEN && s.title);
+        if (arr.length >= count) {
+          newScenes = arr.slice(0, count).map((s, i) => ({
+            ...s,
+            id: `s${startNum + i}`,
+            num: startNum + i,
+            act: s.act || act,
+          }));
+          break;
+        }
+        console.warn(`Reparación intento ${attempt+1}: solo ${arr.length}/${count}, reintentando...`);
+        await new Promise(r => setTimeout(r, 3000));
+      } catch(e) {
+        console.error(`Reparación intento ${attempt+1}:`, e.message);
+        if (attempt < 2) await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+
+    if (newScenes.length < count) throw new Error(`Solo se pudieron reparar ${newScenes.length}/${count} escenas`);
+
+    // Replace broken scenes
+    brokenIndices.forEach((idx, i) => {
+      // Delete old image and audio for this slot
+      const oldId = state.scenes[idx].id;
+      if (oldId) {
+        dbSet(sceneImgKey(oldId), null).catch(() => {});
+        dbSet(sceneAudKey(oldId), null).catch(() => {});
+      }
+      state.scenes[idx] = newScenes[i];
+    });
+
+    saveState();
+    renderScenes();
+    showToast(`✅ ${count} escenas reparadas`, 'success');
+  } catch(e) {
+    openErrorModal('Error reparando escenas', e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🔧 Reparar escenas vacías';
+  }
 });
 
 // ════════════════════════════════════════════════════════════════
