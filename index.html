@@ -726,31 +726,20 @@ async function generateImage(prompt, refImageBase64 = null) {
 const GEMINI_VOICE_MAP = { gemini_male: 'Charon', gemini_female: 'Kore', gemini_male2: 'Fenrir', gemini_female2: 'Aoede' };
 
 async function generateGeminiAudio(text, act) {
-  const key = getKeys().gemini;
-  if (!key) throw new Error('Gemini API Key no configurada. Ve a APIS.');
   const gender = document.getElementById('voiceGenderSelect')?.value || 'gemini_male';
-  const voice = GEMINI_VOICE_MAP[gender] || 'Charon';
-  const emotionPrefix = act === 'climax' ? '[excited] ' : act === 'resolution' ? '[soft] ' : act === 'cold_open' ? '[curious] ' : '';
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${key}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: emotionPrefix + text }] }],
-        generationConfig: {
-          responseModalities: ['AUDIO'],
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } }
-        }
-      })
-    }
-  );
-  if (!res.ok) { const err = await res.text(); throw new Error(`Gemini TTS error ${res.status}: ${err}`); }
+  // Usa el proxy Vertex AI — no necesita API key en el cliente
+  const res = await fetch('/api/audio', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, voice: gender, act }),
+    signal: AbortSignal.timeout(60000),
+  });
+
   const data = await res.json();
-  const audioB64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  if (!audioB64) throw new Error('Gemini TTS: no audio in response');
-  return audioB64;
+  if (!res.ok || data.error) throw new Error(data.error || `Audio proxy error ${res.status}`);
+  if (data.audioData) return data.audioData;
+  throw new Error('Audio proxy: no audioData in response');
 }
 
 // ══════════════════════════════════════════════
