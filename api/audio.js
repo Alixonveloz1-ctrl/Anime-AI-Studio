@@ -11,38 +11,20 @@ async function getAccessToken(serviceAccount) {
     exp: now + 3600,
     scope: 'https://www.googleapis.com/auth/cloud-platform',
   };
-
   const b64 = (obj) => btoa(JSON.stringify(obj)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
   const signingInput = `${b64(header)}.${b64(payload)}`;
-
   const pemBody = serviceAccount.private_key
-    .replace('-----BEGIN PRIVATE KEY-----','')
-    .replace('-----END PRIVATE KEY-----','')
-    .replace(/\n/g,'');
+    .replace('-----BEGIN PRIVATE KEY-----','').replace('-----END PRIVATE KEY-----','').replace(/\n/g,'');
   const keyDer = Uint8Array.from(atob(pemBody), c => c.charCodeAt(0));
-
-  const cryptoKey = await crypto.subtle.importKey(
-    'pkcs8', keyDer,
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false, ['sign']
-  );
-
-  const signature = await crypto.subtle.sign(
-    'RSASSA-PKCS1-v1_5', cryptoKey,
-    new TextEncoder().encode(signingInput)
-  );
-
-  const b64sig = btoa(String.fromCharCode(...new Uint8Array(signature)))
-    .replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
-
+  const cryptoKey = await crypto.subtle.importKey('pkcs8', keyDer, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', cryptoKey, new TextEncoder().encode(signingInput));
+  const b64sig = btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
   const jwt = `${signingInput}.${b64sig}`;
-
   const tokenRes = await fetch(serviceAccount.token_uri, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
   });
-
   const tokenData = await tokenRes.json();
   if (!tokenData.access_token) throw new Error('OAuth error: ' + JSON.stringify(tokenData));
   return tokenData.access_token;
@@ -53,7 +35,6 @@ export default async function handler(req) {
     return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } });
   }
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
-
   const CORS = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
 
   try {
@@ -65,14 +46,8 @@ export default async function handler(req) {
     const serviceAccount = JSON.parse(saJson);
     const projectId = serviceAccount.project_id;
     const location = 'us-central1';
-
     const accessToken = await getAccessToken(serviceAccount);
 
-    // Emotion prefix based on act
-    const emotionPrefix = act === 'climax' ? '[excited] ' : act === 'resolution' ? '[soft] ' : act === 'cold_open' ? '[curious] ' : '';
-    const taggedText = emotionPrefix + text;
-
-    // Voice map
     const voiceMap = {
       gemini_male:   'Charon',
       gemini_female: 'Kore',
@@ -80,15 +55,20 @@ export default async function handler(req) {
       gemini_female2:'Aoede',
     };
     const voiceName = voiceMap[voice] || 'Charon';
+    const emotionPrefix = act === 'climax' ? '[excited] ' : act === 'resolution' ? '[soft] ' : act === 'cold_open' ? '[curious] ' : '';
+    const taggedText = emotionPrefix + text;
 
-    // Call Gemini TTS via Vertex AI
     const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/gemini-2.5-flash-preview-tts:generateContent`;
 
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+        'X-Goog-User-Project': projectId,
+      },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: taggedText }] }],
+        contents: [{ role: 'user', parts: [{ text: taggedText }] }],
         generationConfig: {
           responseModalities: ['AUDIO'],
           speechConfig: {
@@ -106,7 +86,7 @@ export default async function handler(req) {
 
     const audioB64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (!audioB64) {
-      return new Response(JSON.stringify({ error: 'Gemini TTS: no audio in response' }), { status: 500, headers: CORS });
+      return new Response(JSON.stringify({ error: 'Gemini TTS: no audio in response — ' + JSON.stringify(data).substring(0,150) }), { status: 500, headers: CORS });
     }
 
     return new Response(JSON.stringify({ audioData: audioB64 }), { status: 200, headers: CORS });
