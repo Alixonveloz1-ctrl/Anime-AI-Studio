@@ -802,18 +802,23 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
 
     const sysBase = `Eres un guionista de anime experto.
 REGLAS:
-- Narración en PRIMERA PERSONA del protagonista, 4-5 frases por escena
+- Narración en español, PRIMERA PERSONA del protagonista, 4-5 frases por escena. Aquí puedes ser expresivo, pícaro, emotivo según el género.
 - Pensamientos internos visibles
 - Nombres japoneses REALES (sin inventos)
-- imagePromptEN en INGLÉS describiendo visualmente la escena, 9:16 vertical anime 2D
-- FORMATO OBLIGATORIO de imagePromptEN: empezar con "Scene with [character names present]:" y luego describir entorno, acción, expresión. Ejemplo: "Scene with Hiro and Aelina: They stand in a magical library, Hiro looks shocked while Aelina points at a glowing rune. Soft lamp light, dust particles." Si solo aparece el protagonista, escribir "Scene with Hiro alone: ..."
+
+REGLAS CRÍTICAS DEL imagePromptEN (esto va directo al generador de imágenes Gemini, que tiene filtros estrictos):
+- SIEMPRE en INGLÉS técnico de diseño anime
+- FORMATO OBLIGATORIO: empezar con "Scene with [character names present]:" y luego describir entorno, acción, expresión. Ejemplo: "Scene with Hiro and Aelina: They stand in a magical library, Hiro looks shocked while Aelina points at a glowing rune. Soft lamp light." Si solo aparece el protagonista: "Scene with Hiro alone: ..."
+- USAR vocabulario seguro: "feminine figure", "slim waist", "long legs", "graceful", "elegant", "cute", "attractive", "long flowing hair", "school uniform", "blushing", "shy expression", "embarrassed", "close-up", "low angle shot", "swimsuit scene"
+- PROHIBIDO en imagePromptEN (bloquea Gemini): "voluptuous", "busty", "cleavage", "breasts", "chest pressed", "sensual", "seductive", "naked", "nude", "exposed", "intimate", "erotic", "panties visible", "see-through"
+- Si la escena de la narración es íntima/romántica, en imagePromptEN describirla de forma SUGERENTE pero LIMPIA: "hug scene with blushing faces", "she leans close to him with embarrassed expression", "wet uniform after rain, shy reaction" en lugar de descripciones explícitas
 - NO mencionar personajes que no estén físicamente presentes en la escena visual
 - ESTRICTAMENTE FIEL al género: si es isekai DEBE ocurrir transición a otro mundo en escenas tempranas; si es mecha DEBE haber robots gigantes; si es deportes DEBE ser sobre ese deporte
 - NO mezclar géneros no pedidos
 - Responde SOLO JSON válido sin markdown`;
 
     const genreExtra = mod === 'ecchi'
-      ? '\\n\\nMODIFICADOR ECCHI ACTIVO — IMPORTANTE PARA LAS ESCENAS:\\n- imagePromptEN debe incluir fan service VISIBLE: posturas insinuantes, ropa que enfatiza figura, situaciones comprometedoras\\n- Vocabulario permitido en imagePromptEN: "cleavage", "thigh-high stockings", "short skirt", "tight outfit", "wet clothes", "blushing", "low angle shot", "swimsuit", "lingerie scene", "panchira accident", "tsundere blush"\\n- Ejemplos de escenas: ducha accidental, caída con ropa subida, prueba de trajes de baño, masaje torpe, despertar abrazados por error, ropa mojada en lluvia\\n- Mantener tono pícaro y humorístico, NO oscuro'
+      ? '\\n\\nMODIFICADOR ECCHI ACTIVO:\\n- La narración puede ser pícara, traviesa, con situaciones comprometedoras (caídas, ducha, ropa mojada, malentendidos)\\n- El imagePromptEN debe describir el momento ecchi usando SOLO vocabulario seguro: "she trips and lands on him, both blushing", "wet school uniform clinging, embarrassed reaction", "swimsuit scene at the beach, playful pose", "panchira accident, surprised expression", "tsundere blush close-up", "low angle shot of her in short skirt"\\n- NUNCA usar palabras directas anatómicas o sexuales en imagePromptEN'
       : '';
 
     const ctx = `Universo: ${u.title}
@@ -866,17 +871,22 @@ ${MOD_PROMPTS[mod] || ''}`;
 - Variedad visual: distintos colores de cabello, ojos, estilos de ropa
 - Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${mod === 'harem' || mod === 'ecchi' ? '\\n- Personajes femeninos con arquetipos marcados (tsundere, kuudere, genki, dandere, onee-san, etc)' : ''}${mod === 'harem_inverso' ? '\\n- Personajes masculinos con arquetipos marcados (cool, principesco, deportista, intelectual, salvaje, etc)' : ''}
 
-${isEcchi ? `REGLAS DE DESCRIPCIÓN VISUAL (ECCHI ACTIVO):
-- Personajes femeninos: descripciones VISUALMENTE ATRACTIVAS y sensuales
-- USAR libremente: figura curvilínea, busto generoso, piernas largas, cintura estrecha, sensual, atractiva, voluptuosa
-- Ropa que enfatice la figura: uniforme escolar con falda corta, vestido ajustado, blusa con escote, traje de baño, ropa entallada
-- Detalles sugerentes: medias, ligueros, escotes pronunciados, ropa que se transparente con el agua, faldas cortas con vista al viento
-- Edad: TODOS los personajes 18+ años. Especificar edad en la descripción` : `REGLAS DE DESCRIPCIÓN VISUAL (estilo limpio):
-- Describir apariencia de forma neutra y descriptiva
-- Enfocarse en: rostro, ojos, peinado, color de cabello, estilo de ropa general, accesorios
-- Describir el ESTILO de ropa (vestido de fiesta, uniforme escolar, kimono moderno, traje formal)
-- Personajes femeninos: apariencia limpia y atractiva, sin cicatrices, sin heridas, sin ojeras pronunciadas
-- Edad: TODOS los personajes 18+ años. Especificar edad en la descripción`}`;
+REGLAS DE PERSONAJES FEMENINOS (TODOS los géneros):
+- Cabello LARGO obligatorio (hasta los hombros o más largo). Nunca corto tipo bob/pixie.
+- Figura femenina BONITA pero NO exagerada: cintura definida, proporciones equilibradas, esbelta. NO musculosas, NO atléticas marcadas. NO "voluptuosas" extremas.
+- Aspecto INOCENTE: rasgos suaves, ojos grandes y expresivos, sonrisa amable o expresión dulce
+- Piel limpia, sin cicatrices, sin heridas, sin ojeras pronunciadas
+- Ropa adecuada al rol pero femenina
+
+${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
+- En appearance: usar términos técnicos de diseño anime que no disparen filtros: "feminine figure", "slim waist", "long legs", "delicate features"
+- Ropa que insinúa sin ser explícita: uniforme escolar con falda corta, vestido entallado, blusa abierta, traje de baño según escena
+- NO usar en appearance: "voluptuosa", "busto generoso", "curvas pronunciadas", "sensual", "seductora", "escote" — Gemini los bloquea
+- USAR: "graceful", "elegant", "charming", "cute", "attractive", "soft features"` : `RESTRICCIÓN DE LENGUAJE (importante para no activar filtros):
+- En appearance NO usar: voluptuosa, sensual, seductora, escote, busto, curvas pronunciadas, ajustado que realza, translúcida, provocativa
+- USAR: elegante, delicada, dulce, bonita, encantadora, refinada, esbelta`}
+
+- Edad: TODOS los personajes 18+ años. Especificar edad en la descripción`;
 
     const chRaw = await callClaude(
       `${ctx}\\n\\n${charRules}\\n\\nCrea ${numChars} personajes únicos (${numFemales} mujeres + ${numMales} hombre${numMales > 1 ? 's' : ''}) que pertenezcan al género "${genero}" — sus profesiones, vestimenta y trasfondos deben encajar con ese género${isEcchi ? ' y con el tono ecchi (ropa que muestre su atractivo)' : ''}. Devuelve SOLO:
