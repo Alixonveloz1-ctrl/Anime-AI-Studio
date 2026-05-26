@@ -1,142 +1,118 @@
+// ════════════════════════════════════════════════════════════════
+// AUDIO GENERATION PROXY — Gemini 2.5 Flash TTS via Vertex AI
+// ════════════════════════════════════════════════════════════════
 export const config = { runtime: 'edge' };
 
-async function getAccessToken(serviceAccount) {
+// ───────── OAuth: Service Account → Access Token ─────────
+async function getAccessToken(sa) {
   const now = Math.floor(Date.now() / 1000);
-  const header = { alg: 'RS256', typ: 'JWT' };
-  const payload = {
-    iss: serviceAccount.client_email,
-    sub: serviceAccount.client_email,
-    aud: serviceAccount.token_uri,
-    iat: now,
-    exp: now + 3600,
-    scope: 'https://www.googleapis.com/auth/cloud-platform',
-  };
-  const b64 = (obj) => btoa(JSON.stringify(obj)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+  const b64 = o => btoa(JSON.stringify(o)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+  const header  = { alg:'RS256', typ:'JWT' };
+  const payload = { iss:sa.client_email, sub:sa.client_email, aud:sa.token_uri, iat:now, exp:now+3600, scope:'https://www.googleapis.com/auth/cloud-platform' };
   const signingInput = `${b64(header)}.${b64(payload)}`;
-  const pemBody = serviceAccount.private_key
-    .replace('-----BEGIN PRIVATE KEY-----','').replace('-----END PRIVATE KEY-----','').replace(/\n/g,'');
-  const keyDer = Uint8Array.from(atob(pemBody), c => c.charCodeAt(0));
-  const cryptoKey = await crypto.subtle.importKey('pkcs8', keyDer, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
-  const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', cryptoKey, new TextEncoder().encode(signingInput));
-  const b64sig = btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+  const pem = sa.private_key.replace('-----BEGIN PRIVATE KEY-----','').replace('-----END PRIVATE KEY-----','').replace(/\n/g,'');
+  const keyDer = Uint8Array.from(atob(pem), c => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey('pkcs8', keyDer, { name:'RSASSA-PKCS1-v1_5', hash:'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(signingInput));
+  const b64sig = btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
   const jwt = `${signingInput}.${b64sig}`;
-  const tokenRes = await fetch(serviceAccount.token_uri, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
+  const r = await fetch(sa.token_uri, {
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:`grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
   });
-  const tokenData = await tokenRes.json();
-  if (!tokenData.access_token) throw new Error('OAuth error: ' + JSON.stringify(tokenData));
-  return tokenData.access_token;
+  const d = await r.json();
+  if (!d.access_token) throw new Error('OAuth: '+JSON.stringify(d));
+  return d.access_token;
 }
 
-// Convert raw PCM 24kHz 16bit mono to WAV base64
-function pcmToWav(pcmBase64) {
-  const pcmBytes = Uint8Array.from(atob(pcmBase64), c => c.charCodeAt(0));
-  const sampleRate = 24000;
-  const numChannels = 1;
-  const bitsPerSample = 16;
-  const byteRate = sampleRate * numChannels * bitsPerSample / 8;
-  const blockAlign = numChannels * bitsPerSample / 8;
-  const dataSize = pcmBytes.length;
-  const headerSize = 44;
-  const buffer = new ArrayBuffer(headerSize + dataSize);
-  const view = new DataView(buffer);
+// ───────── PCM 24kHz mono 16-bit → WAV base64 ─────────
+function pcmToWav(pcmB64) {
+  const pcm = Uint8Array.from(atob(pcmB64), c => c.charCodeAt(0));
+  const sampleRate = 24000, channels = 1, bits = 16;
+  const byteRate = sampleRate * channels * bits / 8;
+  const blockAlign = channels * bits / 8;
+  const dataSize = pcm.length;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const dv  = new DataView(buf);
+  const w = (off, s) => { for (let i=0; i<s.length; i++) dv.setUint8(off+i, s.charCodeAt(i)); };
 
-  const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
-  writeStr(0, 'RIFF');
-  view.setUint32(4, 36 + dataSize, true);
-  writeStr(8, 'WAVE');
-  writeStr(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, bitsPerSample, true);
-  writeStr(36, 'data');
-  view.setUint32(40, dataSize, true);
+  w(0, 'RIFF');
+  dv.setUint32(4, 36 + dataSize, true);
+  w(8, 'WAVE');
+  w(12, 'fmt ');
+  dv.setUint32(16, 16, true);   dv.setUint16(20, 1, true);
+  dv.setUint16(22, channels, true);
+  dv.setUint32(24, sampleRate, true);
+  dv.setUint32(28, byteRate, true);
+  dv.setUint16(32, blockAlign, true);
+  dv.setUint16(34, bits, true);
+  w(36, 'data');
+  dv.setUint32(40, dataSize, true);
 
-  const wavBytes = new Uint8Array(buffer);
-  wavBytes.set(pcmBytes, headerSize);
+  const wav = new Uint8Array(buf);
+  wav.set(pcm, 44);
 
-  // Convert to base64
-  let binary = '';
-  for (let i = 0; i < wavBytes.length; i++) binary += String.fromCharCode(wavBytes[i]);
-  return btoa(binary);
+  let s = '';
+  for (let i=0; i<wav.length; i++) s += String.fromCharCode(wav[i]);
+  return btoa(s);
 }
 
+// ───────── Handler ─────────
 export default async function handler(req) {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } });
-  }
-  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
-  const CORS = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
+  const CORS = { 'Content-Type':'application/json', 'Access-Control-Allow-Origin':'*' };
+  if (req.method === 'OPTIONS') return new Response(null, { headers:{ ...CORS, 'Access-Control-Allow-Methods':'POST, OPTIONS', 'Access-Control-Allow-Headers':'Content-Type' } });
+  if (req.method !== 'POST')    return new Response('Method not allowed', { status:405 });
 
   try {
     const { text, voice, act } = await req.json();
+    if (!text) return new Response(JSON.stringify({ error:'text required' }), { status:400, headers:CORS });
 
     const saJson = process.env.GCP_SERVICE_ACCOUNT;
-    if (!saJson) return new Response(JSON.stringify({ error: 'GCP_SERVICE_ACCOUNT not configured' }), { status: 500, headers: CORS });
-
-    const serviceAccount = JSON.parse(saJson);
-    const projectId = serviceAccount.project_id;
-    const location = 'us-central1';
-    const accessToken = await getAccessToken(serviceAccount);
+    if (!saJson) return new Response(JSON.stringify({ error:'GCP_SERVICE_ACCOUNT missing' }), { status:500, headers:CORS });
+    const sa = JSON.parse(saJson);
+    const projectId = sa.project_id;
+    const token = await getAccessToken(sa);
 
     const voiceMap = {
-      gemini_male:   'Charon',
-      gemini_female: 'Kore',
-      gemini_male2:  'Fenrir',
-      gemini_female2:'Aoede',
+      gemini_male:    'Charon',
+      gemini_female:  'Kore',
+      gemini_male2:   'Fenrir',
+      gemini_female2: 'Aoede',
     };
     const voiceName = voiceMap[voice] || 'Charon';
-    const emotionPrefix = act === 'climax' ? '[excited] ' : act === 'resolution' ? '[soft] ' : act === 'cold_open' ? '[curious] ' : '';
-    const taggedText = emotionPrefix + text;
+    const tag =
+      act === 'climax'      ? '[excited] '  :
+      act === 'resolution'  ? '[soft] '     :
+      act === 'cold_open'   ? '[curious] '  : '';
 
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/gemini-2.5-flash-preview-tts:generateContent`;
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
-        'X-Goog-User-Project': projectId,
-      },
+    const url = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/gemini-2.5-flash-preview-tts:generateContent`;
+    const r = await fetch(url, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, 'X-Goog-User-Project':projectId },
       body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: taggedText }] }],
-        generationConfig: {
-          responseModalities: ['AUDIO'],
-          speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName } }
-          }
-        }
+        contents:[{ role:'user', parts:[{ text: tag + text }] }],
+        generationConfig:{
+          responseModalities:['AUDIO'],
+          speechConfig:{ voiceConfig:{ prebuiltVoiceConfig:{ voiceName } } },
+        },
       }),
     });
+    const d = await r.json();
+    if (!r.ok) return new Response(JSON.stringify({ error: `Gemini TTS: ${d.error?.message || r.status}` }), { status:500, headers:CORS });
 
-    const data = await res.json();
+    const part = d.candidates?.[0]?.content?.parts?.[0];
+    if (!part?.inlineData?.data) return new Response(JSON.stringify({ error: 'No audio in response' }), { status:500, headers:CORS });
 
-    if (!res.ok) {
-      return new Response(JSON.stringify({ error: `Gemini TTS: ${data.error?.message || res.status}` }), { status: 500, headers: CORS });
-    }
-
-    const part = data.candidates?.[0]?.content?.parts?.[0];
-    if (!part?.inlineData?.data) {
-      return new Response(JSON.stringify({ error: 'Gemini TTS: no audio — ' + JSON.stringify(data).substring(0,150) }), { status: 500, headers: CORS });
-    }
-
-    const mimeType = part.inlineData.mimeType || 'audio/pcm';
+    const mime = part.inlineData.mimeType || 'audio/pcm';
     let audioData = part.inlineData.data;
-
-    // Gemini TTS returns raw PCM — convert to WAV so browsers can play it
-    if (mimeType.includes('pcm') || mimeType.includes('l16') || mimeType.includes('raw')) {
+    if (mime.includes('pcm') || mime.includes('l16') || mime.includes('raw')) {
       audioData = pcmToWav(audioData);
     }
 
-    return new Response(JSON.stringify({ audioData, mimeType: 'audio/wav' }), { status: 200, headers: CORS });
+    return new Response(JSON.stringify({ audioData, mimeType: 'audio/wav' }), { status:200, headers:CORS });
 
   } catch(e) {
-    return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: CORS });
+    return new Response(JSON.stringify({ error: e.message }), { status:500, headers:CORS });
   }
 }
