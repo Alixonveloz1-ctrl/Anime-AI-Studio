@@ -48,6 +48,17 @@ async function getAccessToken(serviceAccount) {
   return tokenData.access_token;
 }
 
+// Extract image from Imagen API response (handles both response formats)
+function extractImagenB64(data) {
+  // Format 1: predictions[0].bytesBase64Encoded
+  if (data.predictions?.[0]?.bytesBase64Encoded) return data.predictions[0].bytesBase64Encoded;
+  // Format 2: predictions[0].image.bytesBase64Encoded
+  if (data.predictions?.[0]?.image?.bytesBase64Encoded) return data.predictions[0].image.bytesBase64Encoded;
+  // Format 3: predictions array with raiFilteredReason (safety block)
+  if (data.predictions?.[0]?.raiFilteredReason) return null;
+  return null;
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } });
@@ -71,23 +82,51 @@ export default async function handler(req) {
     let imageData = null;
     let lastError = null;
 
-    // Try 1: Imagen 3.0
+    // ── Try 1: Imagen 3.0 (best quality) ──────────────────────────────────
     try {
       const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/imagen-3.0-generate-002:predict`;
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-        body: JSON.stringify({ instances: [{ prompt }], parameters: { sampleCount: 1, aspectRatio: '9:16', safetySetting: 'block_only_high' } }),
+        body: JSON.stringify({
+          instances: [{ prompt }],
+          parameters: { sampleCount: 1, aspectRatio: '9:16', safetySetting: 'block_only_high' },
+        }),
       });
       const data = await res.json();
-      if (res.ok && data.predictions?.[0]?.bytesBase64Encoded) {
-        imageData = data.predictions[0].bytesBase64Encoded;
+      if (res.ok) {
+        const b64 = extractImagenB64(data);
+        if (b64) { imageData = b64; }
+        else lastError = `imagen-3.0: no image bytes. Response: ${JSON.stringify(data).substring(0,150)}`;
       } else {
         lastError = `imagen-3.0: ${data.error?.message || res.status}`;
       }
     } catch(e) { lastError = 'imagen-3.0: ' + e.message; }
 
-    // Try 2: Gemini 2.0 Flash Image
+    // ── Try 2: Imagen 3.0 Fast ────────────────────────────────────────────
+    if (!imageData) {
+      try {
+        const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/imagen-3.0-fast-generate-001:predict`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+          body: JSON.stringify({
+            instances: [{ prompt }],
+            parameters: { sampleCount: 1, aspectRatio: '9:16', safetySetting: 'block_only_high' },
+          }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          const b64 = extractImagenB64(data);
+          if (b64) { imageData = b64; }
+          else lastError = `imagen-3-fast: no image bytes. Response: ${JSON.stringify(data).substring(0,150)}`;
+        } else {
+          lastError = `imagen-3-fast: ${data.error?.message || res.status}`;
+        }
+      } catch(e) { lastError = 'imagen-3-fast: ' + e.message; }
+    }
+
+    // ── Try 3: Gemini 2.0 Flash Image ────────────────────────────────────
     if (!imageData) {
       try {
         const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/gemini-2.0-flash-preview-image-generation:generateContent`;
@@ -103,29 +142,11 @@ export default async function handler(req) {
         if (res.ok) {
           const imgPart = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.mimeType?.startsWith('image/'));
           if (imgPart) imageData = imgPart.inlineData.data;
-          else lastError = 'gemini-flash-image: no image in response';
+          else lastError = `gemini-flash-image: no image. Response: ${JSON.stringify(data).substring(0,150)}`;
         } else {
           lastError = `gemini-flash-image: ${data.error?.message || res.status}`;
         }
       } catch(e) { lastError = 'gemini-flash-image: ' + e.message; }
-    }
-
-    // Try 3: Imagen 3 Fast
-    if (!imageData) {
-      try {
-        const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/imagen-3.0-fast-generate-001:predict`;
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-          body: JSON.stringify({ instances: [{ prompt }], parameters: { sampleCount: 1, aspectRatio: '9:16' } }),
-        });
-        const data = await res.json();
-        if (res.ok && data.predictions?.[0]?.bytesBase64Encoded) {
-          imageData = data.predictions[0].bytesBase64Encoded;
-        } else {
-          lastError = `imagen-3-fast: ${data.error?.message || res.status}`;
-        }
-      } catch(e) { lastError = 'imagen-3-fast: ' + e.message; }
     }
 
     if (imageData) return new Response(JSON.stringify({ imageData }), { status: 200, headers: CORS });
