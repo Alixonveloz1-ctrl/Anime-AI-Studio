@@ -48,15 +48,21 @@ async function getAccessToken(serviceAccount) {
   return tokenData.access_token;
 }
 
-// Extract image from Imagen API response (handles both response formats)
 function extractImagenB64(data) {
-  // Format 1: predictions[0].bytesBase64Encoded
   if (data.predictions?.[0]?.bytesBase64Encoded) return data.predictions[0].bytesBase64Encoded;
-  // Format 2: predictions[0].image.bytesBase64Encoded
   if (data.predictions?.[0]?.image?.bytesBase64Encoded) return data.predictions[0].image.bytesBase64Encoded;
-  // Format 3: predictions array with raiFilteredReason (safety block)
-  if (data.predictions?.[0]?.raiFilteredReason) return null;
   return null;
+}
+
+// Enhance prompt to always feature beautiful anime girls
+function enhancePrompt(prompt, isEcchi) {
+  const base = `beautiful anime girl, stunning female character, gorgeous face, large expressive eyes, flowing hair, detailed anime art style, professional illustration, vibrant colors, 9:16 vertical format`;
+
+  if (isEcchi) {
+    return `${prompt}, ${base}, attractive feminine figure, form-fitting clothing, short skirt, low cut top, bare midriff, seductive expression, blushing, alluring pose, anime fan service style, suggestive but tasteful, revealing outfit, long legs, detailed body, soft lighting`;
+  }
+
+  return `${prompt}, ${base}, elegant feminine features, beautiful young woman, expressive emotions, cinematic lighting, high quality anime illustration`;
 }
 
 export default async function handler(req) {
@@ -68,42 +74,43 @@ export default async function handler(req) {
   const CORS = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
 
   try {
-    const { prompt, refImageBase64 } = await req.json();
+    const { prompt, refImageBase64, isEcchi } = await req.json();
 
     const saJson = process.env.GCP_SERVICE_ACCOUNT;
-    if (!saJson) return new Response(JSON.stringify({ error: 'GCP_SERVICE_ACCOUNT not configured in Vercel' }), { status: 500, headers: CORS });
+    if (!saJson) return new Response(JSON.stringify({ error: 'GCP_SERVICE_ACCOUNT not configured' }), { status: 500, headers: CORS });
 
     const serviceAccount = JSON.parse(saJson);
     const projectId = serviceAccount.project_id;
     const location = 'us-central1';
 
     const accessToken = await getAccessToken(serviceAccount);
+    const enhancedPrompt = enhancePrompt(prompt, isEcchi);
 
     let imageData = null;
     let lastError = null;
 
-    // ── Try 1: Imagen 3.0 (best quality) ──────────────────────────────────
+    // Try 1: Imagen 3.0 generate 002
     try {
       const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/imagen-3.0-generate-002:predict`;
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
         body: JSON.stringify({
-          instances: [{ prompt }],
+          instances: [{ prompt: enhancedPrompt }],
           parameters: { sampleCount: 1, aspectRatio: '9:16', safetySetting: 'block_only_high' },
         }),
       });
       const data = await res.json();
       if (res.ok) {
         const b64 = extractImagenB64(data);
-        if (b64) { imageData = b64; }
-        else lastError = `imagen-3.0: no image bytes. Response: ${JSON.stringify(data).substring(0,150)}`;
+        if (b64) imageData = b64;
+        else lastError = `imagen-3.0-002: no bytes. ${JSON.stringify(data).substring(0,100)}`;
       } else {
-        lastError = `imagen-3.0: ${data.error?.message || res.status}`;
+        lastError = `imagen-3.0-002: ${data.error?.message || res.status}`;
       }
-    } catch(e) { lastError = 'imagen-3.0: ' + e.message; }
+    } catch(e) { lastError = 'imagen-3.0-002: ' + e.message; }
 
-    // ── Try 2: Imagen 3.0 Fast ────────────────────────────────────────────
+    // Try 2: Imagen 3.0 fast
     if (!imageData) {
       try {
         const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/imagen-3.0-fast-generate-001:predict`;
@@ -111,42 +118,42 @@ export default async function handler(req) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
           body: JSON.stringify({
-            instances: [{ prompt }],
+            instances: [{ prompt: enhancedPrompt }],
             parameters: { sampleCount: 1, aspectRatio: '9:16', safetySetting: 'block_only_high' },
           }),
         });
         const data = await res.json();
         if (res.ok) {
           const b64 = extractImagenB64(data);
-          if (b64) { imageData = b64; }
-          else lastError = `imagen-3-fast: no image bytes. Response: ${JSON.stringify(data).substring(0,150)}`;
+          if (b64) imageData = b64;
+          else lastError = `imagen-3-fast: no bytes. ${JSON.stringify(data).substring(0,100)}`;
         } else {
           lastError = `imagen-3-fast: ${data.error?.message || res.status}`;
         }
       } catch(e) { lastError = 'imagen-3-fast: ' + e.message; }
     }
 
-    // ── Try 3: Gemini 2.0 Flash Image ────────────────────────────────────
+    // Try 3: Imagen 3.0 generate 001
     if (!imageData) {
       try {
-        const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/gemini-2.0-flash-preview-image-generation:generateContent`;
-        const parts = refImageBase64
-          ? [{ inlineData: { mimeType: 'image/png', data: refImageBase64 } }, { text: 'Use as character reference. Generate: ' + prompt }]
-          : [{ text: prompt }];
+        const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/imagen-3.0-generate-001:predict`;
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-          body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } }),
+          body: JSON.stringify({
+            instances: [{ prompt: enhancedPrompt }],
+            parameters: { sampleCount: 1, aspectRatio: '9:16', safetySetting: 'block_only_high' },
+          }),
         });
         const data = await res.json();
         if (res.ok) {
-          const imgPart = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.mimeType?.startsWith('image/'));
-          if (imgPart) imageData = imgPart.inlineData.data;
-          else lastError = `gemini-flash-image: no image. Response: ${JSON.stringify(data).substring(0,150)}`;
+          const b64 = extractImagenB64(data);
+          if (b64) imageData = b64;
+          else lastError = `imagen-3.0-001: no bytes. ${JSON.stringify(data).substring(0,100)}`;
         } else {
-          lastError = `gemini-flash-image: ${data.error?.message || res.status}`;
+          lastError = `imagen-3.0-001: ${data.error?.message || res.status}`;
         }
-      } catch(e) { lastError = 'gemini-flash-image: ' + e.message; }
+      } catch(e) { lastError = 'imagen-3.0-001: ' + e.message; }
     }
 
     if (imageData) return new Response(JSON.stringify({ imageData }), { status: 200, headers: CORS });
