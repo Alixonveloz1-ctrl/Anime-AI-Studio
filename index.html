@@ -739,7 +739,7 @@ async function generateGeminiAudio(text, act) {
 
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error || `Audio proxy error ${res.status}`);
-  if (data.audioData) return data.audioData;
+  if (data.audioData) return { audioData: data.audioData, mimeType: data.mimeType || 'audio/mpeg' };
   throw new Error('Audio proxy: no audioData in response');
 }
 
@@ -775,7 +775,11 @@ async function generateAzureAudio(text, act, voiceName) {
 
 async function generateAudio(text, act) {
   const gender = document.getElementById('voiceGenderSelect')?.value || 'gemini_male';
-  if (gender.startsWith('gemini_')) return await generateGeminiAudio(text, act);
+  if (gender.startsWith('gemini_')) {
+    const result = await generateGeminiAudio(text, act);
+    if (typeof result === 'object' && result.audioData) return result.audioData;
+    return result;
+  }
   if (gender.startsWith('azure_')) { const voiceName = AZURE_VOICE_MAP[gender] || 'es-MX-JorgeNeural'; return await generateAzureAudio(text, act, voiceName); }
   throw new Error('Voz no soportada: ' + gender);
 }
@@ -1187,7 +1191,7 @@ window.generateSceneAudio = async function(sceneId) {
 window.playSceneAudio = async function(sceneId) {
   const audData = await dbGet(sceneAudKey(sceneId));
   if (!audData) { showToast('No hay audio', 'error'); return; }
-  new Audio(`data:audio/mpeg;base64,${audData}`).play();
+  new Audio(`data:audio/wav;base64,${audData}`).play();
   showToast('▶️ Reproduciendo...');
 };
 window.deleteSceneAudio = async function(sceneId) {
