@@ -140,7 +140,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.4 (tts clean)</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.5 (combined audio)</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1600,6 +1600,119 @@ REGLAS:
 // ════════════════════════════════════════════════════════════════
 // EXPORT ZIP
 // ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// AUDIO COMBINER — Web Audio API to merge all scenes into one WAV
+// ════════════════════════════════════════════════════════════════
+
+// Decode base64 to ArrayBuffer
+function base64ToArrayBuffer(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+// Encode AudioBuffer to WAV (16-bit PCM)
+function audioBufferToWav(audioBuffer) {
+  const numChannels = audioBuffer.numberOfChannels;
+  const sampleRate = audioBuffer.sampleRate;
+  const numFrames = audioBuffer.length;
+  const bytesPerSample = 2;
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = numFrames * blockAlign;
+  const bufferSize = 44 + dataSize;
+
+  const buffer = new ArrayBuffer(bufferSize);
+  const view = new DataView(buffer);
+
+  const writeString = (offset, str) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  };
+
+  writeString(0, 'RIFF');
+  view.setUint32(4, bufferSize - 8, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bytesPerSample * 8, true);
+  writeString(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  // Interleave channel data and convert to 16-bit PCM
+  let offset = 44;
+  const channels = [];
+  for (let c = 0; c < numChannels; c++) channels.push(audioBuffer.getChannelData(c));
+
+  for (let i = 0; i < numFrames; i++) {
+    for (let c = 0; c < numChannels; c++) {
+      let sample = Math.max(-1, Math.min(1, channels[c][i]));
+      sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+      view.setInt16(offset, sample, true);
+      offset += 2;
+    }
+  }
+
+  return new Uint8Array(buffer);
+}
+
+// Combine multiple audio (base64) into one WAV blob
+async function combineAudiosToWav(audioEntries, progressCb) {
+  // audioEntries: [{ data: base64, mime: 'audio/mpeg' | 'audio/wav' }]
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) throw new Error('Tu navegador no soporta Web Audio API');
+  const ctx = new AudioCtx();
+
+  const decoded = [];
+  let maxSampleRate = 0;
+  let maxChannels = 1;
+
+  for (let i = 0; i < audioEntries.length; i++) {
+    const entry = audioEntries[i];
+    if (progressCb) progressCb(i, audioEntries.length);
+    try {
+      const arrBuf = base64ToArrayBuffer(entry.data);
+      // decodeAudioData mutates the buffer in some implementations — clone
+      const buf = await ctx.decodeAudioData(arrBuf.slice(0));
+      decoded.push(buf);
+      if (buf.sampleRate > maxSampleRate) maxSampleRate = buf.sampleRate;
+      if (buf.numberOfChannels > maxChannels) maxChannels = buf.numberOfChannels;
+    } catch(e) {
+      console.warn(`Audio ${i+1} no se pudo decodificar:`, e.message);
+    }
+  }
+
+  if (!decoded.length) throw new Error('Ningún audio se pudo decodificar');
+
+  // Add 0.4s silence between scenes
+  const silenceFrames = Math.floor(maxSampleRate * 0.4);
+  const totalFrames = decoded.reduce((sum, b) => sum + b.length, 0) + silenceFrames * (decoded.length - 1);
+
+  // Use OfflineAudioContext to render properly
+  const offline = new OfflineAudioContext(maxChannels, totalFrames, maxSampleRate);
+  let cursor = 0;
+
+  for (let i = 0; i < decoded.length; i++) {
+    const buf = decoded[i];
+    const src = offline.createBufferSource();
+    src.buffer = buf;
+    src.connect(offline.destination);
+    src.start(cursor / maxSampleRate);
+    cursor += buf.length + silenceFrames;
+  }
+
+  const rendered = await offline.startRendering();
+  return audioBufferToWav(rendered);
+}
+
+// ════════════════════════════════════════════════════════════════
+// EXPORT ZIP
+// ════════════════════════════════════════════════════════════════
 document.getElementById('btnExportZip').addEventListener('click', async () => {
   if (!state.universe) { showToast('Nada que exportar', 'error'); return; }
   const btn = document.getElementById('btnExportZip');
@@ -1621,7 +1734,10 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
       if (img) zip.file(`personajes/${c.name.replace(/[^\w]+/g, '_')}.png`, img, { base64: true });
     }
 
-    // Scene images + audios
+    // Collect audios in order for combination
+    const audioEntries = [];
+
+    // Scene images + individual audios
     for (const s of state.scenes) {
       const img = await dbGet(sceneImgKey(s.id));
       const audStored = await dbGet(sceneAudKey(s.id));
@@ -1629,19 +1745,35 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
       if (img) zip.file(`escenas/escena_${pad}.png`, img, { base64: true });
       if (audStored) {
         // Parse mime|data format
-        let ext = 'wav';
+        let mime = 'audio/wav';
         let audData = audStored;
         if (audStored.includes('|')) {
           const idx = audStored.indexOf('|');
-          const mime = audStored.slice(0, idx);
+          mime = audStored.slice(0, idx);
           audData = audStored.slice(idx + 1);
-          if (mime.includes('mpeg') || mime.includes('mp3')) ext = 'mp3';
-          else if (mime.includes('ogg')) ext = 'ogg';
         }
+        const ext = (mime.includes('mpeg') || mime.includes('mp3')) ? 'mp3'
+                  : (mime.includes('ogg')) ? 'ogg' : 'wav';
         zip.file(`audios/escena_${pad}.${ext}`, audData, { base64: true });
+        audioEntries.push({ data: audData, mime, num: s.num });
       }
     }
 
+    // Combine all audios into one big file
+    if (audioEntries.length > 0) {
+      btn.innerHTML = `<div class="spinner"></div> Combinando ${audioEntries.length} audios...`;
+      try {
+        const combinedWav = await combineAudiosToWav(audioEntries, (i, total) => {
+          btn.innerHTML = `<div class="spinner"></div> Combinando ${i+1}/${total}...`;
+        });
+        zip.file('narracion_completa.wav', combinedWav);
+      } catch(e) {
+        console.error('No se pudo combinar audios:', e);
+        showToast('No se pudo crear audio combinado, solo los individuales', 'error');
+      }
+    }
+
+    btn.innerHTML = '<div class="spinner"></div> Generando ZIP...';
     const blob = await zip.generateAsync({ type: 'blob' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
