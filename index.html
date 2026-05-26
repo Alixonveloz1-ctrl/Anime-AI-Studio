@@ -1000,8 +1000,8 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
   const sysBase = `Eres un guionista de anime experto. REGLAS:
 - Narración PRIMERA PERSONA, 4-5 frases fluidas por escena, con gancho final
 - Pensamiento interno visible, nombres japoneses reales
-- imagePromptEN en INGLÉS, 9:16 anime 2D, muy visual${isEcchi ? `
-- Para ecchi: imagePromptEN DEBE incluir descripción física detallada y sugerente de los personajes femeninos: ropa ajustada, uniforme escolar o ropa de verano reveladora, escote, falda corta, postura sexy, expresión de rubor.` : ''}
+- imagePromptEN en INGLÉS, 9:16 anime 2D, basado en la narración y personajes de esa escena${isEcchi ? `
+- Para ecchi: el imagePromptEN debe reflejar el fan service del género — ropa sugerente, poses atractivas, expresiones de rubor, tensión romántica — acorde a lo que ocurre en la escena` : ''}
 - Responde SOLO JSON válido sin markdown ni texto extra`;
 
   const ctx = `Universo: ${u.title} | Género: ${u.genero}
