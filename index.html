@@ -140,7 +140,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.1</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.2 (azure)</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -227,7 +227,15 @@
 
       <label>Voz de narración</label>
       <select id="voiceSelect">
-        <optgroup label="🔮 Gemini TTS (HD)">
+        <optgroup label="🎤 Azure Neural (español natural)">
+          <option value="azure_male_mx">🎙️ Jorge — Masculino mexicano</option>
+          <option value="azure_male_es">🎙️ Álvaro — Masculino español</option>
+          <option value="azure_male_us">🎙️ Alonso — Masculino latino joven</option>
+          <option value="azure_female_mx">🎙️ Dalia — Femenina mexicana</option>
+          <option value="azure_female_es">🎙️ Elvira — Femenina española</option>
+          <option value="azure_female_us">🎙️ Paloma — Femenina latina joven</option>
+        </optgroup>
+        <optgroup label="🔮 Gemini TTS (multilenguaje)">
           <option value="gemini_male">🎙️ Charon — Masculino profundo</option>
           <option value="gemini_female">🎙️ Kore — Femenino natural</option>
           <option value="gemini_male2">🎙️ Fenrir — Masculino dramático</option>
@@ -584,22 +592,59 @@ async function generateAudio(text, voice, act) {
 
 async function generateAzureAudio(text, voice) {
   const key = getKeys().azure;
-  if (!key) throw new Error('Falta Azure key');
-  const voiceMap = { azure_male: 'es-MX-JorgeNeural', azure_female: 'es-MX-DaliaNeural' };
-  const voiceName = voiceMap[voice] || 'es-MX-JorgeNeural';
-  const ssml = `<speak version='1.0' xml:lang='es-MX'><voice name='${voiceName}'>${text}</voice></speak>`;
+  if (!key) throw new Error('Falta Azure Speech key — agrégala en el panel APIS');
+
+  const voiceMap = {
+    // Mexicanas
+    azure_male_mx:   { name: 'es-MX-JorgeNeural',   lang: 'es-MX', style: 'narration-professional' },
+    azure_female_mx: { name: 'es-MX-DaliaNeural',   lang: 'es-MX', style: 'friendly' },
+    // España
+    azure_male_es:   { name: 'es-ES-AlvaroNeural',  lang: 'es-ES', style: '' },
+    azure_female_es: { name: 'es-ES-ElviraNeural',  lang: 'es-ES', style: '' },
+    // Latino joven (US)
+    azure_male_us:   { name: 'es-US-AlonsoNeural',  lang: 'es-US', style: '' },
+    azure_female_us: { name: 'es-US-PalomaNeural',  lang: 'es-US', style: '' },
+  };
+  const v = voiceMap[voice] || voiceMap.azure_male_mx;
+
+  // Escape XML special chars
+  const safe = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+
+  // SSML with prosody for natural anime narration: slightly slower, expressive
+  const inner = v.style
+    ? `<mstts:express-as style="${v.style}"><prosody rate="-5%" pitch="0%">${safe}</prosody></mstts:express-as>`
+    : `<prosody rate="-5%" pitch="0%">${safe}</prosody>`;
+
+  const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='${v.lang}'><voice name='${v.name}'>${inner}</voice></speak>`;
+
   const res = await fetch('https://eastus.tts.speech.microsoft.com/cognitiveservices/v1', {
     method: 'POST',
     headers: {
       'Ocp-Apim-Subscription-Key': key,
       'Content-Type': 'application/ssml+xml',
-      'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
+      'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3',
+      'User-Agent': 'AnimeAIStudio',
     },
     body: ssml,
   });
-  if (!res.ok) throw new Error(`Azure ${res.status}`);
+  if (!res.ok) {
+    const errTxt = await res.text().catch(() => '');
+    throw new Error(`Azure ${res.status}: ${errTxt.slice(0,100)}`);
+  }
   const buf = await res.arrayBuffer();
-  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  // Convert ArrayBuffer to base64 in chunks (avoid stack overflow on large audio)
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  const b64 = btoa(bin);
   return { audioData: b64, mimeType: 'audio/mpeg' };
 }
 
@@ -1194,7 +1239,9 @@ window.generateSceneAudio = async function(sceneId) {
   showToast(`Generando audio escena ${s.num}...`, 'success');
   try {
     const result = await generateAudio(s.narration, voice, s.act);
-    await dbSet(sceneAudKey(s.id), result.audioData);
+    // Save audio with its mime type prefix so we know how to play it back
+    const mime = result.mimeType || 'audio/wav';
+    await dbSet(sceneAudKey(s.id), `${mime}|${result.audioData}`);
     renderScenes();
     showToast(`Audio ${s.num} listo`, 'success');
   } catch(e) {
@@ -1203,14 +1250,22 @@ window.generateSceneAudio = async function(sceneId) {
 };
 
 window.playSceneAudio = async function(sceneId) {
-  const data = await dbGet(sceneAudKey(sceneId));
-  if (!data) { showToast('Sin audio', 'error'); return; }
+  const stored = await dbGet(sceneAudKey(sceneId));
+  if (!stored) { showToast('Sin audio', 'error'); return; }
   try {
-    // Convert base64 to Blob for reliable playback
+    // Parse stored format: "mime|base64data" or legacy "base64data" (assume wav)
+    let mime = 'audio/wav';
+    let data = stored;
+    if (stored.includes('|')) {
+      const idx = stored.indexOf('|');
+      mime = stored.slice(0, idx);
+      data = stored.slice(idx + 1);
+    }
+
     const binary = atob(data);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const blob = new Blob([bytes], { type: 'audio/wav' });
+    const blob = new Blob([bytes], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = new Audio(url);
     a.onended = () => URL.revokeObjectURL(url);
@@ -1368,25 +1423,46 @@ document.getElementById('btnAllAudio').addEventListener('click', async () => {
   const bp = document.getElementById('bulkProgress'); bp.style.display = 'block';
   const bt = document.getElementById('bulkText'), bb = document.getElementById('bulkBar');
 
+  let failed = 0;
+  let completed = 0;
+  const total = state.scenes.length;
+
   for (let i = 0; i < state.scenes.length; i++) {
     const s = state.scenes[i];
-    const pct = Math.round((i / state.scenes.length) * 100);
+    const pct = Math.round((i / total) * 100);
     bb.style.width = pct + '%';
-    bt.textContent = `Audio ${i+1}/${state.scenes.length} (escena ${s.num})...`;
+    bt.textContent = `Audio ${i+1}/${total} (escena ${s.num})...`;
+
+    // Skip empty/broken scenes
+    if (!s.narration || s.narration.trim().length < 10) {
+      console.warn(`Escena ${s.num} sin narración, saltando audio`);
+      continue;
+    }
+
     try {
       const existing = await dbGet(sceneAudKey(s.id));
       if (!existing) {
         const result = await generateAudio(s.narration, voice, s.act);
-        await dbSet(sceneAudKey(s.id), result.audioData);
+        const mime = result.mimeType || 'audio/wav';
+        await dbSet(sceneAudKey(s.id), `${mime}|${result.audioData}`);
+        completed++;
+        // Live render every 3 audios
+        if (completed % 3 === 0) renderScenes();
       }
     } catch(e) {
       console.error(`Audio ${s.num}:`, e.message);
+      failed++;
+    }
+
+    // Small pause to be nice to the API
+    if (i < state.scenes.length - 1) {
+      await new Promise(r => setTimeout(r, 500));
     }
   }
   bb.style.width = '100%';
-  bt.textContent = '✅ Audios completados';
+  bt.textContent = failed > 0 ? `⚠️ ${completed} audios — ${failed} fallaron` : '✅ Audios completados';
   renderScenes();
-  setTimeout(() => bp.style.display = 'none', 2000);
+  setTimeout(() => bp.style.display = 'none', 3000);
 });
 
 // ════════════════════════════════════════════════════════════════
@@ -1514,10 +1590,22 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
     // Scene images + audios
     for (const s of state.scenes) {
       const img = await dbGet(sceneImgKey(s.id));
-      const aud = await dbGet(sceneAudKey(s.id));
+      const audStored = await dbGet(sceneAudKey(s.id));
       const pad = String(s.num).padStart(2, '0');
       if (img) zip.file(`escenas/escena_${pad}.png`, img, { base64: true });
-      if (aud) zip.file(`audios/escena_${pad}.wav`, aud, { base64: true });
+      if (audStored) {
+        // Parse mime|data format
+        let ext = 'wav';
+        let audData = audStored;
+        if (audStored.includes('|')) {
+          const idx = audStored.indexOf('|');
+          const mime = audStored.slice(0, idx);
+          audData = audStored.slice(idx + 1);
+          if (mime.includes('mpeg') || mime.includes('mp3')) ext = 'mp3';
+          else if (mime.includes('ogg')) ext = 'ogg';
+        }
+        zip.file(`audios/escena_${pad}.${ext}`, audData, { base64: true });
+      }
     }
 
     const blob = await zip.generateAsync({ type: 'blob' });
