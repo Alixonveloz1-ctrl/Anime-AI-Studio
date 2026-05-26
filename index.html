@@ -140,7 +140,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.8 (jorge no pause)</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.9 (jorge fluido)</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -625,36 +625,45 @@ async function generateAzureAudio(text, voice) {
   if (!key) throw new Error('Falta Azure Speech key — agrégala en el panel APIS');
 
   const voiceMap = {
-    // Mexicanas
     azure_male_mx:   { name: 'es-MX-JorgeNeural',   lang: 'es-MX', style: 'narration-professional' },
     azure_female_mx: { name: 'es-MX-DaliaNeural',   lang: 'es-MX', style: 'friendly' },
-    // España
     azure_male_es:   { name: 'es-ES-AlvaroNeural',  lang: 'es-ES', style: '' },
     azure_female_es: { name: 'es-ES-ElviraNeural',  lang: 'es-ES', style: '' },
-    // Latino joven (US)
     azure_male_us:   { name: 'es-US-AlonsoNeural',  lang: 'es-US', style: '' },
     azure_female_us: { name: 'es-US-PalomaNeural',  lang: 'es-US', style: '' },
   };
   const v = voiceMap[voice] || voiceMap.azure_male_mx;
 
-  // Escape XML special chars
-  const safe = text
+  // Step 1: clean the text first (remove *, _, markdown, etc)
+  // cleanTextForTTS is already called in generateAudio before reaching here,
+  // but apply again as safety net
+  let clean = String(text || '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/\*+/g, '')
+    .replace(/_([^_]+)_/g, '$1')
+    .replace(/_+/g, '')
+    .replace(/[""„«»]/g, '"')
+    .replace(/['']/g, "'")
+    .replace(/[—–]/g, ', ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Step 2: escape XML special chars (AFTER cleaning, BEFORE wrapping in SSML)
+  const safe = clean
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
 
-  // Replace sentence-ending periods/exclamations/questions with short SSML breaks
-  // This eliminates Azure's default long pauses between sentences
-  const paced = safe
-    .replace(/\.\s+/g, '. <break time="80ms"/>')
-    .replace(/\!\s+/g, '! <break time="80ms"/>')
-    .replace(/\?\s+/g, '? <break time="80ms"/>');
+  // Step 3: wrap in prosody rate="15%" to eliminate Azure's long sentence pauses
+  // "15%" = 15% faster than default, which removes the unnatural gaps
+  const prose = `<prosody rate="15%">${safe}</prosody>`;
 
   const inner = v.style
-    ? `<mstts:express-as style="${v.style}">${paced}</mstts:express-as>`
-    : paced;
+    ? `<mstts:express-as style="${v.style}">${prose}</mstts:express-as>`
+    : prose;
 
   const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='${v.lang}'><voice name='${v.name}'>${inner}</voice></speak>`;
 
@@ -673,7 +682,6 @@ async function generateAzureAudio(text, voice) {
     throw new Error(`Azure ${res.status}: ${errTxt.slice(0,100)}`);
   }
   const buf = await res.arrayBuffer();
-  // Convert ArrayBuffer to base64 in chunks (avoid stack overflow on large audio)
   const bytes = new Uint8Array(buf);
   let bin = '';
   const chunkSize = 0x8000;
