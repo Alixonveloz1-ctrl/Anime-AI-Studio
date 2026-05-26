@@ -1000,11 +1000,8 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
   const sysBase = `Eres un guionista de anime experto. REGLAS:
 - Narración PRIMERA PERSONA, 4-5 frases fluidas por escena, con gancho final
 - Pensamiento interno visible, nombres japoneses reales
-- imagePromptEN SIEMPRE en inglés, estilo anime 2D japonés clásico (NO 3D, NO realista, NO CGI)
-- imagePromptEN DEBE especificar: 2D anime illustration, flat color shading, cel-shaded, anime art style
-- imagePromptEN DEBE respetar el género del personaje (hombre=male character, mujer=female character)
-- Para personajes femeninos: beautiful anime girl, gorgeous face, large expressive eyes, detailed hair${isEcchi ? `, revealing outfit, short skirt, low cut top, bare midriff, seductive expression, alluring pose, suggestive fan service, long bare legs, blushing` : `, elegant outfit, expressive emotions`}
-- Para personajes masculinos: handsome anime boy/man, sharp features, cool expression
+- imagePromptEN en INGLÉS, 9:16 anime 2D, muy visual${isEcchi ? `
+- Para ecchi: imagePromptEN DEBE incluir descripción física detallada y sugerente de los personajes femeninos: ropa ajustada, uniforme escolar o ropa de verano reveladora, escote, falda corta, postura sexy, expresión de rubor.` : ''}
 - Responde SOLO JSON válido sin markdown ni texto extra`;
 
   const ctx = `Universo: ${u.title} | Género: ${u.genero}
@@ -1096,18 +1093,8 @@ window.generateCharImage = async function(charId) {
   const prevContent = wrap.innerHTML;
   wrap.innerHTML = `<div class="char-generating">⏳</div>`;
   try {
-    const isEcchiGenre = state.universe?.genero === 'ecchi';
-    const isFemale = /female|woman|girl|chica|mujer|femenin/i.test(char.role + ' ' + (char.appearance || ''));
-    const styleBase = '2D anime illustration, cel-shaded, flat color shading, anime art style, NOT 3D, NOT realistic, 9:16 vertical, full body, white background, vibrant colors';
-    let charPromptBase;
-    if (isFemale && isEcchiGenre) {
-      charPromptBase = `beautiful sexy anime girl, ${char.name}, ${char.appearance}, revealing outfit, short skirt, low cut top, bare midriff, seductive smile, alluring pose, fan service style, ${styleBase}`;
-    } else if (isFemale) {
-      charPromptBase = `beautiful anime girl, ${char.name}, ${char.appearance}, gorgeous face, large expressive eyes, elegant outfit, ${styleBase}`;
-    } else {
-      charPromptBase = `handsome anime male character, ${char.name}, ${char.appearance}, sharp features, cool expression, ${styleBase}`;
-    }
-    const imgData = await generateImage(charPromptBase);
+    const charPrompt = `Anime/donghua 2D character portrait, vertical 9:16, full body character reference sheet: ${char.name}, ${char.appearance}. Clean anime art style, vibrant colors, white background, professional character design. High quality illustration.`;
+    const imgData = await generateImage(charPrompt);
     await dbSet(imgKey(charId), imgData);
     wrap.innerHTML = `<img src="data:image/png;base64,${imgData}" alt="${char.name}">`;
     showToast('Imagen generada', 'success');
