@@ -1,196 +1,137 @@
 export const config = { runtime: 'edge' };
 
+async function getAccessToken(serviceAccount) {
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: 'RS256', typ: 'JWT' };
+  const payload = {
+    iss: serviceAccount.client_email,
+    sub: serviceAccount.client_email,
+    aud: serviceAccount.token_uri,
+    iat: now,
+    exp: now + 3600,
+    scope: 'https://www.googleapis.com/auth/cloud-platform',
+  };
+
+  const b64 = (obj) => btoa(JSON.stringify(obj)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+  const signingInput = `${b64(header)}.${b64(payload)}`;
+
+  const pemBody = serviceAccount.private_key
+    .replace('-----BEGIN PRIVATE KEY-----','')
+    .replace('-----END PRIVATE KEY-----','')
+    .replace(/\n/g,'');
+  const keyDer = Uint8Array.from(atob(pemBody), c => c.charCodeAt(0));
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8', keyDer,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false, ['sign']
+  );
+
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5', cryptoKey,
+    new TextEncoder().encode(signingInput)
+  );
+
+  const b64sig = btoa(String.fromCharCode(...new Uint8Array(signature)))
+    .replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+
+  const jwt = `${signingInput}.${b64sig}`;
+
+  const tokenRes = await fetch(serviceAccount.token_uri, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
+  });
+
+  const tokenData = await tokenRes.json();
+  if (!tokenData.access_token) throw new Error('OAuth error: ' + JSON.stringify(tokenData));
+  return tokenData.access_token;
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
-    });
+    return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } });
   }
+  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
 
-  if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
-  }
+  const CORS = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
 
   try {
     const { prompt, refImageBase64 } = await req.json();
-    const apiKey = process.env.GEMINI_API_KEY;
-    const projectId = process.env.GCP_PROJECT_ID || 'anime-ai-studio-497502';
+
+    const saJson = process.env.GCP_SERVICE_ACCOUNT;
+    if (!saJson) return new Response(JSON.stringify({ error: 'GCP_SERVICE_ACCOUNT not configured in Vercel' }), { status: 500, headers: CORS });
+
+    const serviceAccount = JSON.parse(saJson);
+    const projectId = serviceAccount.project_id;
     const location = 'us-central1';
 
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'GEMINI_API_KEY not configured in Vercel' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      });
-    }
-
-    // Detect key type
-    const isServiceAccountKey = apiKey.startsWith('AQ.');
+    const accessToken = await getAccessToken(serviceAccount);
 
     let imageData = null;
     let lastError = null;
 
-    if (isServiceAccountKey) {
-      // ── VERTEX AI (Agent Platform) con Service Account Key ──
-      // Usar endpoint de Vertex AI con la key de cuenta de servicio
-      const vertexEndpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/imagen-3.0-generate-002:predict`;
-
-      try {
-        const res = await fetch(vertexEndpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            instances: [{
-              prompt: prompt,
-            }],
-            parameters: {
-              sampleCount: 1,
-              aspectRatio: '9:16',
-              safetySetting: 'block_only_high',
-            },
-          }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          lastError = `Vertex imagen-3.0: ${data.error?.message || res.status}`;
-        } else {
-          const b64 = data.predictions?.[0]?.bytesBase64Encoded;
-          if (b64) imageData = b64;
-          else lastError = 'Vertex: no image bytes in response';
-        }
-      } catch(e) {
-        lastError = 'Vertex imagen-3.0: ' + e.message;
-      }
-
-      // Fallback: Gemini 2.0 flash image via Vertex
-      if (!imageData) {
-        try {
-          const geminiVertexUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/gemini-2.0-flash-preview-image-generation:generateContent`;
-
-          const parts = [];
-          if (refImageBase64) {
-            parts.push({ inlineData: { mimeType: 'image/png', data: refImageBase64 } });
-            parts.push({ text: 'Use as character reference. Generate: ' + prompt });
-          } else {
-            parts.push({ text: prompt });
-          }
-
-          const res2 = await fetch(geminiVertexUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              contents: [{ role: 'user', parts }],
-              generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
-            }),
-          });
-
-          const data2 = await res2.json();
-          if (res2.ok) {
-            const imgPart = data2.candidates?.[0]?.content?.parts?.find(
-              p => p.inlineData?.mimeType?.startsWith('image/')
-            );
-            if (imgPart) imageData = imgPart.inlineData.data;
-            else lastError = 'Vertex Gemini: no image in response';
-          } else {
-            lastError = `Vertex Gemini: ${data2.error?.message || res2.status}`;
-          }
-        } catch(e) {
-          lastError = 'Vertex Gemini fallback: ' + e.message;
-        }
-      }
-
-    } else {
-      // ── GENERATIVE LANGUAGE API con API key estándar (AIza...) ──
-      const models = [
-        'gemini-2.0-flash-preview-image-generation',
-        'gemini-2.0-flash-exp-image-generation',
-      ];
-
-      const parts = [];
-      if (refImageBase64) {
-        parts.push({ inlineData: { mimeType: 'image/png', data: refImageBase64 } });
-        parts.push({ text: 'Use as character reference. Generate: ' + prompt });
+    // Try 1: Imagen 3.0
+    try {
+      const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/imagen-3.0-generate-002:predict`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify({ instances: [{ prompt }], parameters: { sampleCount: 1, aspectRatio: '9:16', safetySetting: 'block_only_high' } }),
+      });
+      const data = await res.json();
+      if (res.ok && data.predictions?.[0]?.bytesBase64Encoded) {
+        imageData = data.predictions[0].bytesBase64Encoded;
       } else {
-        parts.push({ text: prompt });
+        lastError = `imagen-3.0: ${data.error?.message || res.status}`;
       }
+    } catch(e) { lastError = 'imagen-3.0: ' + e.message; }
 
-      for (const model of models) {
-        try {
-          const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{ role: 'user', parts }],
-                generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
-              }),
-            }
-          );
-          const data = await res.json();
-          if (!res.ok) { lastError = `${model}: ${data.error?.message || res.status}`; continue; }
-          const imgPart = data.candidates?.[0]?.content?.parts?.find(
-            p => p.inlineData?.mimeType?.startsWith('image/')
-          );
-          if (imgPart) { imageData = imgPart.inlineData.data; break; }
-          lastError = `${model}: no image in response`;
-        } catch(e) {
-          lastError = `${model}: ${e.message}`;
+    // Try 2: Gemini 2.0 Flash Image
+    if (!imageData) {
+      try {
+        const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/gemini-2.0-flash-preview-image-generation:generateContent`;
+        const parts = refImageBase64
+          ? [{ inlineData: { mimeType: 'image/png', data: refImageBase64 } }, { text: 'Use as character reference. Generate: ' + prompt }]
+          : [{ text: prompt }];
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+          body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          const imgPart = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.mimeType?.startsWith('image/'));
+          if (imgPart) imageData = imgPart.inlineData.data;
+          else lastError = 'gemini-flash-image: no image in response';
+        } else {
+          lastError = `gemini-flash-image: ${data.error?.message || res.status}`;
         }
-      }
-
-      // Fallback imagen-3
-      if (!imageData) {
-        try {
-          const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                instances: [{ prompt }],
-                parameters: { sampleCount: 1, aspectRatio: '9:16' },
-              }),
-            }
-          );
-          const data = await res.json();
-          const b64 = data.predictions?.[0]?.bytesBase64Encoded;
-          if (b64) imageData = b64;
-          else lastError = 'imagen-3.0: ' + JSON.stringify(data.error || 'no image');
-        } catch(e) {
-          lastError = 'imagen-3.0: ' + e.message;
-        }
-      }
+      } catch(e) { lastError = 'gemini-flash-image: ' + e.message; }
     }
 
-    if (imageData) {
-      return new Response(
-        JSON.stringify({ imageData }),
-        { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
-      );
+    // Try 3: Imagen 3 Fast
+    if (!imageData) {
+      try {
+        const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/imagen-3.0-fast-generate-001:predict`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+          body: JSON.stringify({ instances: [{ prompt }], parameters: { sampleCount: 1, aspectRatio: '9:16' } }),
+        });
+        const data = await res.json();
+        if (res.ok && data.predictions?.[0]?.bytesBase64Encoded) {
+          imageData = data.predictions[0].bytesBase64Encoded;
+        } else {
+          lastError = `imagen-3-fast: ${data.error?.message || res.status}`;
+        }
+      } catch(e) { lastError = 'imagen-3-fast: ' + e.message; }
     }
 
-    return new Response(
-      JSON.stringify({ error: lastError || 'All models failed' }),
-      { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
-    );
+    if (imageData) return new Response(JSON.stringify({ imageData }), { status: 200, headers: CORS });
+    return new Response(JSON.stringify({ error: lastError || 'All models failed' }), { status: 500, headers: CORS });
 
   } catch(e) {
-    return new Response(
-      JSON.stringify({ error: e.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
-    );
+    return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: CORS });
   }
 }
