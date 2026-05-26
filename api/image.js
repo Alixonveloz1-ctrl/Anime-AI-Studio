@@ -54,17 +54,6 @@ function extractImagenB64(data) {
   return null;
 }
 
-// Enhance prompt to always feature beautiful anime girls
-function enhancePrompt(prompt, isEcchi) {
-  const base = `beautiful anime girl, stunning female character, gorgeous face, large expressive eyes, flowing hair, detailed anime art style, professional illustration, vibrant colors, 9:16 vertical format`;
-
-  if (isEcchi) {
-    return `${prompt}, ${base}, attractive feminine figure, form-fitting clothing, short skirt, low cut top, bare midriff, seductive expression, blushing, alluring pose, anime fan service style, suggestive but tasteful, revealing outfit, long legs, detailed body, soft lighting`;
-  }
-
-  return `${prompt}, ${base}, elegant feminine features, beautiful young woman, expressive emotions, cinematic lighting, high quality anime illustration`;
-}
-
 export default async function handler(req) {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } });
@@ -74,7 +63,7 @@ export default async function handler(req) {
   const CORS = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
 
   try {
-    const { prompt, refImageBase64, isEcchi } = await req.json();
+    const { prompt } = await req.json();
 
     const saJson = process.env.GCP_SERVICE_ACCOUNT;
     if (!saJson) return new Response(JSON.stringify({ error: 'GCP_SERVICE_ACCOUNT not configured' }), { status: 500, headers: CORS });
@@ -84,7 +73,6 @@ export default async function handler(req) {
     const location = 'us-central1';
 
     const accessToken = await getAccessToken(serviceAccount);
-    const enhancedPrompt = enhancePrompt(prompt, isEcchi);
 
     let imageData = null;
     let lastError = null;
@@ -96,7 +84,7 @@ export default async function handler(req) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
         body: JSON.stringify({
-          instances: [{ prompt: enhancedPrompt }],
+          instances: [{ prompt }],
           parameters: { sampleCount: 1, aspectRatio: '9:16', safetySetting: 'block_only_high' },
         }),
       });
@@ -104,7 +92,7 @@ export default async function handler(req) {
       if (res.ok) {
         const b64 = extractImagenB64(data);
         if (b64) imageData = b64;
-        else lastError = `imagen-3.0-002: no bytes. ${JSON.stringify(data).substring(0,100)}`;
+        else lastError = `imagen-3.0-002: no bytes. ${JSON.stringify(data).substring(0,150)}`;
       } else {
         lastError = `imagen-3.0-002: ${data.error?.message || res.status}`;
       }
@@ -118,7 +106,7 @@ export default async function handler(req) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
           body: JSON.stringify({
-            instances: [{ prompt: enhancedPrompt }],
+            instances: [{ prompt }],
             parameters: { sampleCount: 1, aspectRatio: '9:16', safetySetting: 'block_only_high' },
           }),
         });
@@ -126,7 +114,7 @@ export default async function handler(req) {
         if (res.ok) {
           const b64 = extractImagenB64(data);
           if (b64) imageData = b64;
-          else lastError = `imagen-3-fast: no bytes. ${JSON.stringify(data).substring(0,100)}`;
+          else lastError = `imagen-3-fast: no bytes. ${JSON.stringify(data).substring(0,150)}`;
         } else {
           lastError = `imagen-3-fast: ${data.error?.message || res.status}`;
         }
@@ -141,7 +129,7 @@ export default async function handler(req) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
           body: JSON.stringify({
-            instances: [{ prompt: enhancedPrompt }],
+            instances: [{ prompt }],
             parameters: { sampleCount: 1, aspectRatio: '9:16', safetySetting: 'block_only_high' },
           }),
         });
@@ -149,7 +137,7 @@ export default async function handler(req) {
         if (res.ok) {
           const b64 = extractImagenB64(data);
           if (b64) imageData = b64;
-          else lastError = `imagen-3.0-001: no bytes. ${JSON.stringify(data).substring(0,100)}`;
+          else lastError = `imagen-3.0-001: no bytes. ${JSON.stringify(data).substring(0,150)}`;
         } else {
           lastError = `imagen-3.0-001: ${data.error?.message || res.status}`;
         }
