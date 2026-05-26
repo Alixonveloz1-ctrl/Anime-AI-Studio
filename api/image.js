@@ -67,7 +67,21 @@ ${prompt}`
   if (!r.ok) return { error: `${model}: ${d.error?.message || r.status}` };
   const img = d.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.mimeType?.startsWith('image/'));
   if (img) return { imageData: img.inlineData.data, model };
-  return { error: `${model}: no image returned` };
+
+  // Detailed reason if no image
+  const cand = d.candidates?.[0];
+  const finishReason = cand?.finishReason || 'UNKNOWN';
+  const safety = cand?.safetyRatings?.filter(s => s.blocked || s.probability === 'HIGH' || s.probability === 'MEDIUM')
+    ?.map(s => s.category.replace('HARM_CATEGORY_', ''))?.join(', ');
+  const blockedMsg = d.promptFeedback?.blockReason ? ` (prompt bloqueado: ${d.promptFeedback.blockReason})` : '';
+  const textPart = cand?.content?.parts?.find(p => p.text)?.text;
+
+  let errorMsg = `${model}: bloqueado por filtros [${finishReason}]`;
+  if (safety) errorMsg += ` — categorías: ${safety}`;
+  if (blockedMsg) errorMsg += blockedMsg;
+  if (textPart) errorMsg += ` — modelo dijo: "${textPart.slice(0,150)}"`;
+
+  return { error: errorMsg };
 }
 
 const ALLOWED_MODELS = new Set(['gemini-2.5-flash-image']);
