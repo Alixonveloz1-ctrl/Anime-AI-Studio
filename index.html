@@ -140,7 +140,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.5 (combined audio)</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.8 (jorge no pause)</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -645,10 +645,16 @@ async function generateAzureAudio(text, voice) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
 
-  // SSML with prosody for natural anime narration: slightly slower, expressive
+  // Replace sentence-ending periods/exclamations/questions with short SSML breaks
+  // This eliminates Azure's default long pauses between sentences
+  const paced = safe
+    .replace(/\.\s+/g, '. <break time="80ms"/>')
+    .replace(/\!\s+/g, '! <break time="80ms"/>')
+    .replace(/\?\s+/g, '? <break time="80ms"/>');
+
   const inner = v.style
-    ? `<mstts:express-as style="${v.style}"><prosody rate="-5%" pitch="0%">${safe}</prosody></mstts:express-as>`
-    : `<prosody rate="-5%" pitch="0%">${safe}</prosody>`;
+    ? `<mstts:express-as style="${v.style}">${paced}</mstts:express-as>`
+    : paced;
 
   const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='${v.lang}'><voice name='${v.name}'>${inner}</voice></speak>`;
 
@@ -1689,8 +1695,8 @@ async function combineAudiosToWav(audioEntries, progressCb) {
 
   if (!decoded.length) throw new Error('Ningún audio se pudo decodificar');
 
-  // Add 0.4s silence between scenes
-  const silenceFrames = Math.floor(maxSampleRate * 0.4);
+  // Add 0.15s silence between scenes — just enough to breathe
+  const silenceFrames = Math.floor(maxSampleRate * 0.15);
   const totalFrames = decoded.reduce((sum, b) => sum + b.length, 0) + silenceFrames * (decoded.length - 1);
 
   // Use OfflineAudioContext to render properly
