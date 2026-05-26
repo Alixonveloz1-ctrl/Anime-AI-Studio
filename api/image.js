@@ -35,7 +35,7 @@ async function callGemini(model, prompt, characterRefs, projectId, token) {
   if (characterRefs && characterRefs.length > 0) {
     // Add each character reference image labeled with their name
     for (const ref of characterRefs) {
-      parts.push({ inlineData: { mimeType: 'image/png', data: ref.img } });
+      parts.push({ inlineData: { mimeType: ref.mimeType || 'image/png', data: ref.img } });
       parts.push({ text: `↑ Character reference: ${ref.name}${ref.role ? ' (' + ref.role + ')' : ''}` });
     }
 
@@ -108,6 +108,7 @@ export default async function handler(req) {
         .map(r => ({
           name: String(r.name || 'character'),
           role: String(r.role || ''),
+          mimeType: r.mimeType || 'image/png',
           img: r.img.replace(/^data:image\/[a-z]+;base64,/i, '').replace(/\s/g, ''),
         }))
         .filter(r => r.img.length > 100);
