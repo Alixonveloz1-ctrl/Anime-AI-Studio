@@ -140,7 +140,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.10 (zoom video)</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.12 (timings v2)</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -268,7 +268,9 @@
 
       <button class="btn" id="btnExportZip" style="margin-bottom:10px">📦 Descargar ZIP</button>
 
-      <button class="btn" id="btnExportVideo" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);margin-bottom:10px">🎬 Exportar Video (imagen+audio sincronizados)</button>
+      <button class="btn" id="btnExportTimings" style="background:linear-gradient(135deg,#059669,#047857);margin-bottom:10px">⏱️ Exportar Tiempos para CapCut</button>
+
+      <button class="btn" id="btnExportVideo" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);margin-bottom:10px">🎬 Exportar Video (experimental)</button>
 
       <div id="videoProgress" style="display:none;margin-top:10px">
         <div class="progress-text" id="videoProgressText">Preparando...</div>
@@ -1813,6 +1815,89 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
 });
 
 // ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// EXPORT TIMINGS FOR CAPCUT
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btnExportTimings').addEventListener('click', async () => {
+  if (!state.scenes.length) { showToast('Genera escenas primero', 'error'); return; }
+
+  const btn = document.getElementById('btnExportTimings');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Midiendo audios...';
+
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const lines = [];
+    lines.push(`TIEMPOS — ${state.universe?.title || 'Episodio'}`);
+    lines.push('');
+    lines.push('Importa las imágenes en orden y el audio narracion_completa.wav');
+    lines.push('Ajusta cada imagen según los tiempos de abajo:');
+    lines.push('');
+
+    let totalSeconds = 0;
+    let sceneCount = 0;
+
+    for (const s of state.scenes) {
+      const audStored = await dbGet(sceneAudKey(s.id));
+      const pad = String(s.num).padStart(2, '0');
+
+      if (!audStored) {
+        lines.push(`escena_${pad}.png  →  sin audio`);
+        continue;
+      }
+
+      let audData = audStored;
+      if (audStored.includes('|')) {
+        audData = audStored.slice(audStored.indexOf('|') + 1);
+      }
+
+      try {
+        const buf = base64ToArrayBuffer(audData);
+        const audioBuffer = await audioCtx.decodeAudioData(buf.slice(0));
+        const dur = audioBuffer.duration;
+        const start = totalSeconds;
+        const end = totalSeconds + dur;
+
+        const fmt = s => {
+          const m = Math.floor(s / 60);
+          const sec = (s % 60).toFixed(1);
+          return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+        };
+
+        lines.push(`Escena ${s.num}  →  de ${fmt(start)} a ${fmt(end)}  (${dur.toFixed(1)}s)${s.title ? '  — ' + s.title : ''}`);
+        totalSeconds += dur;
+        sceneCount++;
+      } catch(e) {
+        lines.push(`escena_${pad}.png  →  error midiendo audio`);
+      }
+    }
+
+    audioCtx.close();
+
+    lines.push('');
+    lines.push('─'.repeat(50));
+    lines.push(`Total: ${sceneCount} escenas — ${Math.floor(totalSeconds/60)}m ${(totalSeconds%60).toFixed(0)}s`);
+
+    // Download as txt
+    const text = lines.join('\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const title = (state.universe?.title || 'anime').replace(/[^\w]+/g, '_').substring(0, 30);
+    a.href = url;
+    a.download = `${title}_tiempos.txt`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast(`✅ Tiempos de ${sceneCount} escenas exportados`, 'success');
+  } catch(e) {
+    openErrorModal('Error exportando tiempos', e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '⏱️ Exportar Tiempos para CapCut';
+  }
+});
+
 // ════════════════════════════════════════════════════════════════
 // VIDEO EXPORT — Canvas + MediaRecorder + Ken Burns zoom
 // ════════════════════════════════════════════════════════════════
