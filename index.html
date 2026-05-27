@@ -1979,6 +1979,9 @@ document.getElementById('btnExportVideo').addEventListener('click', async () => 
 // ════════════════════════════════════════════════════════════════
 // NAV TABS
 // ════════════════════════════════════════════════════════════════
+// NAV TABS
+// ════════════════════════════════════════════════════════════════
+document.querySelectorAll('.nav-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
