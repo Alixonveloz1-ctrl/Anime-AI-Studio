@@ -140,7 +140,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.13 (15x2 + SRT)</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.15</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -199,7 +199,7 @@
 
     <div class="card" id="cardGenerarEpisodio" style="display:none">
       <h2>🎬 Generar Episodio</h2>
-      <p style="font-size:13px;color:var(--text-dim);margin:0 0 10px">Esto creará personajes y 30 escenas con narración e imágenes.</p>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 10px">Esto creará personajes, 15 escenas con narración y 30 imágenes (2 por escena). Duración estimada: ~10 minutos.</p>
       <div id="epProgress" style="display:none">
         <div class="progress-text" id="epProgressText">Iniciando...</div>
         <div class="progress"><div class="progress-bar" id="epProgressBar" style="width:0%"></div></div>
@@ -981,6 +981,12 @@ REGLAS DE PERSONAJES FEMENINOS (TODOS los géneros):
 - Aspecto INOCENTE: rasgos suaves, ojos grandes y expresivos, sonrisa amable o expresión dulce
 - Piel limpia, sin cicatrices, sin heridas, sin ojeras pronunciadas
 - Ropa adecuada al rol pero femenina
+
+REGLAS DE APARIENCIA PARA TODOS LOS PERSONAJES (estilo anime — OBLIGATORIO):
+- La ropa se ve siempre LIMPIA, ENTERA y BIEN PUESTA. En anime nadie tiene ropa sucia, rota ni arrugada.
+- PROHIBIDO: "manchado", "arrugado", "roto", "desgastado", "viejo", "sucio", "raído", "deteriorado", "gastado", "desordenado"
+- Un barista lleva delantal limpio de lino. Un guerrero lleva armadura pulida. Un estudiante lleva uniforme impecable. Siempre.
+- Describir la ropa por ESTILO y COLOR únicamente: "delantal verde oscuro de lino", "camisa blanca de manga corta", "armadura plateada con detalles azules"
 
 ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
 - En appearance: usar términos técnicos de diseño anime que no disparen filtros: "feminine figure", "slim waist", "long legs", "delicate features"
