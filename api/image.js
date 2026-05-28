@@ -1,6 +1,5 @@
 // ════════════════════════════════════════════════════════════════
 // IMAGE GENERATION PROXY — Vertex AI Gemini Image (Nano Banana)
-// Soporta MÚLTIPLES imágenes de referencia para continuidad de personajes
 // ════════════════════════════════════════════════════════════════
 export const config = { runtime: 'edge' };
 
@@ -26,67 +25,64 @@ async function getAccessToken(sa) {
   return d.access_token;
 }
 
-// ───────── Gemini Flash Image — soporta múltiples referencias ─────────
-async function callGemini(model, prompt, characterRefs, projectId, token) {
+// ─── Words that trigger Gemini safety filters (only truly problematic ones) ───
+// Keep this list SHORT — over-sanitizing causes innocent prompts to look weird
+const BLOCKED_WORDS = [
+  [/\bnaked\b/gi, 'in swimsuit'],
+  [/\bnude\b/gi, 'in swimsuit'],
+  [/\bexplicit\b/gi, 'visible'],
+  [/\bpornograph\w*/gi, 'romantic'],
+  [/\berotic\b/gi, 'romantic'],
+  [/\bsex(ual)?\b/gi, 'romantic'],
+  [/\bgenitals?\b/gi, ''],
+  [/\bnipples?\b/gi, ''],
+];
+
+// ─── Words that DON'T trigger filters (safe for Gemini) ───
+// cleavage, busty, thigh, short skirt, wet clothes, blushing,
+// tight outfit, swimsuit, lingerie, suggestive, sensual, voluptuous
+// → these are fine, DO NOT replace them
+
+async function callGemini(model, prompt, characterRefs, projectId, token, isEcchi = false) {
   const url = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/${model}:generateContent`;
 
-  // Sanitize prompt: replace flagged terms with safe equivalents
-  // This is a safety net - the LLM should already produce clean prompts
-  const SAFE_REPLACEMENTS = [
-    [/\bvoluptuous\b/gi, 'graceful'],
-    [/\bbusty\b/gi, 'figure'],
-    [/\bbig breasts?\b/gi, 'feminine figure'],
-    [/\blarge breasts?\b/gi, 'feminine figure'],
-    [/\bbreasts?\b/gi, 'chest area'],
-    [/\bcleavage\b/gi, 'neckline'],
-    [/\bchest pressed\b/gi, 'close hug'],
-    [/\bpressing.*chest\b/gi, 'leaning close'],
-    [/\bsensual\b/gi, 'graceful'],
-    [/\bseductive\b/gi, 'charming'],
-    [/\berotic\b/gi, 'romantic'],
-    [/\bnaked\b/gi, 'in swimsuit'],
-    [/\bnude\b/gi, 'in swimsuit'],
-    [/\bexposed\b/gi, 'visible'],
-    [/\bintimate\b/gi, 'close'],
-    [/\bpanties\b/gi, 'undergarments'],
-    [/\bsee-through\b/gi, 'wet'],
-    [/\btransparent (clothes?|fabric|dress|shirt)\b/gi, 'wet $1'],
-    [/\bgenerous (chest|bust|breasts?)\b/gi, 'feminine figure'],
-  ];
-
+  // Only sanitize truly explicit words — not suggestive/ecchi vocabulary
   let cleanPrompt = prompt;
-  for (const [pattern, replacement] of SAFE_REPLACEMENTS) {
+  for (const [pattern, replacement] of BLOCKED_WORDS) {
     cleanPrompt = cleanPrompt.replace(pattern, replacement);
   }
 
   const parts = [];
 
   if (characterRefs && characterRefs.length > 0) {
-    // Add each character reference image labeled with their name
     for (const ref of characterRefs) {
       parts.push({ inlineData: { mimeType: ref.mimeType || 'image/png', data: ref.img } });
-      parts.push({ text: `↑ This is ${ref.name}${ref.role ? ' (' + ref.role + ')' : ''}. Use this EXACT design for ${ref.name} only.` });
+      parts.push({ text: `↑ CHARACTER REFERENCE: This is ${ref.name}. Draw ${ref.name} with EXACTLY this appearance — same face shape, same hair color and style, same eye color, same outfit. Do NOT mix up characters.` });
     }
 
     const namesList = characterRefs.map(r => r.name).join(', ');
 
+    const ecchiRules = isEcchi ? `
+- This is an ecchi/fan-service anime scene. Draw it with appropriate suggestive visual elements: flattering angles, form-fitting clothing, blushing expressions, suggestive poses.
+- Female characters should have attractive, feminine proportions with emphasis on their appeal.` : '';
+
     parts.push({
-      text: `Above are ${characterRefs.length} official character design${characterRefs.length > 1 ? 's' : ''}: ${namesList}.
+      text: `Character references provided: ${namesList}.
 
-STRICT COMPOSITION RULES:
-- ONLY draw the characters whose names are EXPLICITLY MENTIONED in the scene description below.
-- Each character must appear EXACTLY ONCE in the image. NEVER duplicate any character.
-- NEVER add unnamed/extra characters. If the scene mentions only 2 characters, draw exactly 2.
-- Match each named character to their reference image: same face, same hair color, same hair style, same eye color, same outfit details.
-- Female characters: keep LONG hair (shoulder-length or longer), feminine figure, soft features, innocent expression.
-- Faces must be CLEAR, anatomically correct, and well-defined — no distortion, no blur, no melted features.
-- Style: 9:16 vertical anime 2D illustration, professional quality, clean lineart.
+MANDATORY RULES:
+1. NO text, NO letters, NO watermarks, NO captions, NO subtitles anywhere in the image.
+2. ONLY draw characters explicitly mentioned in the scene. Do not add extra people.
+3. Each character appears EXACTLY ONCE — never duplicate.
+4. Match EACH character to THEIR reference image. Do not swap faces or designs between characters.
+5. Female characters: long hair (shoulder-length or longer), soft anime features, clean skin.
+6. Faces must be clear, well-defined, anatomically correct — no blur, no distortion.
+7. Style: 9:16 vertical anime 2D illustration, professional quality, vibrant colors.${ecchiRules}
 
-Scene to draw (read carefully which characters appear):
+Scene to illustrate:
 ${cleanPrompt}`
     });
   } else {
-    parts.push({ text: `9:16 vertical anime 2D illustration. Clean faces, anatomically correct, professional quality. ${cleanPrompt}` });
+    parts.push({ text: `9:16 vertical anime 2D illustration. NO text, NO watermarks, NO letters anywhere. Clean faces, professional quality, vibrant colors. ${cleanPrompt}` });
   }
 
   const r = await fetch(url, {
@@ -102,40 +98,34 @@ ${cleanPrompt}`
   const img = d.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.mimeType?.startsWith('image/'));
   if (img) return { imageData: img.inlineData.data, model };
 
-  // Detailed reason if no image
   const cand = d.candidates?.[0];
   const finishReason = cand?.finishReason || 'UNKNOWN';
-  const safety = cand?.safetyRatings?.filter(s => s.blocked || s.probability === 'HIGH' || s.probability === 'MEDIUM')
+  const safety = cand?.safetyRatings?.filter(s => s.blocked || s.probability === 'HIGH')
     ?.map(s => s.category.replace('HARM_CATEGORY_', ''))?.join(', ');
   const blockedMsg = d.promptFeedback?.blockReason ? ` (prompt bloqueado: ${d.promptFeedback.blockReason})` : '';
   const textPart = cand?.content?.parts?.find(p => p.text)?.text;
 
-  let errorMsg = `${model}: bloqueado por filtros [${finishReason}]`;
-  if (safety) errorMsg += ` — categorías: ${safety}`;
+  let errorMsg = `${model}: bloqueado [${finishReason}]`;
+  if (safety) errorMsg += ` — ${safety}`;
   if (blockedMsg) errorMsg += blockedMsg;
-  if (textPart) errorMsg += ` — modelo dijo: "${textPart.slice(0,150)}"`;
-
+  if (textPart) errorMsg += ` — "${textPart.slice(0,100)}"`;
   return { error: errorMsg };
 }
 
-const ALLOWED_MODELS = new Set(['gemini-2.5-flash-image']);
-
+// ─────────────────────────────────────────────
+const CORS = { 'Access-Control-Allow-Origin':'*', 'Content-Type':'application/json' };
 export default async function handler(req) {
-  const CORS = { 'Content-Type':'application/json', 'Access-Control-Allow-Origin':'*' };
-  if (req.method === 'OPTIONS') return new Response(null, { headers:{ ...CORS, 'Access-Control-Allow-Methods':'POST, OPTIONS', 'Access-Control-Allow-Headers':'Content-Type' } });
-  if (req.method !== 'POST')    return new Response('Method not allowed', { status:405 });
+  if (req.method === 'OPTIONS') return new Response('', { headers: CORS });
 
   try {
     const body = await req.json();
-    const { prompt, model: forceModel } = body;
+    const { prompt, model: forceModel, isEcchi } = body;
 
-    // Backward compat: accept either characterRefs[] OR single refImageBase64
     let characterRefs = body.characterRefs;
     if (!characterRefs && body.refImageBase64) {
       characterRefs = [{ name: 'main character', role: '', img: body.refImageBase64 }];
     }
 
-    // Clean refs: strip data: prefix, whitespace, validate
     if (characterRefs && Array.isArray(characterRefs)) {
       characterRefs = characterRefs
         .filter(r => r && r.img && typeof r.img === 'string')
@@ -151,17 +141,14 @@ export default async function handler(req) {
 
     if (!prompt) return new Response(JSON.stringify({ error:'prompt required' }), { status:400, headers:CORS });
 
-    const saJson = process.env.GCP_SERVICE_ACCOUNT;
-    if (!saJson) return new Response(JSON.stringify({ error:'GCP_SERVICE_ACCOUNT missing in Vercel env' }), { status:500, headers:CORS });
-    const sa = JSON.parse(saJson);
-    const projectId = sa.project_id;
+    const projectId = process.env.GCP_PROJECT_ID || 'anime-ai-studio-497502';
+    const sa = JSON.parse(process.env.GCP_SERVICE_ACCOUNT);
     const token = await getAccessToken(sa);
 
-    const modelToUse = (forceModel && ALLOWED_MODELS.has(forceModel)) ? forceModel : 'gemini-2.5-flash-image';
-    const result = await callGemini(modelToUse, prompt, characterRefs, projectId, token);
-    if (result.imageData) return new Response(JSON.stringify(result), { status:200, headers:CORS });
-    return new Response(JSON.stringify({ error: result.error || 'Failed' }), { status:500, headers:CORS });
+    const model = forceModel || 'gemini-2.5-flash-image';
+    const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true);
 
+    return new Response(JSON.stringify(result), { headers: CORS });
   } catch(e) {
     return new Response(JSON.stringify({ error: e.message }), { status:500, headers:CORS });
   }
