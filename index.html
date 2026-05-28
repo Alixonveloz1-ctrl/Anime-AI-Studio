@@ -140,7 +140,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.18</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.19</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -921,25 +921,30 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     const mod = u.mod || 'none';
 
     const sysBase = `Eres un guionista de anime experto.
-REGLAS:
-- Narración en español, PRIMERA PERSONA del protagonista, 4-5 frases por escena. Aquí puedes ser expresivo, pícaro, emotivo según el género.
+REGLAS DE NARRACIÓN:
+- En español, PRIMERA PERSONA del protagonista, 3-4 frases por escena, máximo 20 palabras por frase
 - Pensamientos internos visibles
 - Nombres japoneses REALES (sin inventos)
+- La narración puede ser expresiva, pícara o romántica según el género — sin restricciones
 
-REGLAS CRÍTICAS DEL imagePromptEN (esto va directo al generador de imágenes Gemini, que tiene filtros estrictos):
-- SIEMPRE en INGLÉS técnico de diseño anime
-- FORMATO OBLIGATORIO: empezar con "Scene with [character names present]:" y luego describir entorno, acción, expresión. Ejemplo: "Scene with Hiro and Aelina: They stand in a magical library, Hiro looks shocked while Aelina points at a glowing rune. Soft lamp light." Si solo aparece el protagonista: "Scene with Hiro alone: ..."
-- USAR vocabulario seguro: "feminine figure", "slim waist", "long legs", "graceful", "elegant", "cute", "attractive", "long flowing hair", "school uniform", "blushing", "shy expression", "embarrassed", "close-up", "low angle shot", "swimsuit scene"
-- PROHIBIDO en imagePromptEN (bloquea Gemini): "voluptuous", "busty", "cleavage", "breasts", "chest pressed", "sensual", "seductive", "naked", "nude", "exposed", "intimate", "erotic", "panties visible", "see-through"
-- Si la escena de la narración es íntima/romántica, en imagePromptEN describirla de forma SUGERENTE pero LIMPIA: "hug scene with blushing faces", "she leans close to him with embarrassed expression", "wet uniform after rain, shy reaction" en lugar de descripciones explícitas
-- NO mencionar personajes que no estén físicamente presentes en la escena visual
-- ESTRICTAMENTE FIEL al género: si es isekai DEBE ocurrir transición a otro mundo en escenas tempranas; si es mecha DEBE haber robots gigantes; si es deportes DEBE ser sobre ese deporte
-- NO mezclar géneros no pedidos
+REGLAS DEL imagePromptA e imagePromptB (van directo a Gemini generador de imágenes):
+- SIEMPRE en INGLÉS
+- FORMATO: "Scene with [nombres presentes]: [descripción visual]"
+- Describir: entorno, posición de personajes, expresión, iluminación, ángulo de cámara
+- Vocabulario PERMITIDO (no activa filtros): blushing, embarrassed, shy smile, short skirt, school uniform, sleeveless dress, form-fitting outfit, low angle shot, close-up face, wind lifting hair, leaning forward, surprised expression, accidental fall, reaching out
+- Vocabulario PROHIBIDO (bloquea Gemini — NUNCA usar): naked, nude, explicit, sexual, genitals, nipples, pornographic, non-consensual
+- Si la escena es romántica/íntima, describir la REACCIÓN VISUAL no la acción física: "both blushing deeply, faces close together, surprised eyes" en vez de "chest pressed against him"
+- NO texto, NO letras, NO marcas de agua en la imagen
+- Solo incluir personajes que aparecen físicamente en la escena
 - Responde SOLO JSON válido sin markdown`;
 
     const genreExtra = mod === 'ecchi'
-      ? '\\n\\nMODIFICADOR ECCHI ACTIVO:\\n- La narración puede ser pícara, traviesa, con situaciones comprometedoras (caídas, ducha, ropa mojada, malentendidos)\\n- El imagePromptEN debe describir el momento ecchi usando SOLO vocabulario seguro: "she trips and lands on him, both blushing", "wet school uniform clinging, embarrassed reaction", "swimsuit scene at the beach, playful pose", "panchira accident, surprised expression", "tsundere blush close-up", "low angle shot of her in short skirt"\\n- NUNCA usar palabras directas anatómicas o sexuales en imagePromptEN'
+      ? `\n\nMODIFICADOR ECCHI ACTIVO:
+- La narración puede describir situaciones picantes libremente
+- En imagePromptA/B usar "lenguaje de cámara ecchi": "low angle shot of her short skirt", "wind lifting her skirt, surprised blush", "she stumbles forward, both faces turning red", "leaning over the counter, her neckline visible", "wet uniform after rain, shy embarrassed expression", "accidental fall on top of him, both frozen in surprise"
+- NUNCA usar en imagePrompt: naked, nude, breasts, chest pressed, non-consensual, explicit, sexual`
       : '';
+
 
     const episodeInstructions = document.getElementById('episodeInstructions')?.value.trim() || '';
 
