@@ -140,7 +140,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.19</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.20</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1253,7 +1253,8 @@ window.generateSceneImageAB = async function(sceneId, ab) {
   const prompt = ab === 'A' ? (s.imagePromptA || s.narration) : (s.imagePromptB || s.imagePromptA || s.narration);
   showToast(`Generando imagen ${ab} escena ${s.num}...`, 'success');
   try {
-    const refs = await getAllCharacterRefs();
+    // Only pass refs for characters mentioned in THIS prompt
+    const refs = await getRefsForPrompt(prompt);
     let imgB64 = null, lastErr = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
@@ -1293,8 +1294,36 @@ async function getAllCharacterRefs() {
     const img = await dbGet(charImgKey(c.id));
     if (img) refs.push({ name: c.name, role: c.role, img });
   }
-  console.log(`Referencias disponibles: ${refs.length} personajes`);
   return refs;
+}
+
+// Returns ONLY refs for characters whose name appears in the prompt
+// This prevents Gemini from confusing characters
+async function getRefsForPrompt(prompt) {
+  if (!state.characters.length || !prompt) return [];
+  const promptLower = prompt.toLowerCase();
+  const matched = [];
+  for (const c of state.characters) {
+    if (!c.name) continue;
+    // Check if any part of the name appears in the prompt
+    const nameParts = c.name.toLowerCase().split(/\s+/);
+    const found = nameParts.some(part => part.length >= 3 && promptLower.includes(part));
+    if (found) {
+      const img = await dbGet(charImgKey(c.id));
+      if (img) matched.push({ name: c.name, role: c.role, img });
+    }
+  }
+  // If no match found but prompt says "Scene with X alone" or similar, try harder
+  if (!matched.length) {
+    // Fallback: just return the protagonist (first character)
+    const proto = state.characters[0];
+    if (proto) {
+      const img = await dbGet(charImgKey(proto.id));
+      if (img) matched.push({ name: proto.name, role: proto.role, img });
+    }
+  }
+  console.log(`Refs para prompt "${prompt.slice(0,50)}...": ${matched.map(r=>r.name).join(', ')}`);
+  return matched;
 }
 
 window.generateSceneAudio = async function(sceneId) {
@@ -1351,12 +1380,25 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   const bt = document.getElementById('bulkText'), bb = document.getElementById('bulkBar');
 
   bt.textContent = 'Preparando referencias...';
-  const refs = await getAllCharacterRefs();
-  const cachedRefs = [];
-  for (const r of refs.slice(0, 3)) {
+  // Pre-compress ALL character refs once
+  const allRawRefs = await getAllCharacterRefs();
+  const cachedRefMap = {}; // name -> compressed ref
+  for (const r of allRawRefs) {
     if (!r.img) continue;
     const compressed = await compressBase64Image(r.img.replace(/^data:image\/[a-z]+;base64,/i, ''), 768, 0.85);
-    cachedRefs.push({ name: r.name, role: r.role, img: compressed, mimeType: 'image/jpeg' });
+    cachedRefMap[r.name.toLowerCase()] = { name: r.name, role: r.role, img: compressed, mimeType: 'image/jpeg' };
+  }
+  console.log('Refs cacheadas:', Object.keys(cachedRefMap).join(', '));
+
+  // Filter refs for a specific prompt — only characters mentioned by name
+  function getRefsFromCache(prompt) {
+    if (!prompt) return Object.values(cachedRefMap);
+    const promptLower = prompt.toLowerCase();
+    const matched = Object.values(cachedRefMap).filter(r => {
+      const parts = r.name.toLowerCase().split(/\s+/);
+      return parts.some(p => p.length >= 3 && promptLower.includes(p));
+    });
+    return matched.length > 0 ? matched : Object.values(cachedRefMap).slice(0, 1);
   }
 
   // Build list of all images needed: A and B for each scene
@@ -1380,7 +1422,7 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
     let success = false, attempt = 0;
     while (!success && attempt < 8) {
       try {
-        const imgB64 = await generateImageRaw(prompt, cachedRefs);
+        const imgB64 = await generateImageRaw(prompt, getRefsFromCache(prompt));
         const key = ab === 'A' ? sceneImgKeyA(s.id) : sceneImgKeyB(s.id);
         await dbSet(key, imgB64);
         success = true; completed++;
