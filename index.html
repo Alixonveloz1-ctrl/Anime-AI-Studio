@@ -140,7 +140,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.12 (timings v2)</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.13 (15x2 + SRT)</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -342,6 +342,8 @@ function dbDel(k)    { return new Promise(res => { const tx = db.transaction('bl
 
 const charImgKey   = id => `ci_${state.projectId}_${id}`;
 const sceneImgKey  = id => `si_${state.projectId}_${id}`;
+const sceneImgKeyA = id => `sia_${state.projectId}_${id}`;
+const sceneImgKeyB = id => `sib_${state.projectId}_${id}`;
 const sceneAudKey  = id => `sa_${state.projectId}_${id}`;
 
 function saveState() {
@@ -1001,126 +1003,77 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
 
     setProg(20, `✅ ${state.characters.length} personajes — Paso 2/5: Escenas 1-8...`);
 
-    const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título","narration":"4-5 frases primera persona","imagePromptEN":"prompt visual en inglés"}`;
     const charRef = state.characters.map(c => `${c.id}=${c.name}(${c.role}): ${c.appearance}`).join(' | ');
 
-    // Helper: generate a batch with retry + validation. Accepts partial results.
+    // 15 scenes x 2 images = 30 images, ~10 min total
+    const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"3-4 frases primera persona máximo 20 palabras por frase","imagePromptA":"Scene with X alone: primer momento visual","imagePromptB":"Scene with X and Y: segundo momento distinto de la misma escena"}`;
+
     async function generateSceneBatch(batchPrompt, expectedCount, startNum, batchName) {
       let bestResult = [];
-
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callClaude(batchPrompt, sysBase + genreExtra);
           const parsed = safeParseJSON(raw);
           const arr = parsed.scenes || [];
-
-          // Validate each scene has required fields
-          const valid = arr.filter(s => s && s.narration && s.imagePromptEN && s.title);
-
-          // Keep best partial result so far
-          if (valid.length > bestResult.length) {
-            bestResult = valid;
-          }
-
+          const valid = arr.filter(s => s && s.narration && s.imagePromptA && s.imagePromptB && s.title);
+          if (valid.length > bestResult.length) bestResult = valid;
           if (valid.length >= expectedCount) {
             return valid.slice(0, expectedCount).map((s, i) => ({
-              ...s,
-              id: `s${startNum + i}`,
-              num: startNum + i,
-              act: s.act || 'act1',
+              ...s, id: `s${startNum + i}`, num: startNum + i, act: s.act || 'act1',
             }));
           }
-
-          console.warn(`${batchName} intento ${attempt+1}: solo ${valid.length}/${expectedCount} válidas, reintentando...`);
+          console.warn(`${batchName} intento ${attempt+1}: ${valid.length}/${expectedCount}`);
           await new Promise(r => setTimeout(r, 3000));
         } catch(e) {
-          console.error(`${batchName} intento ${attempt+1} error:`, e.message);
+          console.error(`${batchName} intento ${attempt+1}:`, e.message);
           if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
         }
       }
-
-      // Accept best partial result if we have at least some valid scenes
       if (bestResult.length > 0) {
-        console.warn(`${batchName}: usando resultado parcial (${bestResult.length}/${expectedCount}) — rellenando con placeholders`);
-        const result = bestResult.slice(0, expectedCount).map((s, i) => ({
-          ...s,
-          id: `s${startNum + i}`,
-          num: startNum + i,
-          act: s.act || 'act1',
-        }));
-
-        // Fill missing with placeholders (user can repair later)
+        const result = bestResult.map((s, i) => ({ ...s, id: `s${startNum + i}`, num: startNum + i, act: s.act || 'act1' }));
         while (result.length < expectedCount) {
           const num = startNum + result.length;
-          result.push({
-            id: `s${num}`,
-            num: num,
-            act: 'act1',
-            title: `Escena ${num} (pendiente)`,
-            narration: '',
-            imagePromptEN: '',
-          });
+          result.push({ id: `s${num}`, num, act: 'act1', title: `Escena ${num} (pendiente)`, narration: '', imagePromptA: '', imagePromptB: '' });
         }
         return result;
       }
-
-      // Total failure: return placeholders so user can repair
-      console.error(`${batchName}: fallo total, generando ${expectedCount} placeholders reparables`);
-      const placeholders = [];
-      for (let i = 0; i < expectedCount; i++) {
-        const num = startNum + i;
-        placeholders.push({
-          id: `s${num}`,
-          num: num,
-          act: 'act1',
-          title: `Escena ${num} (pendiente)`,
-          narration: '',
-          imagePromptEN: '',
-        });
-      }
-      return placeholders;
+      return Array.from({ length: expectedCount }, (_, i) => ({
+        id: `s${startNum + i}`, num: startNum + i, act: 'act1',
+        title: `Escena ${startNum + i} (pendiente)`, narration: '', imagePromptA: '', imagePromptB: '',
+      }));
     }
 
-    // ─── Step 2-5: Scenes in batches with retry ───
+    const batchRules = `REGLAS ESTRUCTURA:
+- 15 escenas en total, ~10 minutos de audio
+- Narración CORTA: 3-4 frases, máximo 20 palabras por frase
+- imagePromptA = primer momento de la escena (llegada, inicio de acción)
+- imagePromptB = segundo momento distinto (descubrimiento, clímax de esa escena, reacción)
+- FINALE ep1 (escena 15): resolución PARCIAL del conflicto del episodio + misterio abierto que engancha al ep2. NO resolver el conflicto principal de la serie.`;
+
+    // ─── Step 2-3: Scenes in 2 batches ───
     let scenes = await generateSceneBatch(
-      `${ctx}\\nPersonajes: ${charRef}\\n\\nGenera escenas 1-8. Actos: cold_open (1-2), act1 (3-8).\\nCada escena DEBE tener narration (4-5 frases) e imagePromptEN (descripción visual en inglés).\\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con 8 objetos numerados 1-8.`,
-      8, 1, 'Escenas 1-8'
+      `${ctx}\nPersonajes: ${charRef}\n\n${batchRules}\n\nGenera escenas 1-7. Actos: cold_open (1-2), act1 (3-7).\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con 7 objetos numerados 1-7.`,
+      7, 1, 'Escenas 1-7'
     );
 
-    setProg(40, '✅ 1-8 — Paso 3/5: Escenas 9-16...');
+    setProg(60, '✅ 1-7 — Paso 3/3: Escenas 8-15...');
     const batch2 = await generateSceneBatch(
-      `${ctx}\\nPersonajes: ${charRef}\\nÚltima escena: "${scenes[scenes.length-1]?.narration || ''}"\\n\\nGenera escenas 9-16 continuando la trama. Actos: act1 (9-10), act2 (11-16).\\nCada escena DEBE tener narration (4-5 frases) e imagePromptEN.\\nDevuelve SOLO: {"scenes":[...]} con 8 objetos numerados 9-16.`,
-      8, 9, 'Escenas 9-16'
+      `Universo: ${u.title} (${u.genero}${mod !== 'none' ? ', ' + mod : ''})\nPersonajes: ${state.characters.map(c => c.name).join(', ')}\nEscena 7 terminó: "${scenes[scenes.length-1]?.narration || ''}"\n\n${batchRules}\n\nGenera escenas 8-15:\n- 8-12: act2, escalada del conflicto\n- 13-14: clímax\n- 15: FINALE — resolución parcial + pregunta abierta que engancha al episodio 2\nDevuelve SOLO JSON con 8 objetos numerados 8-15.`,
+      8, 8, 'Escenas 8-15'
     );
     scenes = scenes.concat(batch2);
-
-    setProg(60, '✅ 9-16 — Paso 4/5: Escenas 17-24...');
-    const batch3 = await generateSceneBatch(
-      `${ctx}\\nPersonajes: ${charRef}\\nÚltima escena: "${scenes[scenes.length-1]?.narration || ''}"\\n\\nGenera escenas 17-24 continuando la trama. Actos: act2 (17-18), climax (19-24).\\nCada escena DEBE tener narration (4-5 frases) e imagePromptEN.\\nDevuelve SOLO: {"scenes":[...]} con 8 objetos numerados 17-24.`,
-      8, 17, 'Escenas 17-24'
-    );
-    scenes = scenes.concat(batch3);
-
-    setProg(80, '✅ 17-24 — Paso 5/5: Escenas 25-30...');
-    const batch4 = await generateSceneBatch(
-      `Universo: ${u.title} (${u.genero}${mod !== 'none' ? ', ' + mod : ''})\\nPersonajes principales: ${state.characters.map(c => c.name).join(', ')}\\nEscena 24 terminó así: "${scenes[scenes.length-1]?.narration || ''}"\\n\\nGenera las 6 escenas FINALES del episodio (25-30):\\n- Escena 25: clímax final\\n- Escenas 26-29: resolución y consecuencias\\n- Escena 30: post-créditos (gancho para próximo episodio)\\n\\nCada escena con narration (4-5 frases) e imagePromptEN.\\nDevuelve SOLO: {"scenes":[{"num":25,"act":"climax","title":"...","narration":"...","imagePromptEN":"Scene with X: ..."},...]} con 6 objetos.`,
-      6, 25, 'Escenas 25-30'
-    );
-    scenes = scenes.concat(batch4);
 
     state.scenes = scenes;
     saveState();
     renderScenes();
 
-    // Detect pending placeholder scenes
-    const pendingCount = scenes.filter(s => !s.narration || !s.imagePromptEN).length;
-
+    const pendingCount = scenes.filter(s => !s.narration || !s.imagePromptA).length;
     if (pendingCount > 0) {
-      setProg(100, `⚠️ ${state.scenes.length - pendingCount}/${state.scenes.length} escenas — ${pendingCount} pendientes`);
-      showToast(`${pendingCount} escenas no se generaron. Usa el botón "Reparar escenas vacías" para completarlas.`, 'error');
+      setProg(100, `⚠️ ${scenes.length - pendingCount}/15 escenas — ${pendingCount} pendientes`);
+      showToast(`${pendingCount} escenas pendientes. Usa "Reparar escenas vacías".`, 'error');
     } else {
-      setProg(100, '✅ ¡Episodio completo!');
-      showToast(`${state.characters.length} personajes y ${state.scenes.length} escenas creadas`, 'success');
+      setProg(100, '✅ Episodio 1 completo — 15 escenas × 2 imágenes = 30 imágenes');
+      showToast(`${state.characters.length} personajes y 15 escenas listas`, 'success');
     }
     setTimeout(() => { progress.style.display = 'none'; setProg(0, ''); }, 3000);
 
@@ -1211,7 +1164,7 @@ async function renderScenes() {
   }
 
   // Detect broken scenes (no narration, title or num)
-  const brokenCount = state.scenes.filter(s => !s.narration || !s.title || !s.imagePromptEN || s.num === undefined || s.num === null).length;
+  const brokenCount = state.scenes.filter(s => !s.narration || !s.title || !s.imagePromptA || s.num === undefined || s.num === null).length;
   if (repairBtn) {
     if (brokenCount > 0) {
       repairBtn.style.display = 'inline-flex';
@@ -1222,25 +1175,36 @@ async function renderScenes() {
   }
 
   const items = await Promise.all(state.scenes.map(async s => {
-    const imgB64 = await dbGet(sceneImgKey(s.id));
+    const imgA = await dbGet(sceneImgKeyA(s.id));
+    const imgB = await dbGet(sceneImgKeyB(s.id));
     const audData = await dbGet(sceneAudKey(s.id));
-    return { s, imgB64, audData };
+    return { s, imgA, imgB, audData };
   }));
-  c.innerHTML = items.map(({ s, imgB64, audData }) => `
+  c.innerHTML = items.map(({ s, imgA, imgB, audData }) => `
     <div class="scene-card">
       <div class="scene-header">
         <div class="scene-num">Escena ${s.num}</div>
         <div class="scene-act">${s.act}</div>
       </div>
-      <div class="scene-img">
-        ${imgB64 ? `<img src="data:image/png;base64,${imgB64}">` : '<span>Sin imagen</span>'}
+      <div style="display:flex;gap:6px">
+        <div class="scene-img" style="flex:1">
+          ${imgA ? `<img src="data:image/png;base64,${imgA}">` : '<span style="font-size:11px">Sin imagen A</span>'}
+          <div style="text-align:center;margin-top:4px">
+            <button class="btn-sec" style="font-size:11px;padding:4px 8px" onclick="generateSceneImageAB('${s.id}','A')">🖼️ ${imgA ? 'A' : '+ A'}</button>
+          </div>
+        </div>
+        <div class="scene-img" style="flex:1">
+          ${imgB ? `<img src="data:image/png;base64,${imgB}">` : '<span style="font-size:11px">Sin imagen B</span>'}
+          <div style="text-align:center;margin-top:4px">
+            <button class="btn-sec" style="font-size:11px;padding:4px 8px" onclick="generateSceneImageAB('${s.id}','B')">🖼️ ${imgB ? 'B' : '+ B'}</button>
+          </div>
+        </div>
       </div>
       <div class="scene-narration">${s.narration}</div>
       <div class="scene-actions">
-        <button class="btn-sec" onclick="generateSceneImage('${s.id}')">🖼️ ${imgB64 ? 'Regenerar' : 'Imagen'}</button>
         ${audData
           ? `<button class="btn-sec" onclick="playSceneAudio('${s.id}')">▶️ Reproducir</button>
-             <button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🔄 Regenerar</button>`
+             <button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🔄 Audio</button>`
           : `<button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🎙️ Audio</button>`
         }
       </div>
@@ -1248,37 +1212,42 @@ async function renderScenes() {
   `).join('');
 }
 
-window.generateSceneImage = async function(sceneId) {
+window.generateSceneImageAB = async function(sceneId, ab) {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
-  showToast(`Generando imagen escena ${s.num}...`, 'success');
+  const prompt = ab === 'A' ? (s.imagePromptA || s.narration) : (s.imagePromptB || s.imagePromptA || s.narration);
+  showToast(`Generando imagen ${ab} escena ${s.num}...`, 'success');
   try {
     const refs = await getAllCharacterRefs();
-    let imgB64 = null;
-    let lastErr = null;
+    let imgB64 = null, lastErr = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
-        imgB64 = await generateImage(s.imagePromptEN || s.narration, refs);
+        imgB64 = await generateImage(prompt, refs);
         break;
       } catch(e) {
         lastErr = e;
-        const isRateLimit = e.message.includes('429') || e.message.toLowerCase().includes('exhausted') || e.message.toLowerCase().includes('resource');
-        if (isRateLimit) {
-          const waitSec = [30, 60, 90, 120, 180][attempt];
-          showToast(`⏳ Rate limit — esperando ${waitSec}s (${attempt+1}/5)...`, 'error');
-          await new Promise(r => setTimeout(r, waitSec * 1000));
-        } else {
-          throw e;
-        }
+        const isRL = e.message.includes('429') || e.message.toLowerCase().includes('exhausted');
+        if (isRL) {
+          const w = [30,60,90,120,180][attempt];
+          showToast(`⏳ Rate limit ${w}s...`, 'error');
+          await new Promise(r => setTimeout(r, w * 1000));
+        } else throw e;
       }
     }
-    if (!imgB64) throw lastErr || new Error('No se pudo generar');
-    await dbSet(sceneImgKey(s.id), imgB64);
+    if (!imgB64) throw lastErr;
+    const key = ab === 'A' ? sceneImgKeyA(s.id) : sceneImgKeyB(s.id);
+    await dbSet(key, imgB64);
     renderScenes();
-    showToast(`Escena ${s.num} lista (${refs.length} pers.)`, 'success');
+    showToast(`Imagen ${ab} escena ${s.num} lista`, 'success');
   } catch(e) {
-    openErrorModal(`Error imagen escena ${s.num}`, e.message);
+    openErrorModal(`Error imagen ${ab} escena ${s.num}`, e.message);
   }
+};
+
+// Legacy single image (kept for repair button compatibility)
+window.generateSceneImage = async function(sceneId) {
+  await generateSceneImageAB(sceneId, 'A');
+  await generateSceneImageAB(sceneId, 'B');
 };
 
 // Return ALL character reference images (so Nano Banana keeps consistency for whoever appears)
@@ -1346,106 +1315,66 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   const bp = document.getElementById('bulkProgress'); bp.style.display = 'block';
   const bt = document.getElementById('bulkText'), bb = document.getElementById('bulkBar');
 
-  // Cache refs ONCE (avoid re-compressing same images 30 times)
-  bt.textContent = 'Preparando referencias de personajes...';
+  bt.textContent = 'Preparando referencias...';
   const refs = await getAllCharacterRefs();
-
-  // Pre-compress all refs once
   const cachedRefs = [];
   for (const r of refs.slice(0, 3)) {
     if (!r.img) continue;
     const compressed = await compressBase64Image(r.img.replace(/^data:image\/[a-z]+;base64,/i, ''), 768, 0.85);
     cachedRefs.push({ name: r.name, role: r.role, img: compressed, mimeType: 'image/jpeg' });
   }
-  console.log(`Refs cacheadas: ${cachedRefs.length}`);
 
-  let completed = 0;
-  let failed = 0;
-  const failedIds = [];
-  const total = state.scenes.length;
-
-  // Count already-existing
+  // Build list of all images needed: A and B for each scene
+  const queue = [];
   for (const s of state.scenes) {
-    if (await dbGet(sceneImgKey(s.id))) completed++;
+    if (!s.imagePromptA && !s.narration) continue;
+    const existingA = await dbGet(sceneImgKeyA(s.id));
+    const existingB = await dbGet(sceneImgKeyB(s.id));
+    if (!existingA) queue.push({ s, ab: 'A', prompt: s.imagePromptA || s.narration });
+    if (!existingB) queue.push({ s, ab: 'B', prompt: s.imagePromptB || s.imagePromptA || s.narration });
   }
 
-  for (let i = 0; i < state.scenes.length; i++) {
-    const s = state.scenes[i];
+  const total = queue.length;
+  let completed = 0, failed = 0, failedIds = [];
 
-    const existing = await dbGet(sceneImgKey(s.id));
-    if (existing) continue;
+  for (let i = 0; i < queue.length; i++) {
+    const { s, ab, prompt } = queue[i];
+    bb.style.width = Math.round((i / total) * 100) + '%';
+    bt.textContent = `Imagen ${i+1}/${total} — Escena ${s.num}${ab} ...`;
 
-    if (!s.imagePromptEN && !s.narration) {
-      console.warn(`Escena ${s.num} sin prompt — saltando`);
-      failed++;
-      failedIds.push(s.num);
-      continue;
-    }
-
-    const pct = Math.round((completed / total) * 100);
-    bb.style.width = pct + '%';
-    bt.textContent = `Imagen ${completed+1}/${total} (escena ${s.num})...`;
-
-    // Retry up to 8 times with progressive waits — never give up on rate limit
-    let success = false;
-    let attempt = 0;
-    const maxAttempts = 8;
-
-    while (!success && attempt < maxAttempts) {
+    let success = false, attempt = 0;
+    while (!success && attempt < 8) {
       try {
-        const imgB64 = await generateImageRaw(s.imagePromptEN || s.narration, cachedRefs);
-        await dbSet(sceneImgKey(s.id), imgB64);
-        success = true;
-        completed++;
-
-        // Live update — render after each successful image so user sees progress
-        if (completed % 3 === 0 || completed === total) renderScenes();
+        const imgB64 = await generateImageRaw(prompt, cachedRefs);
+        const key = ab === 'A' ? sceneImgKeyA(s.id) : sceneImgKeyB(s.id);
+        await dbSet(key, imgB64);
+        success = true; completed++;
+        if (completed % 4 === 0) renderScenes();
       } catch(e) {
         attempt++;
-        const isRateLimit = e.message.includes('429') || e.message.toLowerCase().includes('exhausted') || e.message.toLowerCase().includes('resource');
-
-        if (isRateLimit) {
-          // 30s, 45s, 60s, 90s, 120s, 180s, 240s, 300s
-          const waits = [30, 45, 60, 90, 120, 180, 240, 300];
-          const waitSec = waits[Math.min(attempt - 1, waits.length - 1)];
-          bt.textContent = `⏳ Escena ${s.num}: rate limit, esperando ${waitSec}s (intento ${attempt}/${maxAttempts})...`;
-          await new Promise(r => setTimeout(r, waitSec * 1000));
-        } else if (e.message.toLowerCase().includes('safety') || e.message.toLowerCase().includes('block')) {
-          // Safety block: no point retrying, move on
-          console.error(`Escena ${s.num} bloqueada:`, e.message);
-          bt.textContent = `⚠️ Escena ${s.num} bloqueada por filtros, continuando...`;
-          await new Promise(r => setTimeout(r, 2000));
-          break;
+        const isRL = e.message.includes('429') || e.message.toLowerCase().includes('exhausted');
+        if (isRL) {
+          const w = [30,45,60,90,120,180,240,300][Math.min(attempt-1,7)];
+          bt.textContent = `⏳ Rate limit ${w}s (intento ${attempt}/8)...`;
+          await new Promise(r => setTimeout(r, w * 1000));
+        } else if (e.message.toLowerCase().includes('block') || e.message.toLowerCase().includes('safety')) {
+          bt.textContent = `⚠️ Escena ${s.num}${ab} bloqueada, continuando...`;
+          await new Promise(r => setTimeout(r, 2000)); break;
         } else {
-          // Other errors: short wait + retry
-          console.error(`Escena ${s.num} intento ${attempt}:`, e.message);
-          bt.textContent = `⚠️ Escena ${s.num} error, reintentando (${attempt}/${maxAttempts})...`;
           await new Promise(r => setTimeout(r, 5000));
         }
       }
     }
-
-    if (!success) {
-      failed++;
-      failedIds.push(s.num);
-      console.error(`Escena ${s.num} FALLÓ después de ${maxAttempts} intentos`);
-    }
-
-    // Pause between scenes — 12s normal, more if recently rate limited
-    if (i < state.scenes.length - 1) {
-      const pauseMs = attempt > 0 ? 15000 : 12000;
-      await new Promise(r => setTimeout(r, pauseMs));
-    }
+    if (!success) { failed++; failedIds.push(`${s.num}${ab}`); }
+    if (i < queue.length - 1) await new Promise(r => setTimeout(r, 12000));
   }
 
   bb.style.width = '100%';
-  if (failed === 0) {
-    bt.textContent = `✅ ${completed}/${total} imágenes completadas`;
-    showToast(`¡Todas las imágenes generadas!`, 'success');
-  } else {
-    bt.textContent = `⚠️ ${completed}/${total} completadas — fallaron escenas: ${failedIds.join(', ')}`;
-    showToast(`${failed} escenas fallaron — vuelve a darle al botón para reintentar`, 'error');
-  }
+  bt.textContent = failed === 0
+    ? `✅ ${completed}/${total} imágenes completadas`
+    : `⚠️ ${completed}/${total} — fallaron: ${failedIds.join(', ')}`;
+  if (failed > 0) showToast(`${failed} imágenes fallaron — dale de nuevo al botón`, 'error');
+  else showToast('¡Todas las imágenes generadas!', 'success');
   renderScenes();
   btn.disabled = false;
   setTimeout(() => bp.style.display = 'none', 5000);
@@ -1536,7 +1465,7 @@ document.getElementById('btnRepairScenes').addEventListener('click', async () =>
   // Find broken scenes (no narration, no title, or num is undefined)
   const brokenIndices = [];
   state.scenes.forEach((s, idx) => {
-    if (!s.narration || !s.title || !s.imagePromptEN || s.num === undefined || s.num === null) {
+    if (!s.narration || !s.title || !s.imagePromptA || s.num === undefined || s.num === null) {
       brokenIndices.push(idx);
     }
   });
@@ -1627,6 +1556,15 @@ REGLAS:
 // ════════════════════════════════════════════════════════════════
 // EXPORT ZIP
 // ════════════════════════════════════════════════════════════════
+// Convert seconds to SRT timestamp format HH:MM:SS,mmm
+function toSrtTime(seconds) {
+  const ms = Math.floor((seconds % 1) * 1000);
+  const s = Math.floor(seconds % 60);
+  const m = Math.floor((seconds / 60) % 60);
+  const h = Math.floor(seconds / 3600);
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')},${String(ms).padStart(3,'0')}`;
+}
+
 // ════════════════════════════════════════════════════════════════
 // AUDIO COMBINER — Web Audio API to merge all scenes into one WAV
 // ════════════════════════════════════════════════════════════════
@@ -1761,32 +1699,69 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
       if (img) zip.file(`personajes/${c.name.replace(/[^\w]+/g, '_')}.png`, img, { base64: true });
     }
 
-    // Collect audios in order for combination
+    // Collect audios + images A/B
     const audioEntries = [];
+    const audioCtxSrt = new (window.AudioContext || window.webkitAudioContext)();
+    const srtLines = [];
+    let srtIndex = 1;
+    let timeOffset = 0;
 
-    // Scene images + individual audios
     for (const s of state.scenes) {
-      const img = await dbGet(sceneImgKey(s.id));
+      const imgA = await dbGet(sceneImgKeyA(s.id));
+      const imgB = await dbGet(sceneImgKeyB(s.id));
       const audStored = await dbGet(sceneAudKey(s.id));
       const pad = String(s.num).padStart(2, '0');
-      if (img) zip.file(`escenas/escena_${pad}.png`, img, { base64: true });
+
+      if (imgA) zip.file(`escenas/escena_${pad}A.png`, imgA, { base64: true });
+      if (imgB) zip.file(`escenas/escena_${pad}B.png`, imgB, { base64: true });
+
       if (audStored) {
-        // Parse mime|data format
-        let mime = 'audio/wav';
-        let audData = audStored;
+        let mime = 'audio/wav', audData = audStored;
         if (audStored.includes('|')) {
           const idx = audStored.indexOf('|');
           mime = audStored.slice(0, idx);
           audData = audStored.slice(idx + 1);
         }
-        const ext = (mime.includes('mpeg') || mime.includes('mp3')) ? 'mp3'
-                  : (mime.includes('ogg')) ? 'ogg' : 'wav';
+        const ext = (mime.includes('mpeg') || mime.includes('mp3')) ? 'mp3' : 'wav';
         zip.file(`audios/escena_${pad}.${ext}`, audData, { base64: true });
         audioEntries.push({ data: audData, mime, num: s.num });
+
+        // Generate SRT entries for this scene
+        try {
+          const buf = base64ToArrayBuffer(audData);
+          const decoded = await audioCtxSrt.decodeAudioData(buf.slice(0));
+          const dur = decoded.duration;
+
+          // Split narration into sentences for subtitles
+          const sentences = cleanTextForTTS(s.narration)
+            .split(/(?<=[.!?])\s+/)
+            .filter(t => t.trim().length > 3);
+
+          if (sentences.length > 0) {
+            const durPerSentence = dur / sentences.length;
+            for (let si = 0; si < sentences.length; si++) {
+              const start = timeOffset + si * durPerSentence;
+              const end = timeOffset + (si + 1) * durPerSentence;
+              srtLines.push(srtIndex++);
+              srtLines.push(`${toSrtTime(start)} --> ${toSrtTime(end)}`);
+              srtLines.push(sentences[si].trim());
+              srtLines.push('');
+            }
+          }
+          timeOffset += dur;
+        } catch(e) {
+          console.warn(`SRT escena ${s.num}:`, e);
+        }
       }
     }
+    audioCtxSrt.close();
 
-    // Combine all audios into one big file
+    // Add SRT file
+    if (srtLines.length > 0) {
+      zip.file('subtitulos.srt', srtLines.join('\n'));
+    }
+
+    // Combine all audios into one
     if (audioEntries.length > 0) {
       btn.innerHTML = `<div class="spinner"></div> Combinando ${audioEntries.length} audios...`;
       try {
@@ -1796,7 +1771,6 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
         zip.file('narracion_completa.wav', combinedWav);
       } catch(e) {
         console.error('No se pudo combinar audios:', e);
-        showToast('No se pudo crear audio combinado, solo los individuales', 'error');
       }
     }
 
@@ -1806,7 +1780,7 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
     const a = document.createElement('a');
     a.href = url; a.download = `${sn}.zip`; a.click();
     URL.revokeObjectURL(url);
-    showToast('ZIP descargado', 'success');
+    showToast('ZIP descargado con subtítulos .srt incluidos', 'success');
   } catch(e) {
     openErrorModal('Error al exportar', e.message);
   } finally {
