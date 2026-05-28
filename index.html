@@ -140,7 +140,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.15</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.17</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -199,12 +199,25 @@
 
     <div class="card" id="cardGenerarEpisodio" style="display:none">
       <h2>🎬 Generar Episodio</h2>
-      <p style="font-size:13px;color:var(--text-dim);margin:0 0 10px">Esto creará personajes, 15 escenas con narración y 30 imágenes (2 por escena). Duración estimada: ~10 minutos.</p>
-      <div id="epProgress" style="display:none">
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px">Esto creará personajes, 15 escenas con narración y 30 imágenes (2 por escena). Duración estimada: ~10 minutos.</p>
+
+      <label>Número de personajes</label>
+      <select id="numCharsSelect">
+        <option value="auto">Auto (3-5 según la historia)</option>
+        <option value="2">2 personajes</option>
+        <option value="3">3 personajes</option>
+        <option value="4">4 personajes</option>
+        <option value="5">5 personajes</option>
+      </select>
+
+      <label style="margin-top:12px">Instrucciones para este episodio <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
+      <textarea id="episodeInstructions" placeholder="Ej: Kenji contrató a una universitaria de medio tiempo. Nao regresa pero ahora está de mejor humor. El episodio termina con una lluvia inesperada que cierra temprano la cafetería..." style="height:90px;resize:vertical"></textarea>
+
+      <div id="epProgress" style="display:none;margin-top:12px">
         <div class="progress-text" id="epProgressText">Iniciando...</div>
         <div class="progress"><div class="progress-bar" id="epProgressBar" style="width:0%"></div></div>
       </div>
-      <button class="btn" id="btnGenerarEpisodio">✨ Generar Episodio Completo</button>
+      <button class="btn" id="btnGenerarEpisodio" style="margin-top:12px">✨ Generar Episodio Completo</button>
     </div>
   </div>
 
@@ -925,6 +938,8 @@ REGLAS CRÍTICAS DEL imagePromptEN (esto va directo al generador de imágenes Ge
       ? '\\n\\nMODIFICADOR ECCHI ACTIVO:\\n- La narración puede ser pícara, traviesa, con situaciones comprometedoras (caídas, ducha, ropa mojada, malentendidos)\\n- El imagePromptEN debe describir el momento ecchi usando SOLO vocabulario seguro: "she trips and lands on him, both blushing", "wet school uniform clinging, embarrassed reaction", "swimsuit scene at the beach, playful pose", "panchira accident, surprised expression", "tsundere blush close-up", "low angle shot of her in short skirt"\\n- NUNCA usar palabras directas anatómicas o sexuales en imagePromptEN'
       : '';
 
+    const episodeInstructions = document.getElementById('episodeInstructions')?.value.trim() || '';
+
     const ctx = `Universo: ${u.title}
 Demografía: ${demo}
 Género: ${genero}
@@ -932,6 +947,7 @@ ${mod !== 'none' ? 'Modificador: ' + mod : ''}
 Concepto: ${u.concepto}
 Conflicto: ${u.conflicto}
 Setting: ${u.setting}
+${episodeInstructions ? '\nINSTRUCCIONES ESPECIALES PARA ESTE EPISODIO:\n' + episodeInstructions : ''}
 
 ${DEMO_PROMPTS[demo] || ''}
 
@@ -942,24 +958,29 @@ ${MOD_PROMPTS[mod] || ''}`;
     // ─── Step 1: Characters ───
     setProg(5, 'Paso 1/5: Creando personajes...');
 
-    // Determine character count and gender ratio based on modifier
+    // Determine character count and gender ratio based on modifier + user selection
     let numChars, numFemales, numMales, protagonistGender;
+    const numCharsChoice = document.getElementById('numCharsSelect')?.value || 'auto';
 
     if (mod === 'harem') {
-      // Male protagonist + 3+ female love interests
-      numChars = 4 + Math.floor(Math.random() * 2); // 4 or 5
-      numMales = 1;
-      numFemales = numChars - 1;
+      numChars = numCharsChoice !== 'auto' ? Math.max(4, parseInt(numCharsChoice)) : (4 + Math.floor(Math.random() * 2));
+      numMales = 1; numFemales = numChars - 1;
       protagonistGender = 'male';
     } else if (mod === 'harem_inverso') {
-      // Female protagonist + 3+ male love interests
-      numChars = 4 + Math.floor(Math.random() * 2); // 4 or 5
-      numFemales = 1;
-      numMales = numChars - 1;
+      numChars = numCharsChoice !== 'auto' ? Math.max(4, parseInt(numCharsChoice)) : (4 + Math.floor(Math.random() * 2));
+      numFemales = 1; numMales = numChars - 1;
       protagonistGender = 'female';
+    } else if (numCharsChoice !== 'auto') {
+      // User picked a specific number
+      numChars = parseInt(numCharsChoice);
+      if (numChars === 2) { numFemales = 1; numMales = 1; }
+      else if (numChars === 3) { numFemales = 2; numMales = 1; }
+      else if (numChars === 4) { numFemales = 3; numMales = 1; }
+      else { numFemales = 3; numMales = 2; }
+      protagonistGender = 'libre (el que mejor sirva al género)';
     } else {
-      // Default: 3-5 chars, always more females than males
-      numChars = 3 + Math.floor(Math.random() * 3); // 3, 4, or 5
+      // Auto: 3-5 chars, always more females than males
+      numChars = 3 + Math.floor(Math.random() * 3);
       if (numChars === 3) { numFemales = 2; numMales = 1; }
       else if (numChars === 4) { numFemales = 3; numMales = 1; }
       else { numFemales = 3; numMales = 2; }
