@@ -25,17 +25,25 @@ async function getAccessToken(sa) {
   return d.access_token;
 }
 
-// ─── Words that trigger Gemini safety filters (only truly problematic ones) ───
-// Keep this list SHORT — over-sanitizing causes innocent prompts to look weird
+// ─── Words that trigger Gemini safety filters ───
 const BLOCKED_WORDS = [
+  // Explicit sexual terms
   [/\bnaked\b/gi, 'in swimsuit'],
   [/\bnude\b/gi, 'in swimsuit'],
-  [/\bexplicit\b/gi, 'visible'],
+  [/\bexplicit\b/gi, 'suggestive'],
   [/\bpornograph\w*/gi, 'romantic'],
   [/\berotic\b/gi, 'romantic'],
   [/\bsex(ual)?\b/gi, 'romantic'],
   [/\bgenitals?\b/gi, ''],
   [/\bnipples?\b/gi, ''],
+  [/\bnon-consensual\b/gi, 'surprising'],
+  // Physical descriptions that trigger content policy
+  [/\bchest pressed\b/gi, 'close embrace'],
+  [/\bbreasts? pressed\b/gi, 'close together'],
+  [/\bpressing.*?(chest|breasts?)\b/gi, 'leaning close'],
+  [/\bbody against\b/gi, 'close to'],
+  [/\bcuerpo.*?pecho\b/gi, 'close together'],  // Spanish
+  [/\bpecho.*?contra\b/gi, 'leaning close'],   // Spanish
 ];
 
 // ─── Words that DON'T trigger filters (safe for Gemini) ───
