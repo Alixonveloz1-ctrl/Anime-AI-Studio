@@ -140,7 +140,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.17</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.18</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -557,23 +557,21 @@ async function compressBase64Image(base64, maxDim = 768, quality = 0.85) {
 async function generateImage(prompt, characterRefs = null, forceModel = null) {
   const modelSel = document.getElementById('imageModelSelect');
   const model = forceModel || (modelSel ? modelSel.value : 'auto');
+  const isEcchi = state.universe?.mod === 'ecchi' || state.universe?.mod === 'harem';
 
-  // Sanitize prompt
   const cleanPrompt = String(prompt || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
-  // Sanitize + compress character refs (max 3 to stay under body size limits)
   let cleanRefs = null;
   if (characterRefs && Array.isArray(characterRefs) && characterRefs.length > 0) {
-    const limited = characterRefs.slice(0, 3); // máx 3 refs
+    const limited = characterRefs.slice(0, 3);
     const processed = [];
     for (const r of limited) {
       if (!r || !r.img || typeof r.img !== 'string') continue;
       const rawImg = r.img.replace(/^data:image\/[a-z]+;base64,/i, '').replace(/\s/g, '');
       if (rawImg.length < 100) continue;
-      // Compress to JPEG 768px max
       const compressed = await compressBase64Image(rawImg, 768, 0.85);
       processed.push({
         name: String(r.name || 'character').replace(/[\u0000-\u001F\u007F]/g, ''),
@@ -585,10 +583,15 @@ async function generateImage(prompt, characterRefs = null, forceModel = null) {
     if (processed.length) cleanRefs = processed;
   }
 
-  // Log payload size for debugging
-  const bodyObj = { prompt: cleanPrompt, characterRefs: cleanRefs, model: model === 'auto' ? null : model };
+  const bodyObj = {
+    prompt: cleanPrompt,
+    characterRefs: cleanRefs,
+    model: model === 'auto' ? null : model,
+    isEcchi,
+  };
+
   const bodyStr = JSON.stringify(bodyObj);
-  console.log(`/api/image body size: ${(bodyStr.length / 1024).toFixed(0)} KB, refs: ${cleanRefs?.length || 0}`);
+  console.log(`/api/image body: ${(bodyStr.length/1024).toFixed(0)}KB, refs:${cleanRefs?.length||0}, ecchi:${isEcchi}`);
 
   const res = await fetch('/api/image', {
     method: 'POST',
@@ -1147,28 +1150,28 @@ window.generateCharImage = async function(charId) {
   if (!ch) return;
   showToast('Generando imagen de personaje...', 'success');
   try {
-    const prompt = `Anime 2D character reference sheet, vertical 9:16, full body design of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. Clean professional anime art style, vibrant colors, white background, character turnaround design.`;
+    // NO text in image, pass only this character's own ref to avoid mixing designs
+    const existingImg = await dbGet(charImgKey(ch.id));
+    const selfRef = existingImg ? [{ name: ch.name, role: ch.role || '', img: existingImg }] : null;
 
-    let imgB64 = null;
-    let lastErr = null;
+    const prompt = `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. NO text, NO letters, NO watermarks, NO labels anywhere in the image. Clean professional anime 2D art style, white background, character turnaround showing front side and back.`;
+
+    let imgB64 = null, lastErr = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
-        imgB64 = await generateImage(prompt);
+        imgB64 = await generateImage(prompt, selfRef);
         break;
       } catch(e) {
         lastErr = e;
-        const isRateLimit = e.message.includes('429') || e.message.toLowerCase().includes('exhausted') || e.message.toLowerCase().includes('resource');
-        if (isRateLimit) {
-          const waitSec = [30, 60, 90, 120, 180][attempt];
-          showToast(`⏳ Rate limit — esperando ${waitSec}s (${attempt+1}/5)...`, 'error');
-          await new Promise(r => setTimeout(r, waitSec * 1000));
-        } else {
-          throw e;
-        }
+        const isRL = e.message.includes('429') || e.message.toLowerCase().includes('exhausted');
+        if (isRL) {
+          const w = [30,60,90,120,180][attempt];
+          showToast(`⏳ Rate limit ${w}s (${attempt+1}/5)...`, 'error');
+          await new Promise(r => setTimeout(r, w * 1000));
+        } else throw e;
       }
     }
     if (!imgB64) throw lastErr || new Error('No se pudo generar');
-
     await dbSet(charImgKey(ch.id), imgB64);
     renderCharacters();
     showToast('Imagen generada', 'success');
