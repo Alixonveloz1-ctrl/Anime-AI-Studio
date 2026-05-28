@@ -140,7 +140,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.21</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.22</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -248,13 +248,22 @@
           <option value="azure_female_es">🎙️ Elvira — Femenina española</option>
           <option value="azure_female_us">🎙️ Paloma — Femenina latina joven</option>
         </optgroup>
-        <optgroup label="🔮 Gemini TTS (multilenguaje)">
+        <optgroup label="⚡ ElevenLabs v3 (máxima calidad)">
+          <option value="elevenlabs">🎙️ ElevenLabs — Voz personalizada</option>
+        </optgroup>
+        <optgroup label="🔮 Gemini TTS">
           <option value="gemini_male">🎙️ Charon — Masculino profundo</option>
           <option value="gemini_female">🎙️ Kore — Femenino natural</option>
           <option value="gemini_male2">🎙️ Fenrir — Masculino dramático</option>
           <option value="gemini_female2">🎙️ Aoede — Femenino expresivo</option>
         </optgroup>
       </select>
+
+      <div id="elevenlabsConfig" style="display:none;margin-top:8px;padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;border:1px solid rgba(255,255,255,0.08)">
+        <label style="font-size:11px;margin-bottom:4px">Voice ID de ElevenLabs</label>
+        <input type="text" id="elevenlabsVoiceId" placeholder="ej: 21m00Tcm4TlvDq8ikWAM" style="margin-bottom:8px;font-size:13px">
+        <p style="font-size:11px;color:var(--text-dim);margin:0">La API key de ElevenLabs se configura en el panel APIS (botón arriba).</p>
+      </div>
 
       <div class="btn-row" style="margin-top:12px">
         <button class="btn-sec" id="btnAllImages">🖼️ Todas las Imágenes</button>
@@ -277,21 +286,8 @@
   <div class="panel" id="panel-exportar">
     <div class="card">
       <h2>📤 Exportar</h2>
-      <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px">Descarga todo el proyecto.</p>
-
-      <button class="btn" id="btnExportZip" style="margin-bottom:10px">📦 Descargar ZIP</button>
-
-      <button class="btn" id="btnExportTimings" style="background:linear-gradient(135deg,#059669,#047857);margin-bottom:10px">⏱️ Exportar Tiempos para CapCut</button>
-
-      <button class="btn" id="btnExportVideo" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);margin-bottom:10px">🎬 Exportar Video (experimental)</button>
-
-      <div id="videoProgress" style="display:none;margin-top:10px">
-        <div class="progress-text" id="videoProgressText">Preparando...</div>
-        <div class="progress"><div class="progress-bar" id="videoProgressBar" style="width:0%"></div></div>
-      </div>
-      <p id="videoNote" style="font-size:12px;color:var(--text-dim);margin-top:8px;display:none">
-        ⚠️ Solo escenas con imagen Y audio generados serán incluidas. El video puede tardar 1-2 min en procesarse.
-      </p>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px">Descarga todo el proyecto. El ZIP incluye imágenes, audios individuales y subtítulos .srt por escena.</p>
+      <button class="btn" id="btnExportZip">📦 Descargar ZIP</button>
     </div>
   </div>
 
@@ -433,8 +429,9 @@ function openErrorModal(title, msg) {
 // ════════════════════════════════════════════════════════════════
 function getKeys() {
   return {
-    claude: localStorage.getItem('key_claude') || '',
-    azure:  localStorage.getItem('key_azure')  || '',
+    claude:      localStorage.getItem('key_claude') || '',
+    azure:       localStorage.getItem('key_azure')  || '',
+    elevenlabs:  localStorage.getItem('key_elevenlabs') || '',
   };
 }
 function updateApiDot() {
@@ -451,24 +448,36 @@ document.getElementById('btnApis').addEventListener('click', () => {
       <input id="kClaude" type="password" placeholder="sk-ant-..." value="${k.claude}">
     </div>
     <div class="api-row">
-      <label>Azure Speech Key (opcional) <span class="api-status ${k.azure?'ok':'no'}">${k.azure?'OK':'Opcional'}</span></label>
-      <input id="kAzure" type="password" placeholder="azure key (backup TTS español)" value="${k.azure}">
+      <label>Azure Speech Key <span class="api-status ${k.azure?'ok':'no'}">${k.azure?'OK':'Opcional'}</span></label>
+      <input id="kAzure" type="password" placeholder="azure key (TTS español)" value="${k.azure}">
+    </div>
+    <div class="api-row">
+      <label>ElevenLabs API Key <span class="api-status ${k.elevenlabs?'ok':'no'}">${k.elevenlabs?'OK':'Opcional'}</span></label>
+      <input id="kElevenLabs" type="password" placeholder="sk_..." value="${k.elevenlabs}">
     </div>
     <div style="font-size:11px;color:var(--text-dim);margin:10px 0 14px;line-height:1.5">
-      • <strong>Claude</strong>: necesaria para generar guiones<br>
-      • <strong>Imágenes y audio</strong>: usan los $300 de Google Cloud (no requieren key aquí)<br>
-      • <strong>Azure</strong>: opcional, voces en español como backup
+      • <strong>Claude</strong>: genera guiones y narración<br>
+      • <strong>Imágenes + Gemini TTS</strong>: usan Google Cloud (configurado)<br>
+      • <strong>Azure</strong>: voces neurales en español<br>
+      • <strong>ElevenLabs</strong>: máxima calidad de voz — selecciona la voz en el episodio y pon el Voice ID
     </div>
     <button class="btn" onclick="saveKeys()">💾 Guardar</button>
   `);
 });
 window.saveKeys = function() {
-  localStorage.setItem('key_claude', document.getElementById('kClaude').value.trim());
-  localStorage.setItem('key_azure',  document.getElementById('kAzure').value.trim());
+  localStorage.setItem('key_claude',     document.getElementById('kClaude').value.trim());
+  localStorage.setItem('key_azure',      document.getElementById('kAzure').value.trim());
+  localStorage.setItem('key_elevenlabs', document.getElementById('kElevenLabs').value.trim());
   updateApiDot();
   closeModal();
   showToast('Keys guardadas', 'success');
 };
+
+// Show/hide ElevenLabs config when selected
+document.getElementById('voiceSelect').addEventListener('change', function() {
+  const el = document.getElementById('elevenlabsConfig');
+  if (el) el.style.display = this.value === 'elevenlabs' ? 'block' : 'none';
+});
 
 // ════════════════════════════════════════════════════════════════
 // PROJECTS MODAL
@@ -634,10 +643,58 @@ function cleanTextForTTS(text) {
     .trim();
 }
 
+async function generateElevenLabsAudio(text, voiceId) {
+  const key = getKeys().elevenlabs;
+  if (!key) throw new Error('Falta ElevenLabs API key — agrégala en el panel APIS');
+  if (!voiceId) throw new Error('Falta Voice ID — ingrésalo debajo del selector de voz');
+
+  const cleanText = cleanTextForTTS(text);
+
+  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+    method: 'POST',
+    headers: {
+      'xi-api-key': key,
+      'Content-Type': 'application/json',
+      'Accept': 'audio/mpeg',
+    },
+    body: JSON.stringify({
+      text: cleanText,
+      model_id: 'eleven_multilingual_v3',
+      voice_settings: {
+        stability: 0.45,
+        similarity_boost: 0.80,
+        style: 0.35,
+        use_speaker_boost: true,
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`ElevenLabs ${res.status}: ${err.detail?.message || res.statusText}`);
+  }
+
+  const buf = await res.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return { audioData: btoa(bin), mimeType: 'audio/mpeg' };
+}
+
 async function generateAudio(text, voice, act) {
   const cleanText = cleanTextForTTS(text);
   if (!cleanText || cleanText.length < 3) throw new Error('Texto vacío para audio');
 
+  if (voice === 'elevenlabs') {
+    const voiceId = document.getElementById('elevenlabsVoiceId')?.value.trim()
+      || localStorage.getItem('elevenlabs_voice_id') || '';
+    // Save voice ID for reuse
+    if (voiceId) localStorage.setItem('elevenlabs_voice_id', voiceId);
+    return await generateElevenLabsAudio(cleanText, voiceId);
+  }
   if (voice && voice.startsWith('azure_')) {
     return await generateAzureAudio(cleanText, voice);
   }
@@ -920,20 +977,24 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     const genero = u.genero;
     const mod = u.mod || 'none';
 
-    const sysBase = `Eres un guionista de anime experto.
+    const sysBase = `Eres un guionista de anime experto especializado en contenido viral para TikTok y YouTube.
 REGLAS DE NARRACIÓN:
 - En español, PRIMERA PERSONA del protagonista, 3-4 frases por escena, máximo 20 palabras por frase
-- Pensamientos internos visibles
+- Pensamientos internos MUY visibles — el lector debe sentir exactamente lo que siente el protagonista
 - Nombres japoneses REALES (sin inventos)
-- La narración puede ser expresiva, pícara o romántica según el género — sin restricciones
+- Las narraciones deben ser EMOCIONANTES, ATRACTIVAS y con TENSIÓN EMOCIONAL o SEXUAL según el género
+- Usar recursos literarios: metáforas sensoriales ("su perfume me envolvió como niebla cálida"), pensamientos contradictorios ("debía irme, pero mis pies no respondían"), suspenso interno
+- Ritmo dinámico: frases cortas para tensión, frases largas para emoción
+- Cada escena debe dejar al lector queriendo saber qué pasa después
+- NO narrar eventos vacíos ("me desperté, desayuné") — CADA escena debe tener carga emocional o tensión
 
 REGLAS DEL imagePromptA e imagePromptB (van directo a Gemini generador de imágenes):
 - SIEMPRE en INGLÉS
 - FORMATO: "Scene with [nombres presentes]: [descripción visual]"
 - Describir: entorno, posición de personajes, expresión, iluminación, ángulo de cámara
-- Vocabulario PERMITIDO (no activa filtros): blushing, embarrassed, shy smile, short skirt, school uniform, sleeveless dress, form-fitting outfit, low angle shot, close-up face, wind lifting hair, leaning forward, surprised expression, accidental fall, reaching out
-- Vocabulario PROHIBIDO (bloquea Gemini — NUNCA usar): naked, nude, explicit, sexual, genitals, nipples, pornographic, non-consensual
-- Si la escena es romántica/íntima, describir la REACCIÓN VISUAL no la acción física: "both blushing deeply, faces close together, surprised eyes" en vez de "chest pressed against him"
+- Vocabulario PERMITIDO: blushing, embarrassed, shy smile, short skirt, school uniform, sleeveless dress, form-fitting outfit, low angle shot, close-up face, wind lifting hair, leaning forward, surprised expression, accidental fall, reaching out, suggestive pose, meaningful glance
+- Vocabulario PROHIBIDO (bloquea Gemini): naked, nude, explicit, sexual, genitals, nipples, pornographic, non-consensual
+- Si la escena es romántica/íntima: describir REACCIÓN VISUAL ("both blushing deeply, faces centimeters apart") no acción física explícita
 - NO texto, NO letras, NO marcas de agua en la imagen
 - Solo incluir personajes que aparecen físicamente en la escena
 - Responde SOLO JSON válido sin markdown`;
@@ -1765,23 +1826,16 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
     const u = state.universe;
     const sn = (u.title || 'proyecto').replace(/[^\w]+/g, '_').substring(0, 40);
 
-    // Universe + characters info
     zip.file('universo.txt', `${u.title}\n${u.tagline}\n\nCONCEPTO:\n${u.concepto}\n\nCONFLICTO:\n${u.conflicto}\n\nSETTING:\n${u.setting}\n\nHOOK:\n${u.hook}`);
     zip.file('personajes.txt', state.characters.map(c => `## ${c.name} (${c.role})\n\nApariencia: ${c.appearance}\n\nPersonalidad: ${c.personality}\n\nBackstory: ${c.backstory}`).join('\n\n---\n\n'));
     zip.file('guion.txt', state.scenes.map(s => `=== Escena ${s.num} [${s.act}] ===\n${s.title || ''}\n\n${s.narration}`).join('\n\n'));
 
-    // Character images
     for (const c of state.characters) {
       const img = await dbGet(charImgKey(c.id));
       if (img) zip.file(`personajes/${c.name.replace(/[^\w]+/g, '_')}.png`, img, { base64: true });
     }
 
-    // Collect audios + images A/B
-    const audioEntries = [];
-    const audioCtxSrt = new (window.AudioContext || window.webkitAudioContext)();
-    const srtLines = [];
-    let srtIndex = 1;
-    let timeOffset = 0;
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
     for (const s of state.scenes) {
       const imgA = await dbGet(sceneImgKeyA(s.id));
@@ -1801,55 +1855,37 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
         }
         const ext = (mime.includes('mpeg') || mime.includes('mp3')) ? 'mp3' : 'wav';
         zip.file(`audios/escena_${pad}.${ext}`, audData, { base64: true });
-        audioEntries.push({ data: audData, mime, num: s.num });
 
-        // Generate SRT entries for this scene
+        // Generate individual SRT for this scene (starts at 0:00:00,000)
         try {
           const buf = base64ToArrayBuffer(audData);
-          const decoded = await audioCtxSrt.decodeAudioData(buf.slice(0));
+          const decoded = await audioCtx.decodeAudioData(buf.slice(0));
           const dur = decoded.duration;
 
-          // Split narration into sentences for subtitles
           const sentences = cleanTextForTTS(s.narration)
-            .split(/(?<=[.!?])\s+/)
-            .filter(t => t.trim().length > 3);
+            .split(/(?<=[.!?¿¡])\s+/)
+            .map(t => t.trim())
+            .filter(t => t.length > 3);
 
           if (sentences.length > 0) {
+            const sceneSrt = [];
             const durPerSentence = dur / sentences.length;
             for (let si = 0; si < sentences.length; si++) {
-              const start = timeOffset + si * durPerSentence;
-              const end = timeOffset + (si + 1) * durPerSentence;
-              srtLines.push(srtIndex++);
-              srtLines.push(`${toSrtTime(start)} --> ${toSrtTime(end)}`);
-              srtLines.push(sentences[si].trim());
-              srtLines.push('');
+              const start = si * durPerSentence;
+              const end = (si + 1) * durPerSentence;
+              sceneSrt.push(si + 1);
+              sceneSrt.push(`${toSrtTime(start)} --> ${toSrtTime(end)}`);
+              sceneSrt.push(sentences[si]);
+              sceneSrt.push('');
             }
+            zip.file(`subtitulos/escena_${pad}.srt`, sceneSrt.join('\n'));
           }
-          timeOffset += dur;
         } catch(e) {
           console.warn(`SRT escena ${s.num}:`, e);
         }
       }
     }
-    audioCtxSrt.close();
-
-    // Add SRT file
-    if (srtLines.length > 0) {
-      zip.file('subtitulos.srt', srtLines.join('\n'));
-    }
-
-    // Combine all audios into one
-    if (audioEntries.length > 0) {
-      btn.innerHTML = `<div class="spinner"></div> Combinando ${audioEntries.length} audios...`;
-      try {
-        const combinedWav = await combineAudiosToWav(audioEntries, (i, total) => {
-          btn.innerHTML = `<div class="spinner"></div> Combinando ${i+1}/${total}...`;
-        });
-        zip.file('narracion_completa.wav', combinedWav);
-      } catch(e) {
-        console.error('No se pudo combinar audios:', e);
-      }
-    }
+    audioCtx.close();
 
     btn.innerHTML = '<div class="spinner"></div> Generando ZIP...';
     const blob = await zip.generateAsync({ type: 'blob' });
@@ -1857,7 +1893,7 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
     const a = document.createElement('a');
     a.href = url; a.download = `${sn}.zip`; a.click();
     URL.revokeObjectURL(url);
-    showToast('ZIP descargado con subtítulos .srt incluidos', 'success');
+    showToast('ZIP descargado — subtítulos individuales por escena', 'success');
   } catch(e) {
     openErrorModal('Error al exportar', e.message);
   } finally {
@@ -1866,252 +1902,6 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
 });
 
 // ════════════════════════════════════════════════════════════════
-// ════════════════════════════════════════════════════════════════
-// EXPORT TIMINGS FOR CAPCUT
-// ════════════════════════════════════════════════════════════════
-document.getElementById('btnExportTimings').addEventListener('click', async () => {
-  if (!state.scenes.length) { showToast('Genera escenas primero', 'error'); return; }
-
-  const btn = document.getElementById('btnExportTimings');
-  btn.disabled = true;
-  btn.innerHTML = '<div class="spinner"></div> Midiendo audios...';
-
-  try {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const lines = [];
-    lines.push(`TIEMPOS — ${state.universe?.title || 'Episodio'}`);
-    lines.push('');
-    lines.push('Importa las imágenes en orden y el audio narracion_completa.wav');
-    lines.push('Ajusta cada imagen según los tiempos de abajo:');
-    lines.push('');
-
-    let totalSeconds = 0;
-    let sceneCount = 0;
-
-    for (const s of state.scenes) {
-      const audStored = await dbGet(sceneAudKey(s.id));
-      const pad = String(s.num).padStart(2, '0');
-
-      if (!audStored) {
-        lines.push(`escena_${pad}.png  →  sin audio`);
-        continue;
-      }
-
-      let audData = audStored;
-      if (audStored.includes('|')) {
-        audData = audStored.slice(audStored.indexOf('|') + 1);
-      }
-
-      try {
-        const buf = base64ToArrayBuffer(audData);
-        const audioBuffer = await audioCtx.decodeAudioData(buf.slice(0));
-        const dur = audioBuffer.duration;
-        const start = totalSeconds;
-        const end = totalSeconds + dur;
-
-        const fmt = s => {
-          const m = Math.floor(s / 60);
-          const sec = (s % 60).toFixed(1);
-          return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
-        };
-
-        lines.push(`Escena ${s.num}  →  de ${fmt(start)} a ${fmt(end)}  (${dur.toFixed(1)}s)${s.title ? '  — ' + s.title : ''}`);
-        totalSeconds += dur;
-        sceneCount++;
-      } catch(e) {
-        lines.push(`escena_${pad}.png  →  error midiendo audio`);
-      }
-    }
-
-    audioCtx.close();
-
-    lines.push('');
-    lines.push('─'.repeat(50));
-    lines.push(`Total: ${sceneCount} escenas — ${Math.floor(totalSeconds/60)}m ${(totalSeconds%60).toFixed(0)}s`);
-
-    // Download as txt
-    const text = lines.join('\n');
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const title = (state.universe?.title || 'anime').replace(/[^\w]+/g, '_').substring(0, 30);
-    a.href = url;
-    a.download = `${title}_tiempos.txt`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    showToast(`✅ Tiempos de ${sceneCount} escenas exportados`, 'success');
-  } catch(e) {
-    openErrorModal('Error exportando tiempos', e.message);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '⏱️ Exportar Tiempos para CapCut';
-  }
-});
-
-// ════════════════════════════════════════════════════════════════
-// VIDEO EXPORT — Canvas + MediaRecorder + Ken Burns zoom
-// ════════════════════════════════════════════════════════════════
-document.getElementById('btnExportVideo').addEventListener('click', async () => {
-  if (!state.scenes.length) { showToast('Genera escenas primero', 'error'); return; }
-
-  const btn = document.getElementById('btnExportVideo');
-  const vp = document.getElementById('videoProgress');
-  const vt = document.getElementById('videoProgressText');
-  const vb = document.getElementById('videoProgressBar');
-  const note = document.getElementById('videoNote');
-
-  btn.disabled = true;
-  vp.style.display = 'block';
-  note.style.display = 'block';
-
-  try {
-    vt.textContent = 'Cargando datos...';
-    const sceneData = [];
-    for (const s of state.scenes) {
-      const img = await dbGet(sceneImgKey(s.id));
-      const audStored = await dbGet(sceneAudKey(s.id));
-      if (!img || !audStored) continue;
-      let mime = 'audio/wav', audData = audStored;
-      if (audStored.includes('|')) {
-        const idx = audStored.indexOf('|');
-        mime = audStored.slice(0, idx);
-        audData = audStored.slice(idx + 1);
-      }
-      sceneData.push({ s, img, audData, mime });
-    }
-
-    if (!sceneData.length) {
-      showToast('Ninguna escena tiene imagen Y audio. Genera ambos primero.', 'error');
-      btn.disabled = false; vp.style.display = 'none'; return;
-    }
-
-    if (!window.MediaRecorder) {
-      throw new Error('Tu navegador no soporta grabación de video. Intenta actualizar Chrome.');
-    }
-
-    const W = 540, H = 960;
-    const canvas = document.createElement('canvas');
-    canvas.width = W; canvas.height = H;
-    const ctx2d = canvas.getContext('2d');
-
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const audioDestination = audioCtx.createMediaStreamDestination();
-    const canvasStream = canvas.captureStream(30);
-    const combinedStream = new MediaStream([
-      ...canvasStream.getVideoTracks(),
-      ...audioDestination.stream.getAudioTracks(),
-    ]);
-
-    const mimeTypes = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
-    const supportedMime = mimeTypes.find(m => MediaRecorder.isTypeSupported(m));
-    if (!supportedMime) throw new Error('Tu navegador no soporta grabación de video.');
-
-    const recorder = new MediaRecorder(combinedStream, { mimeType: supportedMime, videoBitsPerSecond: 3000000 });
-    const chunks = [];
-    recorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
-    recorder.start(200);
-
-    // Load all images
-    vt.textContent = 'Cargando imágenes...';
-    const images = await Promise.all(sceneData.map(({ img }) => new Promise((res, rej) => {
-      const image = new Image();
-      image.onload = () => res(image);
-      image.onerror = rej;
-      image.src = 'data:image/png;base64,' + img;
-    })));
-
-    // Decode all audios
-    vt.textContent = 'Decodificando audios...';
-    const audioBuffers = await Promise.all(sceneData.map(async ({ audData }) => {
-      try {
-        const buf = base64ToArrayBuffer(audData);
-        return await audioCtx.decodeAudioData(buf.slice(0));
-      } catch(e) { return null; }
-    }));
-
-    // Draw frame with Ken Burns zoom (1.0 → 1.04)
-    function drawFrame(image, zoom) {
-      ctx2d.fillStyle = '#000';
-      ctx2d.fillRect(0, 0, W, H);
-      const scale = Math.max(W / image.width, H / image.height) * zoom;
-      const sw = image.width * scale;
-      const sh = image.height * scale;
-      ctx2d.drawImage(image, (W - sw) / 2, (H - sh) / 2, sw, sh);
-    }
-
-    // Render scenes
-    for (let i = 0; i < sceneData.length; i++) {
-      const { s } = sceneData[i];
-      const image = images[i];
-      const audioBuffer = audioBuffers[i];
-      const duration = audioBuffer ? audioBuffer.duration : 3;
-
-      vb.style.width = Math.round((i / sceneData.length) * 90) + '%';
-      vt.textContent = `Escena ${s.num} (${i+1}/${sceneData.length}) — ${duration.toFixed(1)}s`;
-
-      // Start audio
-      if (audioBuffer) {
-        const src = audioCtx.createBufferSource();
-        src.buffer = audioBuffer;
-        src.connect(audioDestination);
-        src.start(audioCtx.currentTime);
-      }
-
-      // Animate zoom frame by frame
-      const fps = 30;
-      const totalFrames = Math.ceil(duration * fps);
-      const frameDuration = 1000 / fps;
-      const frameStart = performance.now();
-
-      for (let f = 0; f < totalFrames; f++) {
-        const progress = f / totalFrames;
-        const zoom = 1.0 + 0.04 * progress; // 1.0 → 1.04
-        drawFrame(image, zoom);
-        const elapsed = performance.now() - frameStart;
-        const wait = Math.max(0, f * frameDuration - elapsed);
-        if (wait > 1) await new Promise(r => setTimeout(r, wait));
-      }
-
-      // Wait remaining audio time
-      const totalElapsed = (performance.now() - frameStart) / 1000;
-      const remaining = duration - totalElapsed;
-      if (remaining > 0.05) await new Promise(r => setTimeout(r, remaining * 1000));
-
-      // Cut directly to next scene (no black frame)
-    }
-
-    // Finalize
-    vt.textContent = 'Finalizando video...';
-    vb.style.width = '95%';
-
-    await new Promise(resolve => { recorder.onstop = resolve; recorder.stop(); });
-    await audioCtx.close();
-
-    const blob = new Blob(chunks, { type: supportedMime });
-    const url = URL.createObjectURL(blob);
-    const title = (state.universe?.title || 'anime').replace(/[^\w]+/g, '_').substring(0, 30);
-
-    // Try download link first
-    const a = document.createElement('a');
-    a.href = url; a.download = `${title}.webm`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-
-    // iOS fallback: open in new tab so user can long-press to save
-    setTimeout(() => window.open(url, '_blank'), 800);
-
-    vb.style.width = '100%';
-    vt.textContent = `✅ ${sceneData.length} escenas — si no se descargó, mantén presionado el video y guárdalo`;
-    showToast('¡Video listo! En iPhone: mantén presionado el video que se abrió → Guardar video', 'success');
-
-  } catch(e) {
-    openErrorModal('Error exportando video', e.message);
-  } finally {
-    btn.disabled = false;
-    setTimeout(() => { vp.style.display = 'none'; note.style.display = 'none'; }, 10000);
-  }
-});
-
 // ════════════════════════════════════════════════════════════════
 // NAV TABS
 // ════════════════════════════════════════════════════════════════
