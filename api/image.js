@@ -136,9 +136,9 @@ export default async function handler(req) {
 
     if (characterRefs && Array.isArray(characterRefs)) {
       characterRefs = characterRefs
-        .filter(r => r && r.img && typeof r.img === 'string')
+        .filter(r => r && r.img && typeof r.img === 'string' && r.name && r.name.trim().length >= 2)
         .map(r => ({
-          name: String(r.name || 'character'),
+          name: String(r.name || 'character').trim(),
           role: String(r.role || ''),
           mimeType: r.mimeType || 'image/png',
           img: r.img.replace(/^data:image\/[a-z]+;base64,/i, '').replace(/\s/g, ''),
