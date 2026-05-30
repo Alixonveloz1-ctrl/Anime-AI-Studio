@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.35 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.36 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1614,6 +1614,8 @@ window.translatePrompts = async function(sceneId) {
     const rawA = taA.value.trim();
     const rawB = taB.value.trim();
 
+    const userContent = 'Traduce estos dos prompts de imagen al español. Mantén nombres propios igual. Responde SOLO con JSON válido, nada más:\n{"a":"traducción A","b":"traducción B"}\n\nPrompt A: ' + rawA + '\n\nPrompt B: ' + rawB;
+
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -1625,24 +1627,35 @@ window.translatePrompts = async function(sceneId) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 600,
-        messages: [{
-          role: 'user',
-          content: 'Traduce estos dos prompts de imagen al español de forma natural. Mantén nombres propios exactamente igual. Devuelve SOLO JSON sin markdown:\n{"a":"traducción A","b":"traducción B"}\n\nPrompt A: ' + rawA + '\n\nPrompt B: ' + rawB
-        }]
+        messages: [{ role: 'user', content: userContent }]
       })
     });
+
     const data = await res.json();
-    const text = data.content?.[0]?.text || '';
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('Sin JSON');
-    const parsed = JSON.parse(match[0]);
+    if (data.error) throw new Error(data.error.message || 'API error');
+
+    const text = (data.content && data.content[0] && data.content[0].text) ? data.content[0].text.trim() : '';
+    console.log('Traducción raw:', text);
+
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch(e) {}
+    if (!parsed) {
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}');
+      if (start !== -1 && end > start) {
+        try { parsed = JSON.parse(text.slice(start, end + 1)); } catch(e) {}
+      }
+    }
+    if (!parsed || (!parsed.a && !parsed.b)) throw new Error('Respuesta sin JSON válido');
+
     if (parsed.a) taA.value = parsed.a;
     if (parsed.b) taB.value = parsed.b;
     btn.textContent = '✅ Traducido';
   } catch(e) {
     btn.textContent = '❌ Reintentar';
     btn.disabled = false;
-    showToast('Error al traducir: ' + e.message, 'error');
+    showToast('Error: ' + e.message, 'error');
+    console.error('translatePrompts:', e);
   }
 };
 
