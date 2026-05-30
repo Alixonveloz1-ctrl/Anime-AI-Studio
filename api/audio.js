@@ -82,7 +82,7 @@ export default async function handler(req) {
     };
     const voiceName = voiceMap[voice] || 'Charon';
 
-    // Speed tag for Gemini TTS (prepended to text)
+    // Speed tag for Gemini 3.1 Flash TTS (prepended to text)
     const spd = parseFloat(speed) || 1.0;
     const speedTag = spd <= 0.6  ? '[slow] '
                    : spd >= 1.8  ? '[fast] '
@@ -90,25 +90,40 @@ export default async function handler(req) {
                    : spd <= 0.8  ? '[slightly slow] '
                    : '';
 
+    // Emotional delivery tag by story act (Gemini 3.1 supports 200+ audio tags)
     const tag =
-      act === 'climax'      ? '[excited] '  :
-      act === 'resolution'  ? '[soft] '     :
-      act === 'cold_open'   ? '[curious] '  : '';
+      act === 'climax'      ? '[intense] [emotional] '  :
+      act === 'resolution'  ? '[soft] [warm] '          :
+      act === 'cold_open'   ? '[curious] [suspenseful] ' :
+      act === 'act2'        ? '[tense] '                 : '';
 
-    const url = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/gemini-2.5-flash-preview-tts:generateContent`;
-    const r = await fetch(url, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, 'X-Goog-User-Project':projectId },
-      body: JSON.stringify({
-        contents:[{ role:'user', parts:[{ text: speedTag + tag + text }] }],
-        generationConfig:{
-          responseModalities:['AUDIO'],
-          speechConfig:{ voiceConfig:{ prebuiltVoiceConfig:{ voiceName } } },
-        },
-      }),
+    const reqBody = JSON.stringify({
+      contents:[{ role:'user', parts:[{ text: speedTag + tag + text }] }],
+      generationConfig:{
+        responseModalities:['AUDIO'],
+        speechConfig:{ voiceConfig:{ prebuiltVoiceConfig:{ voiceName } } },
+      },
     });
-    const d = await r.json();
-    if (!r.ok) return new Response(JSON.stringify({ error: `Gemini TTS: ${d.error?.message || r.status}` }), { status:500, headers:CORS });
+
+    const callModel = async (modelId, apiVersion) => {
+      const url = `https://us-central1-aiplatform.googleapis.com/${apiVersion}/projects/${projectId}/locations/us-central1/publishers/google/models/${modelId}:generateContent`;
+      const resp = await fetch(url, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, 'X-Goog-User-Project':projectId },
+        body: reqBody,
+      });
+      const data = await resp.json();
+      return { ok: resp.ok, status: resp.status, data };
+    };
+
+    // Try Gemini 3.1 Flash TTS first; fall back to 2.5 if preview unavailable
+    let r = await callModel('gemini-3.1-flash-tts-preview', 'v1beta1');
+    if (!r.ok && (r.status === 404 || r.status === 403 || r.status === 503)) {
+      console.warn('3.1 TTS no disponible, usando 2.5:', r.data?.error?.message);
+      r = await callModel('gemini-2.5-flash-preview-tts', 'v1');
+    }
+    if (!r.ok) return new Response(JSON.stringify({ error: `Gemini TTS: ${r.data?.error?.message || r.status}` }), { status:500, headers:CORS });
+    const d = r.data;
 
     const part = d.candidates?.[0]?.content?.parts?.[0];
     if (!part?.inlineData?.data) return new Response(JSON.stringify({ error: 'No audio in response' }), { status:500, headers:CORS });
