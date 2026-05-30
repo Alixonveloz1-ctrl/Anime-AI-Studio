@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.41 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.42 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -2201,6 +2201,31 @@ function toSrtTime(seconds) {
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')},${String(ms).padStart(3,'0')}`;
 }
 
+// Split narration into sentences and time them PROPORTIONALLY to length.
+// Longer sentences take more of the audio duration (matches real speech pacing).
+// Returns [{ text, start, end }] with times relative to baseOffset.
+function timeSentences(narration, totalDur, baseOffset = 0) {
+  const sentences = cleanTextForTTS(narration)
+    .split(/(?<=[.!?¿¡])\s+/)
+    .map(t => t.trim())
+    .filter(t => t.length > 1);
+  if (!sentences.length) return [];
+
+  // Weight by character count (proxy for spoken duration)
+  const weights = sentences.map(t => Math.max(t.length, 1));
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+
+  const result = [];
+  let acc = 0;
+  for (let i = 0; i < sentences.length; i++) {
+    const start = baseOffset + (acc / totalWeight) * totalDur;
+    acc += weights[i];
+    const end = baseOffset + (acc / totalWeight) * totalDur;
+    result.push({ text: sentences[i], start, end });
+  }
+  return result;
+}
+
 // ════════════════════════════════════════════════════════════════
 // AUDIO COMBINER — Web Audio API to merge all scenes into one WAV
 // ════════════════════════════════════════════════════════════════
@@ -2372,20 +2397,13 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
           const decoded = await audioCtx.decodeAudioData(buf.slice(0));
           const dur = decoded.duration;
 
-          const sentences = cleanTextForTTS(s.narration)
-            .split(/(?<=[.!?¿¡])\s+/)
-            .map(t => t.trim())
-            .filter(t => t.length > 3);
-
-          if (sentences.length > 0) {
+          const timed = timeSentences(s.narration, dur, 0);
+          if (timed.length > 0) {
             const sceneSrt = [];
-            const durPerSentence = dur / sentences.length;
-            for (let si = 0; si < sentences.length; si++) {
-              const start = si * durPerSentence;
-              const end = (si + 1) * durPerSentence;
+            for (let si = 0; si < timed.length; si++) {
               sceneSrt.push(si + 1);
-              sceneSrt.push(`${toSrtTime(start)} --> ${toSrtTime(end)}`);
-              sceneSrt.push(sentences[si]);
+              sceneSrt.push(`${toSrtTime(timed[si].start)} --> ${toSrtTime(timed[si].end)}`);
+              sceneSrt.push(timed[si].text);
               sceneSrt.push('');
             }
             zip.file(`subtitulos/escena_${pad}.srt`, sceneSrt.join('\n'));
@@ -2413,25 +2431,18 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
         }
         zip.file('audio_completo.wav', btoa(bin), { base64: true });
 
-        // Global SRT timed to the combined track
+        // Global SRT timed to the combined track (real offsets + proportional sentences)
         const globalSrt = [];
         let cue = 1;
         for (const off of offsets) {
           const entry = audioEntries.find(e => e.idx === off.idx);
           if (!entry) continue;
           const sceneDur = off.end - off.start;
-          const sentences = cleanTextForTTS(entry.narration)
-            .split(/(?<=[.!?¿¡])\s+/)
-            .map(t => t.trim())
-            .filter(t => t.length > 3);
-          if (!sentences.length) continue;
-          const durPer = sceneDur / sentences.length;
-          for (let si = 0; si < sentences.length; si++) {
-            const start = off.start + si * durPer;
-            const end = off.start + (si + 1) * durPer;
+          const timed = timeSentences(entry.narration, sceneDur, off.start);
+          for (let si = 0; si < timed.length; si++) {
             globalSrt.push(cue++);
-            globalSrt.push(`${toSrtTime(start)} --> ${toSrtTime(end)}`);
-            globalSrt.push(sentences[si]);
+            globalSrt.push(`${toSrtTime(timed[si].start)} --> ${toSrtTime(timed[si].end)}`);
+            globalSrt.push(timed[si].text);
             globalSrt.push('');
           }
         }
