@@ -65,7 +65,7 @@ export default async function handler(req) {
   if (req.method !== 'POST')    return new Response('Method not allowed', { status:405 });
 
   try {
-    const { text, voice, act, speed } = await req.json();
+    const { text, voice, act, speed, emotion } = await req.json();
     if (!text) return new Response(JSON.stringify({ error:'text required' }), { status:400, headers:CORS });
 
     const saJson = process.env.GCP_SERVICE_ACCOUNT;
@@ -90,12 +90,14 @@ export default async function handler(req) {
                    : spd <= 0.8  ? '[slightly slow] '
                    : '';
 
-    // Emotional delivery tag by story act (Gemini 3.1 supports 200+ audio tags)
-    const tag =
-      act === 'climax'      ? '[intense] [emotional] '  :
-      act === 'resolution'  ? '[soft] [warm] '          :
-      act === 'cold_open'   ? '[curious] [suspenseful] ' :
-      act === 'act2'        ? '[tense] '                 : '';
+    // Delivery tag by act — only applied when emotion mode is on.
+    // Default 'neutral' = no tags = natural narration without theatrical over-acting.
+    let tag = '';
+    if (emotion === 'subtle') {
+      tag = act === 'climax'     ? '[slightly intense] '
+          : act === 'resolution' ? '[calm] '
+          : '';
+    }
 
     const reqBody = JSON.stringify({
       contents:[{ role:'user', parts:[{ text: speedTag + tag + text }] }],
