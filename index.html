@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.27 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.28 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -439,6 +439,14 @@
         <label style="font-size:11px;margin-bottom:4px">Voice ID de ElevenLabs</label>
         <input type="text" id="elevenlabsVoiceId" placeholder="ej: 21m00Tcm4TlvDq8ikWAM" style="margin-bottom:8px;font-size:13px">
         <p style="font-size:11px;color:var(--text-dim);margin:0">La API key de ElevenLabs se configura en el panel APIS (botón arriba).</p>
+      </div>
+
+      <label>Velocidad de narración — <span id="speedLabel" style="color:var(--accent)">Normal (1.0x)</span></label>
+      <input type="range" id="voiceSpeed" min="0.5" max="2.0" step="0.05" value="1.0"
+        style="padding:4px 0;cursor:pointer;accent-color:var(--accent)"
+        oninput="document.getElementById('speedLabel').textContent = speedLabel(this.value)">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);margin-top:2px">
+        <span>0.5x Lento</span><span>1.0x Normal</span><span>2.0x Rápido</span>
       </div>
 
       <div class="btn-row" style="margin-top:12px">
@@ -864,12 +872,23 @@ function cleanTextForTTS(text) {
     .trim();
 }
 
+function getVoiceSpeed() {
+  return parseFloat(document.getElementById('voiceSpeed')?.value || '1.0');
+}
+function speedLabel(v) {
+  v = parseFloat(v);
+  if (v === 1.0) return 'Normal (1.0x)';
+  if (v < 1.0)  return `Lento (${v.toFixed(2)}x)`;
+  return `Rápido (${v.toFixed(2)}x)`;
+}
+
 async function generateElevenLabsAudio(text, voiceId) {
   const key = getKeys().elevenlabs;
   if (!key) throw new Error('Falta ElevenLabs API key — agrégala en el panel APIS');
   if (!voiceId) throw new Error('Falta Voice ID — ingrésalo debajo del selector de voz');
 
   const cleanText = cleanTextForTTS(text);
+  const speed = getVoiceSpeed(); // 0.5 – 2.0
 
   const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
     method: 'POST',
@@ -886,6 +905,7 @@ async function generateElevenLabsAudio(text, voiceId) {
         similarity_boost: 0.80,
         style: 0.35,
         use_speaker_boost: true,
+        speed: speed,   // ElevenLabs v3 supports speed natively
       },
     }),
   });
@@ -912,17 +932,18 @@ async function generateAudio(text, voice, act) {
   if (voice === 'elevenlabs') {
     const voiceId = document.getElementById('elevenlabsVoiceId')?.value.trim()
       || localStorage.getItem('elevenlabs_voice_id') || '';
-    // Save voice ID for reuse
     if (voiceId) localStorage.setItem('elevenlabs_voice_id', voiceId);
     return await generateElevenLabsAudio(cleanText, voiceId);
   }
   if (voice && voice.startsWith('azure_')) {
     return await generateAzureAudio(cleanText, voice);
   }
+  // Gemini TTS — pass speed to proxy
+  const speed = getVoiceSpeed();
   const res = await fetch('/api/audio', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: cleanText, voice, act }),
+    body: JSON.stringify({ text: cleanText, voice, act, speed }),
   });
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error || `Audio proxy ${res.status}`);
@@ -934,46 +955,36 @@ async function generateAzureAudio(text, voice) {
   if (!key) throw new Error('Falta Azure Speech key — agrégala en el panel APIS');
 
   const voiceMap = {
-    azure_male_mx:   { name: 'es-MX-JorgeNeural',   lang: 'es-MX', style: 'narration-professional' },
-    azure_female_mx: { name: 'es-MX-DaliaNeural',   lang: 'es-MX', style: 'friendly' },
-    azure_male_es:   { name: 'es-ES-AlvaroNeural',  lang: 'es-ES', style: '' },
-    azure_female_es: { name: 'es-ES-ElviraNeural',  lang: 'es-ES', style: '' },
-    azure_male_us:   { name: 'es-US-AlonsoNeural',  lang: 'es-US', style: '' },
-    azure_female_us: { name: 'es-US-PalomaNeural',  lang: 'es-US', style: '' },
+    azure_male_mx:   { name: 'es-MX-JorgeNeural',  lang: 'es-MX', style: 'narration-professional' },
+    azure_female_mx: { name: 'es-MX-DaliaNeural',  lang: 'es-MX', style: 'friendly' },
+    azure_male_es:   { name: 'es-ES-AlvaroNeural', lang: 'es-ES', style: '' },
+    azure_female_es: { name: 'es-ES-ElviraNeural', lang: 'es-ES', style: '' },
+    azure_male_us:   { name: 'es-US-AlonsoNeural', lang: 'es-US', style: '' },
+    azure_female_us: { name: 'es-US-PalomaNeural', lang: 'es-US', style: '' },
   };
   const v = voiceMap[voice] || voiceMap.azure_male_mx;
 
-  // Step 1: clean the text first (remove *, _, markdown, etc)
-  // cleanTextForTTS is already called in generateAudio before reaching here,
-  // but apply again as safety net
+  // Convert speed slider (0.5–2.0) to Azure rate percentage
+  // Azure rate: -50% = 0.5x, 0% = 1.0x (default), +100% = 2.0x
+  const speed = getVoiceSpeed();
+  const ratePercent = Math.round((speed - 1.0) * 100);
+  const rateStr = ratePercent >= 0 ? `+${ratePercent}%` : `${ratePercent}%`;
+
   let clean = String(text || '')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\*([^*]+)\*/g, '$1')
-    .replace(/\*+/g, '')
-    .replace(/_([^_]+)_/g, '$1')
-    .replace(/_+/g, '')
-    .replace(/[""„«»]/g, '"')
-    .replace(/['']/g, "'")
-    .replace(/[—–]/g, ', ')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1').replace(/\*+/g, '')
+    .replace(/_([^_]+)_/g, '$1').replace(/_+/g, '')
+    .replace(/[""„«»]/g, '"').replace(/['']/g, "'")
+    .replace(/[—–]/g, ', ').replace(/\s+/g, ' ').trim();
 
-  // Step 2: escape XML special chars (AFTER cleaning, BEFORE wrapping in SSML)
   const safe = clean
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 
-  // Step 3: wrap in prosody rate="15%" to eliminate Azure's long sentence pauses
-  // "15%" = 15% faster than default, which removes the unnatural gaps
-  const prose = `<prosody rate="15%">${safe}</prosody>`;
-
+  // Combine speed + 15% anti-pause boost
+  const prose = `<prosody rate="${rateStr}">${safe}</prosody>`;
   const inner = v.style
     ? `<mstts:express-as style="${v.style}">${prose}</mstts:express-as>`
     : prose;
-
   const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='${v.lang}'><voice name='${v.name}'>${inner}</voice></speak>`;
 
   const res = await fetch('https://eastus.tts.speech.microsoft.com/cognitiveservices/v1', {
@@ -997,8 +1008,7 @@ async function generateAzureAudio(text, voice) {
   for (let i = 0; i < bytes.length; i += chunkSize) {
     bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
   }
-  const b64 = btoa(bin);
-  return { audioData: b64, mimeType: 'audio/mpeg' };
+  return { audioData: btoa(bin), mimeType: 'audio/mpeg' };
 }
 
 // ════════════════════════════════════════════════════════════════
