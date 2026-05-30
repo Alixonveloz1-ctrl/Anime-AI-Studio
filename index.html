@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.36 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.38 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -437,7 +437,8 @@
           <option value="eleven_flash_v2_5">Eleven Flash v2.5 — Ultra rápido, 32 idiomas</option>
         </select>
         <label style="font-size:11px;margin-bottom:4px">Voice ID de ElevenLabs</label>
-        <input type="text" id="elevenlabsVoiceId" placeholder="ej: 21m00Tcm4TlvDq8ikWAM" style="margin-bottom:8px;font-size:13px">
+        <input type="text" id="elevenlabsVoiceId" placeholder="ej: 21m00Tcm4TlvDq8ikWAM" style="margin-bottom:8px;font-size:13px"
+          oninput="localStorage.setItem('elevenlabs_voice_id', this.value.trim())">
         <p style="font-size:11px;color:var(--text-dim);margin:0">La API key de ElevenLabs se configura en el panel APIS (botón arriba).</p>
       </div>
 
@@ -661,6 +662,13 @@ window.saveKeys = function() {
 document.querySelectorAll('.sg-chip').forEach(chip => {
   chip.addEventListener('click', () => chip.classList.toggle('selected'));
 });
+
+// Restore saved ElevenLabs voice ID
+(function restoreVoiceId() {
+  const saved = localStorage.getItem('elevenlabs_voice_id');
+  const el = document.getElementById('elevenlabsVoiceId');
+  if (saved && el) el.value = saved;
+})();
 
 function getSelectedSubgenres() {
   return [...document.querySelectorAll('#subgeneroGrid .sg-chip.selected')]
@@ -910,6 +918,18 @@ async function generateElevenLabsAudio(text, voiceId) {
 
   const cleanText = cleanTextForTTS(text);
   const speed = getVoiceSpeed(); // 0.5 – 2.0
+  const modelId = document.getElementById('elevenlabsModel')?.value || 'eleven_v3';
+
+  // speed in voice_settings is only supported by v2 models, NOT eleven_v3
+  const voiceSettings = {
+    stability: 0.45,
+    similarity_boost: 0.80,
+    style: 0.35,
+    use_speaker_boost: true,
+  };
+  if (modelId !== 'eleven_v3' && Math.abs(speed - 1.0) > 0.001) {
+    voiceSettings.speed = speed;
+  }
 
   const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
     method: 'POST',
@@ -920,20 +940,15 @@ async function generateElevenLabsAudio(text, voiceId) {
     },
     body: JSON.stringify({
       text: cleanText,
-      model_id: document.getElementById('elevenlabsModel')?.value || 'eleven_v3',
-      voice_settings: {
-        stability: 0.45,
-        similarity_boost: 0.80,
-        style: 0.35,
-        use_speaker_boost: true,
-        speed: speed,   // ElevenLabs v3 supports speed natively
-      },
+      model_id: modelId,
+      voice_settings: voiceSettings,
     }),
   });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(`ElevenLabs ${res.status}: ${err.detail?.message || res.statusText}`);
+    const detail = err.detail?.message || err.detail || res.statusText;
+    throw new Error(`ElevenLabs ${res.status}: ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`);
   }
 
   const buf = await res.arrayBuffer();
@@ -1108,6 +1123,23 @@ const GENRE_PROMPTS = {
 - Basado en TECNOLOGÍAS FUTURAS, viajes espaciales, IA, realidades alternativas científicas
 - Las reglas son científicas (o pseudocientíficas), NO mágicas
 - Reflexión sobre el impacto de la tecnología en la humanidad`,
+  aventura: `GÉNERO: Aventura.
+- VIAJE constante hacia un objetivo o destino lejano
+- Exploración de mundos, descubrimientos, peligros en el camino
+- Crecimiento del protagonista a través de los desafíos del viaje
+- Sentido de asombro y escala épica`,
+  sobrenatural: `GÉNERO: Sobrenatural.
+- Fuerzas que escapan a la lógica natural: espíritus, fantasmas, maldiciones, poderes inexplicables
+- Tensión entre el mundo cotidiano y lo oculto que acecha debajo
+- Atmósfera inquietante, reglas misteriosas que el protagonista debe descifrar`,
+  supervivencia: `GÉNERO: Supervivencia.
+- El protagonista lucha por sobrevivir en un entorno hostil (apocalipsis, isla, juego mortal, etc.)
+- Recursos escasos, decisiones desesperadas, dilemas morales bajo presión extrema
+- La muerte es una amenaza real y constante — la tensión nunca baja`,
+  videojuego: `GÉNERO: Videojuego/Sistema.
+- El protagonista interactúa con un SISTEMA tipo videojuego: niveles, stats, habilidades, misiones, notificaciones
+- Reglas claras de progresión (subir de nivel, desbloquear poderes)
+- Mezcla estrategia con acción, el protagonista explota las mecánicas del sistema`,
 };
 
 const MOD_PROMPTS = {
@@ -1235,26 +1267,32 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     const hasEcchi = subgenres.includes('ecchi') || subgenres.includes('harem') || subgenres.includes('harem_inverso');
     const subgenreText = getSubgenreText(subgenres);
 
-    const sysBase = `Eres un guionista de anime experto especializado en contenido viral para TikTok y YouTube.
-REGLAS DE NARRACIÓN:
-- En español, PRIMERA PERSONA del protagonista, 3-4 frases por escena, máximo 20 palabras por frase
-- Pensamientos internos MUY visibles — el lector debe sentir exactamente lo que siente el protagonista
-- Nombres japoneses REALES (sin inventos)
-- Las narraciones deben ser EMOCIONANTES, ATRACTIVAS y con TENSIÓN EMOCIONAL o SEXUAL según el género
-- Usar recursos literarios: metáforas sensoriales ("su perfume me envolvió como niebla cálida"), pensamientos contradictorios ("debía irme, pero mis pies no respondían"), suspenso interno
-- Ritmo dinámico: frases cortas para tensión, frases largas para emoción
-- Cada escena debe dejar al lector queriendo saber qué pasa después
-- NO narrar eventos vacíos ("me desperté, desayuné") — CADA escena debe tener carga emocional o tensión
+    const sysBase = `Eres un guionista de anime de élite. Tu escritura provoca reacciones físicas en el lector: escalofríos, nudo en la garganta, corazón acelerado.
 
-REGLAS DEL imagePromptA e imagePromptB (van directo a Gemini generador de imágenes):
+REGLAS DE NARRACIÓN (OBLIGATORIAS):
+- En español, PRIMERA PERSONA del protagonista, 3-4 frases, máximo 20 palabras por frase
+- CADA escena debe tener una CARGA EMOCIONAL específica: agonía, éxtasis, terror, deseo, rabia, vacío
+- Pensamientos internos brutalmente honestos — el protagonista no filtra nada
+- Usa recursos literarios CONCRETOS:
+  * Sensaciones físicas del dolor/placer: "el pecho me arde como si respirara fuego", "mis manos tiemblan y no puedo detenerlas"
+  * Contradicción interna: "quiero gritar pero no recuerdo cómo se siente querer algo"
+  * Tiempo distorsionado: "ese segundo duró una eternidad", "no sé si han pasado horas o minutos"
+  * Metáforas viscerales: "mis recuerdos son esquirlas de cristal clavadas en la cabeza"
+- Para géneros PSICOLÓGICOS: mostrar la mente quebrándose en tiempo real — confusión, paranoia, momentos de lucidez seguidos de colapso
+- Para géneros DARK: no suavizar. La vida duele, la gente falla, no hay redención fácil
+- Para géneros de ACCIÓN: adrenalina pura, instinto antes que pensamiento
+- NUNCA escribir escenas neutras — si un personaje toma café, ese café tiene un significado emocional
+- El lector debe quedarse sin aliento al terminar cada escena
+
+REGLAS DE imagePromptA e imagePromptB:
 - SIEMPRE en INGLÉS
-- FORMATO: "Scene with [nombres presentes]: [descripción visual]"
-- Describir: entorno, posición de personajes, expresión, iluminación, ángulo de cámara
-- Vocabulario PERMITIDO: blushing, embarrassed, shy smile, short skirt, school uniform, sleeveless dress, form-fitting outfit, low angle shot, close-up face, wind lifting hair, leaning forward, surprised expression, accidental fall, reaching out, suggestive pose, meaningful glance
-- Vocabulario PROHIBIDO (bloquea Gemini): naked, nude, explicit, sexual, genitals, nipples, pornographic, non-consensual
-- Si la escena es romántica/íntima: describir REACCIÓN VISUAL ("both blushing deeply, faces centimeters apart") no acción física explícita
+- SIEMPRE empezar con "Scene with [nombre exacto]:" 
+- SIEMPRE incluir: nombre del personaje + descripción de su ropa específica + color/estilo de cabello + expresión facial + entorno + iluminación
+- Ejemplo correcto: "Scene with Kenji (short black hair, white hospital shirt, gray pants): sitting on hospital bed, trembling hands on knees, hollow vacant expression, pale fluorescent light casting harsh shadows, clinical white room"
+- NUNCA usar "a man", "a woman", "the protagonist" — SIEMPRE el nombre real
+- Vocabulario PROHIBIDO (bloquea Gemini): naked, nude, explicit, sexual, genitals, nipples, non-consensual
 - NO texto, NO letras, NO marcas de agua en la imagen
-- Solo incluir personajes que aparecen físicamente en la escena
+- Solo personajes físicamente presentes en la escena
 - Responde SOLO JSON válido sin markdown`;
 
     const genreExtra = hasEcchi
@@ -1356,10 +1394,15 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
 
     setProg(20, `✅ ${state.characters.length} personajes — Paso 2/5: Escenas 1-8...`);
 
-    const charRef = state.characters.map(c => `${c.id}=${c.name}(${c.role}): ${c.appearance}`).join(' | ');
+    // Full character reference for imagePrompts — includes name, role, appearance, outfit
+    const charRef = state.characters.map(c =>
+      `- ${c.name} (${c.role}): ${c.appearance}${c.personality ? '. Personalidad: ' + c.personality.slice(0,80) : ''}`
+    ).join('\n');
+
+    const charRefShort = state.characters.map(c => c.name).join(', ');
 
     // 15 scenes x 2 images = 30 images, ~10 min total
-    const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"3-4 frases primera persona máximo 20 palabras por frase","imagePromptA":"Scene with X alone: primer momento visual","imagePromptB":"Scene with X and Y: segundo momento distinto de la misma escena"}`;
+    const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"3-4 frases primera persona máximo 20 palabras por frase","imagePromptA":"Scene with [nombre exacto del personaje]: [descripción visual detallada incluyendo su ropa y apariencia específica]","imagePromptB":"Scene with [nombres exactos]: [segundo momento visual distinto]"}`;
 
     async function generateSceneBatch(batchPrompt, expectedCount, startNum, batchName) {
       let bestResult = [];
@@ -1399,19 +1442,27 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
     const batchRules = `REGLAS ESTRUCTURA:
 - 15 escenas en total, ~10 minutos de audio
 - Narración CORTA: 3-4 frases, máximo 20 palabras por frase
-- imagePromptA = primer momento de la escena (llegada, inicio de acción)
-- imagePromptB = segundo momento distinto (descubrimiento, clímax de esa escena, reacción)
-- FINALE ep1 (escena 15): resolución PARCIAL del conflicto del episodio + misterio abierto que engancha al ep2. NO resolver el conflicto principal de la serie.`;
+- imagePromptA = primer momento de la escena
+- imagePromptB = segundo momento distinto de la misma escena
+- FINALE ep1 (escena 15): resolución PARCIAL + misterio abierto para ep2
+
+REGLAS CRÍTICAS PARA imagePromptA e imagePromptB:
+- SIEMPRE usar el nombre EXACTO del personaje (ej: "Scene with Kenji:")
+- SIEMPRE incluir descripción de ropa específica del personaje según su ficha (ej: "wearing white hospital shirt and gray pants")
+- SIEMPRE incluir color y estilo de cabello (ej: "black short hair", "long silver hair")
+- NUNCA decir solo "the protagonist" o "a man" — usar el nombre real
+- Si 2+ personajes: "Scene with Kenji and Ayame:" y describir apariencia de cada uno
+- Máximo 3 personajes por imagen`;
 
     // ─── Step 2-3: Scenes in 2 batches ───
     let scenes = await generateSceneBatch(
-      `${ctx}\nPersonajes: ${charRef}\n\n${batchRules}\n\nGenera escenas 1-7. Actos: cold_open (1-2), act1 (3-7).\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con 7 objetos numerados 1-7.`,
+      `${ctx}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${batchRules}\n\nGenera escenas 1-7. Actos: cold_open (1-2), act1 (3-7).\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con 7 objetos numerados 1-7.`,
       7, 1, 'Escenas 1-7'
     );
 
     setProg(60, '✅ 1-7 — Paso 3/3: Escenas 8-15...');
     const batch2 = await generateSceneBatch(
-      `Universo: ${u.title} (${u.genero}${mod !== 'none' ? ', ' + mod : ''})\nPersonajes: ${state.characters.map(c => c.name).join(', ')}\nEscena 7 terminó: "${scenes[scenes.length-1]?.narration || ''}"\n\n${batchRules}\n\nGenera escenas 8-15:\n- 8-12: act2, escalada del conflicto\n- 13-14: clímax\n- 15: FINALE — resolución parcial + pregunta abierta que engancha al episodio 2\nDevuelve SOLO JSON con 8 objetos numerados 8-15.`,
+      `Universo: ${u.title} (${u.genero})\n\nPERSONAJES:\n${charRef}\n\nEscena 7 terminó: "${scenes[scenes.length-1]?.narration || ''}"\n\n${batchRules}\n\nGenera escenas 8-15:\n- 8-12: act2, escalada del conflicto\n- 13-14: clímax\n- 15: FINALE — resolución parcial + pregunta abierta que engancha al episodio 2\nDevuelve SOLO JSON con 8 objetos numerados 8-15.`,
       8, 8, 'Escenas 8-15'
     );
     scenes = scenes.concat(batch2);
@@ -1572,8 +1623,13 @@ window.editScenePrompts = function(sceneId) {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
 
-  const rawA = s.imagePromptA || s.imagePromptEN || s.narration || '';
-  const rawB = s.imagePromptB || s.imagePromptEN || s.narration || '';
+  const esc = (t) => String(t || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  const rawA = esc(s.imagePromptA || s.imagePromptEN || s.narration || '');
+  const rawB = esc(s.imagePromptB || s.imagePromptEN || s.narration || '');
 
   openModal(`
     <div class="modal-handle"></div>
@@ -2048,15 +2104,18 @@ document.getElementById('btnRepairScenes').addEventListener('click', async () =>
   btn.innerHTML = `<div class="spinner"></div> Reparando ${brokenIndices.length} escenas...`;
 
   try {
-    const sysBase = `Eres un guionista de anime experto.
+    const sysBase = `Eres un guionista de anime de élite. Tu escritura provoca reacciones físicas en el lector.
 REGLAS:
-- Narración en PRIMERA PERSONA del protagonista, 4-5 frases por escena
-- Pensamientos internos visibles
-- Nombres japoneses REALES (sin inventos)
-- imagePromptEN en INGLÉS describiendo visualmente la escena, 9:16 vertical anime 2D
+- Narración en español, PRIMERA PERSONA, 3-4 frases, máximo 20 palabras por frase
+- Carga emocional específica en cada escena (agonía, terror, deseo, rabia, vacío)
+- Sensaciones físicas concretas, pensamientos internos brutalmente honestos
+- imagePromptA e imagePromptB en INGLÉS, cada uno empezando con "Scene with [nombre exacto]:" e incluyendo ropa específica + cabello + expresión
+- NUNCA usar "a man"/"the protagonist" — siempre el nombre real
 - Responde SOLO JSON válido sin markdown`;
 
-    const charRef = state.characters.map(c => `${c.id}=${c.name}(${c.role}): ${c.appearance}`).join(' | ');
+    const charRef = state.characters.map(c =>
+      `- ${c.name} (${c.role}): ${c.appearance}`
+    ).join('\n');
     const ctx = `Universo: ${u.title}\nGénero: ${u.genero}\nConcepto: ${u.concepto}\nConflicto: ${u.conflicto}\nSetting: ${u.setting}`;
 
     // Get last good scene before broken range for continuity
@@ -2069,20 +2128,19 @@ REGLAS:
 
     let act = 'act2';
     if (startNum <= 2) act = 'cold_open';
-    else if (startNum <= 10) act = 'act1';
-    else if (startNum <= 18) act = 'act2';
-    else if (startNum <= 25) act = 'climax';
-    else if (startNum <= 29) act = 'resolution';
-    else act = 'post_credits';
+    else if (startNum <= 7) act = 'act1';
+    else if (startNum <= 12) act = 'act2';
+    else if (startNum <= 14) act = 'climax';
+    else act = 'resolution';
 
-    const prompt = `${ctx}\nPersonajes: ${charRef}\n${lastGood ? 'Escena anterior (' + lastGood.num + '): "' + lastGood.narration + '"' : ''}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: ${totalScenes} escenas.\nCada escena DEBE tener narration (4-5 frases primera persona) e imagePromptEN (descripción visual en inglés).\nDevuelve SOLO: {"scenes":[{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"...","imagePromptEN":"..."}, ...]}`;
+    const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}\n${lastGood ? '\nEscena anterior (' + lastGood.num + '): "' + lastGood.narration + '"' : ''}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: ${totalScenes} escenas.\nCada escena DEBE tener narration (3-4 frases primera persona), imagePromptA e imagePromptB (ambos en inglés, empezando con "Scene with [nombre]:" e incluyendo ropa/cabello/expresión específicos).\nDevuelve SOLO: {"scenes":[{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"...","imagePromptA":"Scene with [nombre]: ...","imagePromptB":"Scene with [nombre]: ..."}, ...]}`;
 
     let newScenes = [];
     for (let attempt = 0; attempt < 3 && newScenes.length < count; attempt++) {
       try {
         const raw = await callClaude(prompt, sysBase);
         const parsed = safeParseJSON(raw);
-        const arr = (parsed.scenes || []).filter(s => s && s.narration && s.imagePromptEN && s.title);
+        const arr = (parsed.scenes || []).filter(s => s && s.narration && s.imagePromptA && s.imagePromptB && s.title);
         if (arr.length >= count) {
           newScenes = arr.slice(0, count).map((s, i) => ({
             ...s,
@@ -2334,9 +2392,6 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
   }
 });
 
-// ════════════════════════════════════════════════════════════════
-// ════════════════════════════════════════════════════════════════
-// NAV TABS
 // ════════════════════════════════════════════════════════════════
 // NAV TABS
 // ════════════════════════════════════════════════════════════════
