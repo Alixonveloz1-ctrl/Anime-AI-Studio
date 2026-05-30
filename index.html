@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.40 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.41 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -477,7 +477,7 @@
   <div class="panel" id="panel-exportar">
     <div class="card">
       <h2>📤 Exportar</h2>
-      <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px">Descarga todo el proyecto. El ZIP incluye imágenes, audios individuales y subtítulos .srt por escena.</p>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px">Descarga todo el proyecto. El ZIP incluye imágenes, audios individuales, subtítulos .srt por escena, y un audio_completo.wav con su subtítulo global sincronizado.</p>
       <button class="btn" id="btnExportZip">📦 Descargar ZIP</button>
     </div>
   </div>
@@ -2262,7 +2262,9 @@ function audioBufferToWav(audioBuffer) {
   return new Uint8Array(buffer);
 }
 
-// Combine multiple audio (base64) into one WAV blob
+// Combine multiple audio (base64) into one WAV blob.
+// Returns { wav: Uint8Array, offsets: [{start, end}] } where offsets are per-entry
+// time spans (seconds) in the combined track — used to build a global synced SRT.
 async function combineAudiosToWav(audioEntries, progressCb) {
   // audioEntries: [{ data: base64, mime: 'audio/mpeg' | 'audio/wav' }]
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -2280,35 +2282,39 @@ async function combineAudiosToWav(audioEntries, progressCb) {
       const arrBuf = base64ToArrayBuffer(entry.data);
       // decodeAudioData mutates the buffer in some implementations — clone
       const buf = await ctx.decodeAudioData(arrBuf.slice(0));
-      decoded.push(buf);
+      decoded.push({ buf, idx: entry.idx });
       if (buf.sampleRate > maxSampleRate) maxSampleRate = buf.sampleRate;
       if (buf.numberOfChannels > maxChannels) maxChannels = buf.numberOfChannels;
     } catch(e) {
       console.warn(`Audio ${i+1} no se pudo decodificar:`, e.message);
     }
   }
+  ctx.close();
 
   if (!decoded.length) throw new Error('Ningún audio se pudo decodificar');
 
-  // Add 0.15s silence between scenes — just enough to breathe
-  const silenceFrames = Math.floor(maxSampleRate * 0.15);
-  const totalFrames = decoded.reduce((sum, b) => sum + b.length, 0) + silenceFrames * (decoded.length - 1);
+  // Minimal silence between scenes — 0.05s, just enough to avoid abrupt cuts
+  const silenceFrames = Math.floor(maxSampleRate * 0.05);
+  const totalFrames = decoded.reduce((sum, d) => sum + d.buf.length, 0) + silenceFrames * (decoded.length - 1);
 
-  // Use OfflineAudioContext to render properly
   const offline = new OfflineAudioContext(maxChannels, totalFrames, maxSampleRate);
   let cursor = 0;
+  const offsets = []; // per scene: { idx, start, end } in seconds
 
   for (let i = 0; i < decoded.length; i++) {
-    const buf = decoded[i];
+    const buf = decoded[i].buf;
     const src = offline.createBufferSource();
     src.buffer = buf;
     src.connect(offline.destination);
-    src.start(cursor / maxSampleRate);
+    const startSec = cursor / maxSampleRate;
+    src.start(startSec);
+    const endSec = (cursor + buf.length) / maxSampleRate;
+    offsets.push({ idx: decoded[i].idx, start: startSec, end: endSec });
     cursor += buf.length + silenceFrames;
   }
 
   const rendered = await offline.startRendering();
-  return audioBufferToWav(rendered);
+  return { wav: audioBufferToWav(rendered), offsets };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -2335,6 +2341,9 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
+    // Collected in scene order for the combined audio + global SRT
+    const audioEntries = []; // { data, mime, idx, narration }
+
     for (const s of state.scenes) {
       const imgA = await dbGet(sceneImgKeyA(s.id));
       const imgB = await dbGet(sceneImgKeyB(s.id));
@@ -2353,6 +2362,9 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
         }
         const ext = (mime.includes('mpeg') || mime.includes('mp3')) ? 'mp3' : 'wav';
         zip.file(`audios/escena_${pad}.${ext}`, audData, { base64: true });
+
+        // Keep for combined track + global SRT (in scene order)
+        audioEntries.push({ data: audData, mime, idx: audioEntries.length, narration: s.narration });
 
         // Generate individual SRT for this scene (starts at 0:00:00,000)
         try {
@@ -2385,13 +2397,58 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
     }
     audioCtx.close();
 
+    // ─── Combined audio (all scenes, minimal silence) + global synced SRT ───
+    if (audioEntries.length > 0) {
+      btn.innerHTML = '<div class="spinner"></div> Uniendo audios...';
+      try {
+        const { wav, offsets } = await combineAudiosToWav(audioEntries, (i, t) => {
+          btn.innerHTML = `<div class="spinner"></div> Uniendo audio ${i+1}/${t}...`;
+        });
+
+        // Save combined WAV as base64 into the zip
+        let bin = '';
+        const chunk = 0x8000;
+        for (let i = 0; i < wav.length; i += chunk) {
+          bin += String.fromCharCode.apply(null, wav.subarray(i, i + chunk));
+        }
+        zip.file('audio_completo.wav', btoa(bin), { base64: true });
+
+        // Global SRT timed to the combined track
+        const globalSrt = [];
+        let cue = 1;
+        for (const off of offsets) {
+          const entry = audioEntries.find(e => e.idx === off.idx);
+          if (!entry) continue;
+          const sceneDur = off.end - off.start;
+          const sentences = cleanTextForTTS(entry.narration)
+            .split(/(?<=[.!?¿¡])\s+/)
+            .map(t => t.trim())
+            .filter(t => t.length > 3);
+          if (!sentences.length) continue;
+          const durPer = sceneDur / sentences.length;
+          for (let si = 0; si < sentences.length; si++) {
+            const start = off.start + si * durPer;
+            const end = off.start + (si + 1) * durPer;
+            globalSrt.push(cue++);
+            globalSrt.push(`${toSrtTime(start)} --> ${toSrtTime(end)}`);
+            globalSrt.push(sentences[si]);
+            globalSrt.push('');
+          }
+        }
+        zip.file('audio_completo.srt', globalSrt.join('\n'));
+      } catch(e) {
+        console.warn('No se pudo generar audio combinado:', e);
+        showToast('Audio combinado falló (audios individuales sí están)', 'error');
+      }
+    }
+
     btn.innerHTML = '<div class="spinner"></div> Generando ZIP...';
     const blob = await zip.generateAsync({ type: 'blob' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = `${sn}.zip`; a.click();
     URL.revokeObjectURL(url);
-    showToast('ZIP descargado — subtítulos individuales por escena', 'success');
+    showToast('ZIP descargado — incluye audio_completo.wav + .srt global', 'success');
   } catch(e) {
     openErrorModal('Error al exportar', e.message);
   } finally {
