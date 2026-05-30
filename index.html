@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.34 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.35 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1568,61 +1568,26 @@ async function renderScenes() {
   `).join('');
 }
 
-window.editScenePrompts = async function(sceneId) {
+window.editScenePrompts = function(sceneId) {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
 
-  // Translate prompts to Spanish if they look like English
-  const needsTranslation = p => p && /^scene with|^[a-z]/i.test(p.trim());
-  // Fallback: some older scenes used imagePromptEN instead of imagePromptA/B
-  let promptA = s.imagePromptA || s.imagePromptEN || s.narration || '';
-  let promptB = s.imagePromptB || s.imagePromptEN || s.narration || '';
-
-  if (needsTranslation(promptA) || needsTranslation(promptB)) {
-    const btn = document.querySelector(`button[onclick="editScenePrompts('${sceneId}')"]`);
-    if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
-    try {
-      const keys = getKeys();
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': keys.claude,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 400,
-          messages: [{
-            role: 'user',
-            content: `Traduce estos dos prompts de imagen al español de forma natural y descriptiva. Mantén los nombres propios. NO cambies el significado. Devuelve SOLO JSON: {"a":"...","b":"..."}\n\nPrompt A: ${promptA}\nPrompt B: ${promptB}`
-          }]
-        })
-      });
-      const data = await res.json();
-      const text = data.content?.[0]?.text || '';
-      const clean = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
-      if (parsed.a) promptA = parsed.a;
-      if (parsed.b) promptB = parsed.b;
-    } catch(e) {
-      console.warn('Traducción falló:', e);
-    }
-    if (btn) { btn.textContent = '✏️ Prompts'; btn.disabled = false; }
-  }
+  const rawA = s.imagePromptA || s.imagePromptEN || s.narration || '';
+  const rawB = s.imagePromptB || s.imagePromptEN || s.narration || '';
 
   openModal(`
     <div class="modal-handle"></div>
     <h3>✏️ Editar Prompts — Escena ${s.num}</h3>
-    <p style="font-size:12px;color:var(--text-dim);margin:0 0 14px;line-height:1.5">
-      Edita los prompts en español. Cuando guardes, se usarán para regenerar las imágenes.<br>
-      <span style="color:var(--accent)">Tip:</span> Si un filtro lo bloquea, cambia la palabra problemática por una más suave.
+    <p style="font-size:12px;color:var(--text-dim);margin:0 0 12px;line-height:1.5">
+      Edita y traduce los prompts. Luego guarda y regenera la imagen.
     </p>
-    <label>Prompt imagen A</label>
-    <textarea id="editPromptA" style="height:100px;font-size:13px">${promptA}</textarea>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+      <label style="margin:0">Prompt imagen A</label>
+      <button id="btnTranslate" class="btn-sec" style="font-size:11px;padding:3px 10px;width:auto;border-color:rgba(0,229,255,0.4);color:var(--accent2)" onclick="translatePrompts('${sceneId}')">🌐 Traducir al español</button>
+    </div>
+    <textarea id="editPromptA" style="height:110px;font-size:13px">${rawA}</textarea>
     <label>Prompt imagen B</label>
-    <textarea id="editPromptB" style="height:100px;font-size:13px">${promptB}</textarea>
+    <textarea id="editPromptB" style="height:110px;font-size:13px">${rawB}</textarea>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
       <button class="btn-sec" onclick="closeModal()">Cancelar</button>
       <button class="btn" onclick="saveScenePrompts('${sceneId}')">💾 Guardar</button>
@@ -1632,6 +1597,53 @@ window.editScenePrompts = async function(sceneId) {
       <button class="btn-sec" style="font-size:12px" onclick="saveAndRegenAB('${sceneId}','B')">🖼️ Guardar y generar B</button>
     </div>
   `);
+};
+
+window.translatePrompts = async function(sceneId) {
+  const btn = document.getElementById('btnTranslate');
+  const taA = document.getElementById('editPromptA');
+  const taB = document.getElementById('editPromptB');
+  if (!btn || !taA || !taB) return;
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Traduciendo...';
+
+  try {
+    const keys = getKeys();
+    if (!keys.claude) throw new Error('Falta Claude API key');
+    const rawA = taA.value.trim();
+    const rawB = taB.value.trim();
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': keys.claude,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 600,
+        messages: [{
+          role: 'user',
+          content: 'Traduce estos dos prompts de imagen al español de forma natural. Mantén nombres propios exactamente igual. Devuelve SOLO JSON sin markdown:\n{"a":"traducción A","b":"traducción B"}\n\nPrompt A: ' + rawA + '\n\nPrompt B: ' + rawB
+        }]
+      })
+    });
+    const data = await res.json();
+    const text = data.content?.[0]?.text || '';
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('Sin JSON');
+    const parsed = JSON.parse(match[0]);
+    if (parsed.a) taA.value = parsed.a;
+    if (parsed.b) taB.value = parsed.b;
+    btn.textContent = '✅ Traducido';
+  } catch(e) {
+    btn.textContent = '❌ Reintentar';
+    btn.disabled = false;
+    showToast('Error al traducir: ' + e.message, 'error');
+  }
 };
 
 window.saveScenePrompts = function(sceneId) {
