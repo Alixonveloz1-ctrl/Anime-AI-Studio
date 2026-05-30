@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.30 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.31 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -837,7 +837,28 @@ async function generateImage(prompt, characterRefs = null, forceModel = null) {
     body: bodyStr,
   });
   const data = await res.json();
-  if (!res.ok || data.error) throw new Error(data.error || `Image proxy ${res.status}`);
+
+  // If Gemini rejects the reference image, retry without refs
+  if (!res.ok || data.error) {
+    const isRefError = data.error && (
+      data.error.includes('character reference') ||
+      data.error.includes('provided character') ||
+      data.error.includes('cannot generate an image based on')
+    );
+    if (isRefError && cleanRefs) {
+      console.warn('Ref rechazada — reintentando sin refs');
+      const res2 = await fetch('/api/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: cleanPrompt, characterRefs: null, model: model === 'auto' ? null : model, isEcchi }),
+      });
+      const data2 = await res2.json();
+      if (!res2.ok || data2.error) throw new Error(data2.error || `Image proxy ${res2.status}`);
+      if (!data2.imageData) throw new Error('Imagen: respuesta sin datos');
+      return data2.imageData;
+    }
+    throw new Error(data.error || `Image proxy ${res.status}`);
+  }
   if (!data.imageData) throw new Error('Imagen: respuesta sin datos');
   return data.imageData;
 }
@@ -1798,21 +1819,49 @@ async function generateImageRaw(prompt, preCompressedRefs) {
     .replace(/\s+/g, ' ')
     .trim();
 
-  const bodyObj = {
-    prompt: cleanPrompt,
-    characterRefs: (preCompressedRefs && preCompressedRefs.length) ? preCompressedRefs : null,
-    model: model === 'auto' ? null : model,
-  };
+  const isEcchi = (state.universe?.subgenres || []).some(s => ['ecchi','harem','harem_inverso'].includes(s));
 
-  const res = await fetch('/api/image', {
+  // Attempt 1: with character refs
+  if (preCompressedRefs && preCompressedRefs.length) {
+    const bodyObj = {
+      prompt: cleanPrompt,
+      characterRefs: preCompressedRefs,
+      model: model === 'auto' ? null : model,
+      isEcchi,
+    };
+    const res = await fetch('/api/image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bodyObj),
+    });
+    const data = await res.json();
+    if (res.ok && !data.error && data.imageData) return data.imageData;
+
+    // If Gemini rejects the reference image itself, retry without refs
+    const isRefError = data.error && (
+      data.error.includes('character reference') ||
+      data.error.includes('provided character') ||
+      data.error.includes('cannot generate an image based on')
+    );
+    if (!isRefError) throw new Error(data.error || `Image proxy ${res.status}`);
+    console.warn('Ref rechazada por Gemini — reintentando sin refs:', data.error);
+  }
+
+  // Attempt 2: without refs (fallback)
+  const res2 = await fetch('/api/image', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(bodyObj),
+    body: JSON.stringify({
+      prompt: cleanPrompt,
+      characterRefs: null,
+      model: model === 'auto' ? null : model,
+      isEcchi,
+    }),
   });
-  const data = await res.json();
-  if (!res.ok || data.error) throw new Error(data.error || `Image proxy ${res.status}`);
-  if (!data.imageData) throw new Error('Imagen: respuesta sin datos');
-  return data.imageData;
+  const data2 = await res2.json();
+  if (!res2.ok || data2.error) throw new Error(data2.error || `Image proxy ${res2.status}`);
+  if (!data2.imageData) throw new Error('Imagen: respuesta sin datos');
+  return data2.imageData;
 }
 
 document.getElementById('btnAllAudio').addEventListener('click', async () => {
