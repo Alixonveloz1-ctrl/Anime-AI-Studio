@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.33 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.34 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1574,8 +1574,9 @@ window.editScenePrompts = async function(sceneId) {
 
   // Translate prompts to Spanish if they look like English
   const needsTranslation = p => p && /^scene with|^[a-z]/i.test(p.trim());
-  let promptA = s.imagePromptA || '';
-  let promptB = s.imagePromptB || '';
+  // Fallback: some older scenes used imagePromptEN instead of imagePromptA/B
+  let promptA = s.imagePromptA || s.imagePromptEN || s.narration || '';
+  let promptB = s.imagePromptB || s.imagePromptEN || s.narration || '';
 
   if (needsTranslation(promptA) || needsTranslation(promptB)) {
     const btn = document.querySelector(`button[onclick="editScenePrompts('${sceneId}')"]`);
@@ -1653,7 +1654,9 @@ window.saveAndRegenAB = async function(sceneId, ab) {
 window.generateSceneImageAB = async function(sceneId, ab) {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
-  const prompt = ab === 'A' ? (s.imagePromptA || s.narration) : (s.imagePromptB || s.imagePromptA || s.narration);
+  const prompt = ab === 'A'
+    ? (s.imagePromptA || s.imagePromptEN || s.narration)
+    : (s.imagePromptB || s.imagePromptA || s.imagePromptEN || s.narration);
   showToast(`Generando imagen ${ab} escena ${s.num}...`, 'success');
   try {
     // Only pass refs for characters mentioned in THIS prompt
@@ -1844,8 +1847,8 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
     if (!s.imagePromptA && !s.narration) continue;
     const existingA = await dbGet(sceneImgKeyA(s.id));
     const existingB = await dbGet(sceneImgKeyB(s.id));
-    if (!existingA) queue.push({ s, ab: 'A', prompt: s.imagePromptA || s.narration });
-    if (!existingB) queue.push({ s, ab: 'B', prompt: s.imagePromptB || s.imagePromptA || s.narration });
+    if (!existingA) queue.push({ s, ab: 'A', prompt: s.imagePromptA || s.imagePromptEN || s.narration });
+    if (!existingB) queue.push({ s, ab: 'B', prompt: s.imagePromptB || s.imagePromptA || s.imagePromptEN || s.narration });
   }
 
   const total = queue.length;
