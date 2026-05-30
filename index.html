@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.28 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.30 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1598,29 +1598,42 @@ async function getAllCharacterRefs() {
 // This prevents Gemini from confusing characters
 async function getRefsForPrompt(prompt) {
   if (!state.characters.length || !prompt) return [];
-  const promptLower = prompt.toLowerCase();
-  const matched = [];
+
+  // Pre-load all character images
+  const charImgs = [];
   for (const c of state.characters) {
-    if (!c.name) continue;
-    // Check if any part of the name appears in the prompt
-    const nameParts = c.name.toLowerCase().split(/\s+/);
-    const found = nameParts.some(part => part.length >= 3 && promptLower.includes(part));
-    if (found) {
-      const img = await dbGet(charImgKey(c.id));
-      if (img) matched.push({ name: c.name, role: c.role, img });
+    if (!c.name || c.name.trim().length < 2) continue;
+    const img = await dbGet(charImgKey(c.id));
+    if (img) charImgs.push({ name: c.name, role: c.role || '', img });
+  }
+  if (!charImgs.length) return [];
+
+  const promptLower = prompt.toLowerCase();
+  const matched = new Map(); // use Map to avoid duplicates
+
+  // Strategy 1: parse "Scene with X and Y:" prefix — most reliable
+  const sceneWithMatch = prompt.match(/^scene with ([^:]+):/i);
+  if (sceneWithMatch) {
+    const nameSection = sceneWithMatch[1].toLowerCase();
+    for (const c of charImgs) {
+      const parts = c.name.toLowerCase().split(/\s+/).filter(p => p.length >= 3);
+      if (parts.some(p => nameSection.includes(p))) matched.set(c.name, c);
     }
   }
-  // If no match found but prompt says "Scene with X alone" or similar, try harder
-  if (!matched.length) {
-    // Fallback: just return the protagonist (first character)
-    const proto = state.characters[0];
-    if (proto) {
-      const img = await dbGet(charImgKey(proto.id));
-      if (img) matched.push({ name: proto.name, role: proto.role, img });
-    }
+
+  // Strategy 2: search full prompt for any character name
+  for (const c of charImgs) {
+    if (matched.has(c.name)) continue;
+    const parts = c.name.toLowerCase().split(/\s+/).filter(p => p.length >= 3);
+    if (parts.some(p => promptLower.includes(p))) matched.set(c.name, c);
   }
-  console.log(`Refs para prompt "${prompt.slice(0,50)}...": ${matched.map(r=>r.name).join(', ')}`);
-  return matched;
+
+  // Strategy 3: protagonist fallback — if nobody matched, protagonist is almost certainly there
+  if (!matched.size && charImgs[0]) matched.set(charImgs[0].name, charImgs[0]);
+
+  const result = [...matched.values()];
+  console.log(`Refs "${prompt.slice(0,60)}": [${result.map(r=>r.name).join(', ')}]`);
+  return result;
 }
 
 window.generateSceneAudio = async function(sceneId) {
@@ -1687,15 +1700,36 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   }
   console.log('Refs cacheadas:', Object.keys(cachedRefMap).join(', '));
 
-  // Filter refs for a specific prompt — only characters mentioned by name
+  // Filter refs for a specific prompt using same 3-strategy logic as getRefsForPrompt
   function getRefsFromCache(prompt) {
-    if (!prompt) return Object.values(cachedRefMap);
+    if (!prompt) return Object.values(cachedRefMap).slice(0, 1);
     const promptLower = prompt.toLowerCase();
-    const matched = Object.values(cachedRefMap).filter(r => {
-      const parts = r.name.toLowerCase().split(/\s+/);
-      return parts.some(p => p.length >= 3 && promptLower.includes(p));
-    });
-    return matched.length > 0 ? matched : Object.values(cachedRefMap).slice(0, 1);
+    const matched = new Map();
+
+    // Strategy 1: parse "Scene with X and Y:" prefix
+    const sceneWithMatch = prompt.match(/^scene with ([^:]+):/i);
+    if (sceneWithMatch) {
+      const nameSection = sceneWithMatch[1].toLowerCase();
+      for (const [key, r] of Object.entries(cachedRefMap)) {
+        const parts = r.name.toLowerCase().split(/\s+/).filter(p => p.length >= 3);
+        if (parts.some(p => nameSection.includes(p))) matched.set(key, r);
+      }
+    }
+
+    // Strategy 2: search full prompt
+    for (const [key, r] of Object.entries(cachedRefMap)) {
+      if (matched.has(key)) continue;
+      const parts = r.name.toLowerCase().split(/\s+/).filter(p => p.length >= 3);
+      if (parts.some(p => promptLower.includes(p))) matched.set(key, r);
+    }
+
+    // Strategy 3: protagonist fallback
+    if (!matched.size) {
+      const first = Object.values(cachedRefMap)[0];
+      if (first) matched.set(first.name, first);
+    }
+
+    return [...matched.values()];
   }
 
   // Build list of all images needed: A and B for each scene
