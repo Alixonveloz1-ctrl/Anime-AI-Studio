@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.39 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.40 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -449,6 +449,12 @@
       <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);margin-top:2px">
         <span>0.5x Lento</span><span>1.0x Normal</span><span>2.0x Rápido</span>
       </div>
+
+      <label style="margin-top:12px">Expresividad de voz (solo Gemini)</label>
+      <select id="voiceEmotion" style="font-size:13px">
+        <option value="neutral" selected>🗣️ Natural — narración fluida, sin exagerar</option>
+        <option value="subtle">🎭 Sutil — leve énfasis emocional en clímax/final</option>
+      </select>
 
       <div class="btn-row" style="margin-top:12px">
         <button class="btn-sec" id="btnAllImages">🖼️ Todas las Imágenes</button>
@@ -974,12 +980,13 @@ async function generateAudio(text, voice, act) {
   if (voice && voice.startsWith('azure_')) {
     return await generateAzureAudio(cleanText, voice);
   }
-  // Gemini TTS — pass speed to proxy
+  // Gemini TTS — pass speed + emotion mode to proxy
   const speed = getVoiceSpeed();
+  const emotion = document.getElementById('voiceEmotion')?.value || 'neutral';
   const res = await fetch('/api/audio', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: cleanText, voice, act, speed }),
+    body: JSON.stringify({ text: cleanText, voice, act, speed, emotion }),
   });
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error || `Audio proxy ${res.status}`);
