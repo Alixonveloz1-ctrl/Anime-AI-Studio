@@ -65,7 +65,7 @@ export default async function handler(req) {
   if (req.method !== 'POST')    return new Response('Method not allowed', { status:405 });
 
   try {
-    const { text, voice, act } = await req.json();
+    const { text, voice, act, speed } = await req.json();
     if (!text) return new Response(JSON.stringify({ error:'text required' }), { status:400, headers:CORS });
 
     const saJson = process.env.GCP_SERVICE_ACCOUNT;
@@ -81,6 +81,15 @@ export default async function handler(req) {
       gemini_female2: 'Aoede',
     };
     const voiceName = voiceMap[voice] || 'Charon';
+
+    // Speed tag for Gemini TTS (prepended to text)
+    const spd = parseFloat(speed) || 1.0;
+    const speedTag = spd <= 0.6  ? '[slow] '
+                   : spd >= 1.8  ? '[fast] '
+                   : spd >= 1.4  ? '[slightly fast] '
+                   : spd <= 0.8  ? '[slightly slow] '
+                   : '';
+
     const tag =
       act === 'climax'      ? '[excited] '  :
       act === 'resolution'  ? '[soft] '     :
@@ -91,7 +100,7 @@ export default async function handler(req) {
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, 'X-Goog-User-Project':projectId },
       body: JSON.stringify({
-        contents:[{ role:'user', parts:[{ text: tag + text }] }],
+        contents:[{ role:'user', parts:[{ text: speedTag + tag + text }] }],
         generationConfig:{
           responseModalities:['AUDIO'],
           speechConfig:{ voiceConfig:{ prebuiltVoiceConfig:{ voiceName } } },
