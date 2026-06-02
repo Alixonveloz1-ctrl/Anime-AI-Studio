@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.42 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.43 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -664,9 +664,12 @@ window.saveKeys = function() {
   showToast('Keys guardadas', 'success');
 };
 
-// Chip toggle for subgenres
-document.querySelectorAll('.sg-chip').forEach(chip => {
-  chip.addEventListener('click', () => chip.classList.toggle('selected'));
+// Chip toggle for subgenres — listen on the checkbox change (not label click)
+// to avoid double-toggle caused by label's native click → checkbox → bubbling.
+document.querySelectorAll('.sg-chip input[type="checkbox"]').forEach(cb => {
+  cb.addEventListener('change', () => {
+    cb.closest('.sg-chip').classList.toggle('selected', cb.checked);
+  });
 });
 
 // Restore saved ElevenLabs voice ID
