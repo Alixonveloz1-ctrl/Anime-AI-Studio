@@ -1,5 +1,6 @@
 // ════════════════════════════════════════════════════════════════
 // IMAGE GENERATION PROXY — Vertex AI Gemini Image (Nano Banana)
+// Multi-region: us-central1 → europe-west4 → us-east4 on 429
 // ════════════════════════════════════════════════════════════════
 export const config = { runtime: 'edge' };
 
@@ -27,7 +28,6 @@ async function getAccessToken(sa) {
 
 // ─── Words that trigger Gemini safety filters ───
 const BLOCKED_WORDS = [
-  // Explicit sexual terms
   [/\bnaked\b/gi, 'in swimsuit'],
   [/\bnude\b/gi, 'in swimsuit'],
   [/\bexplicit\b/gi, 'suggestive'],
@@ -37,24 +37,60 @@ const BLOCKED_WORDS = [
   [/\bgenitals?\b/gi, ''],
   [/\bnipples?\b/gi, ''],
   [/\bnon-consensual\b/gi, 'surprising'],
-  // Physical descriptions that trigger content policy
   [/\bchest pressed\b/gi, 'close embrace'],
   [/\bbreasts? pressed\b/gi, 'close together'],
   [/\bpressing.*?(chest|breasts?)\b/gi, 'leaning close'],
   [/\bbody against\b/gi, 'close to'],
-  [/\bcuerpo.*?pecho\b/gi, 'close together'],  // Spanish
-  [/\bpecho.*?contra\b/gi, 'leaning close'],   // Spanish
+  [/\bcuerpo.*?pecho\b/gi, 'close together'],
+  [/\bpecho.*?contra\b/gi, 'leaning close'],
 ];
 
-// ─── Words that DON'T trigger filters (safe for Gemini) ───
-// cleavage, busty, thigh, short skirt, wet clothes, blushing,
-// tight outfit, swimsuit, lingerie, suggestive, sensual, voluptuous
-// → these are fine, DO NOT replace them
+// Regions to try — rotates randomly to distribute load across pools
+// All confirmed to support gemini-2.5-flash-image on Vertex AI
+const ALL_REGIONS = ['us-central1', 'europe-west4', 'us-east4'];
+
+function getRegionOrder() {
+  // Start from a random region each request — distributes DSQ load naturally
+  const start = Math.floor(Math.random() * ALL_REGIONS.length);
+  return [...ALL_REGIONS.slice(start), ...ALL_REGIONS.slice(0, start)];
+}
+
+async function callGeminiInRegion(region, model, parts, projectId, token) {
+  const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}:generateContent`;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, 'X-Goog-User-Project':projectId },
+    body: JSON.stringify({
+      contents: [{ role:'user', parts }],
+      generationConfig: { responseModalities: ['IMAGE','TEXT'] },
+    }),
+  });
+  const d = await r.json();
+  const msg = (d.error?.message || '').toLowerCase();
+  // Retry next region on: 429, 503, capacity issues, or model not yet deployed there (404)
+  const shouldRotate = !r.ok && (
+    r.status === 429 ||
+    r.status === 503 ||
+    r.status === 404 ||
+    msg.includes('quota') ||
+    msg.includes('exhausted') ||
+    msg.includes('resource') ||
+    msg.includes('overload') ||
+    msg.includes('unavailable') ||
+    msg.includes('not found') ||
+    msg.includes('not support')
+  );
+  // Safety/content blocks are model-level — no point retrying other regions
+  const isSafetyBlock = !r.ok && (
+    r.status === 400 ||
+    msg.includes('safety') ||
+    msg.includes('block') ||
+    msg.includes('policy')
+  );
+  return { ok: r.ok, shouldRotate, isSafetyBlock, status: r.status, data: d };
+}
 
 async function callGemini(model, prompt, characterRefs, projectId, token, isEcchi = false) {
-  const url = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/${model}:generateContent`;
-
-  // Only sanitize truly explicit words — not suggestive/ecchi vocabulary
   let cleanPrompt = prompt;
   for (const [pattern, replacement] of BLOCKED_WORDS) {
     cleanPrompt = cleanPrompt.replace(pattern, replacement);
@@ -67,15 +103,11 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
       parts.push({ inlineData: { mimeType: ref.mimeType || 'image/png', data: ref.img } });
       parts.push({ text: `↑ CHARACTER REFERENCE: This is ${ref.name}. Draw ${ref.name} with EXACTLY this appearance — same face shape, same hair color and style, same eye color, same outfit. Do NOT mix up characters.` });
     }
-
     const namesList = characterRefs.map(r => r.name).join(', ');
-
     const ecchiRules = isEcchi ? `
 - This is an ecchi/fan-service anime scene. Draw it with appropriate suggestive visual elements: flattering angles, form-fitting clothing, blushing expressions, suggestive poses.
 - Female characters should have attractive, feminine proportions with emphasis on their appeal.` : '';
-
-    parts.push({
-      text: `Character references provided: ${namesList}.
+    parts.push({ text: `Character references provided: ${namesList}.
 
 MANDATORY RULES:
 1. NO text, NO letters, NO watermarks, NO captions, NO subtitles anywhere in the image.
@@ -87,44 +119,59 @@ MANDATORY RULES:
 7. Style: vertical portrait anime 2D illustration, professional quality, vibrant colors, detailed.${ecchiRules}
 
 Scene to illustrate:
-${cleanPrompt}`
-    });
+${cleanPrompt}` });
   } else {
     parts.push({ text: `Vertical portrait anime 2D illustration. NO text, NO watermarks, NO letters anywhere. Clean faces, professional quality, vibrant colors. ${cleanPrompt}` });
   }
 
-  const r = await fetch(url, {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, 'X-Goog-User-Project':projectId },
-    body: JSON.stringify({
-      contents:[{ role:'user', parts }],
-      generationConfig:{ responseModalities:['IMAGE','TEXT'] },
-    }),
-  });
-  const d = await r.json();
-  if (!r.ok) return { error: `${model}: ${d.error?.message || r.status}` };
-  const img = d.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.mimeType?.startsWith('image/'));
-  if (img) return { imageData: img.inlineData.data, model };
+  // ─── Try each region — rotate on capacity/availability issues ───
+  const regions = getRegionOrder();
+  let lastError = '';
+  for (const region of regions) {
+    const { ok, shouldRotate, isSafetyBlock, data } = await callGeminiInRegion(region, model, parts, projectId, token);
 
-  const cand = d.candidates?.[0];
-  const finishReason = cand?.finishReason || 'UNKNOWN';
-  const safety = cand?.safetyRatings?.filter(s => s.blocked || s.probability === 'HIGH')
-    ?.map(s => s.category.replace('HARM_CATEGORY_', ''))?.join(', ');
-  const blockedMsg = d.promptFeedback?.blockReason ? ` (prompt bloqueado: ${d.promptFeedback.blockReason})` : '';
-  const textPart = cand?.content?.parts?.find(p => p.text)?.text;
+    if (shouldRotate) {
+      lastError = `${region}: ${data.error?.message?.slice(0,60) || 'no capacity'}`;
+      console.log(`[image] rotando desde ${region} → siguiente...`);
+      continue;
+    }
 
-  let errorMsg = `${model}: bloqueado [${finishReason}]`;
-  if (safety) errorMsg += ` — ${safety}`;
-  if (blockedMsg) errorMsg += blockedMsg;
-  if (textPart) errorMsg += ` — "${textPart.slice(0,100)}"`;
-  return { error: errorMsg };
+    if (isSafetyBlock) {
+      // Safety block — no point trying other regions, return error immediately
+      const textPart = data.candidates?.[0]?.content?.parts?.find(p => p.text)?.text;
+      let errorMsg = `bloqueado por seguridad [${data.candidates?.[0]?.finishReason || 'SAFETY'}]`;
+      if (textPart) errorMsg += ` — "${textPart.slice(0,80)}"`;
+      return { error: errorMsg };
+    }
+
+    if (!ok) {
+      lastError = `${region}: ${data.error?.message?.slice(0,80) || 'error'}`;
+      continue; // try next region anyway
+    }
+
+    const img = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.mimeType?.startsWith('image/'));
+    if (img) return { imageData: img.inlineData.data, model, region };
+
+    // Got a response but no image — safety block in response body
+    const cand = data.candidates?.[0];
+    const finishReason = cand?.finishReason || 'UNKNOWN';
+    if (finishReason === 'SAFETY' || finishReason === 'RECITATION') {
+      const safety = cand?.safetyRatings?.filter(s => s.blocked)?.map(s => s.category.replace('HARM_CATEGORY_',''))?.join(', ');
+      return { error: `bloqueado [${finishReason}]${safety ? ' — ' + safety : ''}` };
+    }
+    // Unexpected empty response — try next region
+    lastError = `${region}: respuesta vacía [${finishReason}]`;
+    continue;
+  }
+
+  // All regions failed — tell client to retry later
+  return { error: `429 — sin capacidad en ninguna región. ${lastError}` };
 }
 
 // ─────────────────────────────────────────────
 const CORS = { 'Access-Control-Allow-Origin':'*', 'Content-Type':'application/json' };
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response('', { headers: CORS });
-
   try {
     const body = await req.json();
     const { prompt, model: forceModel, isEcchi } = body;
@@ -133,7 +180,6 @@ export default async function handler(req) {
     if (!characterRefs && body.refImageBase64) {
       characterRefs = [{ name: 'main character', role: '', img: body.refImageBase64 }];
     }
-
     if (characterRefs && Array.isArray(characterRefs)) {
       characterRefs = characterRefs
         .filter(r => r && r.img && typeof r.img === 'string' && r.name && r.name.trim().length >= 2)
@@ -146,16 +192,14 @@ export default async function handler(req) {
         .filter(r => r.img.length > 100);
       if (!characterRefs.length) characterRefs = null;
     }
-
     if (!prompt) return new Response(JSON.stringify({ error:'prompt required' }), { status:400, headers:CORS });
 
-    const projectId = process.env.GCP_PROJECT_ID || 'anime-ai-studio-497502';
+    const projectId = process.env.GCP_PROJECT_ID || JSON.parse(process.env.GCP_SERVICE_ACCOUNT).project_id;
     const sa = JSON.parse(process.env.GCP_SERVICE_ACCOUNT);
     const token = await getAccessToken(sa);
 
     const model = forceModel || 'gemini-2.5-flash-image';
     const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true);
-
     return new Response(JSON.stringify(result), { headers: CORS });
   } catch(e) {
     return new Response(JSON.stringify({ error: e.message }), { status:500, headers:CORS });
