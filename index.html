@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.43 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.44 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1945,37 +1945,42 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   const total = queue.length;
   let completed = 0, failed = 0, failedIds = [];
 
-  for (let i = 0; i < queue.length; i++) {
-    const { s, ab, prompt } = queue[i];
+  // Process in parallel batches of 3 — no fixed delay, only back off on real 429
+  const BATCH_SIZE = 3;
+  for (let i = 0; i < queue.length; i += BATCH_SIZE) {
+    const batch = queue.slice(i, Math.min(i + BATCH_SIZE, queue.length));
     bb.style.width = Math.round((i / total) * 100) + '%';
-    bt.textContent = `Imagen ${i+1}/${total} — Escena ${s.num}${ab} ...`;
+    bt.textContent = `Imágenes ${i+1}-${Math.min(i+BATCH_SIZE, total)}/${total} ...`;
 
-    let success = false, attempt = 0;
-    while (!success && attempt < 8) {
-      try {
-        const imgB64 = await generateImageRaw(prompt, getRefsFromCache(prompt));
-        const key = ab === 'A' ? sceneImgKeyA(s.id) : sceneImgKeyB(s.id);
-        await dbSet(key, imgB64);
-        success = true; completed++;
-        if (completed % 4 === 0) renderScenes();
-      } catch(e) {
-        attempt++;
-        const isRL = e.message.includes('429') || e.message.toLowerCase().includes('exhausted') || e.message.toLowerCase().includes('resource');
-        if (isRL) {
-          const w = [60,90,120,180,240,300,360,420][Math.min(attempt-1,7)];
-          bt.textContent = `⏳ Rate limit — esperando ${w}s (intento ${attempt}/8)...`;
-          await new Promise(r => setTimeout(r, w * 1000));
-        } else if (e.message.toLowerCase().includes('block') || e.message.toLowerCase().includes('safety')) {
-          bt.textContent = `⚠️ Escena ${s.num}${ab} bloqueada, continuando...`;
-          await new Promise(r => setTimeout(r, 2000)); break;
-        } else {
-          await new Promise(r => setTimeout(r, 8000));
+    await Promise.all(batch.map(async ({ s, ab, prompt }) => {
+      let success = false, attempt = 0;
+      while (!success && attempt < 8) {
+        try {
+          const imgB64 = await generateImageRaw(prompt, getRefsFromCache(prompt));
+          const key = ab === 'A' ? sceneImgKeyA(s.id) : sceneImgKeyB(s.id);
+          await dbSet(key, imgB64);
+          success = true; completed++;
+          if (completed % 3 === 0) renderScenes();
+        } catch(e) {
+          attempt++;
+          const isRL = e.message.includes('429') || e.message.toLowerCase().includes('exhausted') || e.message.toLowerCase().includes('resource');
+          if (isRL) {
+            const w = [30,45,60,90,120,180,240,300][Math.min(attempt-1,7)];
+            bt.textContent = `⏳ Rate limit — esperando ${w}s (intento ${attempt}/8)...`;
+            await new Promise(r => setTimeout(r, w * 1000));
+          } else if (e.message.toLowerCase().includes('block') || e.message.toLowerCase().includes('safety')) {
+            bt.textContent = `⚠️ Escena ${s.num}${ab} bloqueada, continuando...`;
+            await new Promise(r => setTimeout(r, 2000)); break;
+          } else {
+            await new Promise(r => setTimeout(r, 5000));
+          }
         }
       }
-    }
-    if (!success) { failed++; failedIds.push(`${s.num}${ab}`); }
-    // 20s delay between images to avoid rate limits
-    if (i < queue.length - 1) await new Promise(r => setTimeout(r, 20000));
+      if (!success) { failed++; failedIds.push(`${s.num}${ab}`); }
+    }));
+
+    // Small pause between batches — only to avoid flooding all at once
+    if (i + BATCH_SIZE < queue.length) await new Promise(r => setTimeout(r, 3000));
   }
 
   bb.style.width = '100%';
