@@ -150,7 +150,11 @@ ${cleanPrompt}` });
     }
 
     const img = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.mimeType?.startsWith('image/'));
-    if (img) return { imageData: img.inlineData.data, model, region };
+    if (img) {
+      // Strip any whitespace Gemini may have inserted in the base64 string
+      const cleanData = img.inlineData.data.replace(/\s/g, '');
+      return { imageData: cleanData, model, region };
+    }
 
     // Got a response but no image — safety block in response body
     const cand = data.candidates?.[0];
