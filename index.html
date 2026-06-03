@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.44 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.45 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -687,35 +687,56 @@ function getSelectedSubgenres() {
 function getSubgenreText(subgenres) {
   if (!subgenres.length) return '';
   const labels = {
-    psicologico: 'Psicológico (enfocado en la mente, traumas, distorsión de realidad)',
-    romance: 'Romance (tensión romántica entre personajes, sentimientos)',
-    ecchi: 'Ecchi (personajes femeninos atractivos con ropa corta/sugerente, situaciones comprometedoras, fan service visual)',
-    harem: 'Harem (protagonista masculino rodeado de 3+ mujeres interesadas en él, arquetipos: tsundere, kuudere, genki, onee-san)',
+    psicologico: 'Psicológico (mente, traumas, distorsión de realidad — SÍ permite elementos mentales/paranoicos)',
+    romance: 'Romance (tensión romántica, sentimientos entre personajes reales)',
+    ecchi: 'Ecchi (fan service visual, ropa sugerente, situaciones comprometedoras)',
+    harem: 'Harem (protagonista masculino rodeado de 3+ mujeres interesadas en él)',
     harem_inverso: 'Harem Inverso (protagonista femenina rodeada de 3+ hombres interesados en ella)',
-    comedia: 'Comedia (humor, malentendidos, situaciones absurdas)',
-    dark: 'Dark/Oscuro (temas maduros, moralmente ambiguo, sin finales fáciles)',
-    gore: 'Gore/Violento (violencia explícita, sangre, combates brutales)',
-    misterio: 'Misterio (secretos, pistas, revelaciones graduales)',
-    revenge: 'Revenge (venganza como motor principal, protagonista traicionado)',
-    overpowered: 'Overpowered (protagonista extremadamente poderoso, supera todos los obstáculos)',
-    slice_of_life: 'Slice of Life (momentos cotidianos, belleza en lo pequeño)',
-    musica: 'Música/Arte (el arte como tema central, actuaciones, creatividad)',
-    deporte: 'Deporte (competencias, entrenamiento, trabajo en equipo)',
-    mafia: 'Mafia/Crimen (mundo criminal, lealtad, traición)',
-    escolar: 'Escolar (ambientado en escuela/universidad, dinámicas estudiantiles)',
-    militar: 'Militar (ejércitos, estrategia, honor, guerra)',
-    reencarnacion: 'Reencarnación (personaje renace con memorias de vida anterior)',
-    viaje_tiempo: 'Viaje en el tiempo (alterar el pasado/futuro, paradojas)',
-    apocalipsis: 'Apocalipsis (fin del mundo, supervivencia extrema)',
-    idols: 'Idols/Fama (mundo del entretenimiento, fans, fama)',
-    medicina: 'Medicina/Ciencia (hospitales, investigación, dilemas éticos)',
+    comedia: 'Comedia (humor, malentendidos, situaciones absurdas pero REALES)',
+    dark: 'Dark/Oscuro (temas duros, sin suavizar, consecuencias reales)',
+    gore: 'Gore/Violento (violencia explícita y realista, sangre, heridas)',
+    misterio: 'Misterio (secretos entre personas reales, pistas concretas)',
+    revenge: 'Revenge (venganza motivada por eventos reales entre personajes)',
+    overpowered: 'Overpowered (protagonista muy hábil/poderoso dentro de las reglas del género)',
+    slice_of_life: 'Slice of Life — MODO COTIDIANO: eventos del día a día, detalles mundanos reales, sin drama exagerado',
+    musica: 'Música/Arte (actuaciones, práctica, presentaciones reales)',
+    deporte: 'Deporte (entrenamiento, competencias, marcadores reales)',
+    mafia: 'Mafia/Crimen (delitos reales, jerarquías criminales, consecuencias)',
+    escolar: 'Escolar (clases, exámenes, relaciones entre estudiantes reales)',
+    militar: 'Militar (táctica, cadena de mando, combate realista)',
+    reencarnacion: 'Reencarnación (SÍ permite el elemento sobrenatural de la reencarnación)',
+    viaje_tiempo: 'Viaje en el tiempo (SÍ permite el elemento sobrenatural del viaje temporal)',
+    apocalipsis: 'Apocalipsis (supervivencia extrema, escasez de recursos, amenazas reales)',
+    idols: 'Idols/Fama (industria del entretenimiento, fans, contratos reales)',
+    medicina: 'Medicina (hospitales, diagnósticos, dilemas éticos reales)',
   };
+
   const hasEcchi = subgenres.includes('ecchi');
   const hasHarem = subgenres.includes('harem') || subgenres.includes('harem_inverso');
+  const hasSlice = subgenres.includes('slice_of_life');
+
   let text = 'SUBGÉNEROS ACTIVOS:\n' + subgenres.map(s => `- ${labels[s] || s}`).join('\n');
-  if (hasEcchi || hasHarem) {
-    text += '\n\nREGLAS VISUALES OBLIGATORIAS (por Ecchi/Harem activo):\n- Personajes femeninos SIEMPRE con ropa corta, sugerente o reveladora (faldas cortas, escotes, uniformes ajustados, ropa deportiva ceñida, trajes de baño según la escena)\n- Figuras atractivas y femeninas en todas las personajes mujeres\n- Situaciones comprometedoras naturales en la trama (caídas, malentendidos, momentos íntimos)\n- imagePromptA/B deben reflejar el fan service visualmente';
+
+  if (hasSlice) {
+    text += `
+
+MODO SLICE OF LIFE — REGLAS DE CONTENIDO (OBLIGATORIAS):
+- Las escenas muestran el DÍA A DÍA concreto: buscar comida, cocinar, descansar, hablar con alguien, reparar algo, llover, aburrirse
+- Los conflictos son cotidianos: se acabó el agua, hay una gotera, el vecino hace ruido, perdió las llaves
+- PROHIBIDO en este modo: fantasmas, apariciones, visiones, mensajes de origen desconocido, poderes, conspiraciones, fenómenos inexplicables, personajes que "murieron pero aparecen", distorsiones de realidad
+- Ejemplos BUENOS: "Hoy encontré arroz en el tercer piso. Suficiente para cuatro días."
+- Ejemplos MALOS: "Una voz susurra mi nombre entre las sombras del pasado"`;
   }
+
+  if (hasEcchi || hasHarem) {
+    text += `
+
+REGLAS VISUALES OBLIGATORIAS (por Ecchi/Harem activo):
+- Personajes femeninos SIEMPRE con ropa corta, sugerente o reveladora
+- Situaciones comprometedoras naturales en la trama
+- imagePromptA/B deben reflejar el fan service visualmente`;
+  }
+
   return text;
 }
 
@@ -1274,35 +1295,60 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     const mod = subgenres.includes('harem') ? 'harem'
               : subgenres.includes('harem_inverso') ? 'harem_inverso'
               : subgenres.includes('ecchi') ? 'ecchi' : 'none';
+    const hasSliceOfLife = subgenres.includes('slice_of_life');
+    const hasPsicologico = subgenres.includes('psicologico');
+    const hasDark = subgenres.includes('dark');
+    const hasGore = subgenres.includes('gore');
     const hasEcchi = subgenres.includes('ecchi') || subgenres.includes('harem') || subgenres.includes('harem_inverso');
     const subgenreText = getSubgenreText(subgenres);
 
-    const sysBase = `Eres un guionista de anime de élite. Tu escritura provoca reacciones físicas en el lector: escalofríos, nudo en la garganta, corazón acelerado.
+    // Generos que SIMAN permiten elementos sobrenaturales/fantasía
+    const allowsSuper = ['fantasia','isekai','mecha','sobrenatural','psicologico','terror','videojuego'].includes(genero);
+    const allowsSuper2 = subgenres.some(s => ['psicologico','reencarnacion','viaje_tiempo','misterio'].includes(s));
 
-REGLAS DE NARRACIÓN (OBLIGATORIAS):
-- En español, PRIMERA PERSONA del protagonista, 3-4 frases, máximo 20 palabras por frase
-- CADA escena debe tener una CARGA EMOCIONAL específica: agonía, éxtasis, terror, deseo, rabia, vacío
-- Pensamientos internos brutalmente honestos — el protagonista no filtra nada
-- Usa recursos literarios CONCRETOS:
-  * Sensaciones físicas del dolor/placer: "el pecho me arde como si respirara fuego", "mis manos tiemblan y no puedo detenerlas"
-  * Contradicción interna: "quiero gritar pero no recuerdo cómo se siente querer algo"
-  * Tiempo distorsionado: "ese segundo duró una eternidad", "no sé si han pasado horas o minutos"
-  * Metáforas viscerales: "mis recuerdos son esquirlas de cristal clavadas en la cabeza"
-- Para géneros PSICOLÓGICOS: mostrar la mente quebrándose en tiempo real — confusión, paranoia, momentos de lucidez seguidos de colapso
-- Para géneros DARK: no suavizar. La vida duele, la gente falla, no hay redención fácil
-- Para géneros de ACCIÓN: adrenalina pura, instinto antes que pensamiento
-- NUNCA escribir escenas neutras — si un personaje toma café, ese café tiene un significado emocional
-- El lector debe quedarse sin aliento al terminar cada escena
+    // Estilo de narración según el tono del subgénero
+    const isGrounded = hasSliceOfLife && !allowsSuper && !allowsSuper2;
+
+    const sysBase = `Eres un guionista de anime para reels de Facebook (formato corto y viral).
+
+ESTILO DE NARRACIÓN:
+- Primera persona del protagonista, presente o pasado inmediato
+- 3-4 frases por escena, máximo 18 palabras por frase
+- Lenguaje SIMPLE Y DIRECTO — nada de metáforas rebuscadas ni palabras "profundas"
+- Describe lo que el protagonista VE, HACE y PIENSA de forma concreta
+- El drama surge de los eventos, no de cómo se describen
+- Frases cortas y claras que cualquier persona entienda de inmediato
+${isGrounded ? `
+MODO COTIDIANO ACTIVO (Slice of Life):
+- Narra el día a día con detalles reales y específicos
+- Bueno: "Encuentro una tienda con tres latas sin abrir. Las guardo todas."
+- Bueno: "Llueve desde las dos de la tarde. Mi refugio tiene una gotera nueva."
+- Malo: "el silencio me devora el alma" o "mis recuerdos son esquirlas de cristal"
+- CERO fantasmas, CERO apariciones, CERO mensajes misteriosos, CERO poderes
+- Si el setting es post-apocalíptico: comida, agua, refugio, clima, criaturas reales
+- Si el setting es escolar: clases, recreo, amigos, problemas de verdad` : `
+MODO NARRATIVO ACTIVO:
+- La emoción viene de los hechos, no de la descripción poética
+- Bueno: "Disparo y fallo. El monstruo está a diez metros."
+- Malo: "el terror me paraliza como una fuerza cósmica inevitable"
+- Metáforas solo si son simples y visuales, nunca abstractas`}
+${!allowsSuper && !allowsSuper2 ? `
+⚠️ RESTRICCIÓN CRÍTICA — REALISMO OBLIGATORIO:
+El género ${genero} con estos subgéneros NO incluye elementos sobrenaturales.
+PROHIBIDO ABSOLUTAMENTE: fantasmas, apariciones, visiones, mensajes imposibles,
+poderes especiales, conspiraciones misteriosas, personajes que "murieron pero aparecen",
+distorsiones de realidad, fenómenos inexplicables.
+Si la escena tienta hacia lo sobrenatural → reemplazarla con un evento REAL y concreto.` : ''}
 
 REGLAS DE imagePromptA e imagePromptB:
 - SIEMPRE en INGLÉS
-- SIEMPRE empezar con "Scene with [nombre exacto]:" 
-- SIEMPRE incluir: nombre del personaje + descripción de su ropa específica + color/estilo de cabello + expresión facial + entorno + iluminación
-- Ejemplo correcto: "Scene with Kenji (short black hair, white hospital shirt, gray pants): sitting on hospital bed, trembling hands on knees, hollow vacant expression, pale fluorescent light casting harsh shadows, clinical white room"
-- NUNCA usar "a man", "a woman", "the protagonist" — SIEMPRE el nombre real
-- Vocabulario PROHIBIDO (bloquea Gemini): naked, nude, explicit, sexual, genitals, nipples, non-consensual
-- NO texto, NO letras, NO marcas de agua en la imagen
-- Solo personajes físicamente presentes en la escena
+- SIEMPRE empezar con "Scene with [nombre exacto]:"
+- SIEMPRE incluir: nombre + ropa específica + cabello + expresión + entorno + iluminación
+- Ejemplo: "Scene with Kenji (short black hair, white hospital shirt, gray pants): sitting on hospital bed, looking at window, tired expression, afternoon light, clinical room"
+- NUNCA "a man", "a woman", "the protagonist" — SIEMPRE el nombre real
+- PROHIBIDO en imagePrompt: naked, nude, explicit, sexual, genitals, nipples
+- NO texto, NO letras, NO marcas de agua
+- Solo personajes presentes en esa escena
 - Responde SOLO JSON válido sin markdown`;
 
     const genreExtra = hasEcchi
