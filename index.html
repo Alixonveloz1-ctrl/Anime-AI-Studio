@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.48 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.49 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -822,6 +822,8 @@ function safeParseJSON(raw) {
 // ════════════════════════════════════════════════════════════════
 // Compress/resize a base64 image to keep body size manageable
 async function compressBase64Image(base64, maxDim = 768, quality = 0.85) {
+  // Strip whitespace that Gemini sometimes injects into base64 strings
+  const cleanB64 = (base64 || '').replace(/\s/g, '');
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
@@ -836,12 +838,11 @@ async function compressBase64Image(base64, maxDim = 768, quality = 0.85) {
       canvas.height = height;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, width, height);
-      // JPEG to maximize compression
       const compressed = canvas.toDataURL('image/jpeg', quality).split(',')[1];
       resolve(compressed);
     };
-    img.onerror = () => resolve(base64); // fallback: original
-    img.src = 'data:image/png;base64,' + base64;
+    img.onerror = () => resolve(cleanB64);
+    img.src = 'data:image/png;base64,' + cleanB64;
   });
 }
 
@@ -2308,9 +2309,9 @@ function timeSentences(narration, totalDur, baseOffset = 0) {
 // AUDIO COMBINER — Web Audio API to merge all scenes into one WAV
 // ════════════════════════════════════════════════════════════════
 
-// Decode base64 to ArrayBuffer
+// Decode base64 to ArrayBuffer — strip whitespace first to avoid DOMException
 function base64ToArrayBuffer(base64) {
-  const binary = atob(base64);
+  const binary = atob((base64 || '').replace(/\s/g, ''));
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes.buffer;
