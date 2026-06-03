@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.47 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.48 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -715,6 +715,9 @@ function getSubgenreText(subgenres) {
   };
 
   const hasSistema = subgenres.includes('sistema_awakening');
+  const hasSlice   = subgenres.includes('slice_of_life');
+  const hasEcchi   = subgenres.includes('ecchi');
+  const hasHarem   = subgenres.includes('harem') || subgenres.includes('harem_inverso');
 
   let text = 'SUBGÉNEROS ACTIVOS:\n' + subgenres.map(s => `- ${labels[s] || s}`).join('\n');
 
