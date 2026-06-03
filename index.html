@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.45 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.47 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -308,6 +308,7 @@
         <option value="seinen">Seinen — Hombres adultos (tramas complejas, temas maduros)</option>
         <option value="josei">Josei — Mujeres adultas (vida adulta realista, romance complejo)</option>
         <option value="kodomomuke">Kodomomuke — Infantil (historias sencillas con moraleja)</option>
+        <option value="donghua">Donghua — Animación china (cultivación, wuxia, xianxia)</option>
       </select>
 
       <label>Género principal</label>
@@ -354,6 +355,7 @@
         <label class="sg-chip"><input type="checkbox" value="apocalipsis"> ☣️ Apocalipsis</label>
         <label class="sg-chip"><input type="checkbox" value="idols"> 🌟 Idols / Fama</label>
         <label class="sg-chip"><input type="checkbox" value="medicina"> 🏥 Medicina / Ciencia</label>
+        <label class="sg-chip"><input type="checkbox" value="sistema_awakening"> ⚡ Sistema / Awakening</label>
       </div>
 
       <label>Tono narrativo (opcional)</label>
@@ -709,13 +711,23 @@ function getSubgenreText(subgenres) {
     apocalipsis: 'Apocalipsis (supervivencia extrema, escasez de recursos, amenazas reales)',
     idols: 'Idols/Fama (industria del entretenimiento, fans, contratos reales)',
     medicina: 'Medicina (hospitales, diagnósticos, dilemas éticos reales)',
+    sistema_awakening: 'Sistema/Awakening — El protagonista despierta un sistema de poder con stats, niveles y misiones visibles. Inicio: menospreciado → despierta sistema → sube en secreto → supera a todos',
   };
 
-  const hasEcchi = subgenres.includes('ecchi');
-  const hasHarem = subgenres.includes('harem') || subgenres.includes('harem_inverso');
-  const hasSlice = subgenres.includes('slice_of_life');
+  const hasSistema = subgenres.includes('sistema_awakening');
 
   let text = 'SUBGÉNEROS ACTIVOS:\n' + subgenres.map(s => `- ${labels[s] || s}`).join('\n');
+
+  if (hasSistema) {
+    text += `
+
+MODO SISTEMA/AWAKENING — REGLAS OBLIGATORIAS:
+- El protagonista despierta un sistema en las primeras 2 escenas (ventana flotante, voz en su cabeza, estadísticas visibles)
+- El sistema tiene stats concretos: [Fuerza: 12 → 15], [Nivel: 1], [Misión diaria completada], [Nueva habilidad desbloqueada]
+- La narración puede incluir los mensajes del sistema como texto: "¡DING! Has subido al Nivel 2"
+- Estructura del arco obligatoria: humillación pública → despertar del sistema → entrenamiento oculto → demostración de poder que deja a todos sin palabras
+- Cada episodio debe mostrar progresión visible: algo que antes no podía, ahora puede`;
+  }
 
   if (hasSlice) {
     text += `
@@ -1102,6 +1114,15 @@ const DEMO_PROMPTS = {
 - Historias sencillas con moraleja clara
 - Sin violencia, sin romance, sin temas complejos
 - Personajes simpáticos, tono cálido y educativo`,
+  donghua: `ESTILO: Donghua — Animación china.
+- Protagonistas con nombres chinos, ambientados en China antigua, moderna o fantástica
+- El arquetipo MÁS POPULAR: protagonista que DESPIERTA UN SISTEMA o recibe un "Golden Finger" (金手指) — una ventana de poder que solo él puede ver con stats, niveles, misiones y habilidades desbloqueables
+- El sistema puede aparecer como: ventana flotante con stats (Fuerza, Agilidad, Qi), rango inicial F o basura, misión diaria con recompensa, voz de sistema en su cabeza
+- Otros arquetipos válidos: cultivación clásica (qi, núcleo de oro, niveles Qi Condensation → Foundation → Core), reencarnación con memorias del futuro, heredar un legado antiguo
+- INICIO OBLIGATORIO del arquetipo sistema: el protagonista es humillado/menospreciado → despierta el sistema → empieza a subir en secreto → empieza a superar a quienes lo subestimaron
+- Sectas rivales, familias poderosas, torneos donde el débil sorprende a todos
+- Progresión visible: cada escena puede mostrar un nivel subiendo, una habilidad nueva, un umbral roto
+- Tono épico con momentos de orgullo, humillación y venganza silenciosa`,
 };
 
 const GENRE_PROMPTS = {
