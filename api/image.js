@@ -55,40 +55,25 @@ function getRegionOrder() {
   return [...ALL_REGIONS.slice(start), ...ALL_REGIONS.slice(0, start)];
 }
 
-async function callGeminiInRegion(region, model, parts, projectId, token, aspectRatio = '9:16') {
+async function callGeminiInRegion(region, model, parts, projectId, token) {
   const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}:generateContent`;
   const r = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, 'X-Goog-User-Project':projectId },
     body: JSON.stringify({
       contents: [{ role:'user', parts }],
-      generationConfig: {
-        responseModalities: ['IMAGE','TEXT'],
-      },
+      generationConfig: { responseModalities: ['IMAGE','TEXT'] },
     }),
   });
   const d = await r.json();
   const msg = (d.error?.message || '').toLowerCase();
-  // Retry next region on: 429, 503, capacity issues, or model not yet deployed there (404)
   const shouldRotate = !r.ok && (
-    r.status === 429 ||
-    r.status === 503 ||
-    r.status === 404 ||
-    msg.includes('quota') ||
-    msg.includes('exhausted') ||
-    msg.includes('resource') ||
-    msg.includes('overload') ||
-    msg.includes('unavailable') ||
-    msg.includes('not found') ||
-    msg.includes('not support')
+    r.status === 429 || r.status === 503 || r.status === 404 ||
+    msg.includes('quota') || msg.includes('exhausted') || msg.includes('resource') ||
+    msg.includes('overload') || msg.includes('unavailable') || msg.includes('not found') || msg.includes('not support')
   );
-  // Safety/content blocks are model-level — no point retrying other regions
-  const isSafetyBlock = !r.ok && (
-    r.status === 400 ||
-    msg.includes('safety') ||
-    msg.includes('block') ||
-    msg.includes('policy')
-  );
+  // Only real safety signals — NOT status 400 which could be any format error
+  const isSafetyBlock = !r.ok && (msg.includes('safety') || msg.includes('block') || msg.includes('policy'));
   return { ok: r.ok, shouldRotate, isSafetyBlock, status: r.status, data: d };
 }
 
@@ -99,37 +84,34 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
   }
 
   const parts = [];
-
-  const isVertical = aspectRatio === '9:16';
-  const aspectStyle = isVertical
-    ? '9:16 vertical format, portrait orientation'
-    : '16:9 horizontal widescreen format, landscape orientation';
-
-  // Aspect/camera style — neutral language to avoid safety triggers
-  const sceneStyle = 'Dynamic anime scene, characters engaged in the action, side or three-quarter view, cinematic angle. ';
+  const aspectStyle = aspectRatio === '16:9'
+    ? '16:9 horizontal widescreen'
+    : '9:16 vertical';
 
   if (characterRefs && characterRefs.length > 0) {
     for (const ref of characterRefs) {
       parts.push({ inlineData: { mimeType: ref.mimeType || 'image/png', data: ref.img } });
-      parts.push({ text: `Visual reference for ${ref.name}: use this image as the appearance guide for this character — same face shape, hair color and style, eye color, and outfit.` });
+      parts.push({ text: `↑ CHARACTER REFERENCE: This is ${ref.name}. Draw ${ref.name} with EXACTLY this appearance — same face shape, same hair color and style, same eye color, same outfit. Do NOT mix up characters.` });
     }
     const namesList = characterRefs.map(r => r.name).join(', ');
     const ecchiRules = isEcchi ? `
 - This is an ecchi/fan-service anime scene. Draw it with appropriate suggestive visual elements: flattering angles, form-fitting clothing, blushing expressions, suggestive poses.
 - Female characters should have attractive, feminine proportions with emphasis on their appeal.` : '';
-    parts.push({ text: `${sceneStyle}${aspectStyle} anime illustration. Character references shown above: ${namesList}.
+    parts.push({ text: `Character references provided: ${namesList}.
 
-Style rules:
-1. Clean anime art, no text, no watermarks, no letters in the image.
-2. Draw only the characters mentioned in the scene description.
-3. Each character appears once, matching their reference image appearance.
-4. Female characters: soft anime features, clear face, clean skin.
-5. Professional quality, vibrant colors, cinematic composition.${ecchiRules}
+MANDATORY RULES:
+1. NO text, NO letters, NO watermarks, NO captions, NO subtitles anywhere in the image.
+2. ONLY draw characters explicitly mentioned in the scene. Do not add extra people.
+3. Each character appears EXACTLY ONCE — never duplicate.
+4. Match EACH character to THEIR reference image. Do not swap faces or designs.
+5. Female characters: long hair (shoulder-length or longer), soft anime features, clean skin.
+6. Faces must be clear, well-defined, anatomically correct — no blur, no distortion.
+7. Style: ${aspectStyle} anime scene illustration, professional quality, vibrant colors, detailed.${ecchiRules}
 
-Scene:
+Scene to illustrate:
 ${cleanPrompt}` });
   } else {
-    parts.push({ text: `${sceneStyle}${aspectStyle} anime scene illustration. Clean art, no text, no watermarks, no letters. Professional quality, vibrant colors, cinematic composition. ${cleanPrompt}` });
+    parts.push({ text: `${aspectStyle} anime scene illustration. NO text, NO watermarks, NO letters anywhere. Clean faces, professional quality, vibrant colors. ${cleanPrompt}` });
   }
 
   // ─── Try each region — rotate on capacity/availability issues ───
