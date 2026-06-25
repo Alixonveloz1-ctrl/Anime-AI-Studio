@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.58 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.59 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1765,19 +1765,12 @@ window.generateSceneImageAB = async function(sceneId, ab) {
     let imgB64 = null, lastErr = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
-        // On 2nd attempt after safety block: retry without refs and simpler prompt
-        const useRefs = attempt === 0 ? refs : null;
-        const usePrompt = attempt >= 1 ? prompt.replace(/[^a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ .,\-:'"()]/g, ' ').trim() : prompt;
-        imgB64 = await generateImage(usePrompt, useRefs);
+        imgB64 = await generateImage(prompt, refs);
         break;
       } catch(e) {
         lastErr = e;
-        const isSafety = e.message.toLowerCase().includes('safety') || e.message.toLowerCase().includes('bloqueado');
         const isRL = e.message.includes('429') || e.message.toLowerCase().includes('exhausted') || e.message.toLowerCase().includes('resource');
-        if (isSafety) {
-          console.warn(`Safety block intento ${attempt+1} — reintentando sin refs y prompt limpio`);
-          await new Promise(r => setTimeout(r, 2000));
-        } else if (isRL) {
+        if (isRL) {
           const w = [60,120,180,240,300][Math.min(attempt,4)];
           showToast(`⏳ Rate limit — esperando ${w}s...`, 'error');
           await new Promise(r => setTimeout(r, w * 1000));
