@@ -45,18 +45,24 @@ const BLOCKED_WORDS = [
   [/\bpecho.*?contra\b/gi, 'leaning close'],
 ];
 
-// Regions to try — rotates randomly to distribute load across pools
-// All confirmed to support gemini-2.5-flash-image on Vertex AI
-const ALL_REGIONS = ['us-central1', 'europe-west4', 'us-east4'];
+// ─── Model → endpoint mapping (from working project docs) ───────
+const IMAGE_MODELS = {
+  'gemini-2.5-flash-image':         { location: 'us-central1' },
+  'gemini-3.1-flash-image-preview': { location: 'global'      },
+  'gemini-3-pro-image-preview':     { location: 'global'      },
+};
+// Fallback regions only for us-central1 model (global models use single endpoint)
+const US_REGIONS = ['us-central1', 'europe-west4', 'us-east4'];
 
-function getRegionOrder() {
-  // Start from a random region each request — distributes DSQ load naturally
-  const start = Math.floor(Math.random() * ALL_REGIONS.length);
-  return [...ALL_REGIONS.slice(start), ...ALL_REGIONS.slice(0, start)];
+function getUrl(projectId, modelId, location) {
+  if (location === 'global') {
+    return `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models/${modelId}:generateContent`;
+  }
+  return `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:generateContent`;
 }
 
-async function callGeminiInRegion(region, model, parts, projectId, token, aspectRatio = '9:16') {
-  const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}:generateContent`;
+async function callGeminiAtUrl(url, parts, projectId, token, aspectRatio) {
+  const safeRatio = ['9:16','16:9'].includes(aspectRatio) ? aspectRatio : '9:16';
   const r = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, 'X-Goog-User-Project':projectId },
@@ -64,7 +70,7 @@ async function callGeminiInRegion(region, model, parts, projectId, token, aspect
       contents: [{ role:'user', parts }],
       generationConfig: {
         responseModalities: ['IMAGE','TEXT'],
-        imageConfig: { aspectRatio },   // '9:16' or '16:9'
+        imageConfig: { aspectRatio: safeRatio },
       },
     }),
   });
@@ -75,7 +81,6 @@ async function callGeminiInRegion(region, model, parts, projectId, token, aspect
     msg.includes('quota') || msg.includes('exhausted') || msg.includes('resource') ||
     msg.includes('overload') || msg.includes('unavailable') || msg.includes('not found') || msg.includes('not support')
   );
-  // Only real safety signals — NOT status 400 which could be any format error
   const isSafetyBlock = !r.ok && (msg.includes('safety') || msg.includes('block') || msg.includes('policy'));
   return { ok: r.ok, shouldRotate, isSafetyBlock, status: r.status, data: d };
 }
@@ -87,9 +92,7 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
   }
 
   const parts = [];
-  const aspectStyle = aspectRatio === '16:9'
-    ? '16:9 horizontal widescreen'
-    : '9:16 vertical';
+  const aspectStyle = aspectRatio === '16:9' ? '16:9 horizontal widescreen' : '9:16 vertical';
 
   if (characterRefs && characterRefs.length > 0) {
     for (const ref of characterRefs) {
@@ -117,51 +120,56 @@ ${cleanPrompt}` });
     parts.push({ text: `${aspectStyle} anime scene illustration. NO text, NO watermarks, NO letters anywhere. Clean faces, professional quality, vibrant colors. ${cleanPrompt}` });
   }
 
-  // ─── Try each region — rotate on capacity/availability issues ───
-  const regions = getRegionOrder();
+  // ─── Resolve model → correct endpoint ───────────────────────────
+  const modelInfo = IMAGE_MODELS[model] || IMAGE_MODELS['gemini-2.5-flash-image'];
+  const location  = modelInfo.location;
+
+  if (location === 'global') {
+    // Global models: single endpoint, no rotation
+    const url = getUrl(projectId, model, 'global');
+    const { ok, shouldRotate, isSafetyBlock, data } = await callGeminiAtUrl(url, parts, projectId, token, aspectRatio);
+    if (isSafetyBlock) {
+      const finishReason = data.candidates?.[0]?.finishReason || 'SAFETY';
+      return { error: `bloqueado [${finishReason}]` };
+    }
+    if (!ok) return { error: data.error?.message || `Error ${model}` };
+    const img = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.mimeType?.startsWith('image/'));
+    if (img) return { imageData: img.inlineData.data.replace(/\s/g,''), model, region: 'global' };
+    const fr = data.candidates?.[0]?.finishReason || 'UNKNOWN';
+    return { error: `bloqueado [${fr}]` };
+  }
+
+  // us-central1 model: rotate through regions for capacity
+  const start = Math.floor(Math.random() * US_REGIONS.length);
+  const regions = [...US_REGIONS.slice(start), ...US_REGIONS.slice(0, start)];
   let lastError = '';
   for (const region of regions) {
-    const { ok, shouldRotate, isSafetyBlock, data } = await callGeminiInRegion(region, model, parts, projectId, token, aspectRatio);
+    const url = getUrl(projectId, model, region);
+
+    const { ok, shouldRotate, isSafetyBlock, data } = await callGeminiAtUrl(url, parts, projectId, token, aspectRatio);
 
     if (shouldRotate) {
       lastError = `${region}: ${data.error?.message?.slice(0,60) || 'no capacity'}`;
-      console.log(`[image] rotando desde ${region} → siguiente...`);
       continue;
     }
-
     if (isSafetyBlock) {
-      // Safety block — no point trying other regions, return error immediately
       const textPart = data.candidates?.[0]?.content?.parts?.find(p => p.text)?.text;
-      let errorMsg = `bloqueado por seguridad [${data.candidates?.[0]?.finishReason || 'SAFETY'}]`;
+      let errorMsg = `bloqueado [${data.candidates?.[0]?.finishReason || 'SAFETY'}]`;
       if (textPart) errorMsg += ` — "${textPart.slice(0,80)}"`;
       return { error: errorMsg };
     }
-
-    if (!ok) {
-      lastError = `${region}: ${data.error?.message?.slice(0,80) || 'error'}`;
-      continue; // try next region anyway
-    }
-
+    if (!ok) { lastError = `${region}: ${data.error?.message?.slice(0,80) || 'error'}`; continue; }
     const img = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.mimeType?.startsWith('image/'));
-    if (img) {
-      // Strip any whitespace Gemini may have inserted in the base64 string
-      const cleanData = img.inlineData.data.replace(/\s/g, '');
-      return { imageData: cleanData, model, region };
-    }
-
-    // Got a response but no image — safety block in response body
+    if (img) return { imageData: img.inlineData.data.replace(/\s/g,''), model, region };
     const cand = data.candidates?.[0];
     const finishReason = cand?.finishReason || 'UNKNOWN';
     if (finishReason === 'SAFETY' || finishReason === 'RECITATION') {
       const safety = cand?.safetyRatings?.filter(s => s.blocked)?.map(s => s.category.replace('HARM_CATEGORY_',''))?.join(', ');
       return { error: `bloqueado [${finishReason}]${safety ? ' — ' + safety : ''}` };
     }
-    // Unexpected empty response — try next region
     lastError = `${region}: respuesta vacía [${finishReason}]`;
     continue;
   }
-
-  // All regions failed — tell client to retry later
   return { error: `429 — sin capacidad en ninguna región. ${lastError}` };
 }
 
