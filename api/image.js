@@ -55,14 +55,17 @@ function getRegionOrder() {
   return [...ALL_REGIONS.slice(start), ...ALL_REGIONS.slice(0, start)];
 }
 
-async function callGeminiInRegion(region, model, parts, projectId, token) {
+async function callGeminiInRegion(region, model, parts, projectId, token, aspectRatio = '9:16') {
   const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}:generateContent`;
   const r = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, 'X-Goog-User-Project':projectId },
     body: JSON.stringify({
       contents: [{ role:'user', parts }],
-      generationConfig: { responseModalities: ['IMAGE','TEXT'] },
+      generationConfig: {
+        responseModalities: ['IMAGE','TEXT'],
+        imageGenerationConfig: { aspectRatio },   // '9:16' or '16:9'
+      },
     }),
   });
   const d = await r.json();
@@ -136,7 +139,7 @@ ${cleanPrompt}` });
   const regions = getRegionOrder();
   let lastError = '';
   for (const region of regions) {
-    const { ok, shouldRotate, isSafetyBlock, data } = await callGeminiInRegion(region, model, parts, projectId, token);
+    const { ok, shouldRotate, isSafetyBlock, data } = await callGeminiInRegion(region, model, parts, projectId, token, aspectRatio);
 
     if (shouldRotate) {
       lastError = `${region}: ${data.error?.message?.slice(0,60) || 'no capacity'}`;
