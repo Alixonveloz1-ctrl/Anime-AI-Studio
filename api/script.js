@@ -11,7 +11,7 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-const MODEL    = 'gemini-2.0-flash-001';
+const MODEL    = 'gemini-2.5-flash';
 const LOCATION = 'us-central1';
 
 async function getAccessToken(sa) {
