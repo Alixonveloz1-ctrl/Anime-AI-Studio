@@ -4,7 +4,7 @@
 // ════════════════════════════════════════════════════════════════
 const crypto = require('crypto');
 
-const MODEL_ID = 'veo-3.1-generate-001'; // must match video-status.js exactly
+const MODEL_ID = 'veo-3.1-lite-generate-001'; // must match video-status.js exactly
 const LOCATION  = 'us-central1';
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
