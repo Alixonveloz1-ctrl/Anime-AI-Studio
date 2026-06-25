@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-05-26.49 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.52 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -412,14 +412,6 @@
 
       <label>Voz de narración</label>
       <select id="voiceSelect">
-        <optgroup label="🎤 Azure Neural (español natural)">
-          <option value="azure_male_mx">🎙️ Jorge — Masculino mexicano</option>
-          <option value="azure_male_es">🎙️ Álvaro — Masculino español</option>
-          <option value="azure_male_us">🎙️ Alonso — Masculino latino joven</option>
-          <option value="azure_female_mx">🎙️ Dalia — Femenina mexicana</option>
-          <option value="azure_female_es">🎙️ Elvira — Femenina española</option>
-          <option value="azure_female_us">🎙️ Paloma — Femenina latina joven</option>
-        </optgroup>
         <optgroup label="⚡ ElevenLabs v3 (máxima calidad)">
           <option value="elevenlabs">🎙️ ElevenLabs — Voz personalizada</option>
         </optgroup>
@@ -441,7 +433,7 @@
         <label style="font-size:11px;margin-bottom:4px">Voice ID de ElevenLabs</label>
         <input type="text" id="elevenlabsVoiceId" placeholder="ej: 21m00Tcm4TlvDq8ikWAM" style="margin-bottom:8px;font-size:13px"
           oninput="localStorage.setItem('elevenlabs_voice_id', this.value.trim())">
-        <p style="font-size:11px;color:var(--text-dim);margin:0">La API key de ElevenLabs se configura en el panel APIS (botón arriba).</p>
+        <p style="font-size:11px;color:var(--text-dim);margin:0">La API key de ElevenLabs está en las variables de entorno de Vercel.</p>
       </div>
 
       <label>Velocidad de narración — <span id="speedLabel" style="color:var(--accent)">Normal (1.0x)</span></label>
@@ -464,6 +456,7 @@
       </div>
       <div class="btn-row" style="margin-top:8px">
         <button class="btn-sec" id="btnRepairScenes" style="display:none">🔧 Reparar escenas vacías</button>
+        <button class="btn-sec" onclick="generateAllVideos()" style="border-color:rgba(0,229,255,0.4);color:var(--accent2)">🎬 Todos los Videos</button>
       </div>
 
       <div id="bulkProgress" style="display:none;margin-top:10px">
@@ -547,6 +540,13 @@ const sceneImgKey  = id => `si_${state.projectId}_${id}`;
 const sceneImgKeyA = id => `sia_${state.projectId}_${id}`;
 const sceneImgKeyB = id => `sib_${state.projectId}_${id}`;
 const sceneAudKey  = id => `sa_${state.projectId}_${id}`;
+const sceneVidKey  = id => `sv_${state.projectId}_${id}`;
+
+// Build a video prompt from the scene (English, motion-focused)
+function buildVideoPrompt(s) {
+  const base = (s.imagePromptA || s.narration || '').replace(/"/g,'').slice(0, 300);
+  return `Anime animated scene, smooth fluid motion, 9:16 vertical. ${base}. High quality anime animation, cinematic movement, vibrant colors.`;
+}
 
 function saveState() {
   if (!state.projectId) return;
@@ -618,53 +618,26 @@ function openErrorModal(title, msg) {
 }
 
 // ════════════════════════════════════════════════════════════════
-// API KEYS
+// API — todo va en variables de entorno de Vercel
 // ════════════════════════════════════════════════════════════════
-function getKeys() {
-  return {
-    claude:      localStorage.getItem('key_claude') || '',
-    azure:       localStorage.getItem('key_azure')  || '',
-    elevenlabs:  localStorage.getItem('key_elevenlabs') || '',
-  };
-}
 function updateApiDot() {
-  const k = getKeys();
-  const ok = k.claude.length > 10;
-  document.getElementById('apiDot').className = ok ? 'dot ok' : 'dot';
+  // APIs are configured in Vercel env vars — dot always green
+  const dot = document.getElementById('apiDot');
+  if (dot) dot.className = 'dot ok';
 }
 document.getElementById('btnApis').addEventListener('click', () => {
-  const k = getKeys();
   openModal(`
-    <h3>🔑 API Keys</h3>
-    <div class="api-row">
-      <label>Claude API Key <span class="api-status ${k.claude?'ok':'no'}">${k.claude?'Configurado':'Falta'}</span></label>
-      <input id="kClaude" type="password" placeholder="sk-ant-..." value="${k.claude}">
-    </div>
-    <div class="api-row">
-      <label>Azure Speech Key <span class="api-status ${k.azure?'ok':'no'}">${k.azure?'OK':'Opcional'}</span></label>
-      <input id="kAzure" type="password" placeholder="azure key (TTS español)" value="${k.azure}">
-    </div>
-    <div class="api-row">
-      <label>ElevenLabs API Key <span class="api-status ${k.elevenlabs?'ok':'no'}">${k.elevenlabs?'OK':'Opcional'}</span></label>
-      <input id="kElevenLabs" type="password" placeholder="sk_..." value="${k.elevenlabs}">
-    </div>
-    <div style="font-size:11px;color:var(--text-dim);margin:10px 0 14px;line-height:1.5">
-      • <strong>Claude</strong>: genera guiones y narración<br>
-      • <strong>Imágenes + Gemini TTS</strong>: usan Google Cloud (configurado)<br>
-      • <strong>Azure</strong>: voces neurales en español<br>
-      • <strong>ElevenLabs</strong>: máxima calidad de voz — selecciona la voz en el episodio y pon el Voice ID
-    </div>
-    <button class="btn" onclick="saveKeys()">💾 Guardar</button>
+    <h3>ℹ️ APIs configuradas</h3>
+    <p style="font-size:13px;color:var(--text-dim);line-height:1.6;margin:0 0 16px">
+      Todas las APIs están configuradas como variables de entorno en Vercel:<br><br>
+      • <strong>GCP_SERVICE_ACCOUNT</strong> — Gemini (guiones, imágenes, audio, video)<br>
+      • <strong>GCS_OUTPUT_BUCKET</strong> — almacenamiento de videos<br>
+      • <strong>ELEVENLABS_API_KEY</strong> — ElevenLabs TTS<br><br>
+      Para cambiar una key ve a Vercel → Settings → Environment Variables.
+    </p>
+    <button class="btn" onclick="closeModal()">Entendido</button>
   `);
 });
-window.saveKeys = function() {
-  localStorage.setItem('key_claude',     document.getElementById('kClaude').value.trim());
-  localStorage.setItem('key_azure',      document.getElementById('kAzure').value.trim());
-  localStorage.setItem('key_elevenlabs', document.getElementById('kElevenLabs').value.trim());
-  updateApiDot();
-  closeModal();
-  showToast('Keys guardadas', 'success');
-};
 
 // Chip toggle for subgenres — listen on the checkbox change (not label click)
 // to avoid double-toggle caused by label's native click → checkbox → bubbling.
@@ -786,27 +759,18 @@ document.getElementById('btnProjects').addEventListener('click', openProjectsMod
 // ════════════════════════════════════════════════════════════════
 // CLAUDE API
 // ════════════════════════════════════════════════════════════════
-async function callClaude(prompt, system) {
-  const key = getKeys().claude;
-  if (!key) throw new Error('Falta Claude API key. Toca el botón APIS para configurarla.');
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+async function callGemini(prompt, system) {
+  const res = await fetch('/api/script', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 8000,
-      system,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', parts: [{ text: prompt }] }],
+      system: system || '',
     }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message || `Claude ${res.status}`);
-  return data.content[0].text;
+  if (!res.ok || data.error) throw new Error(data.error || `Script API ${res.status}`);
+  return data.text;
 }
 
 function safeParseJSON(raw) {
@@ -1011,87 +975,32 @@ async function generateAudio(text, voice, act) {
   const cleanText = cleanTextForTTS(text);
   if (!cleanText || cleanText.length < 3) throw new Error('Texto vacío para audio');
 
+  const speed = getVoiceSpeed();
+  const emotion = document.getElementById('voiceEmotion')?.value || 'neutral';
+
+  // All audio goes through the proxy — keys are in Vercel env vars
+  const body = { text: cleanText, speed, emotion, act };
+
   if (voice === 'elevenlabs') {
     const voiceId = document.getElementById('elevenlabsVoiceId')?.value.trim()
       || localStorage.getItem('elevenlabs_voice_id') || '';
-    if (voiceId) localStorage.setItem('elevenlabs_voice_id', voiceId);
-    return await generateElevenLabsAudio(cleanText, voiceId);
+    if (!voiceId) throw new Error('Ingresa el Voice ID de ElevenLabs');
+    localStorage.setItem('elevenlabs_voice_id', voiceId);
+    body.provider = 'elevenlabs';
+    body.voiceId = voiceId;
+  } else {
+    body.provider = 'gemini';
+    body.voice = voice;
   }
-  if (voice && voice.startsWith('azure_')) {
-    return await generateAzureAudio(cleanText, voice);
-  }
-  // Gemini TTS — pass speed + emotion mode to proxy
-  const speed = getVoiceSpeed();
-  const emotion = document.getElementById('voiceEmotion')?.value || 'neutral';
+
   const res = await fetch('/api/audio', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: cleanText, voice, act, speed, emotion }),
+    body: JSON.stringify(body),
   });
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error || `Audio proxy ${res.status}`);
   return { audioData: data.audioData, mimeType: data.mimeType || 'audio/wav' };
-}
-
-async function generateAzureAudio(text, voice) {
-  const key = getKeys().azure;
-  if (!key) throw new Error('Falta Azure Speech key — agrégala en el panel APIS');
-
-  const voiceMap = {
-    azure_male_mx:   { name: 'es-MX-JorgeNeural',  lang: 'es-MX', style: 'narration-professional' },
-    azure_female_mx: { name: 'es-MX-DaliaNeural',  lang: 'es-MX', style: 'friendly' },
-    azure_male_es:   { name: 'es-ES-AlvaroNeural', lang: 'es-ES', style: '' },
-    azure_female_es: { name: 'es-ES-ElviraNeural', lang: 'es-ES', style: '' },
-    azure_male_us:   { name: 'es-US-AlonsoNeural', lang: 'es-US', style: '' },
-    azure_female_us: { name: 'es-US-PalomaNeural', lang: 'es-US', style: '' },
-  };
-  const v = voiceMap[voice] || voiceMap.azure_male_mx;
-
-  // Convert speed slider (0.5–2.0) to Azure rate percentage
-  // Azure rate: -50% = 0.5x, 0% = 1.0x (default), +100% = 2.0x
-  const speed = getVoiceSpeed();
-  const ratePercent = Math.round((speed - 1.0) * 100);
-  const rateStr = ratePercent >= 0 ? `+${ratePercent}%` : `${ratePercent}%`;
-
-  let clean = String(text || '')
-    .replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1').replace(/\*+/g, '')
-    .replace(/_([^_]+)_/g, '$1').replace(/_+/g, '')
-    .replace(/[""„«»]/g, '"').replace(/['']/g, "'")
-    .replace(/[—–]/g, ', ').replace(/\s+/g, ' ').trim();
-
-  const safe = clean
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
-
-  // Combine speed + 15% anti-pause boost
-  const prose = `<prosody rate="${rateStr}">${safe}</prosody>`;
-  const inner = v.style
-    ? `<mstts:express-as style="${v.style}">${prose}</mstts:express-as>`
-    : prose;
-  const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='${v.lang}'><voice name='${v.name}'>${inner}</voice></speak>`;
-
-  const res = await fetch('https://eastus.tts.speech.microsoft.com/cognitiveservices/v1', {
-    method: 'POST',
-    headers: {
-      'Ocp-Apim-Subscription-Key': key,
-      'Content-Type': 'application/ssml+xml',
-      'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3',
-      'User-Agent': 'AnimeAIStudio',
-    },
-    body: ssml,
-  });
-  if (!res.ok) {
-    const errTxt = await res.text().catch(() => '');
-    throw new Error(`Azure ${res.status}: ${errTxt.slice(0,100)}`);
-  }
-  const buf = await res.arrayBuffer();
-  const bytes = new Uint8Array(buf);
-  let bin = '';
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-  }
-  return { audioData: btoa(bin), mimeType: 'audio/mpeg' };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1265,7 +1174,7 @@ Crea un universo ORIGINAL y único que sea ESTRICTAMENTE FIEL al género "${gene
   "subgenres": ${JSON.stringify(subgenres)}
 }`;
 
-    const raw = await callClaude(prompt, system);
+    const raw = await callGemini(prompt, system);
     state.universe = safeParseJSON(raw);
     state.characters = [];
     state.scenes = [];
@@ -1334,15 +1243,15 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     // Estilo de narración según el tono del subgénero
     const isGrounded = hasSliceOfLife && !allowsSuper && !allowsSuper2;
 
-    const sysBase = `Eres un guionista de anime para reels de Facebook (formato corto y viral).
+    const sysBase = `Eres un guionista de anime para reels de Facebook. Escribes narración para UN SOLO NARRADOR que cuenta la historia del episodio.
 
 ESTILO DE NARRACIÓN:
-- Primera persona del protagonista, presente o pasado inmediato
-- 3-4 frases por escena, máximo 18 palabras por frase
-- Lenguaje SIMPLE Y DIRECTO — nada de metáforas rebuscadas ni palabras "profundas"
-- Describe lo que el protagonista VE, HACE y PIENSA de forma concreta
-- El drama surge de los eventos, no de cómo se describen
-- Frases cortas y claras que cualquier persona entienda de inmediato
+- TERCERA PERSONA, narrador omnisciente que describe la historia
+- Cada escena: exactamente 70-80 palabras (equivale a ~30 segundos de audio narrado)
+- Lenguaje SIMPLE Y DIRECTO — describe lo que ocurre y lo que los personajes sienten
+- Frases cortas y claras, máximo 20 palabras por frase
+- El drama surge de los eventos, no de adjetivos o metáforas
+- Estilo: narrador de documental de anime, como si describiera lo que se ve en pantalla
 ${isGrounded ? `
 MODO COTIDIANO ACTIVO (Slice of Life):
 - Narra el día a día con detalles reales y específicos
@@ -1464,7 +1373,7 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
 
 - Edad: TODOS los personajes 18+ años. Especificar edad en la descripción`;
 
-    const chRaw = await callClaude(
+    const chRaw = await callGemini(
       `${ctx}\\n\\n${charRules}\\n\\nCrea ${numChars} personajes únicos (${numFemales} mujeres + ${numMales} hombre${numMales > 1 ? 's' : ''}) que pertenezcan al género "${genero}" — sus profesiones, vestimenta y trasfondos deben encajar con ese género${isEcchi ? ' y con el tono ecchi (ropa que muestre su atractivo)' : ''}. Devuelve SOLO:
 {"characters":[{"id":"c1","name":"nombre japonés","role":"protagonista o rol","gender":"female o male","age":"edad numérica (18+)","appearance":"descripción visual ${isEcchi ? 'atractiva y sugerente (figura, ropa que enfatiza)' : 'neutra y descriptiva'}","personality":"2 frases","backstory":"2 frases"}]}`,
       sysBase + genreExtra
@@ -1489,7 +1398,7 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
       let bestResult = [];
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
-          const raw = await callClaude(batchPrompt, sysBase + genreExtra);
+          const raw = await callGemini(batchPrompt, sysBase + genreExtra);
           const parsed = safeParseJSON(raw);
           const arr = parsed.scenes || [];
           const valid = arr.filter(s => s && s.narration && s.imagePromptA && s.imagePromptB && s.title);
@@ -1660,12 +1569,13 @@ async function renderScenes() {
   }
 
   const items = await Promise.all(state.scenes.map(async s => {
-    const imgA = await dbGet(sceneImgKeyA(s.id));
-    const imgB = await dbGet(sceneImgKeyB(s.id));
+    const imgA   = await dbGet(sceneImgKeyA(s.id));
+    const imgB   = await dbGet(sceneImgKeyB(s.id));
     const audData = await dbGet(sceneAudKey(s.id));
-    return { s, imgA, imgB, audData };
+    const vidUrl  = await dbGet(sceneVidKey(s.id));
+    return { s, imgA, imgB, audData, vidUrl };
   }));
-  c.innerHTML = items.map(({ s, imgA, imgB, audData }) => `
+  c.innerHTML = items.map(({ s, imgA, imgB, audData, vidUrl }) => `
     <div class="scene-card">
       <div class="scene-header">
         <div class="scene-num">Escena ${s.num}</div>
@@ -1695,7 +1605,18 @@ async function renderScenes() {
              <button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🔄 Audio</button>`
           : `<button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🎙️ Audio</button>`
         }
+        <button id="btnVid_${s.id}" class="btn-sec" style="border-color:rgba(0,229,255,0.3);color:var(--accent2)"
+          onclick="generateSceneVideo('${s.id}')">🎬 ${vidUrl ? 'Re-video' : 'Video'}</button>
       </div>
+      <div id="vidStatus_${s.id}" style="font-size:11px;color:var(--text-dim);text-align:center;min-height:14px;margin-top:2px"></div>
+      ${vidUrl ? `
+      <div style="margin-top:8px;border-radius:8px;overflow:hidden;background:#000">
+        <video src="${vidUrl}" controls playsinline style="width:100%;display:block;border-radius:8px"></video>
+        <div style="text-align:center;padding:6px">
+          <a href="${vidUrl}" download="escena_${String(s.num).padStart(2,'0')}.mp4"
+            style="font-size:11px;color:var(--accent2);text-decoration:none">⬇️ Descargar MP4</a>
+        </div>
+      </div>` : ''}
     </div>
   `).join('');
 }
@@ -1928,7 +1849,6 @@ window.playSceneAudio = async function(sceneId) {
   const stored = await dbGet(sceneAudKey(sceneId));
   if (!stored) { showToast('Sin audio', 'error'); return; }
   try {
-    // Parse stored format: "mime|base64data" or legacy "base64data" (assume wav)
     let mime = 'audio/wav';
     let data = stored;
     if (stored.includes('|')) {
@@ -1936,7 +1856,6 @@ window.playSceneAudio = async function(sceneId) {
       mime = stored.slice(0, idx);
       data = stored.slice(idx + 1);
     }
-
     const binary = atob(data);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -1948,6 +1867,100 @@ window.playSceneAudio = async function(sceneId) {
   } catch(e) {
     showToast('No se pudo reproducir: ' + e.message, 'error');
   }
+};
+
+// ─── VIDEO GENERATION (Veo 3.1 via Vertex AI) ───────────────────
+
+// Poll /api/video-status until done or timeout
+async function pollVideoStatus(operationName, projectId, onProgress) {
+  const MAX = 60, INTERVAL = 10000;
+  for (let i = 0; i < MAX; i++) {
+    await new Promise(r => setTimeout(r, INTERVAL));
+    if (onProgress) onProgress(i + 1, MAX);
+    try {
+      const res = await fetch('/api/video-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operationName, projectId }),
+      });
+      const data = await res.json();
+      if (data.error && data.done) throw new Error(data.error);
+      if (data.done) return data.publicUrl;
+    } catch(e) {
+      throw e;
+    }
+  }
+  throw new Error('Timeout — Veo tardó más de 10 minutos');
+}
+
+window.generateSceneVideo = async function(sceneId) {
+  const s = state.scenes.find(x => x.id === sceneId);
+  if (!s) return;
+  const btn = document.getElementById(`btnVid_${sceneId}`);
+  const statusEl = document.getElementById(`vidStatus_${sceneId}`);
+
+  const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
+  const setBtn = (text, disabled = true) => { if (btn) { btn.textContent = text; btn.disabled = disabled; } };
+
+  setBtn('⏳ Iniciando...', true);
+  setStatus('Iniciando generación de video...');
+
+  try {
+    // Get images from IndexedDB for visual reference
+    const imgA = await dbGet(sceneImgKeyA(sceneId));
+    const imgB = await dbGet(sceneImgKeyB(sceneId));
+
+    const res = await fetch('/api/video-start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: buildVideoPrompt(s),
+        imageA: imgA || null,
+        imageB: imgB || null,
+      }),
+    });
+    const startData = await res.json();
+    if (!res.ok || startData.error) throw new Error(startData.error || 'Error al iniciar video');
+
+    setBtn('⏳ Procesando...', true);
+    setStatus('Veo procesando... (puede tardar 2-5 min)');
+
+    const publicUrl = await pollVideoStatus(
+      startData.operationName,
+      startData.projectId,
+      (attempt, max) => setStatus(`Procesando... ${attempt * 10}s / ~${max * 10}s`)
+    );
+
+    // Save URL in IndexedDB
+    await dbSet(sceneVidKey(sceneId), publicUrl);
+    await renderScenes();
+    showToast(`Video escena ${s.num} listo 🎬`, 'success');
+  } catch(e) {
+    setBtn('🎬 Generar Video', false);
+    setStatus('');
+    showToast(`Error video ${s.num}: ${e.message}`, 'error');
+  }
+};
+
+window.generateAllVideos = async function() {
+  const scenes = state.scenes.filter(s => s.narration && s.imagePromptA);
+  if (!scenes.length) { showToast('Genera las escenas primero', 'error'); return; }
+
+  showToast(`Generando videos de ${scenes.length} escenas (secuencial)...`, 'success');
+  let done = 0, errors = 0;
+
+  for (const s of scenes) {
+    const existing = await dbGet(sceneVidKey(s.id));
+    if (existing) { done++; continue; } // skip already generated
+    try {
+      await window.generateSceneVideo(s.id);
+      done++;
+    } catch(e) {
+      errors++;
+      console.warn(`Video escena ${s.num}:`, e.message);
+    }
+  }
+  showToast(`Videos: ${done} listos${errors ? ', ' + errors + ' fallidos' : ''} 🎬`, errors ? 'error' : 'success');
 };
 
 // ════════════════════════════════════════════════════════════════
@@ -2016,42 +2029,36 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   const total = queue.length;
   let completed = 0, failed = 0, failedIds = [];
 
-  // Process in parallel batches of 3 — no fixed delay, only back off on real 429
-  const BATCH_SIZE = 3;
-  for (let i = 0; i < queue.length; i += BATCH_SIZE) {
-    const batch = queue.slice(i, Math.min(i + BATCH_SIZE, queue.length));
+  // Sequential — one image at a time, UI updates immediately after each one
+  for (let i = 0; i < queue.length; i++) {
+    const { s, ab, prompt } = queue[i];
     bb.style.width = Math.round((i / total) * 100) + '%';
-    bt.textContent = `Imágenes ${i+1}-${Math.min(i+BATCH_SIZE, total)}/${total} ...`;
+    bt.textContent = `Imagen ${i + 1}/${total} — Escena ${s.num}${ab}...`;
 
-    await Promise.all(batch.map(async ({ s, ab, prompt }) => {
-      let success = false, attempt = 0;
-      while (!success && attempt < 8) {
-        try {
-          const imgB64 = await generateImageRaw(prompt, getRefsFromCache(prompt));
-          const key = ab === 'A' ? sceneImgKeyA(s.id) : sceneImgKeyB(s.id);
-          await dbSet(key, imgB64);
-          success = true; completed++;
-          if (completed % 3 === 0) renderScenes();
-        } catch(e) {
-          attempt++;
-          const isRL = e.message.includes('429') || e.message.toLowerCase().includes('exhausted') || e.message.toLowerCase().includes('resource');
-          if (isRL) {
-            const w = [30,45,60,90,120,180,240,300][Math.min(attempt-1,7)];
-            bt.textContent = `⏳ Rate limit — esperando ${w}s (intento ${attempt}/8)...`;
-            await new Promise(r => setTimeout(r, w * 1000));
-          } else if (e.message.toLowerCase().includes('block') || e.message.toLowerCase().includes('safety')) {
-            bt.textContent = `⚠️ Escena ${s.num}${ab} bloqueada, continuando...`;
-            await new Promise(r => setTimeout(r, 2000)); break;
-          } else {
-            await new Promise(r => setTimeout(r, 5000));
-          }
+    let success = false, attempt = 0;
+    while (!success && attempt < 8) {
+      try {
+        const imgB64 = await generateImageRaw(prompt, getRefsFromCache(prompt));
+        const key = ab === 'A' ? sceneImgKeyA(s.id) : sceneImgKeyB(s.id);
+        await dbSet(key, imgB64);
+        success = true; completed++;
+        renderScenes(); // update UI immediately so user sees each image appear
+      } catch(e) {
+        attempt++;
+        const isRL = e.message.includes('429') || e.message.toLowerCase().includes('exhausted') || e.message.toLowerCase().includes('resource');
+        if (isRL) {
+          const w = [30,45,60,90,120,180,240,300][Math.min(attempt-1,7)];
+          bt.textContent = `⏳ Rate limit — esperando ${w}s (intento ${attempt}/8)...`;
+          await new Promise(r => setTimeout(r, w * 1000));
+        } else if (e.message.toLowerCase().includes('block') || e.message.toLowerCase().includes('safety')) {
+          bt.textContent = `⚠️ Escena ${s.num}${ab} bloqueada, continuando...`;
+          await new Promise(r => setTimeout(r, 2000)); break;
+        } else {
+          await new Promise(r => setTimeout(r, 5000));
         }
       }
-      if (!success) { failed++; failedIds.push(`${s.num}${ab}`); }
-    }));
-
-    // Small pause between batches — only to avoid flooding all at once
-    if (i + BATCH_SIZE < queue.length) await new Promise(r => setTimeout(r, 3000));
+    }
+    if (!success) { failed++; failedIds.push(`${s.num}${ab}`); }
   }
 
   bb.style.width = '100%';
@@ -2224,7 +2231,7 @@ REGLAS:
     let newScenes = [];
     for (let attempt = 0; attempt < 3 && newScenes.length < count; attempt++) {
       try {
-        const raw = await callClaude(prompt, sysBase);
+        const raw = await callGemini(prompt, sysBase);
         const parsed = safeParseJSON(raw);
         const arr = (parsed.scenes || []).filter(s => s && s.narration && s.imagePromptA && s.imagePromptB && s.title);
         if (arr.length >= count) {
@@ -2423,6 +2430,7 @@ async function combineAudiosToWav(audioEntries, progressCb) {
 
 // ════════════════════════════════════════════════════════════════
 // EXPORT ZIP
+// Structure: imagenes/ | videos/ | audio_completo.wav | subtitulos.srt | guion.txt
 // ════════════════════════════════════════════════════════════════
 document.getElementById('btnExportZip').addEventListener('click', async () => {
   if (!state.universe) { showToast('Nada que exportar', 'error'); return; }
@@ -2432,30 +2440,39 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
   try {
     const zip = new JSZip();
     const u = state.universe;
-    const sn = (u.title || 'proyecto').replace(/[^\w]+/g, '_').substring(0, 40);
+    const sn = (u.title || 'episodio').replace(/[^\w]+/g, '_').substring(0, 40);
 
-    zip.file('universo.txt', `${u.title}\n${u.tagline}\n\nCONCEPTO:\n${u.concepto}\n\nCONFLICTO:\n${u.conflicto}\n\nSETTING:\n${u.setting}\n\nHOOK:\n${u.hook}`);
-    zip.file('personajes.txt', state.characters.map(c => `## ${c.name} (${c.role})\n\nApariencia: ${c.appearance}\n\nPersonalidad: ${c.personality}\n\nBackstory: ${c.backstory}`).join('\n\n---\n\n'));
-    zip.file('guion.txt', state.scenes.map(s => `=== Escena ${s.num} [${s.act}] ===\n${s.title || ''}\n\n${s.narration}`).join('\n\n'));
-
-    for (const c of state.characters) {
-      const img = await dbGet(charImgKey(c.id));
-      if (img) zip.file(`personajes/${c.name.replace(/[^\w]+/g, '_')}.png`, img, { base64: true });
-    }
+    // guion.txt in root
+    zip.file('guion.txt', state.scenes.map(s => '=== Escena ' + s.num + ' [' + s.act + '] ===\n' + (s.title || '') + '\n\n' + s.narration).join('\n\n'));
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-    // Collected in scene order for the combined audio + global SRT
-    const audioEntries = []; // { data, mime, idx, narration }
+    const audioEntries = [];
 
     for (const s of state.scenes) {
-      const imgA = await dbGet(sceneImgKeyA(s.id));
-      const imgB = await dbGet(sceneImgKeyB(s.id));
+      const imgA   = await dbGet(sceneImgKeyA(s.id));
+      const imgB   = await dbGet(sceneImgKeyB(s.id));
       const audStored = await dbGet(sceneAudKey(s.id));
-      const pad = String(s.num).padStart(2, '0');
+      const vidUrl = await dbGet(sceneVidKey(s.id));
+      const pad    = String(s.num).padStart(2, '0');
 
-      if (imgA) zip.file(`escenas/escena_${pad}A.png`, imgA, { base64: true });
-      if (imgB) zip.file(`escenas/escena_${pad}B.png`, imgB, { base64: true });
+      // imagenes/ folder
+      if (imgA) zip.file(`imagenes/${pad}A.png`, imgA, { base64: true });
+      if (imgB) zip.file(`imagenes/${pad}B.png`, imgB, { base64: true });
+
+      // videos/ folder — fetch from GCS and include
+      if (vidUrl) {
+        btn.innerHTML = `<div class="spinner"></div> Descargando video ${s.num}...`;
+        try {
+          const vRes = await fetch(vidUrl);
+          if (vRes.ok) {
+            const vBuf = await vRes.arrayBuffer();
+            zip.file(`videos/${pad}A.mp4`, vBuf);
+          }
+        } catch(e) {
+          console.warn(`Video ${s.num} no descargado:`, e.message);
+          zip.file(`videos/${pad}A_url.txt`, vidUrl);
+        }
+      }
 
       if (audStored) {
         let mime = 'audio/wav', audData = audStored;
@@ -2464,71 +2481,43 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
           mime = audStored.slice(0, idx);
           audData = audStored.slice(idx + 1);
         }
-        const ext = (mime.includes('mpeg') || mime.includes('mp3')) ? 'mp3' : 'wav';
-        zip.file(`audios/escena_${pad}.${ext}`, audData, { base64: true });
-
-        // Keep for combined track + global SRT (in scene order)
         audioEntries.push({ data: audData, mime, idx: audioEntries.length, narration: s.narration });
-
-        // Generate individual SRT for this scene (starts at 0:00:00,000)
-        try {
-          const buf = base64ToArrayBuffer(audData);
-          const decoded = await audioCtx.decodeAudioData(buf.slice(0));
-          const dur = decoded.duration;
-
-          const timed = timeSentences(s.narration, dur, 0);
-          if (timed.length > 0) {
-            const sceneSrt = [];
-            for (let si = 0; si < timed.length; si++) {
-              sceneSrt.push(si + 1);
-              sceneSrt.push(`${toSrtTime(timed[si].start)} --> ${toSrtTime(timed[si].end)}`);
-              sceneSrt.push(timed[si].text);
-              sceneSrt.push('');
-            }
-            zip.file(`subtitulos/escena_${pad}.srt`, sceneSrt.join('\n'));
-          }
-        } catch(e) {
-          console.warn(`SRT escena ${s.num}:`, e);
-        }
       }
     }
     audioCtx.close();
 
-    // ─── Combined audio (all scenes, minimal silence) + global synced SRT ───
+    // audio_completo.wav + subtitulos.srt in root (ALL CAPS)
     if (audioEntries.length > 0) {
       btn.innerHTML = '<div class="spinner"></div> Uniendo audios...';
       try {
         const { wav, offsets } = await combineAudiosToWav(audioEntries, (i, t) => {
-          btn.innerHTML = `<div class="spinner"></div> Uniendo audio ${i+1}/${t}...`;
+          btn.innerHTML = `<div class="spinner"></div> Audio ${i+1}/${t}...`;
         });
 
-        // Save combined WAV as base64 into the zip
-        let bin = '';
-        const chunk = 0x8000;
-        for (let i = 0; i < wav.length; i += chunk) {
+        let bin = ''; const chunk = 0x8000;
+        for (let i = 0; i < wav.length; i += chunk)
           bin += String.fromCharCode.apply(null, wav.subarray(i, i + chunk));
-        }
         zip.file('audio_completo.wav', btoa(bin), { base64: true });
 
-        // Global SRT timed to the combined track (real offsets + proportional sentences)
-        const globalSrt = [];
+        // SRT: ALL CAPS, synced to real audio offsets
+        const srtLines = [];
         let cue = 1;
         for (const off of offsets) {
           const entry = audioEntries.find(e => e.idx === off.idx);
           if (!entry) continue;
           const sceneDur = off.end - off.start;
           const timed = timeSentences(entry.narration, sceneDur, off.start);
-          for (let si = 0; si < timed.length; si++) {
-            globalSrt.push(cue++);
-            globalSrt.push(`${toSrtTime(timed[si].start)} --> ${toSrtTime(timed[si].end)}`);
-            globalSrt.push(timed[si].text);
-            globalSrt.push('');
+          for (const t of timed) {
+            srtLines.push(cue++);
+            srtLines.push(`${toSrtTime(t.start)} --> ${toSrtTime(t.end)}`);
+            srtLines.push(t.text.toUpperCase());  // ALL CAPS for CapCut
+            srtLines.push('');
           }
         }
-        zip.file('audio_completo.srt', globalSrt.join('\n'));
+        zip.file('subtitulos.srt', srtLines.join('\n'));
       } catch(e) {
-        console.warn('No se pudo generar audio combinado:', e);
-        showToast('Audio combinado falló (audios individuales sí están)', 'error');
+        console.warn('Audio combinado falló:', e);
+        showToast('Audio combinado falló', 'error');
       }
     }
 
@@ -2538,7 +2527,7 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
     const a = document.createElement('a');
     a.href = url; a.download = `${sn}.zip`; a.click();
     URL.revokeObjectURL(url);
-    showToast('ZIP descargado — incluye audio_completo.wav + .srt global', 'success');
+    showToast('ZIP listo — imagenes/ videos/ audio_completo.wav subtitulos.srt', 'success');
   } catch(e) {
     openErrorModal('Error al exportar', e.message);
   } finally {
