@@ -258,7 +258,7 @@
   .scene-num { font-size:12px; color:var(--accent3); font-weight:700; letter-spacing:0.5px; }
   .scene-act { font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:2px; }
   .scene-img { width:100%; background:rgba(7,7,26,0.9); border-radius:var(--radius-sm);
-    overflow:hidden; margin-bottom:8px;
+    margin-bottom:8px;
     display:flex; align-items:center; justify-content:center;
     color:var(--text-dim); font-size:12px; min-height:80px;
     border:1px solid var(--border);
@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.53 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.54 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -408,6 +408,12 @@
       <label>Modelo de imagen</label>
       <select id="imageModelSelect">
         <option value="auto">⚡ Nano Banana (Gemini 2.5 Flash Image)</option>
+      </select>
+
+      <label>Formato de imagen y video</label>
+      <select id="aspectRatio">
+        <option value="9:16">📱 9:16 Vertical — Reels / TikTok / Stories</option>
+        <option value="16:9">🖥️ 16:9 Horizontal — YouTube / Widescreen</option>
       </select>
 
       <label>Voz de narración</label>
@@ -840,11 +846,14 @@ async function generateImage(prompt, characterRefs = null, forceModel = null) {
     if (processed.length) cleanRefs = processed;
   }
 
+  const aspectRatio = document.getElementById('aspectRatio')?.value || '9:16';
+
   const bodyObj = {
     prompt: cleanPrompt,
     characterRefs: cleanRefs,
     model: model === 'auto' ? null : model,
     isEcchi,
+    aspectRatio,
   };
 
   const bodyStr = JSON.stringify(bodyObj);
@@ -1244,15 +1253,15 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     // Estilo de narración según el tono del subgénero
     const isGrounded = hasSliceOfLife && !allowsSuper && !allowsSuper2;
 
-    const sysBase = `Eres un guionista de anime para reels de Facebook. Escribes narración para UN SOLO NARRADOR que cuenta la historia del episodio.
+    const sysBase = `Eres un guionista de anime para reels de Facebook. Escribes narración en PRIMERA PERSONA del protagonista, como si él contara su historia directamente al espectador.
 
 ESTILO DE NARRACIÓN:
-- TERCERA PERSONA, narrador omnisciente que describe la historia
+- PRIMERA PERSONA (YO) — el protagonista habla directamente: "Yo me llamo...", "Desperté en...", "No podía creer lo que veía..."
 - Cada escena: exactamente 70-80 palabras (equivale a ~30 segundos de audio narrado)
-- Lenguaje SIMPLE Y DIRECTO — describe lo que ocurre y lo que los personajes sienten
+- Lenguaje SIMPLE Y DIRECTO — el protagonista describe lo que VE, SIENTE y PIENSA
 - Frases cortas y claras, máximo 20 palabras por frase
 - El drama surge de los eventos, no de adjetivos o metáforas
-- Estilo: narrador de documental de anime, como si describiera lo que se ve en pantalla
+- Como si el protagonista le contara su historia a la cámara en un reel viral
 ${isGrounded ? `
 MODO COTIDIANO ACTIVO (Slice of Life):
 - Narra el día a día con detalles reales y específicos
@@ -1912,12 +1921,14 @@ window.generateSceneVideo = async function(sceneId, ab) {
     const imgKey = ab === 'A' ? sceneImgKeyA(sceneId) : sceneImgKeyB(sceneId);
     const imgData = await dbGet(imgKey);
 
+    const aspectRatio = document.getElementById('aspectRatio')?.value || '9:16';
     const res = await fetch('/api/video-start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt: buildVideoPrompt(s, ab),
         imageA: imgData || null,
+        aspectRatio,
       }),
     });
     const startData = await res.json();
