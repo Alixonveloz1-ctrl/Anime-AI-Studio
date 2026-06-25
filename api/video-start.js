@@ -44,7 +44,7 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { prompt, imageA, imageB } = req.body;
+    const { prompt, imageA, imageB } = req.body; // imageA = the specific image for this video
     if (!prompt) return res.status(400).json({ error: 'prompt requerido' });
 
     const saRaw = process.env.GCP_SERVICE_ACCOUNT;
@@ -56,23 +56,15 @@ module.exports = async function handler(req, res) {
     const projectId = sa.project_id;
     const token = await getGoogleToken(sa);
 
-    // Reference images: imageA for visual context, imageB (if present) closest to prompt
-    const referenceImages = [];
-    if (imageA) referenceImages.push({
-      referenceType: 'REFERENCE_TYPE_SUBJECT',
-      image: { bytesBase64Encoded: imageA.replace(/\s/g, ''), mimeType: 'image/png' },
-    });
-    if (imageB) referenceImages.push({
-      referenceType: 'REFERENCE_TYPE_SUBJECT',
-      image: { bytesBase64Encoded: imageB.replace(/\s/g, ''), mimeType: 'image/png' },
-    });
+    // Single reference image (Veo 3.1 Lite uses image field, not referenceImages array)
+    const imageData = (imageA || imageB || '').replace(/\s/g, '');
 
     const url = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL_ID}:predictLongRunning`;
 
     const body = {
       instances: [{
         prompt,
-        ...(referenceImages.length > 0 ? { referenceImages } : {}),
+        ...(imageData ? { image: { bytesBase64Encoded: imageData, mimeType: 'image/png' } } : {}),
       }],
       parameters: {
         aspectRatio: '9:16',
