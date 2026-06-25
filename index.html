@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.55 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.57 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1588,12 +1588,16 @@ async function renderScenes() {
   }));
 
   // Helper: render one image column with buttons OUTSIDE the image div
+  const selRatio = document.getElementById('aspectRatio')?.value || '9:16';
+  const cssRatio = selRatio === '16:9' ? '16/9' : '9/16';
   const imgCol = (sceneId, num, ab, img, vidUrl) => {
     const pad = String(num).padStart(2,'0');
     return `
     <div style="flex:1;display:flex;flex-direction:column;gap:4px">
-      <div class="scene-img">
-        ${img ? `<img src="data:image/png;base64,${img}">` : `<div style="height:80px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-dim)">Sin imagen ${ab}</div>`}
+      <div class="scene-img" style="aspect-ratio:${cssRatio};overflow:hidden">
+        ${img
+          ? `<img src="data:image/png;base64,${img}" style="width:100%;height:100%;object-fit:contain;display:block;background:#000">`
+          : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-dim)">Sin imagen ${ab}</div>`}
       </div>
       <div style="display:flex;gap:4px;justify-content:center">
         <button class="btn-sec" style="font-size:11px;padding:4px 8px;flex:1" onclick="generateSceneImageAB('${sceneId}','${ab}')">🖼️ ${img ? ab : '+ '+ab}</button>
@@ -1604,11 +1608,9 @@ async function renderScenes() {
       ${vidUrl ? `
       <div style="border-radius:6px;overflow:hidden;background:#000">
         <video src="${vidUrl}" controls playsinline style="width:100%;display:block;border-radius:6px"></video>
-        <div style="text-align:center;padding:4px">
-          <a href="${vidUrl}" download="escena_${pad}${ab}.mp4"
-            style="font-size:10px;color:var(--accent2);text-decoration:none">⬇️ MP4</a>
-        </div>
-      </div>` : ''}
+      </div>
+      <button class="btn-sec" style="width:100%;margin-top:4px;border-color:rgba(0,229,255,0.4);color:var(--accent2);font-size:11px"
+        onclick="downloadVideo('${vidUrl}','escena_${pad}${ab}.mp4')">⬇️ Descargar Video ${ab}</button>` : ''}
     </div>`;
   };
 
@@ -1883,6 +1885,22 @@ window.playSceneAudio = async function(sceneId) {
   } catch(e) {
     showToast('No se pudo reproducir: ' + e.message, 'error');
   }
+};
+
+// ─── BLOB DOWNLOAD — works on iOS and cross-origin ───────────────
+window.downloadVideo = async function(url, filename) {
+  try {
+    showToast('Descargando video...', 'success');
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+  } catch(e) { showToast('Error descarga: ' + e.message, 'error'); }
 };
 
 // ─── VIDEO GENERATION (Veo 3.1 via Vertex AI) ───────────────────
