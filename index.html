@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.57 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.58 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1402,7 +1402,7 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
     const charRefShort = state.characters.map(c => c.name).join(', ');
 
     // 15 scenes x 2 images = 30 images, ~10 min total
-    const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"3-4 frases primera persona máximo 20 palabras por frase","imagePromptA":"Scene with [nombre exacto del personaje]: [descripción visual detallada incluyendo su ropa y apariencia específica]","imagePromptB":"Scene with [nombres exactos]: [segundo momento visual distinto]"}`;
+    const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"EXACTAMENTE 70-80 palabras en primera persona (YO). 5-7 frases naturales, máximo 16 palabras por frase. Equivale a 30 segundos de audio narrado.","imagePromptA":"Scene with [nombre exacto del personaje]: [descripción visual detallada incluyendo su ropa y apariencia específica]","imagePromptB":"Scene with [nombres exactos]: [segundo momento visual distinto]"}`;
 
     async function generateSceneBatch(batchPrompt, expectedCount, startNum, batchName) {
       let bestResult = [];
@@ -1440,8 +1440,8 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
     }
 
     const batchRules = `REGLAS ESTRUCTURA:
-- 15 escenas en total, ~10 minutos de audio
-- Narración CORTA: 3-4 frases, máximo 20 palabras por frase
+- 15 escenas en total, 7.5 minutos de video (30 segundos por escena × 15)
+- Narración: EXACTAMENTE 70-80 palabras en PRIMERA PERSONA (YO). 5-7 frases naturales, máximo 16 palabras por frase. Este texto se narrará en audio y debe cubrir exactamente 30 segundos.
 - imagePromptA = primer momento de la escena
 - imagePromptB = segundo momento distinto de la misma escena
 - FINALE ep1 (escena 15): resolución PARCIAL + misterio abierto para ep2
@@ -1765,13 +1765,20 @@ window.generateSceneImageAB = async function(sceneId, ab) {
     let imgB64 = null, lastErr = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
-        imgB64 = await generateImage(prompt, refs);
+        // On 2nd attempt after safety block: retry without refs and simpler prompt
+        const useRefs = attempt === 0 ? refs : null;
+        const usePrompt = attempt >= 1 ? prompt.replace(/[^a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ .,\-:'"()]/g, ' ').trim() : prompt;
+        imgB64 = await generateImage(usePrompt, useRefs);
         break;
       } catch(e) {
         lastErr = e;
+        const isSafety = e.message.toLowerCase().includes('safety') || e.message.toLowerCase().includes('bloqueado');
         const isRL = e.message.includes('429') || e.message.toLowerCase().includes('exhausted') || e.message.toLowerCase().includes('resource');
-        if (isRL) {
-          const w = [60,120,180,240,300][attempt];
+        if (isSafety) {
+          console.warn(`Safety block intento ${attempt+1} — reintentando sin refs y prompt limpio`);
+          await new Promise(r => setTimeout(r, 2000));
+        } else if (isRL) {
+          const w = [60,120,180,240,300][Math.min(attempt,4)];
           showToast(`⏳ Rate limit — esperando ${w}s...`, 'error');
           await new Promise(r => setTimeout(r, w * 1000));
         } else throw e;
@@ -2236,11 +2243,10 @@ document.getElementById('btnRepairScenes').addEventListener('click', async () =>
   btn.innerHTML = `<div class="spinner"></div> Reparando ${brokenIndices.length} escenas...`;
 
   try {
-    const sysBase = `Eres un guionista de anime de élite. Tu escritura provoca reacciones físicas en el lector.
+    const sysBase = `Eres un guionista de anime para reels de Facebook. Escribes narración en PRIMERA PERSONA del protagonista.
 REGLAS:
-- Narración en español, PRIMERA PERSONA, 3-4 frases, máximo 20 palabras por frase
-- Carga emocional específica en cada escena (agonía, terror, deseo, rabia, vacío)
-- Sensaciones físicas concretas, pensamientos internos brutalmente honestos
+- Narración: EXACTAMENTE 70-80 palabras en español, PRIMERA PERSONA (YO). 5-7 frases naturales, máximo 16 palabras por frase. Este texto se narrará en audio y debe cubrir 30 segundos exactos.
+- Lenguaje simple y directo, el drama surge de los eventos no de las metáforas
 - imagePromptA e imagePromptB en INGLÉS, cada uno empezando con "Scene with [nombre exacto]:" e incluyendo ropa específica + cabello + expresión
 - NUNCA usar "a man"/"the protagonist" — siempre el nombre real
 - Responde SOLO JSON válido sin markdown`;
@@ -2265,7 +2271,7 @@ REGLAS:
     else if (startNum <= 14) act = 'climax';
     else act = 'resolution';
 
-    const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}\n${lastGood ? '\nEscena anterior (' + lastGood.num + '): "' + lastGood.narration + '"' : ''}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: ${totalScenes} escenas.\nCada escena DEBE tener narration (3-4 frases primera persona), imagePromptA e imagePromptB (ambos en inglés, empezando con "Scene with [nombre]:" e incluyendo ropa/cabello/expresión específicos).\nDevuelve SOLO: {"scenes":[{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"...","imagePromptA":"Scene with [nombre]: ...","imagePromptB":"Scene with [nombre]: ..."}, ...]}`;
+    const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}\n${lastGood ? '\nEscena anterior (' + lastGood.num + '): "' + lastGood.narration + '"' : ''}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: ${totalScenes} escenas.\nCada escena DEBE tener narration (EXACTAMENTE 70-80 palabras, primera persona, 5-7 frases), imagePromptA e imagePromptB (ambos en inglés, empezando con "Scene with [nombre]:" e incluyendo ropa/cabello/expresión específicos).\nDevuelve SOLO: {"scenes":[{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"...","imagePromptA":"Scene with [nombre]: ...","imagePromptB":"Scene with [nombre]: ..."}, ...]}`;
 
     let newScenes = [];
     for (let attempt = 0; attempt < 3 && newScenes.length < count; attempt++) {
