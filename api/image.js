@@ -116,12 +116,13 @@ MANDATORY RULES:
 4. Match EACH character to THEIR reference image. Do not swap faces or designs between characters.
 5. Female characters: long hair (shoulder-length or longer), soft anime features, clean skin.
 6. Faces must be clear, well-defined, anatomically correct — no blur, no distortion.
-7. Style: vertical portrait anime 2D illustration, professional quality, vibrant colors, detailed.${ecchiRules}
+7. Style: vertical anime scene illustration, professional quality, vibrant colors, detailed, cinematic composition.
+8. IMPORTANT: Characters are INSIDE the scene, fully immersed in the action. They are NOT looking at the camera, NOT posing for the camera. They are interacting with their environment and each other naturally.${ecchiRules}
 
 Scene to illustrate:
 ${cleanPrompt}` });
   } else {
-    parts.push({ text: `Vertical portrait anime 2D illustration. NO text, NO watermarks, NO letters anywhere. Clean faces, professional quality, vibrant colors. ${cleanPrompt}` });
+    parts.push({ text: `Vertical anime scene illustration, cinematic composition. NO text, NO watermarks, NO letters anywhere. Characters are inside the scene, NOT looking at or posing for the camera — they interact naturally with their environment. Clean faces, professional quality, vibrant colors. ${cleanPrompt}` });
   }
 
   // ─── Try each region — rotate on capacity/availability issues ───
