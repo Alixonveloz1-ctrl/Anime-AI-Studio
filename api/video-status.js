@@ -123,6 +123,17 @@ export default async function handler(req) {
     const bucket   = gcsPath.slice(0, slash);
     const objPath  = gcsPath.slice(slash + 1);
 
+    // Set CORS on bucket so browser fetch() works (needed for ZIP and blob download)
+    try {
+      await fetch(`https://storage.googleapis.com/storage/v1/b/${bucket}`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cors: [{ origin: ['*'], method: ['GET', 'HEAD'], responseHeader: ['Content-Type','Content-Length','Content-Range'], maxAgeSeconds: 86400 }]
+        }),
+      });
+    } catch(e) { console.warn('CORS patch:', e.message); }
+
     // Generate V4 Signed URL — 7 days, no public access needed
     const signedUrl = await generateSignedUrl(sa, bucket, objPath, 604800);
 
