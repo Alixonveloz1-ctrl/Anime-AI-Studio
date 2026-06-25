@@ -98,31 +98,39 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
 
   const parts = [];
 
+  const { aspectRatio = '9:16' } = req.body || {};
+  const isVertical = aspectRatio === '9:16';
+  const aspectStyle = isVertical
+    ? '9:16 vertical format, portrait orientation'
+    : '16:9 horizontal widescreen format, landscape orientation';
+
+  // No-camera prefix — added to every prompt to override Gemini's portrait bias
+  const noCameraPrefix = 'IMPORTANT: Do NOT show characters looking at or posing for the camera. Characters must be immersed in the scene, looking at each other, at their environment, or in the direction of their action. Side angle, three-quarter angle, or back view preferred. This is a SCENE ILLUSTRATION not a portrait.\n\n';
+
   if (characterRefs && characterRefs.length > 0) {
     for (const ref of characterRefs) {
       parts.push({ inlineData: { mimeType: ref.mimeType || 'image/png', data: ref.img } });
-      parts.push({ text: `↑ CHARACTER REFERENCE: This is ${ref.name}. Draw ${ref.name} with EXACTLY this appearance — same face shape, same hair color and style, same eye color, same outfit. Do NOT mix up characters.` });
+      parts.push({ text: `↑ CHARACTER REFERENCE: This is ${ref.name}. You MUST draw ${ref.name} with EXACTLY this appearance — same face, hair color and style, eye color, and outfit. This reference image is mandatory.` });
     }
     const namesList = characterRefs.map(r => r.name).join(', ');
     const ecchiRules = isEcchi ? `
 - This is an ecchi/fan-service anime scene. Draw it with appropriate suggestive visual elements: flattering angles, form-fitting clothing, blushing expressions, suggestive poses.
 - Female characters should have attractive, feminine proportions with emphasis on their appeal.` : '';
-    parts.push({ text: `Character references provided: ${namesList}.
+    parts.push({ text: `${noCameraPrefix}Character references provided above: ${namesList}. Use them.
 
 MANDATORY RULES:
 1. NO text, NO letters, NO watermarks, NO captions, NO subtitles anywhere in the image.
 2. ONLY draw characters explicitly mentioned in the scene. Do not add extra people.
 3. Each character appears EXACTLY ONCE — never duplicate.
-4. Match EACH character to THEIR reference image. Do not swap faces or designs between characters.
+4. Match EACH character to THEIR reference image. Do not swap faces or designs.
 5. Female characters: long hair (shoulder-length or longer), soft anime features, clean skin.
 6. Faces must be clear, well-defined, anatomically correct — no blur, no distortion.
-7. Style: vertical anime scene illustration, professional quality, vibrant colors, detailed, cinematic composition.
-8. IMPORTANT: Characters are INSIDE the scene, fully immersed in the action. They are NOT looking at the camera, NOT posing for the camera. They are interacting with their environment and each other naturally.${ecchiRules}
+7. Style: ${aspectStyle} anime scene illustration, professional quality, vibrant colors, cinematic composition.${ecchiRules}
 
 Scene to illustrate:
 ${cleanPrompt}` });
   } else {
-    parts.push({ text: `Vertical anime scene illustration, cinematic composition. NO text, NO watermarks, NO letters anywhere. Characters are inside the scene, NOT looking at or posing for the camera — they interact naturally with their environment. Clean faces, professional quality, vibrant colors. ${cleanPrompt}` });
+    parts.push({ text: `${noCameraPrefix}${aspectStyle} anime scene illustration, cinematic composition. NO text, NO watermarks, NO letters anywhere. Characters are inside the scene, NOT looking at or posing for the camera — they interact naturally with their environment. Clean faces, professional quality, vibrant colors. ${cleanPrompt}` });
   }
 
   // ─── Try each region — rotate on capacity/availability issues ───
