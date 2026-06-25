@@ -5,7 +5,7 @@
 // ════════════════════════════════════════════════════════════════
 export const config = { runtime: 'edge' };
 
-const MODEL_ID = 'veo-3.1-generate-001'; // must match video-start.js exactly
+const MODEL_ID = 'veo-3.1-lite-generate-001'; // must match video-start.js exactly
 const LOCATION  = 'us-central1';
 const CORS = {
   'Content-Type': 'application/json',
