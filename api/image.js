@@ -90,7 +90,7 @@ async function callGeminiInRegion(region, model, parts, projectId, token) {
   return { ok: r.ok, shouldRotate, isSafetyBlock, status: r.status, data: d };
 }
 
-async function callGemini(model, prompt, characterRefs, projectId, token, isEcchi = false) {
+async function callGemini(model, prompt, characterRefs, projectId, token, isEcchi = false, aspectRatio = '9:16') {
   let cleanPrompt = prompt;
   for (const [pattern, replacement] of BLOCKED_WORDS) {
     cleanPrompt = cleanPrompt.replace(pattern, replacement);
@@ -98,7 +98,6 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
 
   const parts = [];
 
-  const { aspectRatio = '9:16' } = req.body || {};
   const isVertical = aspectRatio === '9:16';
   const aspectStyle = isVertical
     ? '9:16 vertical format, portrait orientation'
@@ -211,8 +210,9 @@ export default async function handler(req) {
     const sa = JSON.parse(process.env.GCP_SERVICE_ACCOUNT);
     const token = await getAccessToken(sa);
 
+    const aspectRatio = body.aspectRatio || '9:16';
     const model = forceModel || 'gemini-2.5-flash-image';
-    const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true);
+    const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true, aspectRatio);
     return new Response(JSON.stringify(result), { headers: CORS });
   } catch(e) {
     return new Response(JSON.stringify({ error: e.message }), { status:500, headers:CORS });
