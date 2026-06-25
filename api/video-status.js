@@ -51,10 +51,10 @@ async function generateSignedUrl(sa, bucket, objectPath, expiresSeconds = 604800
     `X-Goog-SignedHeaders=host`,
   ].join('&');
 
-  // Canonical request
+  // Canonical request — path must include bucket for path-style GCS URLs
   const canonicalRequest = [
     'GET',
-    `/${objectPath}`,
+    `/${bucket}/${objectPath}`,
     queryParams,
     `host:storage.googleapis.com`,
     '',          // blank line after headers
