@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.52 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.53 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -540,11 +540,12 @@ const sceneImgKey  = id => `si_${state.projectId}_${id}`;
 const sceneImgKeyA = id => `sia_${state.projectId}_${id}`;
 const sceneImgKeyB = id => `sib_${state.projectId}_${id}`;
 const sceneAudKey  = id => `sa_${state.projectId}_${id}`;
-const sceneVidKey  = id => `sv_${state.projectId}_${id}`;
+const sceneVidKeyA = id => `sva_${state.projectId}_${id}`;
+const sceneVidKeyB = id => `svb_${state.projectId}_${id}`;
 
 // Build a video prompt from the scene (English, motion-focused)
-function buildVideoPrompt(s) {
-  const base = (s.imagePromptA || s.narration || '').replace(/"/g,'').slice(0, 300);
+function buildVideoPrompt(s, ab) {
+  const base = (ab === 'B' ? (s.imagePromptB || s.imagePromptA) : (s.imagePromptA || s.narration) || '').replace(/"/g,'').slice(0, 300);
   return `Anime animated scene, smooth fluid motion, 9:16 vertical. ${base}. High quality anime animation, cinematic movement, vibrant colors.`;
 }
 
@@ -1569,13 +1570,35 @@ async function renderScenes() {
   }
 
   const items = await Promise.all(state.scenes.map(async s => {
-    const imgA   = await dbGet(sceneImgKeyA(s.id));
-    const imgB   = await dbGet(sceneImgKeyB(s.id));
+    const imgA    = await dbGet(sceneImgKeyA(s.id));
+    const imgB    = await dbGet(sceneImgKeyB(s.id));
     const audData = await dbGet(sceneAudKey(s.id));
-    const vidUrl  = await dbGet(sceneVidKey(s.id));
-    return { s, imgA, imgB, audData, vidUrl };
+    const vidUrlA = await dbGet(sceneVidKeyA(s.id));
+    const vidUrlB = await dbGet(sceneVidKeyB(s.id));
+    return { s, imgA, imgB, audData, vidUrlA, vidUrlB };
   }));
-  c.innerHTML = items.map(({ s, imgA, imgB, audData, vidUrl }) => `
+
+  // Helper: render one image column with its video button and player
+  const imgCol = (sceneId, num, ab, img, vidUrl) => `
+    <div class="scene-img" style="flex:1">
+      ${img ? `<img src="data:image/png;base64,${img}">` : `<span style="font-size:11px">Sin imagen ${ab}</span>`}
+      <div style="display:flex;gap:4px;margin-top:4px;justify-content:center">
+        <button class="btn-sec" style="font-size:11px;padding:4px 8px" onclick="generateSceneImageAB('${sceneId}','${ab}')">🖼️ ${img ? ab : '+ '+ab}</button>
+        <button id="btnVid_${sceneId}_${ab}" class="btn-sec" style="font-size:11px;padding:4px 8px;border-color:rgba(0,229,255,0.3);color:var(--accent2)"
+          onclick="generateSceneVideo('${sceneId}','${ab}')">🎬 ${vidUrl ? '↺' : ab}</button>
+      </div>
+      <div id="vidStatus_${sceneId}_${ab}" style="font-size:10px;color:var(--text-dim);text-align:center;min-height:12px;margin-top:2px"></div>
+      ${vidUrl ? `
+      <div style="margin-top:6px;border-radius:6px;overflow:hidden;background:#000">
+        <video src="${vidUrl}" controls playsinline style="width:100%;display:block;border-radius:6px"></video>
+        <div style="text-align:center;padding:4px">
+          <a href="${vidUrl}" download="escena_${String(num).padStart(2,'0')}${ab}.mp4"
+            style="font-size:10px;color:var(--accent2);text-decoration:none">⬇️ MP4</a>
+        </div>
+      </div>` : ''}
+    </div>`;
+
+  c.innerHTML = items.map(({ s, imgA, imgB, audData, vidUrlA, vidUrlB }) => `
     <div class="scene-card">
       <div class="scene-header">
         <div class="scene-num">Escena ${s.num}</div>
@@ -1585,18 +1608,8 @@ async function renderScenes() {
         </div>
       </div>
       <div style="display:flex;gap:6px">
-        <div class="scene-img" style="flex:1">
-          ${imgA ? `<img src="data:image/png;base64,${imgA}">` : '<span style="font-size:11px">Sin imagen A</span>'}
-          <div style="text-align:center;margin-top:4px">
-            <button class="btn-sec" style="font-size:11px;padding:4px 8px" onclick="generateSceneImageAB('${s.id}','A')">🖼️ ${imgA ? 'A' : '+ A'}</button>
-          </div>
-        </div>
-        <div class="scene-img" style="flex:1">
-          ${imgB ? `<img src="data:image/png;base64,${imgB}">` : '<span style="font-size:11px">Sin imagen B</span>'}
-          <div style="text-align:center;margin-top:4px">
-            <button class="btn-sec" style="font-size:11px;padding:4px 8px" onclick="generateSceneImageAB('${s.id}','B')">🖼️ ${imgB ? 'B' : '+ B'}</button>
-          </div>
-        </div>
+        ${imgCol(s.id, s.num, 'A', imgA, vidUrlA)}
+        ${imgCol(s.id, s.num, 'B', imgB, vidUrlB)}
       </div>
       <div class="scene-narration">${s.narration}</div>
       <div class="scene-actions">
@@ -1605,18 +1618,7 @@ async function renderScenes() {
              <button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🔄 Audio</button>`
           : `<button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🎙️ Audio</button>`
         }
-        <button id="btnVid_${s.id}" class="btn-sec" style="border-color:rgba(0,229,255,0.3);color:var(--accent2)"
-          onclick="generateSceneVideo('${s.id}')">🎬 ${vidUrl ? 'Re-video' : 'Video'}</button>
       </div>
-      <div id="vidStatus_${s.id}" style="font-size:11px;color:var(--text-dim);text-align:center;min-height:14px;margin-top:2px"></div>
-      ${vidUrl ? `
-      <div style="margin-top:8px;border-radius:8px;overflow:hidden;background:#000">
-        <video src="${vidUrl}" controls playsinline style="width:100%;display:block;border-radius:8px"></video>
-        <div style="text-align:center;padding:6px">
-          <a href="${vidUrl}" download="escena_${String(s.num).padStart(2,'0')}.mp4"
-            style="font-size:11px;color:var(--accent2);text-decoration:none">⬇️ Descargar MP4</a>
-        </div>
-      </div>` : ''}
     </div>
   `).join('');
 }
@@ -1893,52 +1895,52 @@ async function pollVideoStatus(operationName, projectId, onProgress) {
   throw new Error('Timeout — Veo tardó más de 10 minutos');
 }
 
-window.generateSceneVideo = async function(sceneId) {
+window.generateSceneVideo = async function(sceneId, ab) {
   const s = state.scenes.find(x => x.id === sceneId);
-  if (!s) return;
-  const btn = document.getElementById(`btnVid_${sceneId}`);
-  const statusEl = document.getElementById(`vidStatus_${sceneId}`);
+  if (!s || !ab) return;
+  const btn = document.getElementById(`btnVid_${sceneId}_${ab}`);
+  const statusEl = document.getElementById(`vidStatus_${sceneId}_${ab}`);
 
   const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
   const setBtn = (text, disabled = true) => { if (btn) { btn.textContent = text; btn.disabled = disabled; } };
 
   setBtn('⏳ Iniciando...', true);
-  setStatus('Iniciando generación de video...');
+  setStatus('Iniciando...');
 
   try {
-    // Get images from IndexedDB for visual reference
-    const imgA = await dbGet(sceneImgKeyA(sceneId));
-    const imgB = await dbGet(sceneImgKeyB(sceneId));
+    // Get the specific image for this video (A or B)
+    const imgKey = ab === 'A' ? sceneImgKeyA(sceneId) : sceneImgKeyB(sceneId);
+    const imgData = await dbGet(imgKey);
 
     const res = await fetch('/api/video-start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        prompt: buildVideoPrompt(s),
-        imageA: imgA || null,
-        imageB: imgB || null,
+        prompt: buildVideoPrompt(s, ab),
+        imageA: imgData || null,
       }),
     });
     const startData = await res.json();
     if (!res.ok || startData.error) throw new Error(startData.error || 'Error al iniciar video');
 
     setBtn('⏳ Procesando...', true);
-    setStatus('Veo procesando... (puede tardar 2-5 min)');
+    setStatus('Veo... (2-5 min)');
 
     const publicUrl = await pollVideoStatus(
       startData.operationName,
       startData.projectId,
-      (attempt, max) => setStatus(`Procesando... ${attempt * 10}s / ~${max * 10}s`)
+      (attempt, max) => setStatus(`${attempt * 10}s / ~${max * 10}s`)
     );
 
-    // Save URL in IndexedDB
-    await dbSet(sceneVidKey(sceneId), publicUrl);
+    // Save URL in IndexedDB with A/B key
+    const vidKey = ab === 'A' ? sceneVidKeyA(sceneId) : sceneVidKeyB(sceneId);
+    await dbSet(vidKey, publicUrl);
     await renderScenes();
-    showToast(`Video escena ${s.num} listo 🎬`, 'success');
+    showToast(`Video ${s.num}${ab} listo 🎬`, 'success');
   } catch(e) {
-    setBtn('🎬 Generar Video', false);
+    setBtn(`🎬 ${ab}`, false);
     setStatus('');
-    showToast(`Error video ${s.num}: ${e.message}`, 'error');
+    showToast(`Error video ${s.num}${ab}: ${e.message}`, 'error');
   }
 };
 
@@ -1946,18 +1948,21 @@ window.generateAllVideos = async function() {
   const scenes = state.scenes.filter(s => s.narration && s.imagePromptA);
   if (!scenes.length) { showToast('Genera las escenas primero', 'error'); return; }
 
-  showToast(`Generando videos de ${scenes.length} escenas (secuencial)...`, 'success');
+  showToast(`Generando todos los videos A y B (secuencial)...`, 'success');
   let done = 0, errors = 0;
 
   for (const s of scenes) {
-    const existing = await dbGet(sceneVidKey(s.id));
-    if (existing) { done++; continue; } // skip already generated
-    try {
-      await window.generateSceneVideo(s.id);
-      done++;
-    } catch(e) {
-      errors++;
-      console.warn(`Video escena ${s.num}:`, e.message);
+    for (const ab of ['A', 'B']) {
+      const vidKey = ab === 'A' ? sceneVidKeyA(s.id) : sceneVidKeyB(s.id);
+      const existing = await dbGet(vidKey);
+      if (existing) { done++; continue; }
+      try {
+        await window.generateSceneVideo(s.id, ab);
+        done++;
+      } catch(e) {
+        errors++;
+        console.warn(`Video ${s.num}${ab}:`, e.message);
+      }
     }
   }
   showToast(`Videos: ${done} listos${errors ? ', ' + errors + ' fallidos' : ''} 🎬`, errors ? 'error' : 'success');
@@ -2452,25 +2457,27 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
       const imgA   = await dbGet(sceneImgKeyA(s.id));
       const imgB   = await dbGet(sceneImgKeyB(s.id));
       const audStored = await dbGet(sceneAudKey(s.id));
-      const vidUrl = await dbGet(sceneVidKey(s.id));
-      const pad    = String(s.num).padStart(2, '0');
+      const vidUrlA = await dbGet(sceneVidKeyA(s.id));
+      const vidUrlB = await dbGet(sceneVidKeyB(s.id));
+      const pad     = String(s.num).padStart(2, '0');
 
       // imagenes/ folder
       if (imgA) zip.file(`imagenes/${pad}A.png`, imgA, { base64: true });
       if (imgB) zip.file(`imagenes/${pad}B.png`, imgB, { base64: true });
 
       // videos/ folder — fetch from GCS and include
-      if (vidUrl) {
-        btn.innerHTML = `<div class="spinner"></div> Descargando video ${s.num}...`;
+      for (const [ab, vidUrl] of [['A', vidUrlA], ['B', vidUrlB]]) {
+        if (!vidUrl) continue;
+        btn.innerHTML = `<div class="spinner"></div> Descargando video ${s.num}${ab}...`;
         try {
           const vRes = await fetch(vidUrl);
           if (vRes.ok) {
             const vBuf = await vRes.arrayBuffer();
-            zip.file(`videos/${pad}A.mp4`, vBuf);
+            zip.file(`videos/${pad}${ab}.mp4`, vBuf);
           }
         } catch(e) {
-          console.warn(`Video ${s.num} no descargado:`, e.message);
-          zip.file(`videos/${pad}A_url.txt`, vidUrl);
+          console.warn(`Video ${s.num}${ab} no descargado:`, e.message);
+          zip.file(`videos/${pad}${ab}_url.txt`, vidUrl);
         }
       }
 
