@@ -70,6 +70,7 @@ module.exports = async function handler(req, res) {
         aspectRatio: (aspectRatio === '16:9') ? '16:9' : '9:16',
         sampleCount: 1,
         durationSeconds: 8,
+        generateAudio: false,
         storageUri: `gs://${bucket}/veo-outputs/`,
       },
     };
