@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.61 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.62 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -552,9 +552,42 @@ const sceneVidKeyA = id => `sva_${state.projectId}_${id}`;
 const sceneVidKeyB = id => `svb_${state.projectId}_${id}`;
 
 // Build a video prompt from the scene (English, motion-focused)
+// Studio references by genre — matched to studios known for that genre
+const STUDIO_BY_GENRE = {
+  accion:        'Mappa and Bones studio style, like Jujutsu Kaisen and My Hero Academia',
+  fantasia:      'Madhouse and A-1 Pictures style, like Overlord and No Game No Life',
+  isekai:        'J.C. Staff and White Fox style, like That Time I Got Reincarnated as a Slime and Re:Zero',
+  mecha:         'Sunrise studio style, like Mobile Suit Gundam and Code Geass',
+  romcom:        'Kyoto Animation style, like Toradora and Clannad',
+  drama:         'Kyoto Animation and P.A. Works style, like Violet Evergarden and Anohana',
+  slice_of_life: 'Kyoto Animation style, like K-On and The Melancholy of Haruhi Suzumiya',
+  terror:        'Madhouse studio style, like Another and Parasyte the Maxim',
+  psicologico:   'Madhouse and Shaft style, like Death Note and Puella Magi Madoka Magica',
+  misterio:      'Bones and P.A. Works style, like Gosick and Hyouka',
+  deportes:      'Production I.G style, like Haikyuu and Kuroko no Basket',
+  sci_fi:        'Production I.G style, like Ghost in the Shell and Psycho-Pass',
+  aventura:      'Toei Animation style, like One Piece and Dragon Ball',
+  sobrenatural:  'Bones studio style, like Soul Eater and Noragami',
+  supervivencia: 'Mappa and Wit Studio style, like Attack on Titan',
+  videojuego:    'A-1 Pictures style, like Sword Art Online and Overlord',
+  donghua:       'Bilibili Animation and MAPPA style, like Fog Hill of Five Elements',
+};
+const STUDIO_BY_DEMO = {
+  shonen:       ', Pierrot studio energy like Naruto and Bleach',
+  seinen:       ', Wit Studio sophistication like Vinland Saga',
+  shojo:        ', TMS Entertainment elegance like Fruits Basket',
+  josei:        ', Production I.G refinement',
+  kodomomuke:   ', Toei Animation warmth',
+  donghua:      ', Chinese xianxia animation fluidity',
+};
+
 function buildVideoPrompt(s, ab) {
-  const base = (ab === 'B' ? (s.imagePromptB || s.imagePromptA) : (s.imagePromptA || s.narration) || '').replace(/"/g,'').slice(0, 300);
-  return `2D anime animation, hand-drawn style, classic Japanese anime aesthetic like Toei Animation or Madhouse studio. Smooth fluid motion, expressive character movement, vibrant cel-shading colors. NOT 3D, NOT CGI, NOT video game graphics, NOT realistic rendering. Pure 2D anime art style. ${base}. Cinematic anime scene, professional quality animation.`;
+  const base    = (ab === 'B' ? (s.imagePromptB || s.imagePromptA) : (s.imagePromptA || s.narration) || '').replace(/"/g,'').slice(0, 280);
+  const genre   = document.getElementById('generoSelect')?.value || 'accion';
+  const demo    = document.getElementById('demoSelect')?.value   || 'shonen';
+  const studio  = STUDIO_BY_GENRE[genre]  || STUDIO_BY_GENRE['accion'];
+  const demoRef = STUDIO_BY_DEMO[demo]    || '';
+  return `2D anime animation, hand-drawn style, ${studio}${demoRef}. Smooth fluid motion, expressive character movement, vibrant cel-shading colors. NOT 3D, NOT CGI, NOT video game graphics, NOT realistic rendering. Pure 2D anime art style. ${base}. Cinematic anime scene, professional quality animation.`;
 }
 
 function saveState() {
