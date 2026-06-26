@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.60 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.61 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -554,7 +554,7 @@ const sceneVidKeyB = id => `svb_${state.projectId}_${id}`;
 // Build a video prompt from the scene (English, motion-focused)
 function buildVideoPrompt(s, ab) {
   const base = (ab === 'B' ? (s.imagePromptB || s.imagePromptA) : (s.imagePromptA || s.narration) || '').replace(/"/g,'').slice(0, 300);
-  return `Anime animated scene, smooth fluid motion, 9:16 vertical. ${base}. High quality anime animation, cinematic movement, vibrant colors.`;
+  return `2D anime animation, hand-drawn style, classic Japanese anime aesthetic like Toei Animation or Madhouse studio. Smooth fluid motion, expressive character movement, vibrant cel-shading colors. NOT 3D, NOT CGI, NOT video game graphics, NOT realistic rendering. Pure 2D anime art style. ${base}. Cinematic anime scene, professional quality animation.`;
 }
 
 function saveState() {
