@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.70 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.71 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1314,17 +1314,19 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
 
     // Estilo de narración según el tono del subgénero
     const isGrounded  = hasSliceOfLife && !allowsSuper && !allowsSuper2;
-    const sysBase = `Eres un guionista viral de anime para Facebook Reels. Creas narraciones en PRIMERA PERSONA que enganchan desde el primer segundo y no sueltan al espectador.
+    const sysBase = `You are a viral anime scriptwriter for Facebook Reels. Write stories in FIRST PERSON that hook viewers instantly.
 
-FÓRMULA VIRAL PARA FACEBOOK REELS DE ANIME:
-- PRIMERA PERSONA del protagonista (YO), tiempo presente o pasado inmediato
-- Cada escena: EXACTAMENTE 75-80 palabras. CUENTA tus palabras antes de responder. No negociable.
-- PRIMERA FRASE = gancho inmediato: acción, revelación o emoción fuerte. NUNCA empezar describiendo el ambiente.
-- ESPECÍFICO no genérico: "Mi poder llegó a nivel 9,999" no "Me volví muy fuerte". "La habilidad [DOMINACIÓN] se desbloqueó" no "obtuve una habilidad".
-- SENSACIONES FÍSICAS concretas: "el frío me paralizó la espalda", "mis rodillas cedieron", "la sangre ardía en mis venas"
-- CONTRASTE EMOCIONAL en cada escena: el punto más bajo antes del ascenso, el éxito antes de la traición, la esperanza antes del golpe
-- Cada escena termina con TENSIÓN O PREGUNTA IMPLÍCITA — el espectador NECESITA saber qué sigue
-- Frases cortas. Máximo 15 palabras por frase. Ritmo rápido.
+CRITICAL: The JSON field for story text MUST be called "narration" (English spelling, no accent).
+
+VIRAL FORMULA — write the "narration" field in Spanish:
+- First person narrator (YO), present or immediate past tense
+- Each scene: EXACTLY 75-80 Spanish words in "narration". Count before responding.
+- FIRST SENTENCE = immediate hook: action, revelation, or strong emotion. NEVER start with scenery.
+- SPECIFIC not generic: "My power reached level 9,999" not "I became strong". "The [DOMINATION] skill unlocked" not "I got a skill".
+- Concrete physical sensations: "the cold ran down my spine", "my knees gave out", "the blood burned in my veins"
+- Emotional contrast: lowest point before the rise, success before betrayal
+- Each scene ends with IMPLICIT TENSION — the viewer NEEDS to know what happens next
+- Short sentences. Max 15 words each. Fast rhythm.
 ${isGrounded ? `
 MODO COTIDIANO ACTIVO (Slice of Life):
 - Narra el día a día con detalles reales y específicos
@@ -1474,6 +1476,8 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
           const raw = await callGemini(batchPrompt, sysBase + genreExtra);
           const parsed = safeParseJSON(raw);
           const arr = parsed.scenes || [];
+          // Normalize: Gemini sometimes returns "narración" (Spanish) instead of "narration"
+          arr.forEach(s => { if (s && s['narración'] && !s.narration) s.narration = s['narración']; });
           const valid = arr.filter(s => s && s.narration && s.imagePromptA && s.imagePromptB && s.title);
           if (valid.length > bestResult.length) bestResult = valid;
           if (valid.length >= expectedCount) {
@@ -1504,7 +1508,7 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
 
     const batchRules = `REGLAS ESTRUCTURA:
 - 15 escenas en total, 7.5 minutos de video (30 segundos por escena × 15)
-- Narración: EXACTAMENTE 75-80 palabras en PRIMERA PERSONA. CUENTA las palabras. Ni más ni menos. Gancho en primera frase, tensión al final.
+- The "narration" field: EXACTLY 75-80 Spanish words, FIRST PERSON (YO). Count words. Hook in first sentence, tension at the end.
 - imagePromptA = primer momento de la escena
 - imagePromptB = segundo momento distinto de la misma escena
 - FINALE ep1 (escena 15): resolución PARCIAL + misterio abierto para ep2
@@ -2303,13 +2307,13 @@ document.getElementById('btnRepairScenes').addEventListener('click', async () =>
   btn.innerHTML = `<div class="spinner"></div> Reparando ${brokenIndices.length} escenas...`;
 
   try {
-    const sysBase = `Eres un guionista viral de anime para Facebook Reels. Creas narraciones en PRIMERA PERSONA que enganchan al espectador.
-REGLAS:
-- Narración: EXACTAMENTE 75-80 palabras en español, PRIMERA PERSONA (YO). Gancho en primera frase. Tensión al final. CUENTA las palabras.
-- Lenguaje directo y específico. Sensaciones físicas concretas. Sin metáforas rebuscadas.
-- imagePromptA e imagePromptB en INGLÉS, empezando con "Scene with [nombre exacto]:" incluyendo ropa/cabello/expresión/entorno
-- NUNCA usar "a man"/"the protagonist" — siempre el nombre real
-- Responde SOLO JSON válido sin markdown`;
+    const sysBase = `You are a viral anime scriptwriter for Facebook Reels. Write first-person narrations in Spanish.
+RULES:
+- JSON field MUST be "narration" (English, no accent mark). EXACTLY 75-80 Spanish words. Count them.
+- Hook in first sentence. Physical sensations. Tension at the end. No metaphors.
+- imagePromptA and imagePromptB in ENGLISH, starting with "Scene with [exact name]:" with outfit/hair/expression/setting
+- NEVER use "a man"/"the protagonist" — always the real character name
+- Respond ONLY with valid JSON, no markdown`;
 
     const charRef = state.characters.map(c =>
       `- ${c.name} (${c.role}): ${c.appearance}`
@@ -2341,6 +2345,8 @@ REGLAS:
       try {
         const raw = await callGemini(prompt, sysBase);
         const parsed = safeParseJSON(raw);
+        // Normalize: Gemini sometimes returns "narración" (Spanish) instead of "narration"
+        (parsed.scenes || []).forEach(s => { if (s && s['narración'] && !s.narration) s.narration = s['narración']; });
         const arr = (parsed.scenes || []).filter(s => s && s.narration && s.imagePromptA && s.imagePromptB && s.title);
         if (arr.length >= count) {
           newScenes = arr.slice(0, count).map((s, i) => ({
