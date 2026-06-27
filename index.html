@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.68 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.70 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -300,12 +300,6 @@
   <div class="panel active" id="panel-universo">
     <div class="card">
       <h2>🌌 Crear Universo</h2>
-
-      <label>Modo de historia</label>
-      <select id="storyMode">
-        <option value="narracion">🎙️ Narración — Una voz narra la historia</option>
-        <option value="dialogos">💬 Diálogos — Los personajes hablan en el video (audio de Veo)</option>
-      </select>
 
       <label>Demografía (público objetivo)</label>
       <select id="demoSelect">
@@ -429,11 +423,25 @@
         <optgroup label="⚡ ElevenLabs v3 (máxima calidad)">
           <option value="elevenlabs">🎙️ ElevenLabs — Voz personalizada</option>
         </optgroup>
-        <optgroup label="🔮 Gemini 3.1 Flash TTS (nuevo, expresivo)">
-          <option value="gemini_male">🎙️ Charon — Masculino profundo</option>
-          <option value="gemini_female">🎙️ Kore — Femenino natural</option>
-          <option value="gemini_male2">🎙️ Fenrir — Masculino dramático</option>
-          <option value="gemini_female2">🎙️ Aoede — Femenino expresivo</option>
+        <optgroup label="🔮 Gemini TTS — Masculinas">
+          <option value="gemini_Charon">Charon — Grave y firme</option>
+          <option value="gemini_Fenrir">Fenrir — Dramático e intenso</option>
+          <option value="gemini_Orus">Orus — Natural y cálido</option>
+          <option value="gemini_Perseus">Perseus — Claro y directo</option>
+          <option value="gemini_Puck">Puck — Energético y ágil</option>
+          <option value="gemini_Achird">Achird — Suave y sereno</option>
+          <option value="gemini_Sadaltager">Sadaltager — Maduro y seguro</option>
+          <option value="gemini_Gacrux">Gacrux — Ronco y expresivo</option>
+        </optgroup>
+        <optgroup label="🔮 Gemini TTS — Femeninas">
+          <option value="gemini_Aoede">Aoede — Expresiva y fluida</option>
+          <option value="gemini_Kore">Kore — Natural y firme</option>
+          <option value="gemini_Zephyr">Zephyr — Luminosa y fresca</option>
+          <option value="gemini_Leda">Leda — Suave y melodiosa</option>
+          <option value="gemini_Callirrhoe">Callirrhoe — Clara y joven</option>
+          <option value="gemini_Autonoe">Autonoe — Cálida y cercana</option>
+          <option value="gemini_Vindemiatrix">Vindemiatrix — Segura y madura</option>
+          <option value="gemini_Sulafat">Sulafat — Suave y delicada</option>
         </optgroup>
       </select>
 
@@ -591,30 +599,11 @@ function buildVideoPrompt(s, ab) {
   const base      = (ab === 'B' ? (s.imagePromptB || s.imagePromptA) : (s.imagePromptA || s.narration) || '').replace(/"/g,'').slice(0, 200);
   const genre     = document.getElementById('generoSelect')?.value || 'accion';
   const demo      = document.getElementById('demoSelect')?.value   || 'shonen';
-  const storyMode = document.getElementById('storyMode')?.value    || 'narracion';
-  const studio    = STUDIO_BY_GENRE[genre]  || STUDIO_BY_GENRE['accion'];
-  const demoRef   = STUDIO_BY_DEMO[demo]    || '';
-  const noCamera  = 'Characters face each other or look at their environment, NOT at the camera. Side or three-quarter angle, never direct eye contact with viewer.';
-  const styleBase = `2D anime animation, hand-drawn style, ${studio}${demoRef}. Smooth fluid motion, expressive character movement, vibrant cel-shading colors. NOT 3D, NOT CGI, NOT video game graphics. Pure 2D anime art style. ${noCamera} ${base}.`;
-
-  if (storyMode === 'dialogos' && s.dialogue?.length) {
-    // Split dialogue: A gets first half, B gets second half
-    const half     = Math.ceil(s.dialogue.length / 2);
-    const myLines  = ab === 'A' ? s.dialogue.slice(0, half) : s.dialogue.slice(half);
-    const useLines = myLines.length > 0 ? myLines : s.dialogue;
-
-    // Add character appearance from state so Veo doesn't invent them
-    const charNames = [...new Set(useLines.map(d => d.character))];
-    const charDescs = charNames.map(name => {
-      const ch = (state.characters || []).find(c => c.name === name);
-      return ch ? `${name}: ${ch.appearance}` : name;
-    }).join('. ');
-
-    const lines = useLines.map(d => `${d.character} says in Spanish: "${d.line}"`).join('. ');
-    return `${styleBase} CHARACTER APPEARANCES — ${charDescs}. DIALOGUE IN SPANISH — ${lines}. Characters speak with natural voice acting in Spanish. Include ambient sound and music.`;
-  }
-
-  return `${styleBase} Cinematic anime scene, professional quality animation.`;
+  const studio   = STUDIO_BY_GENRE[genre]  || STUDIO_BY_GENRE['accion'];
+  const demoRef  = STUDIO_BY_DEMO[demo]    || '';
+  const noCamera = 'Characters face each other or look at their environment, NOT at the camera. Side or three-quarter angle, never direct eye contact with viewer.';
+  const audioRule = 'NO voice dialogue, NO narration, NO singing. ONLY instrumental background music fitting the scene mood and genre.';
+  return `2D anime animation, hand-drawn style, ${studio}${demoRef}. Smooth fluid motion, expressive character movement, vibrant cel-shading colors. NOT 3D, NOT CGI, NOT video game graphics. Pure 2D anime art style. ${noCamera} ${base}. ${audioRule} Cinematic anime scene, professional quality animation.`;
 }
 
 function saveState() {
@@ -623,7 +612,7 @@ function saveState() {
     universe: state.universe,
     characters: state.characters,
     scenes: state.scenes,
-    storyMode: document.getElementById('storyMode')?.value || 'narracion',
+
   };
   localStorage.setItem(`proj_${state.projectId}`, JSON.stringify(data));
   const i = projects.findIndex(p => p.id === state.projectId);
@@ -638,9 +627,7 @@ function loadStateFor(pid) {
     state.universe    = d.universe;
     state.characters  = d.characters || [];
     state.scenes      = d.scenes || [];
-    // Restore storyMode selector to saved value
-    const sm = document.getElementById('storyMode');
-    if (sm && d.storyMode) sm.value = d.storyMode;
+
   } catch(e) {}
 }
 function saveProjects() { localStorage.setItem('projects_index', JSON.stringify(projects)); }
@@ -1327,28 +1314,17 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
 
     // Estilo de narración según el tono del subgénero
     const isGrounded  = hasSliceOfLife && !allowsSuper && !allowsSuper2;
-    const storyMode   = document.getElementById('storyMode')?.value || 'narracion';
-    const isDialogue  = storyMode === 'dialogos';
+    const sysBase = `Eres un guionista viral de anime para Facebook Reels. Creas narraciones en PRIMERA PERSONA que enganchan desde el primer segundo y no sueltan al espectador.
 
-    const sysBase = isDialogue
-      ? `Eres un guionista de anime profesional. Escribes DIÁLOGOS entre personajes para que Veo AI los ejecute con audio en español integrado en el video.
-
-ESTILO DE DIÁLOGOS:
-- Diálogos en ESPAÑOL, naturales y expresivos como anime doblado al español latino
-- 3-5 intercambios por escena, máximo 12 palabras por línea de diálogo
-- Cada línea avanza la historia o revela carácter/emoción del personaje
-- Los personajes hablan entre sí, nunca con el espectador
-- Tono apropiado al género: dramático en acción, tierno en romance, tenso en terror
-- Las líneas deben sonar naturales al hablarse, no como texto escrito`
-      : `Eres un guionista de anime para reels de Facebook. Escribes narración en PRIMERA PERSONA del protagonista, como si él contara su historia directamente al espectador.
-
-ESTILO DE NARRACIÓN:
-- PRIMERA PERSONA (YO) — el protagonista habla directamente: "Yo me llamo...", "Desperté en...", "No podía creer lo que veía..."
-- Cada escena: exactamente 70-80 palabras (equivale a ~30 segundos de audio narrado)
-- Lenguaje SIMPLE Y DIRECTO — el protagonista describe lo que VE, SIENTE y PIENSA
-- Frases cortas y claras, máximo 20 palabras por frase
-- El drama surge de los eventos, no de adjetivos o metáforas
-- Como si el protagonista le contara su historia a la cámara en un reel viral
+FÓRMULA VIRAL PARA FACEBOOK REELS DE ANIME:
+- PRIMERA PERSONA del protagonista (YO), tiempo presente o pasado inmediato
+- Cada escena: EXACTAMENTE 75-80 palabras. CUENTA tus palabras antes de responder. No negociable.
+- PRIMERA FRASE = gancho inmediato: acción, revelación o emoción fuerte. NUNCA empezar describiendo el ambiente.
+- ESPECÍFICO no genérico: "Mi poder llegó a nivel 9,999" no "Me volví muy fuerte". "La habilidad [DOMINACIÓN] se desbloqueó" no "obtuve una habilidad".
+- SENSACIONES FÍSICAS concretas: "el frío me paralizó la espalda", "mis rodillas cedieron", "la sangre ardía en mis venas"
+- CONTRASTE EMOCIONAL en cada escena: el punto más bajo antes del ascenso, el éxito antes de la traición, la esperanza antes del golpe
+- Cada escena termina con TENSIÓN O PREGUNTA IMPLÍCITA — el espectador NECESITA saber qué sigue
+- Frases cortas. Máximo 15 palabras por frase. Ritmo rápido.
 ${isGrounded ? `
 MODO COTIDIANO ACTIVO (Slice of Life):
 - Narra el día a día con detalles reales y específicos
@@ -1489,9 +1465,7 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
     const charRefShort = state.characters.map(c => c.name).join(', ');
 
     // 15 scenes x 2 images = 30 images, ~10 min total
-    const sceneShape = isDialogue
-      ? `{"id":"s1","num":1,"act":"cold_open","title":"título corto","dialogue":[{"character":"nombre exacto","line":"línea en español natural, máx 12 palabras"},{"character":"nombre exacto","line":"respuesta en español natural, máx 12 palabras"}],"imagePromptA":"Scene with [TODOS los nombres de personajes del diálogo]: [primer momento visual — TODOS los personajes presentes, descripción de ropa y apariencia de cada uno]","imagePromptB":"Scene with [TODOS los nombres de personajes del diálogo]: [segundo momento visual distinto — los MISMOS personajes, mismo lugar, diferente momento de la conversación]"}`
-      : `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"EXACTAMENTE 70-80 palabras en primera persona (YO). 5-7 frases naturales, máximo 16 palabras por frase. Equivale a 30 segundos de audio narrado.","imagePromptA":"Scene with [nombre exacto del personaje]: [descripción visual detallada incluyendo su ropa y apariencia específica]","imagePromptB":"Scene with [nombres exactos]: [segundo momento visual distinto]"}`;
+    const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"EXACTAMENTE 75-80 palabras en primera persona (YO). Gancho en la primera frase. Sensaciones físicas concretas. Termina con tensión. Cuenta las palabras.","imagePromptA":"Scene with [nombre exacto]: [descripción visual detallada — ropa, cabello, expresión, entorno, iluminación]","imagePromptB":"Scene with [nombre exacto]: [segundo momento visual distinto de la misma escena]"}`;
 
     async function generateSceneBatch(batchPrompt, expectedCount, startNum, batchName) {
       let bestResult = [];
@@ -1500,7 +1474,7 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
           const raw = await callGemini(batchPrompt, sysBase + genreExtra);
           const parsed = safeParseJSON(raw);
           const arr = parsed.scenes || [];
-          const valid = arr.filter(s => s && (isDialogue ? s.dialogue?.length : s.narration) && s.imagePromptA && s.imagePromptB && s.title);
+          const valid = arr.filter(s => s && s.narration && s.imagePromptA && s.imagePromptB && s.title);
           if (valid.length > bestResult.length) bestResult = valid;
           if (valid.length >= expectedCount) {
             return valid.slice(0, expectedCount).map((s, i) => ({
@@ -1528,15 +1502,9 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
       }));
     }
 
-    const batchRules = isDialogue ? `REGLAS ESTRUCTURA (MODO DIÁLOGOS):
-- 15 escenas en total
-- dialogue: array con 3-5 objetos {"character":"nombre exacto","line":"línea en español"}
-- Las líneas deben sonar naturales al ser habladas, máximo 12 palabras por línea
-- CRÍTICO: imagePromptA e imagePromptB deben mostrar SIEMPRE a TODOS los personajes del diálogo juntos en la misma imagen. Si el diálogo es entre Kai y Yuki, AMBAS imágenes deben tener "Scene with Kai and Yuki:". Nunca una imagen con solo un personaje cuando hay diálogo entre varios.
-- imagePromptA = primer momento de la conversación (todos los personajes presentes)
-- imagePromptB = segundo momento distinto de la misma conversación (mismos personajes)` : `REGLAS ESTRUCTURA:
+    const batchRules = `REGLAS ESTRUCTURA:
 - 15 escenas en total, 7.5 minutos de video (30 segundos por escena × 15)
-- Narración: EXACTAMENTE 70-80 palabras en PRIMERA PERSONA (YO). 5-7 frases naturales, máximo 16 palabras por frase. Este texto se narrará en audio y debe cubrir exactamente 30 segundos.
+- Narración: EXACTAMENTE 75-80 palabras en PRIMERA PERSONA. CUENTA las palabras. Ni más ni menos. Gancho en primera frase, tensión al final.
 - imagePromptA = primer momento de la escena
 - imagePromptB = segundo momento distinto de la misma escena
 - FINALE ep1 (escena 15): resolución PARCIAL + misterio abierto para ep2
@@ -1558,9 +1526,7 @@ REGLAS CRÍTICAS PARA imagePromptA e imagePromptB:
     setProg(60, '✅ 1-7 — Paso 3/3: Escenas 8-15...');
 
     const lastScene7 = scenes[scenes.length - 1];
-    const lastSceneRef = isDialogue
-      ? (lastScene7?.dialogue?.length ? `Escena 7 terminó con diálogo: ${lastScene7.dialogue.map(d=>d.character+': "'+d.line+'"').join(' / ')}` : '')
-      : `Escena 7 terminó: "${lastScene7?.narration || ''}"`;
+    const lastSceneRef = `Escena 7 terminó: "${lastScene7?.narration || ""}"`;
 
     const batch2 = await generateSceneBatch(
       `Universo: ${u.title} (${u.genero})\n\nPERSONAJES:\n${charRef}\n\n${lastSceneRef}\n\n${batchRules}\n\nGenera escenas 8-15:\n- 8-12: act2, escalada del conflicto\n- 13-14: clímax\n- 15: FINALE — resolución parcial + pregunta abierta que engancha al episodio 2\nDevuelve SOLO JSON con 8 objetos numerados 8-15: {"scenes":[${sceneShape},...]}`,
@@ -1572,7 +1538,7 @@ REGLAS CRÍTICAS PARA imagePromptA e imagePromptB:
     saveState();
     renderScenes();
 
-    const pendingCount = scenes.filter(s => isDialogue ? !s.dialogue?.length || !s.imagePromptA : !s.narration || !s.imagePromptA).length;
+    const pendingCount = scenes.filter(s => !s.narration || !s.imagePromptA).length;
     if (pendingCount > 0) {
       setProg(100, `⚠️ ${scenes.length - pendingCount}/15 escenas — ${pendingCount} pendientes`);
       showToast(`${pendingCount} escenas pendientes. Usa "Reparar escenas vacías".`, 'error');
@@ -1728,18 +1694,12 @@ async function renderScenes() {
         ${imgCol(s.id, s.num, 'A', imgA, vidUrlA)}
         ${imgCol(s.id, s.num, 'B', imgB, vidUrlB)}
       </div>
-      <div class="scene-narration">
-        ${(document.getElementById('storyMode')?.value === 'dialogos' && s.dialogue?.length)
-          ? s.dialogue.map(d => `<span style="color:var(--accent2);font-weight:600">${d.character}:</span> "${d.line}"`).join('<br>')
-          : (s.narration || '')}
-      </div>
+      <div class="scene-narration">${s.narration || ""}</div>
       <div class="scene-actions">
-        ${(document.getElementById('storyMode')?.value !== 'dialogos')
-          ? (audData
-            ? `<button class="btn-sec" onclick="playSceneAudio('${s.id}')">▶️ Reproducir</button>
-               <button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🔄 Audio</button>`
-            : `<button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🎙️ Audio</button>`)
-          : `<span style="font-size:10px;color:var(--text-dim)">🎙️ Audio integrado en video</span>`
+        ${audData
+          ? `<button class="btn-sec" onclick="playSceneAudio('${s.id}')">▶️ Reproducir</button>
+             <button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🔄 Audio</button>`
+          : `<button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🎙️ Audio</button>`
         }
       </div>
     </div>
@@ -2052,7 +2012,6 @@ window.generateSceneVideo = async function(sceneId, ab) {
     const imgData = await dbGet(imgKey);
 
     const aspectRatio = document.getElementById('aspectRatio')?.value || '9:16';
-    const isDialogueMode = (document.getElementById('storyMode')?.value || 'narracion') === 'dialogos';
     const res = await fetch('/api/video-start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2060,7 +2019,7 @@ window.generateSceneVideo = async function(sceneId, ab) {
         prompt: buildVideoPrompt(s, ab),
         imageA: imgData || null,
         aspectRatio,
-        generateAudio: isDialogueMode,
+        generateAudio: false,
       }),
     });
     const startData = await res.json();
@@ -2330,15 +2289,11 @@ document.getElementById('btnRepairScenes').addEventListener('click', async () =>
   if (!state.universe || !state.scenes.length) { showToast('No hay episodio', 'error'); return; }
   const u = state.universe;
 
-  const isDialogue = (document.getElementById('storyMode')?.value || 'narracion') === 'dialogos';
-
-  // Find broken scenes — in dialogue mode, broken = no dialogue array
+  // Find broken scenes
   const brokenIndices = [];
   state.scenes.forEach((s, idx) => {
-    const isBroken = isDialogue
-      ? (!s.dialogue?.length || !s.title || !s.imagePromptA || s.num === undefined)
-      : (!s.narration || !s.title || !s.imagePromptA || s.num === undefined || s.num === null);
-    if (isBroken) brokenIndices.push(idx);
+    if (!s.narration || !s.title || !s.imagePromptA || s.num === undefined || s.num === null)
+      brokenIndices.push(idx);
   });
 
   if (!brokenIndices.length) { showToast('No hay escenas que reparar', 'success'); return; }
@@ -2348,19 +2303,11 @@ document.getElementById('btnRepairScenes').addEventListener('click', async () =>
   btn.innerHTML = `<div class="spinner"></div> Reparando ${brokenIndices.length} escenas...`;
 
   try {
-    const sysBase = isDialogue
-      ? `Eres un guionista de anime profesional. Escribes DIÁLOGOS entre personajes en español para videos de anime.
+    const sysBase = `Eres un guionista viral de anime para Facebook Reels. Creas narraciones en PRIMERA PERSONA que enganchan al espectador.
 REGLAS:
-- dialogue: array con 3-5 objetos {"character":"nombre exacto","line":"línea en español natural, máx 12 palabras"}
-- Los diálogos deben sonar naturales al ser hablados, apropiados al género
-- imagePromptA e imagePromptB en INGLÉS, empezando con "Scene with [nombre exacto]:" incluyendo ropa/cabello/expresión
-- NUNCA usar "a man"/"the protagonist" — siempre el nombre real
-- Responde SOLO JSON válido sin markdown`
-      : `Eres un guionista de anime para reels de Facebook. Escribes narración en PRIMERA PERSONA del protagonista.
-REGLAS:
-- Narración: EXACTAMENTE 70-80 palabras en español, PRIMERA PERSONA (YO). 5-7 frases naturales, máximo 16 palabras por frase. Este texto se narrará en audio y debe cubrir 30 segundos exactos.
-- Lenguaje simple y directo, el drama surge de los eventos no de las metáforas
-- imagePromptA e imagePromptB en INGLÉS, cada uno empezando con "Scene with [nombre exacto]:" e incluyendo ropa específica + cabello + expresión
+- Narración: EXACTAMENTE 75-80 palabras en español, PRIMERA PERSONA (YO). Gancho en primera frase. Tensión al final. CUENTA las palabras.
+- Lenguaje directo y específico. Sensaciones físicas concretas. Sin metáforas rebuscadas.
+- imagePromptA e imagePromptB en INGLÉS, empezando con "Scene with [nombre exacto]:" incluyendo ropa/cabello/expresión/entorno
 - NUNCA usar "a man"/"the protagonist" — siempre el nombre real
 - Responde SOLO JSON válido sin markdown`;
 
@@ -2383,24 +2330,18 @@ REGLAS:
     else if (startNum <= 14) act = 'climax';
     else act = 'resolution';
 
-    const lastGoodRef = lastGood
-      ? (isDialogue
-          ? `\nEscena anterior (${lastGood.num}): ${(lastGood.dialogue||[]).map(d=>d.character+': '+d.line).join(' / ')}`
-          : `\nEscena anterior (${lastGood.num}): "${lastGood.narration}"`)
-      : '';
+    const lastGoodRef = lastGood ? `\nEscena anterior (${lastGood.num}): "${lastGood.narration}"` : '';
 
-    const sceneExample = isDialogue
-      ? `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","dialogue":[{"character":"nombre","line":"línea en español"},{"character":"nombre","line":"respuesta"}],"imagePromptA":"Scene with [TODOS los personajes del diálogo]: [primer momento — todos presentes]","imagePromptB":"Scene with [TODOS los personajes del diálogo]: [segundo momento — mismos personajes]"}`
-      : `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"70-80 palabras primera persona...","imagePromptA":"Scene with [nombre]: ...","imagePromptB":"Scene with [nombre]: ..."}`;
+    const sceneExample = `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"EXACTAMENTE 75-80 palabras primera persona, gancho inicial, tensión final","imagePromptA":"Scene with [nombre exacto]: ...","imagePromptB":"Scene with [nombre exacto]: ..."}`;
 
-    const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: ${totalScenes} escenas.\n${isDialogue ? 'Cada escena DEBE tener dialogue (array 3-5 líneas en español)' : 'Cada escena DEBE tener narration (EXACTAMENTE 70-80 palabras, primera persona, 5-7 frases)'}, imagePromptA e imagePromptB (ambos en inglés).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
+    const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: ${totalScenes} escenas.\nCada escena DEBE tener narration (EXACTAMENTE 75-80 palabras, primera persona, gancho inicial, tensión final), imagePromptA e imagePromptB (ambos en inglés).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
 
     let newScenes = [];
     for (let attempt = 0; attempt < 3 && newScenes.length < count; attempt++) {
       try {
         const raw = await callGemini(prompt, sysBase);
         const parsed = safeParseJSON(raw);
-        const arr = (parsed.scenes || []).filter(s => s && (isDialogue ? s.dialogue?.length : s.narration) && s.imagePromptA && s.imagePromptB && s.title);
+        const arr = (parsed.scenes || []).filter(s => s && s.narration && s.imagePromptA && s.imagePromptB && s.title);
         if (arr.length >= count) {
           newScenes = arr.slice(0, count).map((s, i) => ({
             ...s,
