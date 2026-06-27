@@ -4,8 +4,8 @@
 // ════════════════════════════════════════════════════════════════
 const crypto = require('crypto');
 
-const MODEL_ID = 'veo-3.1-lite-generate-001'; // must match video-status.js exactly
-const LOCATION  = 'us-central1';
+const DEFAULT_MODEL = 'veo-3.1-lite-generate-001';
+const LOCATION       = 'us-central1';
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -44,8 +44,10 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { prompt, imageA, imageB, aspectRatio = '9:16', generateAudio = false } = req.body; // imageA = the specific image for this video
+    const { prompt, imageA, imageB, aspectRatio = '9:16', generateAudio = false, veoModel } = req.body;
     if (!prompt) return res.status(400).json({ error: 'prompt requerido' });
+
+    const MODEL_ID = (veoModel || DEFAULT_MODEL).trim();
 
     const saRaw = process.env.GCP_SERVICE_ACCOUNT;
     const bucket = (process.env.GCS_OUTPUT_BUCKET || '').trim().replace(/\/+$/, '');
