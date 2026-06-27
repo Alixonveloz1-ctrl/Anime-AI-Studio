@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.63 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.65 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1527,8 +1527,14 @@ REGLAS CRÍTICAS PARA imagePromptA e imagePromptB:
     );
 
     setProg(60, '✅ 1-7 — Paso 3/3: Escenas 8-15...');
+
+    const lastScene7 = scenes[scenes.length - 1];
+    const lastSceneRef = isDialogue
+      ? (lastScene7?.dialogue?.length ? `Escena 7 terminó con diálogo: ${lastScene7.dialogue.map(d=>d.character+': "'+d.line+'"').join(' / ')}` : '')
+      : `Escena 7 terminó: "${lastScene7?.narration || ''}"`;
+
     const batch2 = await generateSceneBatch(
-      `Universo: ${u.title} (${u.genero})\n\nPERSONAJES:\n${charRef}\n\nEscena 7 terminó: "${scenes[scenes.length-1]?.narration || ''}"\n\n${batchRules}\n\nGenera escenas 8-15:\n- 8-12: act2, escalada del conflicto\n- 13-14: clímax\n- 15: FINALE — resolución parcial + pregunta abierta que engancha al episodio 2\nDevuelve SOLO JSON con 8 objetos numerados 8-15.`,
+      `Universo: ${u.title} (${u.genero})\n\nPERSONAJES:\n${charRef}\n\n${lastSceneRef}\n\n${batchRules}\n\nGenera escenas 8-15:\n- 8-12: act2, escalada del conflicto\n- 13-14: clímax\n- 15: FINALE — resolución parcial + pregunta abierta que engancha al episodio 2\nDevuelve SOLO JSON con 8 objetos numerados 8-15: {"scenes":[${sceneShape},...]}`,
       8, 8, 'Escenas 8-15'
     );
     scenes = scenes.concat(batch2);
@@ -1537,7 +1543,7 @@ REGLAS CRÍTICAS PARA imagePromptA e imagePromptB:
     saveState();
     renderScenes();
 
-    const pendingCount = scenes.filter(s => !s.narration || !s.imagePromptA).length;
+    const pendingCount = scenes.filter(s => isDialogue ? !s.dialogue?.length || !s.imagePromptA : !s.narration || !s.imagePromptA).length;
     if (pendingCount > 0) {
       setProg(100, `⚠️ ${scenes.length - pendingCount}/15 escenas — ${pendingCount} pendientes`);
       showToast(`${pendingCount} escenas pendientes. Usa "Reparar escenas vacías".`, 'error');
@@ -2295,12 +2301,15 @@ document.getElementById('btnRepairScenes').addEventListener('click', async () =>
   if (!state.universe || !state.scenes.length) { showToast('No hay episodio', 'error'); return; }
   const u = state.universe;
 
-  // Find broken scenes (no narration, no title, or num is undefined)
+  const isDialogue = (document.getElementById('storyMode')?.value || 'narracion') === 'dialogos';
+
+  // Find broken scenes — in dialogue mode, broken = no dialogue array
   const brokenIndices = [];
   state.scenes.forEach((s, idx) => {
-    if (!s.narration || !s.title || !s.imagePromptA || s.num === undefined || s.num === null) {
-      brokenIndices.push(idx);
-    }
+    const isBroken = isDialogue
+      ? (!s.dialogue?.length || !s.title || !s.imagePromptA || s.num === undefined)
+      : (!s.narration || !s.title || !s.imagePromptA || s.num === undefined || s.num === null);
+    if (isBroken) brokenIndices.push(idx);
   });
 
   if (!brokenIndices.length) { showToast('No hay escenas que reparar', 'success'); return; }
@@ -2310,7 +2319,15 @@ document.getElementById('btnRepairScenes').addEventListener('click', async () =>
   btn.innerHTML = `<div class="spinner"></div> Reparando ${brokenIndices.length} escenas...`;
 
   try {
-    const sysBase = `Eres un guionista de anime para reels de Facebook. Escribes narración en PRIMERA PERSONA del protagonista.
+    const sysBase = isDialogue
+      ? `Eres un guionista de anime profesional. Escribes DIÁLOGOS entre personajes en español para videos de anime.
+REGLAS:
+- dialogue: array con 3-5 objetos {"character":"nombre exacto","line":"línea en español natural, máx 12 palabras"}
+- Los diálogos deben sonar naturales al ser hablados, apropiados al género
+- imagePromptA e imagePromptB en INGLÉS, empezando con "Scene with [nombre exacto]:" incluyendo ropa/cabello/expresión
+- NUNCA usar "a man"/"the protagonist" — siempre el nombre real
+- Responde SOLO JSON válido sin markdown`
+      : `Eres un guionista de anime para reels de Facebook. Escribes narración en PRIMERA PERSONA del protagonista.
 REGLAS:
 - Narración: EXACTAMENTE 70-80 palabras en español, PRIMERA PERSONA (YO). 5-7 frases naturales, máximo 16 palabras por frase. Este texto se narrará en audio y debe cubrir 30 segundos exactos.
 - Lenguaje simple y directo, el drama surge de los eventos no de las metáforas
@@ -2323,11 +2340,10 @@ REGLAS:
     ).join('\n');
     const ctx = `Universo: ${u.title}\nGénero: ${u.genero}\nConcepto: ${u.concepto}\nConflicto: ${u.conflicto}\nSetting: ${u.setting}`;
 
-    // Get last good scene before broken range for continuity
     const firstBroken = brokenIndices[0];
     const lastGood = firstBroken > 0 ? state.scenes[firstBroken - 1] : null;
     const totalScenes = state.scenes.length;
-    const startNum = firstBroken + 1; // 1-indexed
+    const startNum = firstBroken + 1;
     const endNum = brokenIndices[brokenIndices.length - 1] + 1;
     const count = brokenIndices.length;
 
@@ -2338,14 +2354,24 @@ REGLAS:
     else if (startNum <= 14) act = 'climax';
     else act = 'resolution';
 
-    const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}\n${lastGood ? '\nEscena anterior (' + lastGood.num + '): "' + lastGood.narration + '"' : ''}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: ${totalScenes} escenas.\nCada escena DEBE tener narration (EXACTAMENTE 70-80 palabras, primera persona, 5-7 frases), imagePromptA e imagePromptB (ambos en inglés, empezando con "Scene with [nombre]:" e incluyendo ropa/cabello/expresión específicos).\nDevuelve SOLO: {"scenes":[{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"...","imagePromptA":"Scene with [nombre]: ...","imagePromptB":"Scene with [nombre]: ..."}, ...]}`;
+    const lastGoodRef = lastGood
+      ? (isDialogue
+          ? `\nEscena anterior (${lastGood.num}): ${(lastGood.dialogue||[]).map(d=>d.character+': '+d.line).join(' / ')}`
+          : `\nEscena anterior (${lastGood.num}): "${lastGood.narration}"`)
+      : '';
+
+    const sceneExample = isDialogue
+      ? `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","dialogue":[{"character":"nombre","line":"línea en español"},{"character":"nombre","line":"respuesta"}],"imagePromptA":"Scene with [nombre]: ...","imagePromptB":"Scene with [nombre]: ..."}`
+      : `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"70-80 palabras primera persona...","imagePromptA":"Scene with [nombre]: ...","imagePromptB":"Scene with [nombre]: ..."}`;
+
+    const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: ${totalScenes} escenas.\n${isDialogue ? 'Cada escena DEBE tener dialogue (array 3-5 líneas en español)' : 'Cada escena DEBE tener narration (EXACTAMENTE 70-80 palabras, primera persona, 5-7 frases)'}, imagePromptA e imagePromptB (ambos en inglés).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
 
     let newScenes = [];
     for (let attempt = 0; attempt < 3 && newScenes.length < count; attempt++) {
       try {
         const raw = await callGemini(prompt, sysBase);
         const parsed = safeParseJSON(raw);
-        const arr = (parsed.scenes || []).filter(s => s && s.narration && s.imagePromptA && s.imagePromptB && s.title);
+        const arr = (parsed.scenes || []).filter(s => s && (isDialogue ? s.dialogue?.length : s.narration) && s.imagePromptA && s.imagePromptB && s.title);
         if (arr.length >= count) {
           newScenes = arr.slice(0, count).map((s, i) => ({
             ...s,
