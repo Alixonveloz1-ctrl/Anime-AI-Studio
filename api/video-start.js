@@ -44,7 +44,7 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { prompt, imageA, imageB, aspectRatio = '9:16' } = req.body; // imageA = the specific image for this video
+    const { prompt, imageA, imageB, aspectRatio = '9:16', generateAudio = false } = req.body; // imageA = the specific image for this video
     if (!prompt) return res.status(400).json({ error: 'prompt requerido' });
 
     const saRaw = process.env.GCP_SERVICE_ACCOUNT;
@@ -70,7 +70,7 @@ module.exports = async function handler(req, res) {
         aspectRatio: (aspectRatio === '16:9') ? '16:9' : '9:16',
         sampleCount: 1,
         durationSeconds: 8,
-        generateAudio: false,
+        generateAudio: generateAudio === true,
         storageUri: `gs://${bucket}/veo-outputs/`,
       },
     };
