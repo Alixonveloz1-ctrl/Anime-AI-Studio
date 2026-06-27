@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.65 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.66 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -605,7 +605,12 @@ function buildVideoPrompt(s, ab) {
 
 function saveState() {
   if (!state.projectId) return;
-  const data = { universe: state.universe, characters: state.characters, scenes: state.scenes };
+  const data = {
+    universe: state.universe,
+    characters: state.characters,
+    scenes: state.scenes,
+    storyMode: document.getElementById('storyMode')?.value || 'narracion',
+  };
   localStorage.setItem(`proj_${state.projectId}`, JSON.stringify(data));
   const i = projects.findIndex(p => p.id === state.projectId);
   if (i >= 0) { projects[i].name = state.universe?.title || projects[i].name; projects[i].updated = Date.now(); saveProjects(); }
@@ -614,7 +619,15 @@ function loadStateFor(pid) {
   const raw = localStorage.getItem(`proj_${pid}`);
   state = { projectId: pid, universe: null, characters: [], scenes: [] };
   if (!raw) return;
-  try { const d = JSON.parse(raw); state.universe = d.universe; state.characters = d.characters || []; state.scenes = d.scenes || []; } catch(e) {}
+  try {
+    const d = JSON.parse(raw);
+    state.universe    = d.universe;
+    state.characters  = d.characters || [];
+    state.scenes      = d.scenes || [];
+    // Restore storyMode selector to saved value
+    const sm = document.getElementById('storyMode');
+    if (sm && d.storyMode) sm.value = d.storyMode;
+  } catch(e) {}
 }
 function saveProjects() { localStorage.setItem('projects_index', JSON.stringify(projects)); }
 function loadProjects() { try { projects = JSON.parse(localStorage.getItem('projects_index') || '[]'); } catch(e) { projects = []; } }
