@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.62 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.63 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -300,6 +300,12 @@
   <div class="panel active" id="panel-universo">
     <div class="card">
       <h2>🌌 Crear Universo</h2>
+
+      <label>Modo de historia</label>
+      <select id="storyMode">
+        <option value="narracion">🎙️ Narración — Una voz narra la historia</option>
+        <option value="dialogos">💬 Diálogos — Los personajes hablan en el video (audio de Veo)</option>
+      </select>
 
       <label>Demografía (público objetivo)</label>
       <select id="demoSelect">
@@ -582,12 +588,19 @@ const STUDIO_BY_DEMO = {
 };
 
 function buildVideoPrompt(s, ab) {
-  const base    = (ab === 'B' ? (s.imagePromptB || s.imagePromptA) : (s.imagePromptA || s.narration) || '').replace(/"/g,'').slice(0, 280);
-  const genre   = document.getElementById('generoSelect')?.value || 'accion';
-  const demo    = document.getElementById('demoSelect')?.value   || 'shonen';
-  const studio  = STUDIO_BY_GENRE[genre]  || STUDIO_BY_GENRE['accion'];
-  const demoRef = STUDIO_BY_DEMO[demo]    || '';
-  return `2D anime animation, hand-drawn style, ${studio}${demoRef}. Smooth fluid motion, expressive character movement, vibrant cel-shading colors. NOT 3D, NOT CGI, NOT video game graphics, NOT realistic rendering. Pure 2D anime art style. ${base}. Cinematic anime scene, professional quality animation.`;
+  const base      = (ab === 'B' ? (s.imagePromptB || s.imagePromptA) : (s.imagePromptA || s.narration) || '').replace(/"/g,'').slice(0, 240);
+  const genre     = document.getElementById('generoSelect')?.value || 'accion';
+  const demo      = document.getElementById('demoSelect')?.value   || 'shonen';
+  const storyMode = document.getElementById('storyMode')?.value    || 'narracion';
+  const studio    = STUDIO_BY_GENRE[genre]  || STUDIO_BY_GENRE['accion'];
+  const demoRef   = STUDIO_BY_DEMO[demo]    || '';
+  const noCamera  = 'Characters face each other or look at their environment, NOT at the camera. Side or three-quarter angle, never direct eye contact with viewer.';
+  const styleBase = `2D anime animation, hand-drawn style, ${studio}${demoRef}. Smooth fluid motion, expressive character movement, vibrant cel-shading colors. NOT 3D, NOT CGI, NOT video game graphics. Pure 2D anime art style. ${noCamera} ${base}.`;
+  if (storyMode === 'dialogos' && s.dialogue?.length) {
+    const lines = s.dialogue.map(d => `${d.character} says in Spanish: "${d.line}"`).join('. ');
+    return `${styleBase} DIALOGUE IN SPANISH — ${lines}. Characters speak with natural voice acting in Spanish language. Include ambient sound.`;
+  }
+  return `${styleBase} Cinematic anime scene, professional quality animation.`;
 }
 
 function saveState() {
@@ -1286,9 +1299,21 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     const allowsSuper2 = subgenres.some(s => ['psicologico','reencarnacion','viaje_tiempo','misterio'].includes(s));
 
     // Estilo de narración según el tono del subgénero
-    const isGrounded = hasSliceOfLife && !allowsSuper && !allowsSuper2;
+    const isGrounded  = hasSliceOfLife && !allowsSuper && !allowsSuper2;
+    const storyMode   = document.getElementById('storyMode')?.value || 'narracion';
+    const isDialogue  = storyMode === 'dialogos';
 
-    const sysBase = `Eres un guionista de anime para reels de Facebook. Escribes narración en PRIMERA PERSONA del protagonista, como si él contara su historia directamente al espectador.
+    const sysBase = isDialogue
+      ? `Eres un guionista de anime profesional. Escribes DIÁLOGOS entre personajes para que Veo AI los ejecute con audio en español integrado en el video.
+
+ESTILO DE DIÁLOGOS:
+- Diálogos en ESPAÑOL, naturales y expresivos como anime doblado al español latino
+- 3-5 intercambios por escena, máximo 12 palabras por línea de diálogo
+- Cada línea avanza la historia o revela carácter/emoción del personaje
+- Los personajes hablan entre sí, nunca con el espectador
+- Tono apropiado al género: dramático en acción, tierno en romance, tenso en terror
+- Las líneas deben sonar naturales al hablarse, no como texto escrito`
+      : `Eres un guionista de anime para reels de Facebook. Escribes narración en PRIMERA PERSONA del protagonista, como si él contara su historia directamente al espectador.
 
 ESTILO DE NARRACIÓN:
 - PRIMERA PERSONA (YO) — el protagonista habla directamente: "Yo me llamo...", "Desperté en...", "No podía creer lo que veía..."
@@ -1437,7 +1462,9 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
     const charRefShort = state.characters.map(c => c.name).join(', ');
 
     // 15 scenes x 2 images = 30 images, ~10 min total
-    const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"EXACTAMENTE 70-80 palabras en primera persona (YO). 5-7 frases naturales, máximo 16 palabras por frase. Equivale a 30 segundos de audio narrado.","imagePromptA":"Scene with [nombre exacto del personaje]: [descripción visual detallada incluyendo su ropa y apariencia específica]","imagePromptB":"Scene with [nombres exactos]: [segundo momento visual distinto]"}`;
+    const sceneShape = isDialogue
+      ? `{"id":"s1","num":1,"act":"cold_open","title":"título corto","dialogue":[{"character":"nombre exacto","line":"línea en español natural, máx 12 palabras"},{"character":"nombre exacto","line":"respuesta en español natural, máx 12 palabras"}],"imagePromptA":"Scene with [nombre exacto del personaje]: [descripción visual detallada incluyendo ropa y apariencia]","imagePromptB":"Scene with [nombres exactos]: [segundo momento visual distinto]"}`
+      : `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"EXACTAMENTE 70-80 palabras en primera persona (YO). 5-7 frases naturales, máximo 16 palabras por frase. Equivale a 30 segundos de audio narrado.","imagePromptA":"Scene with [nombre exacto del personaje]: [descripción visual detallada incluyendo su ropa y apariencia específica]","imagePromptB":"Scene with [nombres exactos]: [segundo momento visual distinto]"}`;
 
     async function generateSceneBatch(batchPrompt, expectedCount, startNum, batchName) {
       let bestResult = [];
@@ -1446,7 +1473,7 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
           const raw = await callGemini(batchPrompt, sysBase + genreExtra);
           const parsed = safeParseJSON(raw);
           const arr = parsed.scenes || [];
-          const valid = arr.filter(s => s && s.narration && s.imagePromptA && s.imagePromptB && s.title);
+          const valid = arr.filter(s => s && (isDialogue ? s.dialogue?.length : s.narration) && s.imagePromptA && s.imagePromptB && s.title);
           if (valid.length > bestResult.length) bestResult = valid;
           if (valid.length >= expectedCount) {
             return valid.slice(0, expectedCount).map((s, i) => ({
@@ -1464,17 +1491,21 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
         const result = bestResult.map((s, i) => ({ ...s, id: `s${startNum + i}`, num: startNum + i, act: s.act || 'act1' }));
         while (result.length < expectedCount) {
           const num = startNum + result.length;
-          result.push({ id: `s${num}`, num, act: 'act1', title: `Escena ${num} (pendiente)`, narration: '', imagePromptA: '', imagePromptB: '' });
+          result.push({ id: `s${num}`, num, act: 'act1', title: `Escena ${num} (pendiente)`, narration: '', dialogue: [], imagePromptA: '', imagePromptB: '' });
         }
         return result;
       }
       return Array.from({ length: expectedCount }, (_, i) => ({
         id: `s${startNum + i}`, num: startNum + i, act: 'act1',
-        title: `Escena ${startNum + i} (pendiente)`, narration: '', imagePromptA: '', imagePromptB: '',
+        title: `Escena ${startNum + i} (pendiente)`, narration: '', dialogue: [], imagePromptA: '', imagePromptB: '',
       }));
     }
 
-    const batchRules = `REGLAS ESTRUCTURA:
+    const batchRules = isDialogue ? `REGLAS ESTRUCTURA (MODO DIÁLOGOS):
+- 15 escenas en total
+- dialogue: array con 3-5 objetos {"character":"nombre exacto","line":"línea en español"}
+- Las líneas deben sonar naturales al ser habladas, máximo 12 palabras por línea
+- imagePromptA = primer momento de la escena` : `REGLAS ESTRUCTURA:
 - 15 escenas en total, 7.5 minutos de video (30 segundos por escena × 15)
 - Narración: EXACTAMENTE 70-80 palabras en PRIMERA PERSONA (YO). 5-7 frases naturales, máximo 16 palabras por frase. Este texto se narrará en audio y debe cubrir exactamente 30 segundos.
 - imagePromptA = primer momento de la escena
@@ -1662,12 +1693,18 @@ async function renderScenes() {
         ${imgCol(s.id, s.num, 'A', imgA, vidUrlA)}
         ${imgCol(s.id, s.num, 'B', imgB, vidUrlB)}
       </div>
-      <div class="scene-narration">${s.narration}</div>
+      <div class="scene-narration">
+        ${(document.getElementById('storyMode')?.value === 'dialogos' && s.dialogue?.length)
+          ? s.dialogue.map(d => `<span style="color:var(--accent2);font-weight:600">${d.character}:</span> "${d.line}"`).join('<br>')
+          : (s.narration || '')}
+      </div>
       <div class="scene-actions">
-        ${audData
-          ? `<button class="btn-sec" onclick="playSceneAudio('${s.id}')">▶️ Reproducir</button>
-             <button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🔄 Audio</button>`
-          : `<button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🎙️ Audio</button>`
+        ${(document.getElementById('storyMode')?.value !== 'dialogos')
+          ? (audData
+            ? `<button class="btn-sec" onclick="playSceneAudio('${s.id}')">▶️ Reproducir</button>
+               <button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🔄 Audio</button>`
+            : `<button class="btn-sec" onclick="generateSceneAudio('${s.id}')">🎙️ Audio</button>`)
+          : `<span style="font-size:10px;color:var(--text-dim)">🎙️ Audio integrado en video</span>`
         }
       </div>
     </div>
@@ -1980,6 +2017,7 @@ window.generateSceneVideo = async function(sceneId, ab) {
     const imgData = await dbGet(imgKey);
 
     const aspectRatio = document.getElementById('aspectRatio')?.value || '9:16';
+    const isDialogueMode = (document.getElementById('storyMode')?.value || 'narracion') === 'dialogos';
     const res = await fetch('/api/video-start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1987,6 +2025,7 @@ window.generateSceneVideo = async function(sceneId, ab) {
         prompt: buildVideoPrompt(s, ab),
         imageA: imgData || null,
         aspectRatio,
+        generateAudio: isDialogueMode,
       }),
     });
     const startData = await res.json();
