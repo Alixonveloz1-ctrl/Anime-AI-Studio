@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.66 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.68 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -588,7 +588,7 @@ const STUDIO_BY_DEMO = {
 };
 
 function buildVideoPrompt(s, ab) {
-  const base      = (ab === 'B' ? (s.imagePromptB || s.imagePromptA) : (s.imagePromptA || s.narration) || '').replace(/"/g,'').slice(0, 240);
+  const base      = (ab === 'B' ? (s.imagePromptB || s.imagePromptA) : (s.imagePromptA || s.narration) || '').replace(/"/g,'').slice(0, 200);
   const genre     = document.getElementById('generoSelect')?.value || 'accion';
   const demo      = document.getElementById('demoSelect')?.value   || 'shonen';
   const storyMode = document.getElementById('storyMode')?.value    || 'narracion';
@@ -596,10 +596,24 @@ function buildVideoPrompt(s, ab) {
   const demoRef   = STUDIO_BY_DEMO[demo]    || '';
   const noCamera  = 'Characters face each other or look at their environment, NOT at the camera. Side or three-quarter angle, never direct eye contact with viewer.';
   const styleBase = `2D anime animation, hand-drawn style, ${studio}${demoRef}. Smooth fluid motion, expressive character movement, vibrant cel-shading colors. NOT 3D, NOT CGI, NOT video game graphics. Pure 2D anime art style. ${noCamera} ${base}.`;
+
   if (storyMode === 'dialogos' && s.dialogue?.length) {
-    const lines = s.dialogue.map(d => `${d.character} says in Spanish: "${d.line}"`).join('. ');
-    return `${styleBase} DIALOGUE IN SPANISH — ${lines}. Characters speak with natural voice acting in Spanish language. Include ambient sound.`;
+    // Split dialogue: A gets first half, B gets second half
+    const half     = Math.ceil(s.dialogue.length / 2);
+    const myLines  = ab === 'A' ? s.dialogue.slice(0, half) : s.dialogue.slice(half);
+    const useLines = myLines.length > 0 ? myLines : s.dialogue;
+
+    // Add character appearance from state so Veo doesn't invent them
+    const charNames = [...new Set(useLines.map(d => d.character))];
+    const charDescs = charNames.map(name => {
+      const ch = (state.characters || []).find(c => c.name === name);
+      return ch ? `${name}: ${ch.appearance}` : name;
+    }).join('. ');
+
+    const lines = useLines.map(d => `${d.character} says in Spanish: "${d.line}"`).join('. ');
+    return `${styleBase} CHARACTER APPEARANCES — ${charDescs}. DIALOGUE IN SPANISH — ${lines}. Characters speak with natural voice acting in Spanish. Include ambient sound and music.`;
   }
+
   return `${styleBase} Cinematic anime scene, professional quality animation.`;
 }
 
@@ -1476,7 +1490,7 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
 
     // 15 scenes x 2 images = 30 images, ~10 min total
     const sceneShape = isDialogue
-      ? `{"id":"s1","num":1,"act":"cold_open","title":"título corto","dialogue":[{"character":"nombre exacto","line":"línea en español natural, máx 12 palabras"},{"character":"nombre exacto","line":"respuesta en español natural, máx 12 palabras"}],"imagePromptA":"Scene with [nombre exacto del personaje]: [descripción visual detallada incluyendo ropa y apariencia]","imagePromptB":"Scene with [nombres exactos]: [segundo momento visual distinto]"}`
+      ? `{"id":"s1","num":1,"act":"cold_open","title":"título corto","dialogue":[{"character":"nombre exacto","line":"línea en español natural, máx 12 palabras"},{"character":"nombre exacto","line":"respuesta en español natural, máx 12 palabras"}],"imagePromptA":"Scene with [TODOS los nombres de personajes del diálogo]: [primer momento visual — TODOS los personajes presentes, descripción de ropa y apariencia de cada uno]","imagePromptB":"Scene with [TODOS los nombres de personajes del diálogo]: [segundo momento visual distinto — los MISMOS personajes, mismo lugar, diferente momento de la conversación]"}`
       : `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"EXACTAMENTE 70-80 palabras en primera persona (YO). 5-7 frases naturales, máximo 16 palabras por frase. Equivale a 30 segundos de audio narrado.","imagePromptA":"Scene with [nombre exacto del personaje]: [descripción visual detallada incluyendo su ropa y apariencia específica]","imagePromptB":"Scene with [nombres exactos]: [segundo momento visual distinto]"}`;
 
     async function generateSceneBatch(batchPrompt, expectedCount, startNum, batchName) {
@@ -1518,7 +1532,9 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
 - 15 escenas en total
 - dialogue: array con 3-5 objetos {"character":"nombre exacto","line":"línea en español"}
 - Las líneas deben sonar naturales al ser habladas, máximo 12 palabras por línea
-- imagePromptA = primer momento de la escena` : `REGLAS ESTRUCTURA:
+- CRÍTICO: imagePromptA e imagePromptB deben mostrar SIEMPRE a TODOS los personajes del diálogo juntos en la misma imagen. Si el diálogo es entre Kai y Yuki, AMBAS imágenes deben tener "Scene with Kai and Yuki:". Nunca una imagen con solo un personaje cuando hay diálogo entre varios.
+- imagePromptA = primer momento de la conversación (todos los personajes presentes)
+- imagePromptB = segundo momento distinto de la misma conversación (mismos personajes)` : `REGLAS ESTRUCTURA:
 - 15 escenas en total, 7.5 minutos de video (30 segundos por escena × 15)
 - Narración: EXACTAMENTE 70-80 palabras en PRIMERA PERSONA (YO). 5-7 frases naturales, máximo 16 palabras por frase. Este texto se narrará en audio y debe cubrir exactamente 30 segundos.
 - imagePromptA = primer momento de la escena
@@ -2374,7 +2390,7 @@ REGLAS:
       : '';
 
     const sceneExample = isDialogue
-      ? `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","dialogue":[{"character":"nombre","line":"línea en español"},{"character":"nombre","line":"respuesta"}],"imagePromptA":"Scene with [nombre]: ...","imagePromptB":"Scene with [nombre]: ..."}`
+      ? `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","dialogue":[{"character":"nombre","line":"línea en español"},{"character":"nombre","line":"respuesta"}],"imagePromptA":"Scene with [TODOS los personajes del diálogo]: [primer momento — todos presentes]","imagePromptB":"Scene with [TODOS los personajes del diálogo]: [segundo momento — mismos personajes]"}`
       : `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"70-80 palabras primera persona...","imagePromptA":"Scene with [nombre]: ...","imagePromptB":"Scene with [nombre]: ..."}`;
 
     const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: ${totalScenes} escenas.\n${isDialogue ? 'Cada escena DEBE tener dialogue (array 3-5 líneas en español)' : 'Cada escena DEBE tener narration (EXACTAMENTE 70-80 palabras, primera persona, 5-7 frases)'}, imagePromptA e imagePromptB (ambos en inglés).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
