@@ -103,11 +103,8 @@ export default async function handler(req) {
     const projectId = sa.project_id;
     const token = await getAccessToken(sa);
 
-    const voiceMap = {
-      gemini_male: 'Charon', gemini_female: 'Kore',
-      gemini_male2: 'Fenrir', gemini_female2: 'Aoede',
-    };
-    const voiceName = voiceMap[voice] || 'Charon';
+    // Voice IDs follow format gemini_{Name} — strip prefix to get Gemini voice name
+    const voiceName = voice.startsWith('gemini_') ? voice.replace('gemini_', '') : 'Orus';
 
     const spd = parseFloat(speed) || 1.0;
     const speedTag = spd <= 0.6 ? '[slow] ' : spd >= 1.8 ? '[fast] '
