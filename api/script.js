@@ -2,7 +2,6 @@
 // SCRIPT GENERATION PROXY — Gemini 2.0 Flash via Vertex AI
 // Replaces Claude for all story/scene/character generation
 // ════════════════════════════════════════════════════════════════
-export const config = { runtime: 'edge' };
 
 const CORS = {
   'Content-Type': 'application/json',
@@ -75,15 +74,28 @@ export default async function handler(req) {
       },
     };
 
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'X-Goog-User-Project': projectId,
-      },
-      body: JSON.stringify(body),
-    });
+    // Timeout: abort Gemini call after 55 seconds (under vercel.json maxDuration:60)
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 55000);
+    let r;
+    try {
+      r = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-Goog-User-Project': projectId,
+        },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+    } catch(fetchErr) {
+      if (fetchErr.name === 'AbortError')
+        return new Response(JSON.stringify({ error: 'Gemini tardó más de 55 segundos — intenta de nuevo o reduce el texto.' }), { status: 504, headers: CORS });
+      throw fetchErr;
+    } finally {
+      clearTimeout(timer);
+    }
 
     const d = await r.json();
     if (!r.ok) {
