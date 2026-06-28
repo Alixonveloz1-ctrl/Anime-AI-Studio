@@ -98,6 +98,31 @@ export default async function handler(req) {
       return new Response(JSON.stringify({ audioData: b64ToBase64(buf), mimeType: 'audio/mpeg' }), { headers: CORS });
     }
 
+    // ─── Google Cloud TTS (Neural2 / WaveNet) ───
+    if (voice.startsWith('gcp_')) {
+      const sa = JSON.parse((process.env.GCP_SERVICE_ACCOUNT || '').trim());
+      const token = await getAccessToken(sa);
+      const voiceName = voice.replace('gcp_', ''); // e.g. "es-US-Neural2-B"
+      const langCode  = voiceName.slice(0, 5);     // e.g. "es-US"
+      const spd = parseFloat(speed) || 1.0;
+
+      const res = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: { text },
+          voice: { languageCode: langCode, name: voiceName },
+          audioConfig: { audioEncoding: 'LINEAR16', speakingRate: spd },
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.audioContent)
+        return new Response(JSON.stringify({ error: `GCP TTS: ${data.error?.message || res.status}` }), { status: res.status || 500, headers: CORS });
+
+      return new Response(JSON.stringify({ audioData: data.audioContent, mimeType: 'audio/wav' }), { headers: CORS });
+    }
+
     // ─── Gemini TTS via Vertex AI ───
     const sa = JSON.parse((process.env.GCP_SERVICE_ACCOUNT || '').trim());
     const projectId = sa.project_id;
