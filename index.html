@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.79 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.80 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -364,7 +364,18 @@
       <label>Concepto semilla (opcional)</label>
       <textarea id="conceptoInput" placeholder="Una idea base que quieras explorar..."></textarea>
 
-      <button class="btn" id="btnGenerarUniverso" style="margin-top:14px">🌌 Generar Universo</button>
+      <button class="btn" id="btnGenerarUniverso" style="margin-top:14px">🌌 Generar Universo Automático</button>
+
+      <!-- ── MI HISTORIA MODE ── -->
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-size:13px;color:var(--text-dim)">¿Tienes tu propia historia?</span>
+        </div>
+        <label style="color:var(--accent2)">📖 Pegar mi propia historia</label>
+        <p style="font-size:11px;color:var(--text-dim);margin:2px 0 8px">La herramienta extrae personajes, divide en 10 escenas y genera todos los prompts automáticamente.</p>
+        <textarea id="miHistoriaInput" placeholder="Pega aquí tu historia completa. Puede ser un resumen, una sinopsis larga, o un guion. Mientras más detalle, mejores los personajes y escenas extraídas..." style="height:160px;resize:vertical;border-color:rgba(0,229,255,0.3)"></textarea>
+        <button class="btn" id="btnAnalizarHistoria" style="margin-top:8px;background:linear-gradient(135deg,#0d2a3a,#0d3a4a);border-color:rgba(0,229,255,0.5)">📖 Analizar Historia y Generar Episodio</button>
+      </div>
 
       <div id="universoDisplay"></div>
     </div>
@@ -1326,6 +1337,100 @@ const MOD_PROMPTS = {
 
 // ════════════════════════════════════════════════════════════════
 // UNIVERSE GENERATION
+// ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// MI HISTORIA — STORY ANALYZER
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btnAnalizarHistoria').addEventListener('click', async () => {
+  const historia = document.getElementById('miHistoriaInput')?.value.trim();
+  if (!historia || historia.length < 100) { showToast('Pega tu historia completa (mínimo 100 caracteres)', 'error'); return; }
+
+  const btn = document.getElementById('btnAnalizarHistoria');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Analizando historia...';
+  const progress = document.getElementById('progressBar');
+  progress.style.display = 'block';
+  const setProg = (pct, msg) => { document.getElementById('progressFill').style.width = pct+'%'; document.getElementById('progressMsg').textContent = msg; };
+
+  try {
+    const genero = document.getElementById('generoSelect')?.value || 'accion';
+    const demo   = document.getElementById('demoSelect')?.value   || 'shonen';
+    const epNum  = state.currentEpisode || 1;
+
+    const TONE_MAP = {
+      accion:'Epic action, physical, adrenaline. Short explosive sentences.',
+      fantasia:'Grand and magical. Wonder mixed with danger.',
+      isekai:'Discovery and growth. System unlocks, underdog rising.',
+      donghua:'Cultivation system. Cold ambitious ascent. Stats and ranks. NOT emotional drama.',
+      videojuego:'Game logic. Levels, skills, boss fights. Concrete stats.',
+      romcom:'Warm, playful, fluttery. Light fun with real emotion.',
+      drama:'Emotional depth. Hard choices. Real relationships.',
+      slice_of_life:'Quiet and warm. Small moments that matter.',
+      terror:'Creeping dread. Short tense sentences.',
+      psicologico:'Unreliable mind. Reality bends.',
+      misterio:'Clues and shadows. Questions accumulate.',
+      deportes:'Competitive fire. Body pushed to its limit.',
+      sci_fi:'Futuristic and analytical.',
+      aventura:'Exploration and discovery.',
+      sobrenatural:'Hidden powers. Danger from beyond.',
+      supervivencia:'Every resource counts. Brutal decisions.',
+    };
+    const tone = TONE_MAP[genero] || 'Match the genre.';
+    const sceneShape = '{"id":"s1","num":1,"act":"cold_open","title":"...","narration":"EXACTLY 75-80 Spanish words, first person YO, hook first sentence, tension at end","imagePromptA":"Scene with [name]: [action, outfit, hair, expression, setting]","imagePromptB":"Scene with [name]: [CONTINUATION of A — same location, 3-5 sec later, next action]"}';
+
+    const sysParse = `You are an expert anime story analyst. Analyze a story and return structured episode data.
+CRITICAL: Return ONLY valid JSON. No markdown, no backticks.
+Field "narration" must be exactly that English spelling.
+GENRE TONE: ${tone}
+Narration: EXACTLY 75-80 Spanish words, first person (YO), hook first, tension at end, max 15 words/sentence.
+Images in English, start "Scene with [name]:", never camera-facing, always action/side angles.
+imagePromptB = direct continuation of imagePromptA, same location, 3-5 seconds later.`;
+
+    setProg(30, 'Gemini analizando historia...');
+    const prompt = 'Analyze this story:\n\n"' + historia + '"\n\nGenre: ' + genero + ' | Demo: ' + demo + '\n\nReturn this JSON:\n{"universe":{"title":"...","genero":"' + genero + '","concepto":"...","conflicto":"...","setting":"..."},"characters":[{"id":"c1","name":"...","role":"...","gender":"female or male","age":"18+","appearance":"detailed visual description for AI image generation","personality":"2 sentences","backstory":"2 sentences"}],"scenes":[' + sceneShape + ']}\n\nRequirements:\n- Extract ALL named characters with detailed visual descriptions\n- EXACTLY 10 scenes: cold_open(1-2), act1(3-5), act2(6-8), climax(9), resolution(10)\n- Scene 10 FINALE: partial resolution + open hook for episode ' + (epNum+1) + '\n- Apply genre tone to every narration';
+
+    const raw  = await callGemini(prompt, sysParse);
+    const data = safeParseJSON(raw);
+    if (!data.universe || !data.characters?.length || !data.scenes?.length)
+      throw new Error('Respuesta incompleta. Intenta de nuevo.');
+
+    // Normalize narración → narration
+    data.scenes.forEach(s => { if (s['narración'] && !s.narration) s.narration = s['narración']; });
+
+    setProg(80, `✅ ${data.characters.length} personajes, ${data.scenes.length} escenas extraídas...`);
+
+    state.universe = data.universe;
+    state.characters = data.characters;
+    if (!state.episodes) state.episodes = {};
+    state.currentEpisode = epNum;
+    state.scenes = data.scenes;
+    state.episodes[epNum] = data.scenes;
+    saveState();
+
+    document.getElementById('universoDisplay').innerHTML = `<div style="margin-top:12px;padding:10px;background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.2);border-radius:8px"><div style="font-weight:600;color:var(--accent)">${data.universe.title}</div><div style="font-size:12px;color:var(--text-dim);margin-top:4px">${data.universe.concepto}</div></div>`;
+
+    renderCharacters();
+    renderScenes();
+    updateEpisodeNav();
+    ['cardGenerarEpisodio','cardPersonajes','cardScenes'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.style.display = 'block';
+    });
+
+    setProg(100, `✅ Historia analizada — ${data.characters.length} personajes, ${data.scenes.length} escenas listas`);
+    showToast('Historia analizada. Genera las imágenes de personajes para referencias visuales.', 'success');
+    setTimeout(() => { progress.style.display = 'none'; setProg(0,''); }, 3000);
+
+  } catch(e) {
+    openErrorModal('Error analizando historia', e.message);
+    progress.style.display = 'none';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '📖 Analizar Historia y Generar Episodio';
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
+// UNIVERSE GENERATOR (auto)
 // ════════════════════════════════════════════════════════════════
 document.getElementById('btnGenerarUniverso').addEventListener('click', async () => {
   const btn = document.getElementById('btnGenerarUniverso');
