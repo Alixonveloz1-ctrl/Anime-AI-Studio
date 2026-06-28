@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.80 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.81 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1347,7 +1347,7 @@ document.getElementById('btnAnalizarHistoria').addEventListener('click', async (
 
   const btn = document.getElementById('btnAnalizarHistoria');
   btn.disabled = true;
-  btn.innerHTML = '<div class="spinner"></div> Analizando historia...';
+  btn.innerHTML = '<div class="spinner"></div> Analizando...';
   const progress = document.getElementById('progressBar');
   progress.style.display = 'block';
   const setProg = (pct, msg) => { document.getElementById('progressFill').style.width = pct+'%'; document.getElementById('progressMsg').textContent = msg; };
@@ -1376,48 +1376,60 @@ document.getElementById('btnAnalizarHistoria').addEventListener('click', async (
       supervivencia:'Every resource counts. Brutal decisions.',
     };
     const tone = TONE_MAP[genero] || 'Match the genre.';
-    const sceneShape = '{"id":"s1","num":1,"act":"cold_open","title":"...","narration":"EXACTLY 75-80 Spanish words, first person YO, hook first sentence, tension at end","imagePromptA":"Scene with [name]: [action, outfit, hair, expression, setting]","imagePromptB":"Scene with [name]: [CONTINUATION of A — same location, 3-5 sec later, next action]"}';
 
-    const sysParse = `You are an expert anime story analyst. Analyze a story and return structured episode data.
-CRITICAL: Return ONLY valid JSON. No markdown, no backticks.
-Field "narration" must be exactly that English spelling.
+    // ── CALL 1: Extract universe + characters ──
+    setProg(15, 'Paso 1/2: Extrayendo universo y personajes...');
+
+    const sysStep1 = `You are an anime story analyst. Extract structured data from a story.
+Return ONLY valid JSON, no markdown, no backticks, no explanations.`;
+
+    const promptStep1 = 'Extract from this story:\n\n"' + historia + '"\n\nReturn ONLY this JSON:\n{"universe":{"title":"story title","genero":"' + genero + '","concepto":"core concept 1-2 sentences","conflicto":"central conflict 1-2 sentences","setting":"world/location description"},"characters":[{"id":"c1","name":"exact name from story","role":"protagonist/antagonist/supporting","gender":"female or male","age":"numeric 18+","appearance":"detailed visual description: hair color and style, eye color, height, build, outfit, distinctive features — specific enough for AI image generation","personality":"2 sentences","backstory":"2 sentences from the story"}]}\n\nExtract ALL named characters. Be specific with visual descriptions.';
+
+    const raw1   = await callGemini(promptStep1, sysStep1);
+    const data1  = safeParseJSON(raw1);
+    if (!data1.universe || !data1.characters?.length)
+      throw new Error('No se pudieron extraer personajes. Verifica que tu historia tenga personajes con nombres.');
+
+    state.universe   = data1.universe;
+    state.characters = data1.characters;
+    saveState();
+    renderCharacters();
+    document.getElementById('universoDisplay').innerHTML = `<div style="margin-top:12px;padding:10px;background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.2);border-radius:8px"><div style="font-weight:600;color:var(--accent)">${data1.universe.title}</div><div style="font-size:12px;color:var(--text-dim);margin-top:4px">${data1.universe.concepto}</div></div>`;
+
+    setProg(50, `✅ ${data1.characters.length} personajes extraídos — Paso 2/2: Generando escenas...`);
+
+    // ── CALL 2: Generate 10 scenes ──
+    const charRef  = data1.characters.map(ch => '- ' + ch.name + ' (' + ch.role + '): ' + ch.appearance).join('\n');
+    const sysStep2 = `You are a viral anime screenwriter. Divide a story into exactly 10 anime scenes.
+Return ONLY valid JSON. Field must be called "narration" (English, no accent).
 GENRE TONE: ${tone}
-Narration: EXACTLY 75-80 Spanish words, first person (YO), hook first, tension at end, max 15 words/sentence.
-Images in English, start "Scene with [name]:", never camera-facing, always action/side angles.
-imagePromptB = direct continuation of imagePromptA, same location, 3-5 seconds later.`;
+NARRATION: EXACTLY 75-80 Spanish words, first person (YO), hook first sentence, tension at end. Max 15 words/sentence.
+IMAGE PROMPTS in English. Start with "Scene with [name]:". Never camera-facing. Side/3-quarter angles.
+imagePromptB = direct continuation of imagePromptA, same location, 3-5 seconds later, next action.`;
 
-    setProg(30, 'Gemini analizando historia...');
-    const prompt = 'Analyze this story:\n\n"' + historia + '"\n\nGenre: ' + genero + ' | Demo: ' + demo + '\n\nReturn this JSON:\n{"universe":{"title":"...","genero":"' + genero + '","concepto":"...","conflicto":"...","setting":"..."},"characters":[{"id":"c1","name":"...","role":"...","gender":"female or male","age":"18+","appearance":"detailed visual description for AI image generation","personality":"2 sentences","backstory":"2 sentences"}],"scenes":[' + sceneShape + ']}\n\nRequirements:\n- Extract ALL named characters with detailed visual descriptions\n- EXACTLY 10 scenes: cold_open(1-2), act1(3-5), act2(6-8), climax(9), resolution(10)\n- Scene 10 FINALE: partial resolution + open hook for episode ' + (epNum+1) + '\n- Apply genre tone to every narration';
+    const sceneShape = '{"id":"s1","num":1,"act":"cold_open","title":"...","narration":"EXACTLY 75-80 Spanish words first person","imagePromptA":"Scene with [name]: [action outfit hair expression setting]","imagePromptB":"Scene with [name]: [continuation of A same location next action]"}';
+    const promptStep2 = 'Story summary:\n' + data1.universe.concepto + '\n\nConflict: ' + data1.universe.conflicto + '\n\nCharacters:\n' + charRef + '\n\nFull story:\n"' + historia.slice(0, 3000) + '"\n\nDivide into EXACTLY 10 scenes:\n- 1-2: cold_open\n- 3-5: act1\n- 6-8: act2\n- 9: climax\n- 10: FINALE (partial resolution + open hook for next episode)\n\nReturn ONLY: {"scenes":[' + sceneShape + ',...]} with exactly 10 objects numbered 1-10.';
 
-    const raw  = await callGemini(prompt, sysParse);
-    const data = safeParseJSON(raw);
-    if (!data.universe || !data.characters?.length || !data.scenes?.length)
-      throw new Error('Respuesta incompleta. Intenta de nuevo.');
+    const raw2  = await callGemini(promptStep2, sysStep2);
+    const data2 = safeParseJSON(raw2);
+    const scenes = (data2.scenes || []);
+    scenes.forEach(s => { if (s['narración'] && !s.narration) s.narration = s['narración']; });
+    if (!scenes.length) throw new Error('No se generaron escenas. Intenta de nuevo.');
 
-    // Normalize narración → narration
-    data.scenes.forEach(s => { if (s['narración'] && !s.narration) s.narration = s['narración']; });
-
-    setProg(80, `✅ ${data.characters.length} personajes, ${data.scenes.length} escenas extraídas...`);
-
-    state.universe = data.universe;
-    state.characters = data.characters;
     if (!state.episodes) state.episodes = {};
     state.currentEpisode = epNum;
-    state.scenes = data.scenes;
-    state.episodes[epNum] = data.scenes;
+    state.scenes = scenes;
+    state.episodes[epNum] = scenes;
     saveState();
-
-    document.getElementById('universoDisplay').innerHTML = `<div style="margin-top:12px;padding:10px;background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.2);border-radius:8px"><div style="font-weight:600;color:var(--accent)">${data.universe.title}</div><div style="font-size:12px;color:var(--text-dim);margin-top:4px">${data.universe.concepto}</div></div>`;
-
-    renderCharacters();
     renderScenes();
     updateEpisodeNav();
+
     ['cardGenerarEpisodio','cardPersonajes','cardScenes'].forEach(id => {
       const el = document.getElementById(id); if (el) el.style.display = 'block';
     });
 
-    setProg(100, `✅ Historia analizada — ${data.characters.length} personajes, ${data.scenes.length} escenas listas`);
-    showToast('Historia analizada. Genera las imágenes de personajes para referencias visuales.', 'success');
+    setProg(100, `✅ ${data1.characters.length} personajes · ${scenes.length} escenas listas`);
+    showToast('Historia analizada. Genera las imágenes de personajes antes de las escenas.', 'success');
     setTimeout(() => { progress.style.display = 'none'; setProg(0,''); }, 3000);
 
   } catch(e) {
