@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.84 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.85 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -366,16 +366,6 @@
 
       <button class="btn" id="btnGenerarUniverso" style="margin-top:14px">🌌 Generar Universo Automático</button>
 
-      <!-- ── MI HISTORIA MODE ── -->
-      <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08)">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <span style="font-size:13px;color:var(--text-dim)">¿Tienes tu propia historia?</span>
-        </div>
-        <label style="color:var(--accent2)">📖 Pegar mi propia historia</label>
-        <p style="font-size:11px;color:var(--text-dim);margin:2px 0 8px">La herramienta extrae personajes, divide en 10 escenas y genera todos los prompts automáticamente.</p>
-        <textarea id="miHistoriaInput" placeholder="Pega aquí tu historia completa. Puede ser un resumen, una sinopsis larga, o un guion. Mientras más detalle, mejores los personajes y escenas extraídas..." style="height:160px;resize:vertical;border-color:rgba(0,229,255,0.3)"></textarea>
-        <button class="btn" id="btnAnalizarHistoria" style="margin-top:8px;background:linear-gradient(135deg,#0d2a3a,#0d3a4a);border-color:rgba(0,229,255,0.5)">📖 Analizar Historia y Generar Episodio</button>
-      </div>
 
       <div id="universoDisplay"></div>
     </div>
@@ -1349,84 +1339,6 @@ const MOD_PROMPTS = {
 // UNIVERSE GENERATION
 // ════════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════════
-// MI HISTORIA — STORY ANALYZER
-// ════════════════════════════════════════════════════════════════
-document.getElementById('btnAnalizarHistoria').addEventListener('click', async () => {
-  const historia = (document.getElementById('miHistoriaInput')?.value || '').trim();
-  if (historia.length < 50) { showToast('Pega tu historia primero', 'error'); return; }
-
-  const btn = document.getElementById('btnAnalizarHistoria');
-  btn.disabled = true;
-  btn.innerHTML = '<div class="spinner"></div> Analizando...';
-  const prog = document.getElementById('progressBar');
-  prog.style.display = 'block';
-  const setPr = (p, m) => { document.getElementById('progressFill').style.width = p+'%'; document.getElementById('progressMsg').textContent = m; };
-
-  try {
-    const genero = document.getElementById('generoSelect')?.value || 'accion';
-    const epNum  = state.currentEpisode || 1;
-
-    // Truncate story — max 1500 chars to stay within Gemini limits
-    const txt = historia.length > 1500 ? historia.slice(0, 1500) + '...' : historia;
-
-    // ── CALL 1: Universe + Characters ──
-    setPr(20, 'Paso 1/2: Extrayendo personajes...');
-    showToast('Analizando historia — Paso 1/2...', 'success');
-
-    const r1 = await callGemini(
-      'Story: "' + txt + '"\n\nExtract and return JSON:\n{"universe":{"title":"title","genero":"' + genero + '","concepto":"1 sentence","conflicto":"1 sentence","setting":"location"},"characters":[{"id":"c1","name":"name","role":"role","gender":"female or male","age":"18+","appearance":"hair, eyes, outfit, build","personality":"1 sentence","backstory":"1 sentence"}]}\nInclude all named characters.',
-      'Extract story data. Return ONLY valid JSON, no markdown.'
-    );
-
-    const d1 = safeParseJSON(r1);
-    if (!d1.universe || !d1.characters?.length) throw new Error('No se encontraron personajes. ¿La historia tiene personajes con nombres?');
-
-    state.universe   = d1.universe;
-    state.characters = d1.characters;
-    saveState();
-    renderCharacters();
-    document.getElementById('universoDisplay').innerHTML = '<div style="margin-top:10px;padding:8px;background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.2);border-radius:6px"><b style="color:var(--accent)">' + d1.universe.title + '</b><br><span style="font-size:12px;color:var(--text-dim)">' + d1.universe.concepto + '</span></div>';
-
-    setPr(55, 'Paso 2/2: Generando 10 escenas...');
-    showToast('Paso 2/2: Generando escenas...', 'success');
-
-    // ── CALL 2: 10 Scenes ──
-    const chars = d1.characters.map(ch => ch.name + ' (' + ch.role + '): ' + ch.appearance).join('; ');
-    const tones = {accion:'epic action',fantasia:'grand magical',isekai:'system unlocks underdog',donghua:'cultivation cold ambition NOT drama',videojuego:'game logic levels',romcom:'warm playful',drama:'emotional depth',terror:'dread tension',slice_of_life:'quiet warm'};
-    const tone  = tones[genero] || 'match the genre';
-
-    const r2 = await callGemini(
-      'Story: "' + txt + '"\nCharacters: ' + chars + '\nGenerate 10 scenes dividing the story evenly.\nReturn ONLY: {"scenes":[{"id":"s1","num":1,"act":"cold_open","title":"short title","narration":"EXACTLY 75-80 Spanish words first person YO hook first tension last","imagePromptA":"Scene with [name]: action outfit hair expression setting side-angle","imagePromptB":"Scene with [name]: continuation of A same location 3sec later next action"},...]}\nScenes: 1-2 cold_open, 3-5 act1, 6-8 act2, 9 climax, 10 finale with open hook. Genre tone: ' + tone + '.',
-      'Generate anime scenes from story. Return ONLY valid JSON. Field must be "narration" (English no accent).'
-    );
-
-    const d2 = safeParseJSON(r2);
-    const scenes = d2.scenes || [];
-    scenes.forEach(s => { if (s['narración'] && !s.narration) s.narration = s['narración']; });
-    if (!scenes.length) throw new Error('No se generaron escenas. Intenta de nuevo.');
-
-    if (!state.episodes) state.episodes = {};
-    state.currentEpisode = epNum;
-    state.scenes = scenes;
-    state.episodes[epNum] = scenes;
-    saveState();
-    renderScenes();
-    updateEpisodeNav();
-    ['cardGenerarEpisodio','cardPersonajes','cardScenes'].forEach(id => { const el=document.getElementById(id); if(el) el.style.display='block'; });
-
-    setPr(100, '✅ ' + d1.characters.length + ' personajes · ' + scenes.length + ' escenas listas');
-    showToast('✅ Historia analizada. Genera imágenes de personajes primero.', 'success');
-    setTimeout(() => { prog.style.display='none'; setPr(0,''); }, 3000);
-
-  } catch(e) {
-    showToast('Error: ' + e.message, 'error');
-    prog.style.display = 'none';
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '📖 Analizar Historia y Generar Episodio';
-  }
-});
-
 // ════════════════════════════════════════════════════════════════
 // UNIVERSE GENERATOR (auto)
 // ════════════════════════════════════════════════════════════════
@@ -1564,21 +1476,44 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     };
     const genreTone = GENRE_TONE[genero] || 'TONE: Match the genre atmosphere — keep it specific and immersive.';
 
-    const sysBase = `You are a viral anime scriptwriter for Facebook Reels. Write stories in FIRST PERSON that hook viewers instantly.
+    const SCENE_ENDING = {
+      accion:       'Each scene ends with an exciting moment, a power move, or a clash that makes you want to see the next second.',
+      fantasia:     'Each scene ends with wonder, a magical discovery, or a new challenge appearing.',
+      isekai:       'Each scene ends with a new skill unlock, a stat reveal, or the protagonist taking the next step up.',
+      donghua:      'Each scene ends with a cultivation breakthrough, a rank reveal, or a cold calculated move forward.',
+      videojuego:   'Each scene ends with a level up, a boss appearing, or a skill unlocking.',
+      mecha:        'Each scene ends with a tactical decision, an incoming threat, or a machine ready to launch.',
+      romcom:       'Each scene ends with a warm moment, an awkward smile, or a feeling the protagonist cannot explain.',
+      drama:        'Each scene ends with emotional weight — a consequence, a realization, or a decision that costs something.',
+      slice_of_life:'Each scene ends with a small warm moment, a quiet realization, or a comfortable feeling.',
+      terror:       'Each scene ends with dread, a wrong detail, or the sense that something is very close.',
+      psicologico:  'Each scene ends with doubt, a reality crack, or a question the protagonist cannot answer.',
+      misterio:     'Each scene ends with a new clue, a contradiction, or a door that just opened.',
+      deportes:     'Each scene ends with competitive fire, a personal record broken, or a rival getting closer.',
+      sci_fi:       'Each scene ends with a discovery, a system alert, or technology doing something unexpected.',
+      aventura:     'Each scene ends with a new horizon, a challenge accepted, or something unknown just ahead.',
+      sobrenatural: 'Each scene ends with a power flaring, a demon appearing, or a secret revealed.',
+      supervivencia:'Each scene ends with a resource found, a threat passing, or the next danger already visible.',
+    };
+    const sceneEnding = SCENE_ENDING[genero] || 'Each scene ends naturally for the genre — no forced drama.';
+
+    const sysBase = `You are a viral anime scriptwriter for Facebook Reels. Write stories in FIRST PERSON that hook viewers.
 
 CRITICAL: The JSON field for story text MUST be called "narration" (English spelling, no accent).
 
-GENRE TONE — THIS IS MANDATORY:
+GENRE TONE — MANDATORY — this defines the entire feel of every scene:
 ${genreTone}
 
-VIRAL FORMULA — write the "narration" field in Spanish:
+SCENE ENDING RULE — apply this to every scene:
+${sceneEnding}
+
+NARRATION RULES — write the "narration" field in Spanish:
 - First person narrator (YO), present or immediate past tense
-- Each scene: EXACTLY 75-80 Spanish words in "narration". Count before responding.
-- FIRST SENTENCE = immediate hook: action, revelation, or strong emotion. NEVER start with scenery.
-- SPECIFIC not generic: "My power reached level 9,999" not "I became strong". "The [DOMINATION] skill unlocked" not "I got a skill".
-- Concrete physical sensations: "the cold ran down my spine", "my knees gave out", "the blood burned in my veins"
-- Each scene ends with IMPLICIT TENSION — the viewer NEEDS to know what happens next
-- Short sentences. Max 15 words each. Fast rhythm.
+- Each scene: EXACTLY 75-80 Spanish words. Count before responding.
+- First sentence = immediate hook for this genre's tone. NEVER start with scenery description.
+- Specific details: character names, skill names, place names, numbers. Not generic descriptions.
+- Physical sensations appropriate to the genre (not always dramatic — can be exciting, warm, tense, or curious)
+- Short sentences. Max 15 words each. Match the genre rhythm.
 ${isGrounded ? `
 MODO COTIDIANO ACTIVO (Slice of Life):
 - Narra el día a día con detalles reales y específicos
