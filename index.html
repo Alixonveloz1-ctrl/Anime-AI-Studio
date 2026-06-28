@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.77 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.78 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1434,9 +1434,34 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
 
     // Estilo de narración según el tono del subgénero
     const isGrounded  = hasSliceOfLife && !allowsSuper && !allowsSuper2;
+    const GENRE_TONE = {
+      accion:       'TONE: High-octane, physical, adrenaline. Actions described blow-by-blow. NO melodrama — let the action speak. Short explosive sentences.',
+      fantasia:     'TONE: Epic and grand. Magic feels real and dangerous. Wonder mixed with stakes. Ancient powers have weight.',
+      isekai:       'TONE: Discovery and overpowering growth. The protagonist adapts fast and keeps winning. System notifications, skill unlocks, stat reveals. Excitement of an underdog rising.',
+      donghua:      'TONE: Cultivation system, levels, techniques. Cold and calculated ambition. The protagonist ASCENDS step by step. Power is earned, not given. Stats, ranks, sects matter. Epic but methodical — NOT emotional drama.',
+      videojuego:   'TONE: Game system logic. Levels, skills, quests, boss fights. The protagonist plays to win. Concrete stats and skill names. Fast, game-like pacing.',
+      mecha:        'TONE: Machine and pilot as one. Tactical combat. Steel and speed. Cockpit tension. War has a human cost.',
+      romcom:       'TONE: Warm and playful. Misunderstandings, embarrassment, fluttery feelings. Light and fun with moments of real emotion.',
+      drama:        'TONE: Emotional depth and weight. Real relationships, hard choices, consequences. Let feelings breathe — but no melodrama.',
+      slice_of_life:'TONE: Quiet and warm. Small moments that matter. Everyday details. No big plot events — the beauty is in the ordinary.',
+      terror:       'TONE: Creeping dread. The unknown threatens. Short tense sentences. Something is very wrong and getting worse.',
+      psicologico:  'TONE: Unreliable perception. Mind under pressure. Reality bends. The protagonist questions everything including themselves.',
+      misterio:     'TONE: Clues and shadows. Every detail might matter. Questions accumulate. The reader must keep watching to find out.',
+      deportes:     'TONE: Competitive fire. Training pays off in crucial moments. Team and rival dynamics. The body pushed to its limit.',
+      sci_fi:       'TONE: Futuristic and analytical. Technology as both tool and threat. Cold logic with a human core.',
+      aventura:     'TONE: Exploration and discovery. New places, new dangers, new allies. The journey IS the story.',
+      sobrenatural: 'TONE: Hidden powers revealed. Demons, spirits, the unseen world. Danger from beyond. Power is both gift and curse.',
+      supervivencia:'TONE: Every resource counts. Time pressure. Brutal decisions. Physical reality — food, water, shelter, threat.',
+      mecha:        'TONE: War machine and pilot. Tactical, mechanical, human cost of battle.',
+    };
+    const genreTone = GENRE_TONE[genero] || 'TONE: Match the genre atmosphere — keep it specific and immersive.';
+
     const sysBase = `You are a viral anime scriptwriter for Facebook Reels. Write stories in FIRST PERSON that hook viewers instantly.
 
 CRITICAL: The JSON field for story text MUST be called "narration" (English spelling, no accent).
+
+GENRE TONE — THIS IS MANDATORY:
+${genreTone}
 
 VIRAL FORMULA — write the "narration" field in Spanish:
 - First person narrator (YO), present or immediate past tense
@@ -1444,7 +1469,6 @@ VIRAL FORMULA — write the "narration" field in Spanish:
 - FIRST SENTENCE = immediate hook: action, revelation, or strong emotion. NEVER start with scenery.
 - SPECIFIC not generic: "My power reached level 9,999" not "I became strong". "The [DOMINATION] skill unlocked" not "I got a skill".
 - Concrete physical sensations: "the cold ran down my spine", "my knees gave out", "the blood burned in my veins"
-- Emotional contrast: lowest point before the rise, success before betrayal
 - Each scene ends with IMPLICIT TENSION — the viewer NEEDS to know what happens next
 - Short sentences. Max 15 words each. Fast rhythm.
 ${isGrounded ? `
@@ -1623,7 +1647,7 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
     const charRefShort = state.characters.map(c => c.name).join(', ');
 
     // 15 scenes x 2 images = 30 images, ~10 min total
-    const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"EXACTAMENTE 75-80 palabras en primera persona (YO). Gancho en la primera frase. Sensaciones físicas concretas. Termina con tensión. Cuenta las palabras.","imagePromptA":"Scene with [nombre exacto]: [descripción visual detallada — ropa, cabello, expresión, entorno, iluminación]","imagePromptB":"Scene with [nombre exacto]: [segundo momento visual distinto de la misma escena]"}`;
+    const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"EXACTAMENTE 75-80 palabras en primera persona (YO). Gancho en la primera frase. Sensaciones físicas concretas. Termina con tensión. Cuenta las palabras.","imagePromptA":"Scene with [nombre exacto]: [descripción visual detallada — ropa, cabello, expresión, entorno, iluminación]","imagePromptB":"Scene with [nombre exacto]: [CONTINUATION of imagePromptA — same location, 3-5 seconds later, next action in sequence]"}`;
 
     async function generateSceneBatch(batchPrompt, expectedCount, startNum, batchName) {
       let bestResult = [];
@@ -1665,8 +1689,8 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
     const batchRules = `REGLAS ESTRUCTURA:
 - 10 escenas en total — estructura: cold_open (1-2), act1 (3-5), act2 (6-8), clímax (9), resolución (10)
 - The "narration" field: EXACTLY 75-80 Spanish words, FIRST PERSON (YO). Count words. Hook in first sentence, tension at the end.
-- imagePromptA = primer momento de la escena
-- imagePromptB = segundo momento distinto de la misma escena
+- imagePromptA = first visual moment of the scene (character in action, specific setting)
+- imagePromptB = DIRECT CONTINUATION of imagePromptA — same characters, same exact location, 3-5 seconds later. Describe the NEXT action or position in sequence. If A shows "charging toward enemy", B shows "striking the enemy mid-swing". NEVER a different location or completely different action. The viewer must feel A and B are two frames of the same continuous shot.
 - FINALE (escena 10): resolución PARCIAL + misterio abierto que engancha al episodio ${epNum + 1}
 
 REGLAS CRÍTICAS PARA imagePromptA e imagePromptB:
