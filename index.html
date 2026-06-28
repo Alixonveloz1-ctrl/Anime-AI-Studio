@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.82 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.83 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1368,24 +1368,27 @@ document.getElementById('btnAnalizarHistoria').addEventListener('click', async (
     const epNum  = state.currentEpisode || 1;
 
     const TONE_MAP = {
-      accion:'Epic action, physical, adrenaline. Short explosive sentences.',
-      fantasia:'Grand and magical. Wonder mixed with danger.',
-      isekai:'Discovery and growth. System unlocks, underdog rising.',
-      donghua:'Cultivation system. Cold ambitious ascent. Stats and ranks. NOT emotional drama.',
-      videojuego:'Game logic. Levels, skills, boss fights. Concrete stats.',
-      romcom:'Warm, playful, fluttery. Light fun with real emotion.',
-      drama:'Emotional depth. Hard choices. Real relationships.',
-      slice_of_life:'Quiet and warm. Small moments that matter.',
-      terror:'Creeping dread. Short tense sentences.',
-      psicologico:'Unreliable mind. Reality bends.',
-      misterio:'Clues and shadows. Questions accumulate.',
-      deportes:'Competitive fire. Body pushed to its limit.',
-      sci_fi:'Futuristic and analytical.',
+      accion:'Epic action, adrenaline, short sentences.',
+      fantasia:'Grand, magical, wonder mixed with danger.',
+      isekai:'Discovery, system unlocks, underdog rising.',
+      donghua:'Cultivation system, cold ambition, stats/ranks, NOT emotional drama.',
+      videojuego:'Game logic, levels, skills, concrete stats.',
+      romcom:'Warm, playful, fluttery, light fun.',
+      drama:'Emotional depth, hard choices, real relationships.',
+      slice_of_life:'Quiet and warm, small moments.',
+      terror:'Creeping dread, short tense sentences.',
+      psicologico:'Unreliable mind, reality bends.',
+      misterio:'Clues and shadows, questions accumulate.',
+      deportes:'Competitive fire, body pushed to limit.',
+      sci_fi:'Futuristic, analytical.',
       aventura:'Exploration and discovery.',
-      sobrenatural:'Hidden powers. Danger from beyond.',
-      supervivencia:'Every resource counts. Brutal decisions.',
+      sobrenatural:'Hidden powers, danger from beyond.',
+      supervivencia:'Every resource counts, brutal decisions.',
     };
     const tone = TONE_MAP[genero] || 'Match the genre.';
+
+    // Truncate story to avoid overloading Gemini
+    const historiaCorta = historia.slice(0, 2000) + (historia.length > 2000 ? '...' : '');
 
     // ── CALL 1: Extract universe + characters ──
     setProg(15, 'Paso 1/2: Extrayendo universo y personajes...');
@@ -1418,7 +1421,7 @@ IMAGE PROMPTS in English. Start with "Scene with [name]:". Never camera-facing. 
 imagePromptB = direct continuation of imagePromptA, same location, 3-5 seconds later, next action.`;
 
     const sceneShape = '{"id":"s1","num":1,"act":"cold_open","title":"...","narration":"EXACTLY 75-80 Spanish words first person","imagePromptA":"Scene with [name]: [action outfit hair expression setting]","imagePromptB":"Scene with [name]: [continuation of A same location next action]"}';
-    const promptStep2 = 'Story summary:\n' + data1.universe.concepto + '\n\nConflict: ' + data1.universe.conflicto + '\n\nCharacters:\n' + charRef + '\n\nFull story:\n"' + historia.slice(0, 3000) + '"\n\nDivide into EXACTLY 10 scenes:\n- 1-2: cold_open\n- 3-5: act1\n- 6-8: act2\n- 9: climax\n- 10: FINALE (partial resolution + open hook for next episode)\n\nReturn ONLY: {"scenes":[' + sceneShape + ',...]} with exactly 10 objects numbered 1-10.';
+    const promptStep2 = 'Story summary:\n' + data1.universe.concepto + '\n\nConflict: ' + data1.universe.conflicto + '\n\nCharacters:\n' + charRef + '\n\nFull story:\n"' + historiaCorta + '"\n\nDivide into EXACTLY 10 scenes:\n- 1-2: cold_open\n- 3-5: act1\n- 6-8: act2\n- 9: climax\n- 10: FINALE (partial resolution + open hook for next episode)\n\nReturn ONLY: {"scenes":[' + sceneShape + ',...]} with exactly 10 objects numbered 1-10.';
 
     const raw2  = await callGemini(promptStep2, sysStep2);
     const data2 = safeParseJSON(raw2);
