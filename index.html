@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.87 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.88 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1826,18 +1826,16 @@ window.generateCharImage = async function(charId) {
   if (!ch) return;
   showToast('Generando imagen de personaje...', 'success');
   try {
-    const existingImg = await dbGet(charImgKey(ch.id));
-    const selfRef = existingImg ? [{ name: ch.name, role: ch.role || '', img: existingImg }] : null;
-
     // Use editable prompt from textarea if available, else build default
     const textarea = document.getElementById('charPrompt_' + charId);
     const prompt = textarea?.value.trim() ||
       `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. NO text, NO letters, NO watermarks. Clean professional 2D anime hand-drawn style, white background, character turnaround showing front side and back.`;
 
+    // Never pass existing image as reference — it prevents the prompt from taking effect
     let imgB64 = null, lastErr = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
-        imgB64 = await generateImage(prompt, selfRef);
+        imgB64 = await generateImage(prompt, null);
         break;
       } catch(e) {
         lastErr = e;
