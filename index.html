@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.78 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.79 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -624,7 +624,12 @@ function buildVideoPrompt(s, ab) {
   const demoRef  = STUDIO_BY_DEMO[demo]    || '';
   const noCamera = 'CRITICAL: Characters must be ACTING and DOING things in the scene, fully immersed in the story — NEVER posing, NEVER looking at the camera, NEVER facing the viewer. Use side angles, 3/4 views, over-shoulder, or from-behind perspectives. Characters interact with each other or with their environment.';
   const audioRule = 'NO voice dialogue, NO narration, NO singing. ONLY instrumental background music fitting the scene mood and genre.';
-  return `2D anime animation, hand-drawn style, ${studio}${demoRef}. Smooth fluid motion, expressive character movement, vibrant cel-shading colors. NOT 3D, NOT CGI, NOT video game graphics. Pure 2D anime art style. ${noCamera} ${base}. ${audioRule} Cinematic anime scene, professional quality animation.`;
+
+  const animeStyle = `STYLE — THIS IS MANDATORY: Traditional Japanese 2D hand-drawn anime animation. Flat color fills with sharp ink outlines. Classic cel-shading with 2-3 tone shadow layers. Expressive anime facial features. Fluid character movement with motion blur and impact frames. Vibrant saturated anime color palette. Art direction by ${studio}${demoRef}.
+STRICTLY FORBIDDEN — ANY of these will ruin the result: 3D rendering, CGI, photorealistic textures, realistic skin, Unreal Engine, video game graphics, game cutscene aesthetic, western cartoon, Disney style, Pixar style.
+THIS MUST LOOK EXACTLY LIKE A PROFESSIONAL JAPANESE ANIME TV SERIES EPISODE — pure 2D animation, nothing else.`;
+
+  return `${animeStyle} ${noCamera} ${base}. ${audioRule}`;
 }
 
 // ════════════════════════════════════════════════════════════════
