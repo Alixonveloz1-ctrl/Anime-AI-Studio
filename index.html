@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.85 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.86 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1018,7 +1018,7 @@ async function generateImage(prompt, characterRefs = null, forceModel = null) {
   const model = forceModel || (modelSel ? modelSel.value : 'auto');
   const isEcchi = (state.universe?.subgenres || []).some(s => ['ecchi','harem','harem_inverso'].includes(s));
 
-  const noLookSuffix = ' Character is actively doing something — acting, reacting, or moving. NOT posing, NOT looking at camera. Side angle or 3/4 view.';
+  const noLookSuffix = ' 2D anime, hand-drawn cel animation style. Character is actively doing something — acting, reacting, or moving. NOT posing, NOT looking at camera. Side angle or 3/4 view. NOT 3D, NOT CGI, NOT video game graphics.';
   const cleanPrompt = (String(prompt || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -1548,10 +1548,12 @@ REGLAS DE imagePromptA e imagePromptB:
 - Responde SOLO JSON válido sin markdown`;
 
     const genreExtra = hasEcchi
-      ? `\n\nSUBGÉNERO ECCHI/HAREM ACTIVO:
-- La narración puede incluir situaciones comprometedoras, tensión sexual, malentendidos picantes
-- En imagePromptA/B usar "lenguaje de cámara ecchi": "low angle shot", "wind lifting her short skirt", "she stumbles forward blushing", "leaning over counter her uniform visible", "wet clothes after rain embarrassed expression"
-- NUNCA usar en imagePrompt: naked, nude, breasts, non-consensual, explicit, sexual`
+      ? `\n\nECCHI/HAREM ACTIVO — REGLAS OBLIGATORIAS:
+NARRACIÓN: Cada escena incluye al menos UN momento de fan service real. La narración describe lo que el protagonista VE y SIENTE: curvas, piel, ropa ajustada, momentos accidentales. Tono sugerente y picante — el espectador quiere seguir mirando.
+SITUACIONES CLÁSICAS DE FAN SERVICE: caída accidental encima de alguien, ropa mojada tras la lluvia, cambio de ropa interrumpido, uniforme con falda que se levanta con el viento, escena de playa o piscina, toalla que casi cae, uniforme de gimnasio ajustado, pijama corto en el pasillo, inclinarse hacia adelante sin darse cuenta.
+LENGUAJE DE CÁMARA ECCHI para imagePromptA/B: "low angle shot revealing her thighs", "wind lifting her skirt she blushes", "her uniform barely covers as she leans forward", "wet shirt clinging to her figure after rain", "she wraps towel around herself surprised expression", "swimsuit scene at pool side profile view", "gym uniform form-fitting surprised mid-motion", "short nightgown in hallway embarrassed expression", "side view leaning over desk skirt riding up"
+APARIENCIA: figuras atractivas con outfits sugerentes — uniforme escolar con falda corta, bikini, lingerie estilo anime (lace trim, ribbon details), ropa ajustada que marca la silueta, vestido corto, traje de baño. Describir la silueta con: "hourglass silhouette", "long slender legs", "delicate collarbone visible", "graceful figure", "fitted uniform emphasizing her shape"
+LÍMITE: sin desnudez explícita, sin partes íntimas visibles — ecchi, no hentai`
       : '';
 
 
@@ -1623,11 +1625,12 @@ REGLAS DE APARIENCIA PARA TODOS LOS PERSONAJES (estilo anime — OBLIGATORIO):
 - Un barista lleva delantal limpio de lino. Un guerrero lleva armadura pulida. Un estudiante lleva uniforme impecable. Siempre.
 - Describir la ropa por ESTILO y COLOR únicamente: "delantal verde oscuro de lino", "camisa blanca de manga corta", "armadura plateada con detalles azules"
 
-${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
-- En appearance: usar términos técnicos de diseño anime que no disparen filtros: "feminine figure", "slim waist", "long legs", "delicate features"
-- Ropa que insinúa sin ser explícita: uniforme escolar con falda corta, vestido entallado, blusa abierta, traje de baño según escena
-- NO usar en appearance: "voluptuosa", "busto generoso", "curvas pronunciadas", "sensual", "seductora", "escote" — Gemini los bloquea
-- USAR: "graceful", "elegant", "charming", "cute", "attractive", "soft features"` : `RESTRICCIÓN DE LENGUAJE (importante para no activar filtros):
+${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA:
+- Personajes femeninos (18+) con figuras atractivas estilo ecchi anime: "graceful hourglass silhouette", "long slender legs", "delicate collarbone", "slim waist", "soft delicate features"
+- Ropa fan service típica del género: falda corta escolar, uniforme ajustado, traje de baño, pijama corto, lencería anime (encajes, lazos), ropa deportiva ajustada
+- Vocabulario que funciona con Gemini: "form-fitting uniform", "short pleated skirt", "fitted sports outfit", "swimsuit", "lace-trim sleepwear", "attractive silhouette"
+- NO usar en appearance: "naked", "nude", "explicit", "nipples", "genitals" — sin desnudez explícita
+- SIEMPRE especificar la edad (18-25 años)` : `RESTRICCIÓN DE LENGUAJE (importante para no activar filtros):
 - En appearance NO usar: voluptuosa, sensual, seductora, escote, busto, curvas pronunciadas, ajustado que realza, translúcida, provocativa
 - USAR: elegante, delicada, dulce, bonita, encantadora, refinada, esbelta`}
 
@@ -1737,6 +1740,7 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
 - FINALE (escena 10): resolución PARCIAL + misterio abierto que engancha al episodio ${epNum + 1}
 
 REGLAS CRÍTICAS PARA imagePromptA e imagePromptB:
+- SIEMPRE empezar con el estilo: "2D anime, hand-drawn cel animation style,"
 - SIEMPRE usar el nombre EXACTO del personaje (ej: "Scene with Kenji:")
 - SIEMPRE incluir descripción de ropa específica del personaje según su ficha
 - SIEMPRE incluir color y estilo de cabello
