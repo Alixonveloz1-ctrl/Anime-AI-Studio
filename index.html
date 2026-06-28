@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.91 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-28.94 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -636,11 +636,15 @@ function buildVideoPrompt(s, ab) {
   const noCamera = 'CRITICAL: Characters must be ACTING and DOING things in the scene, fully immersed in the story — NEVER posing, NEVER looking at the camera, NEVER facing the viewer. Use side angles, 3/4 views, over-shoulder, or from-behind perspectives. Characters interact with each other or with their environment.';
   const audioRule = 'NO voice dialogue, NO narration, NO singing. ONLY instrumental background music fitting the scene mood and genre.';
 
-  const animeStyle = `STYLE — THIS IS MANDATORY: Traditional Japanese 2D hand-drawn anime animation. Flat color fills with sharp ink outlines. Classic cel-shading with 2-3 tone shadow layers. Expressive anime facial features. Fluid character movement with motion blur and impact frames. Vibrant saturated anime color palette. Art direction by ${studio}${demoRef}.
-STRICTLY FORBIDDEN — ANY of these will ruin the result: 3D rendering, CGI, photorealistic textures, realistic skin, Unreal Engine, video game graphics, game cutscene aesthetic, western cartoon, Disney style, Pixar style.
-THIS MUST LOOK EXACTLY LIKE A PROFESSIONAL JAPANESE ANIME TV SERIES EPISODE — pure 2D animation, nothing else.`;
+  const isDonghua = (genre === 'donghua');
 
-  return `${animeStyle} ${noCamera} ${base}. ${audioRule}`;
+  const animeStyle = isDonghua
+    ? `STYLE — MANDATORY: Chinese donghua animation. Bilibili/iQIYI aesthetic. Clean cel-shaded 2D characters on detailed semi-realistic backgrounds. Smooth modern character designs. Art direction: ${studio}${demoRef}. NOT Japanese anime. NOT 3D. NOT CGI.`
+    : `STYLE — ABSOLUTELY MANDATORY: This clip must look like a screenshot from a real Japanese anime TV series. 2D hand-drawn animation. Thick clean black ink outlines on every character and element. Flat color fills with 2-3 tone cel-shading only — NO gradients, NO textures, NO realistic lighting. Expressive anime character designs: large detailed eyes, smooth simplified faces, vivid saturated colors. Backgrounds in classic anime painterly style. Animation quality reference: ${studio}${demoRef}. STRICTLY FORBIDDEN: 3D rendering, CGI, photorealism, Unreal Engine, video game graphics, western cartoon, Disney/Pixar, realistic human skin, motion capture aesthetic. IF IT LOOKS LIKE A VIDEO GAME CUTSCENE, IT IS WRONG.`;
+
+  const motionRule = `MOTION — CRITICAL: Subtle cinematic movement only. Gentle breathing, slow camera drift, small natural gestures (head tilt, eye blink, hand movement). Characters stay in position — NO jumping, NO teleporting, NO sudden changes. Smooth and natural like a real animated series.`;
+
+  return `${animeStyle} ${motionRule} ${noCamera} ${base}. ${audioRule}`;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1028,7 +1032,11 @@ async function generateImage(prompt, characterRefs = null, forceModel = null) {
   const model = forceModel || (modelSel ? modelSel.value : 'auto');
   const isEcchi = (state.universe?.subgenres || []).some(s => ['ecchi','harem','harem_inverso'].includes(s));
 
-  const noLookSuffix = ' 2D anime, hand-drawn cel animation style. Character is actively doing something — acting, reacting, or moving. NOT posing, NOT looking at camera. Side angle or 3/4 view. NOT 3D, NOT CGI, NOT video game graphics.';
+  const sceneGenre = document.getElementById('generoSelect')?.value || 'accion';
+  const styleSpec = sceneGenre === 'donghua'
+    ? 'Chinese donghua animation, bilibili iQIYI style. 2D cel-shaded characters with thick clean ink outlines. Detailed semi-realistic backgrounds with soft lighting. Smooth modern character designs. Hand-drawn 2D animation frame. NOT 3D, NOT CGI, NOT photorealistic.'
+    : 'Japanese anime style. 2D hand-drawn animation frame extracted from a professional TV anime episode. Thick clean black ink outlines on all elements. Flat color fills with exactly 2-3 tone cel-shading, NO gradients, NO textures. Large expressive anime eyes, simplified nose and mouth, smooth face. Vibrant saturated anime color palette. Background in anime painterly style. MAPPA or Madhouse or Ufotable animation quality. This must look EXACTLY like a screenshot from a real anime series — NOT 3D, NOT CGI, NOT video game, NOT photorealistic, NOT western cartoon, NOT realistic skin, NOT Pixar.';
+  const noLookSuffix = ' ' + styleSpec + ' Character actively in the scene, NOT posing, NOT looking at camera. Side angle or 3/4 view.';
   const cleanPrompt = (String(prompt || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -1750,12 +1758,12 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA:
     const batchRules = `REGLAS ESTRUCTURA:
 - 10 escenas en total — estructura: cold_open (1-2), act1 (3-5), act2 (6-8), clímax (9), resolución (10)
 - The "narration" field: EXACTLY 75-80 Spanish words, FIRST PERSON (YO). Count words. Drop into the scene immediately. End naturally for the genre — not forced tension.
-- imagePromptA = first visual moment of the scene (character in action, specific setting)
-- imagePromptB = DIRECT CONTINUATION of imagePromptA — same characters, same exact location, 3-5 seconds later. Describe the NEXT action or position in sequence. If A shows "charging toward enemy", B shows "striking the enemy mid-swing". NEVER a different location or completely different action. The viewer must feel A and B are two frames of the same continuous shot.
+- imagePromptA = establish the scene clearly: characters, location, time of day, what they are doing. Wide or medium shot showing the full context.
+- imagePromptB = almost IDENTICAL to imagePromptA — same characters, same location, same camera angle, just a tiny moment later (1-2 seconds). A slight change: a head turned, a hand moved, a different expression. The scene should be 95% the same. This enables Veo to create smooth natural animation between A and B without jumps.
 - FINALE (escena 10): resolución PARCIAL + misterio abierto que engancha al episodio ${epNum + 1}
 
 REGLAS CRÍTICAS PARA imagePromptA e imagePromptB:
-- SIEMPRE empezar con el estilo: "2D anime, hand-drawn cel animation style,"
+- SIEMPRE empezar imagePromptA y imagePromptB con el estilo visual del género: para "donghua" → "Chinese donghua animation, bilibili aesthetic, 2D cel-shaded, thick ink outlines," — para todos los demás géneros → "2D hand-drawn anime frame, thick black ink outlines, flat cel-shading, vibrant colors, TV anime quality,"
 - SIEMPRE usar el nombre EXACTO del personaje (ej: "Scene with Kenji:")
 - SIEMPRE incluir descripción de ropa específica del personaje según su ficha
 - SIEMPRE incluir color y estilo de cabello
