@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.86 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.87 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1798,7 +1798,9 @@ async function renderCharacters() {
     const imgB64 = await dbGet(charImgKey(ch.id));
     return { ch, imgB64 };
   }));
-  c.innerHTML = items.map(({ ch, imgB64 }) => `
+  c.innerHTML = items.map(({ ch, imgB64 }) => {
+    const defaultPrompt = `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. NO text, NO letters, NO watermarks, NO labels anywhere in the image. Clean professional 2D anime hand-drawn style, white background, character turnaround showing front side and back.`;
+    return `
     <div class="char-card">
       <div class="char-header">
         <div class="char-img">
@@ -1810,9 +1812,13 @@ async function renderCharacters() {
           <div class="char-detail">${ch.appearance || ''}</div>
         </div>
       </div>
-      <button class="btn-sec" onclick="generateCharImage('${ch.id}')">🎨 Generar Imagen</button>
-    </div>
-  `).join('');
+      <div style="margin-top:8px">
+        <label style="font-size:11px;color:var(--text-dim);margin-bottom:4px;display:block">✏️ Prompt de imagen (editable)</label>
+        <textarea id="charPrompt_${ch.id}" style="width:100%;height:80px;font-size:11px;resize:vertical;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:var(--text);padding:6px;line-height:1.4">${defaultPrompt.replace(/`/g,"'")}</textarea>
+      </div>
+      <button class="btn-sec" style="margin-top:6px" onclick="generateCharImage('${ch.id}')">🎨 Generar Imagen</button>
+    </div>`;
+  }).join('');
 }
 
 window.generateCharImage = async function(charId) {
@@ -1820,11 +1826,13 @@ window.generateCharImage = async function(charId) {
   if (!ch) return;
   showToast('Generando imagen de personaje...', 'success');
   try {
-    // NO text in image, pass only this character's own ref to avoid mixing designs
     const existingImg = await dbGet(charImgKey(ch.id));
     const selfRef = existingImg ? [{ name: ch.name, role: ch.role || '', img: existingImg }] : null;
 
-    const prompt = `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. NO text, NO letters, NO watermarks, NO labels anywhere in the image. Clean professional anime 2D art style, white background, character turnaround showing front side and back.`;
+    // Use editable prompt from textarea if available, else build default
+    const textarea = document.getElementById('charPrompt_' + charId);
+    const prompt = textarea?.value.trim() ||
+      `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. NO text, NO letters, NO watermarks. Clean professional 2D anime hand-drawn style, white background, character turnaround showing front side and back.`;
 
     let imgB64 = null, lastErr = null;
     for (let attempt = 0; attempt < 5; attempt++) {
