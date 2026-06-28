@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.73 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.74 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -371,7 +371,12 @@
 
     <div class="card" id="cardGenerarEpisodio" style="display:none">
       <h2>🎬 Generar Episodio</h2>
-      <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px">Esto creará personajes, 15 escenas con narración y 30 imágenes (2 por escena). Duración estimada: ~10 minutos.</p>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px">Crea 10 escenas con narración y 20 imágenes (2 por escena). Duración estimada: ~5 minutos.</p>
+      <!-- Episode navigation -->
+      <div id="episodeNav" style="display:none;margin-bottom:14px">
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">Episodios generados:</div>
+        <div id="episodeTabs" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
 
       <label>Número de personajes</label>
       <select id="numCharsSelect">
@@ -389,7 +394,8 @@
         <div class="progress-text" id="epProgressText">Iniciando...</div>
         <div class="progress"><div class="progress-bar" id="epProgressBar" style="width:0%"></div></div>
       </div>
-      <button class="btn" id="btnGenerarEpisodio" style="margin-top:12px">✨ Generar Episodio Completo</button>
+      <button class="btn" id="btnGenerarEpisodio" style="margin-top:12px">✨ Generar Episodio 1</button>
+      <button class="btn" id="btnNextEpisode" style="margin-top:8px;display:none;background:linear-gradient(135deg,#1a4a1a,#2a6a2a);border-color:rgba(100,220,100,0.4)">➕ Generar Siguiente Episodio</button>
     </div>
   </div>
 
@@ -566,11 +572,13 @@ function dbDel(k)    { return new Promise(res => { const tx = db.transaction('bl
 
 const charImgKey   = id => `ci_${state.projectId}_${id}`;
 const sceneImgKey  = id => `si_${state.projectId}_${id}`;
-const sceneImgKeyA = id => `sia_${state.projectId}_${id}`;
-const sceneImgKeyB = id => `sib_${state.projectId}_${id}`;
-const sceneAudKey  = id => `sa_${state.projectId}_${id}`;
-const sceneVidKeyA = id => `sva_${state.projectId}_${id}`;
-const sceneVidKeyB = id => `svb_${state.projectId}_${id}`;
+// Episode suffix: episode 1 uses legacy keys (no prefix) for backwards compat
+const epSfx = () => (state.currentEpisode || 1) > 1 ? `_ep${state.currentEpisode}` : '';
+const sceneImgKeyA = id => `sia_${state.projectId}${epSfx()}_${id}`;
+const sceneImgKeyB = id => `sib_${state.projectId}${epSfx()}_${id}`;
+const sceneAudKey  = id => `sa_${state.projectId}${epSfx()}_${id}`;
+const sceneVidKeyA = id => `sva_${state.projectId}${epSfx()}_${id}`;
+const sceneVidKeyB = id => `svb_${state.projectId}${epSfx()}_${id}`;
 
 // Build a video prompt from the scene (English, motion-focused)
 // Studio references by genre — matched to studios known for that genre
@@ -613,13 +621,98 @@ function buildVideoPrompt(s, ab) {
   return `2D anime animation, hand-drawn style, ${studio}${demoRef}. Smooth fluid motion, expressive character movement, vibrant cel-shading colors. NOT 3D, NOT CGI, NOT video game graphics. Pure 2D anime art style. ${noCamera} ${base}. ${audioRule} Cinematic anime scene, professional quality animation.`;
 }
 
+// ════════════════════════════════════════════════════════════════
+// MULTI-EPISODE HELPERS
+// ════════════════════════════════════════════════════════════════
+function buildPrevEpisodesSummary() {
+  if (!state.episodes) return '';
+  const epNums = Object.keys(state.episodes).map(Number).sort((a,b)=>a-b);
+  const cur = state.currentEpisode || 1;
+  const prev = epNums.filter(n => n < cur);
+  if (!prev.length) return '';
+  return prev.map(n => {
+    const sc = state.episodes[n] || [];
+    if (!sc.length) return '';
+    const titles = sc.map(s => s.title).filter(Boolean).join(', ');
+    const first = (sc[0]?.narration || '').split('.')[0];
+    const last  = (sc[sc.length-1]?.narration || '').split('.')[0];
+    return `Episodio ${n}: Comenzó: "${first}". Escenas: ${titles}. Terminó: "${last}".`;
+  }).filter(Boolean).join('\n');
+}
+
+function updateEpisodeNav() {
+  const nav      = document.getElementById('episodeNav');
+  const tabs     = document.getElementById('episodeTabs');
+  const nextBtn  = document.getElementById('btnNextEpisode');
+  const genBtn   = document.getElementById('btnGenerarEpisodio');
+  if (!state.episodes) return;
+
+  const epNums = Object.keys(state.episodes).map(Number).sort((a,b)=>a-b);
+  if (epNums.length === 0) { nav.style.display = 'none'; return; }
+
+  nav.style.display = 'block';
+  const cur = state.currentEpisode || 1;
+
+  // Render episode tabs
+  tabs.innerHTML = epNums.map(n => `
+    <button onclick="switchEpisode(${n})"
+      style="padding:5px 12px;font-size:12px;border-radius:6px;border:1px solid ${n===cur?'var(--accent)':'rgba(255,255,255,0.15)'};
+             background:${n===cur?'rgba(0,229,255,0.15)':'rgba(255,255,255,0.04)'};
+             color:${n===cur?'var(--accent)':'var(--text-dim)'};cursor:pointer">
+      Ep ${n}
+    </button>`).join('');
+
+  // Show "Generar siguiente episodio" if current is complete
+  const curScenes = state.episodes[cur] || [];
+  const isComplete = curScenes.length >= 10 && curScenes.every(s => s.narration && s.imagePromptA);
+  nextBtn.style.display = isComplete ? 'block' : 'none';
+  nextBtn.textContent = `➕ Generar Episodio ${cur + 1}`;
+
+  // Update main generate button label
+  genBtn.textContent = `✨ Generar Episodio ${cur} (reemplazar)`;
+}
+
+window.switchEpisode = function(ep) {
+  if (!state.episodes[ep]) return;
+  state.currentEpisode = ep;
+  state.scenes = state.episodes[ep];
+  saveState();
+  renderScenes();
+  updateEpisodeNav();
+  showToast(`Episodio ${ep} cargado`, 'success');
+};
+
+// ════════════════════════════════════════════════════════════════
+// FRAME CAPTURE → Image B
+// ════════════════════════════════════════════════════════════════
+window.captureVideoFrame = async function(sceneId) {
+  const vid = document.querySelector(`video[data-sid="${sceneId}"]`);
+  if (!vid) { showToast('No hay video A para capturar', 'error'); return; }
+  if (vid.readyState < 2) { showToast('El video aún no está listo — espera un momento', 'error'); return; }
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width  = vid.videoWidth  || 720;
+    canvas.height = vid.videoHeight || 1280;
+    canvas.getContext('2d').drawImage(vid, 0, 0, canvas.width, canvas.height);
+    const b64 = canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, '');
+    await dbSet(sceneImgKeyB(sceneId), b64);
+    showToast('✅ Fotograma guardado como Imagen B', 'success');
+    renderScenes();
+  } catch(e) {
+    showToast('No se pudo capturar (CORS). Pausa el video, toma captura de pantalla y úsala como Imagen B manualmente.', 'error');
+  }
+};
+
 function saveState() {
   if (!state.projectId) return;
+  // Sync current episode scenes into episodes map
+  if (!state.episodes) state.episodes = {};
+  state.episodes[state.currentEpisode || 1] = state.scenes;
   const data = {
     universe: state.universe,
     characters: state.characters,
-    scenes: state.scenes,
-
+    episodes: state.episodes,
+    currentEpisode: state.currentEpisode || 1,
   };
   localStorage.setItem(`proj_${state.projectId}`, JSON.stringify(data));
   const i = projects.findIndex(p => p.id === state.projectId);
@@ -627,14 +720,22 @@ function saveState() {
 }
 function loadStateFor(pid) {
   const raw = localStorage.getItem(`proj_${pid}`);
-  state = { projectId: pid, universe: null, characters: [], scenes: [] };
+  state = { projectId: pid, universe: null, characters: [], episodes: { 1: [] }, currentEpisode: 1, scenes: [] };
   if (!raw) return;
   try {
     const d = JSON.parse(raw);
-    state.universe    = d.universe;
-    state.characters  = d.characters || [];
-    state.scenes      = d.scenes || [];
-
+    state.universe   = d.universe;
+    state.characters = d.characters || [];
+    if (d.episodes) {
+      // New multi-episode format
+      state.episodes      = d.episodes;
+      state.currentEpisode = d.currentEpisode || 1;
+    } else {
+      // Old single-episode format — migrate to episode 1
+      state.episodes      = { 1: d.scenes || [] };
+      state.currentEpisode = 1;
+    }
+    state.scenes = state.episodes[state.currentEpisode] || [];
   } catch(e) {}
 }
 function saveProjects() { localStorage.setItem('projects_index', JSON.stringify(projects)); }
@@ -1514,52 +1615,47 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
       }));
     }
 
+    const epNum = state.currentEpisode || 1;
     const batchRules = `REGLAS ESTRUCTURA:
-- 15 escenas en total, 7.5 minutos de video (30 segundos por escena × 15)
+- 10 escenas en total — estructura: cold_open (1-2), act1 (3-5), act2 (6-8), clímax (9), resolución (10)
 - The "narration" field: EXACTLY 75-80 Spanish words, FIRST PERSON (YO). Count words. Hook in first sentence, tension at the end.
 - imagePromptA = primer momento de la escena
 - imagePromptB = segundo momento distinto de la misma escena
-- FINALE ep1 (escena 15): resolución PARCIAL + misterio abierto para ep2
+- FINALE (escena 10): resolución PARCIAL + misterio abierto que engancha al episodio ${epNum + 1}
 
 REGLAS CRÍTICAS PARA imagePromptA e imagePromptB:
 - SIEMPRE usar el nombre EXACTO del personaje (ej: "Scene with Kenji:")
-- SIEMPRE incluir descripción de ropa específica del personaje según su ficha (ej: "wearing white hospital shirt and gray pants")
-- SIEMPRE incluir color y estilo de cabello (ej: "black short hair", "long silver hair")
+- SIEMPRE incluir descripción de ropa específica del personaje según su ficha
+- SIEMPRE incluir color y estilo de cabello
 - NUNCA decir solo "the protagonist" o "a man" — usar el nombre real
 - Si 2+ personajes: "Scene with Kenji and Ayame:" y describir apariencia de cada uno
 - Máximo 3 personajes por imagen
-- CRÍTICO: el personaje NUNCA mira a la cámara. Describe siempre qué acción está haciendo (corriendo, luchando, hablando con alguien, mirando el horizonte...). Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"`;
+- CRÍTICO: el personaje NUNCA mira a la cámara. Describe la acción que está haciendo. Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"`;
 
-    // ─── Step 2-3: Scenes in 2 batches ───
-    let scenes = await generateSceneBatch(
-      `${ctx}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${batchRules}\n\nGenera escenas 1-7. Actos: cold_open (1-2), act1 (3-7).\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con 7 objetos numerados 1-7.`,
-      7, 1, 'Escenas 1-7'
+    // ─── Single call: 10 scenes ───
+    setProg(40, 'Generando 10 escenas...');
+    const prevEpSummary = buildPrevEpisodesSummary();
+    const scenes = await generateSceneBatch(
+      `${ctx}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${batchRules}\n\nGenera EXACTAMENTE 10 escenas numeradas 1-10:\n- Escenas 1-2: cold_open\n- Escenas 3-5: act1\n- Escenas 6-8: act2\n- Escena 9: clímax\n- Escena 10: FINALE — resolución parcial + pregunta abierta para episodio ${epNum + 1}\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con exactamente 10 objetos numerados 1-10.`,
+      10, 1, 'Escenas 1-10'
     );
-
-    setProg(60, '✅ 1-7 — Paso 3/3: Escenas 8-15...');
-
-    const lastScene7 = scenes[scenes.length - 1];
-    const lastSceneRef = `Escena 7 terminó: "${lastScene7?.narration || ""}"`;
-
-    const batch2 = await generateSceneBatch(
-      `Universo: ${u.title} (${u.genero})\n\nPERSONAJES:\n${charRef}\n\n${lastSceneRef}\n\n${batchRules}\n\nGenera escenas 8-15:\n- 8-12: act2, escalada del conflicto\n- 13-14: clímax\n- 15: FINALE — resolución parcial + pregunta abierta que engancha al episodio 2\nDevuelve SOLO JSON con 8 objetos numerados 8-15: {"scenes":[${sceneShape},...]}`,
-      8, 8, 'Escenas 8-15'
-    );
-    scenes = scenes.concat(batch2);
 
     state.scenes = scenes;
+    state.episodes[epNum] = scenes;
     saveState();
     renderScenes();
+    updateEpisodeNav();
 
     const pendingCount = scenes.filter(s => !s.narration || !s.imagePromptA).length;
     if (pendingCount > 0) {
-      setProg(100, `⚠️ ${scenes.length - pendingCount}/15 escenas — ${pendingCount} pendientes`);
+      setProg(100, `⚠️ ${scenes.length - pendingCount}/10 escenas — ${pendingCount} pendientes`);
       showToast(`${pendingCount} escenas pendientes. Usa "Reparar escenas vacías".`, 'error');
     } else {
-      setProg(100, '✅ Episodio 1 completo — 15 escenas × 2 imágenes = 30 imágenes');
-      showToast(`${state.characters.length} personajes y 15 escenas listas`, 'success');
+      setProg(100, `✅ Episodio ${epNum} completo — 10 escenas × 2 imágenes = 20 imágenes`);
+      showToast(`Episodio ${epNum}: ${state.characters.length} personajes y 10 escenas listas`, 'success');
     }
     setTimeout(() => { progress.style.display = 'none'; setProg(0, ''); }, 3000);
+    updateEpisodeNav();
 
   } catch(e) {
     openErrorModal('Error generando episodio', e.message);
@@ -1687,8 +1783,11 @@ async function renderScenes() {
       <div id="vidStatus_${sceneId}_${ab}" style="font-size:10px;color:var(--text-dim);text-align:center;min-height:12px"></div>
       ${vidUrl ? `
       <div style="border-radius:6px;overflow:hidden;background:#000">
-        <video src="${vidUrl}" controls playsinline style="width:100%;display:block;border-radius:6px"></video>
+        <video data-sid="${sceneId}" src="${vidUrl}" crossorigin="anonymous"
+          controls playsinline style="width:100%;display:block;border-radius:6px"></video>
       </div>
+      ${ab === 'A' ? `<button class="btn-sec" style="width:100%;margin-top:4px;font-size:11px;border-color:rgba(255,200,0,0.4);color:#ffd700"
+        onclick="captureVideoFrame('${sceneId}')">📸 Capturar fotograma → Imagen B</button>` : ''}
       <button class="btn-sec" style="width:100%;margin-top:4px;border-color:rgba(0,229,255,0.4);color:var(--accent2);font-size:11px"
         onclick="downloadVideo('${vidUrl}','escena_${pad}${ab}.mp4')">⬇️ Descargar Video ${ab}</button>` : ''}
     </div>`;
@@ -2297,6 +2396,28 @@ document.getElementById('btnAllAudio').addEventListener('click', async () => {
 });
 
 // ════════════════════════════════════════════════════════════════
+// NEXT EPISODE GENERATOR
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btnNextEpisode').addEventListener('click', async () => {
+  if (!state.universe) { showToast('No hay universo activo', 'error'); return; }
+  const nextEp = (state.currentEpisode || 1) + 1;
+  const confirmed = confirm(`¿Generar Episodio ${nextEp}?\nEl Episodio ${nextEp} continuará la historia del Episodio ${state.currentEpisode}.`);
+  if (!confirmed) return;
+
+  // Switch to new episode slot
+  if (!state.episodes) state.episodes = {};
+  state.currentEpisode = nextEp;
+  state.episodes[nextEp] = [];
+  state.scenes = [];
+
+  // Use the main episode generator — it reads state.currentEpisode
+  document.getElementById('btnGenerarEpisodio').click();
+});
+
+// Call updateEpisodeNav after load
+window.addEventListener('load', () => setTimeout(updateEpisodeNav, 500));
+
+// ════════════════════════════════════════════════════════════════
 // REPAIR EMPTY/UNDEFINED SCENES
 // ════════════════════════════════════════════════════════════════
 document.getElementById('btnRepairScenes').addEventListener('click', async () => {
@@ -2348,7 +2469,7 @@ RULES:
 
     const sceneExample = `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"EXACTAMENTE 75-80 palabras primera persona, gancho inicial, tensión final","imagePromptA":"Scene with [nombre exacto]: ...","imagePromptB":"Scene with [nombre exacto]: ..."}`;
 
-    const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: ${totalScenes} escenas.\nCada escena DEBE tener narration (EXACTAMENTE 75-80 palabras, primera persona, gancho inicial, tensión final), imagePromptA e imagePromptB (ambos en inglés).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
+    const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: 10 escenas.\nCada escena DEBE tener narration (EXACTAMENTE 75-80 palabras, primera persona, gancho inicial, tensión final), imagePromptA e imagePromptB (ambos en inglés).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
 
     let newScenes = [];
     for (let attempt = 0; attempt < 3 && newScenes.length < count; attempt++) {
