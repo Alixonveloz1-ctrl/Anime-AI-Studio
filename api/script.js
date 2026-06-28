@@ -65,12 +65,13 @@ export default async function handler(req) {
     const url = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
 
     const body = {
-      contents: messages, // Gemini format: [{role:'user', parts:[{text:'...'}]}]
+      contents: messages,
       ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
       generationConfig: {
         temperature: 0.8,
         maxOutputTokens: 8192,
-        responseMimeType: 'application/json', // forces clean JSON output — no markdown fences
+        responseMimeType: 'application/json',
+        thinkingConfig: { thinkingBudget: 0 }, // disable thinking — prevents timeouts
       },
     };
 
