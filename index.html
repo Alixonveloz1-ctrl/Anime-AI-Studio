@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.74 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.76 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -388,7 +388,13 @@
       </select>
 
       <label style="margin-top:12px">Instrucciones para este episodio <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
-      <textarea id="episodeInstructions" placeholder="Ej: Kenji contrató a una universitaria de medio tiempo. Nao regresa pero ahora está de mejor humor. El episodio termina con una lluvia inesperada que cierra temprano la cafetería..." style="height:90px;resize:vertical"></textarea>
+      <textarea id="episodeInstructions" placeholder="Ej: Kenji contrató una universitaria de medio tiempo. El episodio termina con una lluvia inesperada..." style="height:70px;resize:vertical"></textarea>
+
+      <div id="newCharsSection" style="display:none;margin-top:12px;padding:10px;background:rgba(100,220,100,0.06);border:1px solid rgba(100,220,100,0.2);border-radius:8px">
+        <label style="color:#64dc64;margin-bottom:4px">👤 Personajes nuevos en este episodio <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
+        <p style="font-size:11px;color:var(--text-dim);margin:0 0 6px">Describe los personajes que entran por primera vez. El sistema generará su ficha visual y los agregará a la historia.</p>
+        <textarea id="newCharsInput" placeholder="Ej: Una rival llamada Yuki, 19 años, cabello blanco largo, ojos violeta, uniforme de médica estudiante, personalidad fría pero con un secreto que involucra al protagonista." style="height:70px;resize:vertical;border-color:rgba(100,220,100,0.3)"></textarea>
+      </div>
 
       <div id="epProgress" style="display:none;margin-top:12px">
         <div class="progress-text" id="epProgressText">Iniciando...</div>
@@ -661,6 +667,10 @@ function updateEpisodeNav() {
              color:${n===cur?'var(--accent)':'var(--text-dim)'};cursor:pointer">
       Ep ${n}
     </button>`).join('');
+
+  // Show new chars field only for ep 2+
+  const newCharsSection = document.getElementById('newCharsSection');
+  if (newCharsSection) newCharsSection.style.display = cur > 1 ? 'block' : 'none';
 
   // Show "Generar siguiente episodio" if current is complete
   const curScenes = state.episodes[cur] || [];
@@ -1493,39 +1503,37 @@ ${GENRE_PROMPTS[genero] || ''}
 
 ${subgenreText}`;
 
-    // ─── Step 1: Characters ───
-    setProg(5, 'Paso 1/5: Creando personajes...');
-
-    // Determine character count and gender ratio based on modifier + user selection
-    let numChars, numFemales, numMales, protagonistGender;
-    const numCharsChoice = document.getElementById('numCharsSelect')?.value || 'auto';
-
-    if (mod === 'harem') {
-      numChars = numCharsChoice !== 'auto' ? Math.max(4, parseInt(numCharsChoice)) : (4 + Math.floor(Math.random() * 2));
-      numMales = 1; numFemales = numChars - 1;
-      protagonistGender = 'male';
-    } else if (mod === 'harem_inverso') {
-      numChars = numCharsChoice !== 'auto' ? Math.max(4, parseInt(numCharsChoice)) : (4 + Math.floor(Math.random() * 2));
-      numFemales = 1; numMales = numChars - 1;
-      protagonistGender = 'female';
-    } else if (numCharsChoice !== 'auto') {
-      // User picked a specific number
-      numChars = parseInt(numCharsChoice);
-      if (numChars === 2) { numFemales = 1; numMales = 1; }
-      else if (numChars === 3) { numFemales = 2; numMales = 1; }
-      else if (numChars === 4) { numFemales = 3; numMales = 1; }
-      else { numFemales = 3; numMales = 2; }
-      protagonistGender = 'libre (el que mejor sirva al género)';
-    } else {
-      // Auto: 3-5 chars, always more females than males
-      numChars = 3 + Math.floor(Math.random() * 3);
-      if (numChars === 3) { numFemales = 2; numMales = 1; }
-      else if (numChars === 4) { numFemales = 3; numMales = 1; }
-      else { numFemales = 3; numMales = 2; }
-      protagonistGender = 'libre (el que mejor sirva al género)';
-    }
-
+    // ─── Step 1: Characters (only for Episode 1 — reuse existing for 2+) ───
     const isEcchi = mod === 'ecchi';
+
+    if (epNum === 1 || !state.characters?.length) {
+      setProg(5, 'Paso 1/2: Creando personajes...');
+
+      let numChars, numFemales, numMales, protagonistGender;
+      const numCharsChoice = document.getElementById('numCharsSelect')?.value || 'auto';
+
+      if (mod === 'harem') {
+        numChars = numCharsChoice !== 'auto' ? Math.max(4, parseInt(numCharsChoice)) : (4 + Math.floor(Math.random() * 2));
+        numMales = 1; numFemales = numChars - 1;
+        protagonistGender = 'male';
+      } else if (mod === 'harem_inverso') {
+        numChars = numCharsChoice !== 'auto' ? Math.max(4, parseInt(numCharsChoice)) : (4 + Math.floor(Math.random() * 2));
+        numFemales = 1; numMales = numChars - 1;
+        protagonistGender = 'female';
+      } else if (numCharsChoice !== 'auto') {
+        numChars = parseInt(numCharsChoice);
+        if (numChars === 2) { numFemales = 1; numMales = 1; }
+        else if (numChars === 3) { numFemales = 2; numMales = 1; }
+        else if (numChars === 4) { numFemales = 3; numMales = 1; }
+        else { numFemales = 3; numMales = 2; }
+        protagonistGender = 'libre (el que mejor sirva al género)';
+      } else {
+        numChars = 3 + Math.floor(Math.random() * 3);
+        if (numChars === 3) { numFemales = 2; numMales = 1; }
+        else if (numChars === 4) { numFemales = 3; numMales = 1; }
+        else { numFemales = 3; numMales = 2; }
+        protagonistGender = 'libre (el que mejor sirva al género)';
+      }
 
     const charRules = `REGLAS OBLIGATORIAS DE REPARTO:
 - Crear EXACTAMENTE ${numChars} personajes: ${numFemales} femeninos + ${numMales} masculino${numMales > 1 ? 's' : ''}
@@ -1557,16 +1565,54 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS ADICIONALES:
 
 - Edad: TODOS los personajes 18+ años. Especificar edad en la descripción`;
 
-    const chRaw = await callGemini(
-      `${ctx}\\n\\n${charRules}\\n\\nCrea ${numChars} personajes únicos (${numFemales} mujeres + ${numMales} hombre${numMales > 1 ? 's' : ''}) que pertenezcan al género "${genero}" — sus profesiones, vestimenta y trasfondos deben encajar con ese género${isEcchi ? ' y con el tono ecchi (ropa que muestre su atractivo)' : ''}. Devuelve SOLO:
+      const chRaw = await callGemini(
+        `${ctx}\\n\\n${charRules}\\n\\nCrea ${numChars} personajes únicos (${numFemales} mujeres + ${numMales} hombre${numMales > 1 ? 's' : ''}) que pertenezcan al género "${genero}" — sus profesiones, vestimenta y trasfondos deben encajar con ese género${isEcchi ? ' y con el tono ecchi (ropa que muestre su atractivo)' : ''}. Devuelve SOLO:
 {"characters":[{"id":"c1","name":"nombre japonés","role":"protagonista o rol","gender":"female o male","age":"edad numérica (18+)","appearance":"descripción visual ${isEcchi ? 'atractiva y sugerente (figura, ropa que enfatiza)' : 'neutra y descriptiva'}","personality":"2 frases","backstory":"2 frases"}]}`,
-      sysBase + genreExtra
-    );
-    state.characters = safeParseJSON(chRaw).characters || [];
-    saveState();
-    renderCharacters();
+        sysBase + genreExtra
+      );
+      state.characters = safeParseJSON(chRaw).characters || [];
+      saveState();
+      renderCharacters();
+      setProg(20, `✅ ${state.characters.length} personajes — Paso 2/2: Generando escenas...`);
+    } else {
+      // Episode 2+ — reuse existing characters, skip regeneration
+      const newCharsDesc = document.getElementById('newCharsInput')?.value.trim() || '';
+      if (newCharsDesc) {
+        setProg(10, `Paso 1/2: Generando personajes nuevos para Episodio ${epNum}...`);
+        try {
+          const existingCharList = state.characters.map(ch => '- ' + ch.name + ' (' + (ch.role||'') + '): ' + (ch.appearance||'')).join('\n');
+          const newCharPrompt = ctx + '\n\nPERSONAJES EXISTENTES (NO recrear):\n' + existingCharList + '\n\nPersonajes nuevos a crear:\n"' + newCharsDesc + '"\n\nCrea SOLO los personajes nuevos. Devuelve SOLO:\n{"characters":[{"id":"c_new1","name":"nombre","role":"rol","gender":"female o male","age":"18+","appearance":"descripción visual detallada","personality":"2 frases","backstory":"2 frases"}]}';
+          const newCharRaw = await callGemini(newCharPrompt, sysBase + genreExtra);
+          const newChars = safeParseJSON(newCharRaw).characters || [];
+          if (newChars.length) {
+            // Give unique IDs to avoid collision
+            const ts = Date.now();
+            newChars.forEach((ch, i) => { ch.id = `c_new_ep${epNum}_${i}_${ts}`; });
+            state.characters = [...state.characters, ...newChars];
+            saveState();
+            renderCharacters();
 
-    setProg(20, `✅ ${state.characters.length} personajes — Paso 2/5: Escenas 1-8...`);
+            // Auto-generate reference images for new characters
+            setProg(15, `Generando imágenes de ${newChars.length} personaje(s) nuevo(s)...`);
+            for (const ch of newChars) {
+              try {
+                const prompt = `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. NO text, NO letters, NO watermarks. Clean professional anime 2D art style, white background, character turnaround showing front side and back.`;
+                const imgB64 = await generateImage(prompt, null);
+                await dbSet(charImgKey(ch.id), imgB64);
+                renderCharacters();
+                showToast(`✅ Imagen generada: ${ch.name}`, 'success');
+              } catch(imgErr) {
+                showToast(`⚠️ No se pudo generar imagen de ${ch.name} — genera manualmente`, 'error');
+              }
+            }
+          }
+        } catch(e) {
+          showToast('⚠️ Error creando personajes nuevos — se continúa con los existentes', 'error');
+        }
+      }
+      setProg(20, `✅ ${state.characters.length} personajes — Generando escenas del Episodio ${epNum}...`);
+      showToast(`Episodio ${epNum}: ${state.characters.length} personajes listos`, 'success');
+    }
 
     // Full character reference for imagePrompts — includes name, role, appearance, outfit
     const charRef = state.characters.map(c =>
@@ -1656,6 +1702,9 @@ REGLAS CRÍTICAS PARA imagePromptA e imagePromptB:
     }
     setTimeout(() => { progress.style.display = 'none'; setProg(0, ''); }, 3000);
     updateEpisodeNav();
+    // Clear new chars input after successful generation
+    const nci = document.getElementById('newCharsInput');
+    if (nci) nci.value = '';
 
   } catch(e) {
     openErrorModal('Error generando episodio', e.message);
