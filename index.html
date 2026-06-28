@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.88 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-24.90 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1455,26 +1455,25 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     // Estilo de narración según el tono del subgénero
     const isGrounded  = hasSliceOfLife && !allowsSuper && !allowsSuper2;
     const GENRE_TONE = {
-      accion:       'TONE: High-octane, physical, adrenaline. Actions described blow-by-blow. NO melodrama — let the action speak. Short explosive sentences.',
-      fantasia:     'TONE: Epic and grand. Magic feels real and dangerous. Wonder mixed with stakes. Ancient powers have weight.',
-      isekai:       'TONE: Discovery and overpowering growth. The protagonist adapts fast and keeps winning. System notifications, skill unlocks, stat reveals. Excitement of an underdog rising.',
-      donghua:      'TONE: Cultivation system, levels, techniques. Cold and calculated ambition. The protagonist ASCENDS step by step. Power is earned, not given. Stats, ranks, sects matter. Epic but methodical — NOT emotional drama.',
-      videojuego:   'TONE: Game system logic. Levels, skills, quests, boss fights. The protagonist plays to win. Concrete stats and skill names. Fast, game-like pacing.',
-      mecha:        'TONE: Machine and pilot as one. Tactical combat. Steel and speed. Cockpit tension. War has a human cost.',
-      romcom:       'TONE: Warm and playful. Misunderstandings, embarrassment, fluttery feelings. Light and fun with moments of real emotion.',
-      drama:        'TONE: Emotional depth and weight. Real relationships, hard choices, consequences. Let feelings breathe — but no melodrama.',
-      slice_of_life:'TONE: Quiet and warm. Small moments that matter. Everyday details. No big plot events — the beauty is in the ordinary.',
-      terror:       'TONE: Creeping dread. The unknown threatens. Short tense sentences. Something is very wrong and getting worse.',
-      psicologico:  'TONE: Unreliable perception. Mind under pressure. Reality bends. The protagonist questions everything including themselves.',
-      misterio:     'TONE: Clues and shadows. Every detail might matter. Questions accumulate. The reader must keep watching to find out.',
-      deportes:     'TONE: Competitive fire. Training pays off in crucial moments. Team and rival dynamics. The body pushed to its limit.',
-      sci_fi:       'TONE: Futuristic and analytical. Technology as both tool and threat. Cold logic with a human core.',
-      aventura:     'TONE: Exploration and discovery. New places, new dangers, new allies. The journey IS the story.',
-      sobrenatural: 'TONE: Hidden powers revealed. Demons, spirits, the unseen world. Danger from beyond. Power is both gift and curse.',
-      supervivencia:'TONE: Every resource counts. Time pressure. Brutal decisions. Physical reality — food, water, shelter, threat.',
-      mecha:        'TONE: War machine and pilot. Tactical, mechanical, human cost of battle.',
+      accion:       'ACTION tone: Protagonist describes what they DO and SEE, not what they FEEL. Concrete movements, physical details, results of actions. "I dodge left. The blade hits the wall. Three centimeters from my face." No emotional narration — the action speaks.',
+      fantasia:     'FANTASY tone: Casual wonder. The protagonist notices magical things like they are learning a new neighborhood. Concrete details about how magic works, what it costs, what it can and cannot do. Natural reactions, not overwrought awe.',
+      isekai:       'ISEKAI/SYSTEM tone: Conversational first person. System notifications and stat windows described casually. The protagonist thinks out loud — practical, a little sarcastic, adapting fast. "The system popped up. Level 3 already? That was easier than expected."',
+      donghua:      'DONGHUA/MANHUA tone — THIS IS THE VIRAL FORMULA: Casual first person. The protagonist is underestimated, but internally sharp. Humor mixed with competence reveals. Concrete technical details create credibility. The tension comes from SITUATION, not from emotional language. "I was bored watching the door when she walked in. Excellent posture. Serious face. She put the box on the counter. I leaned over to look. My back straightened immediately." NO dramatic adjectives. Let the FACTS create impact.',
+      videojuego:   'GAME tone: Think out loud like a player. Analyze the situation, calculate options, execute. Concrete game mechanics described as real. "Boss pattern: charges twice then pauses. I count to two and step left."',
+      mecha:        'MECHA tone: Technical and tactical. Pilot and machine thinking together. Systems, readings, decisions under pressure. Calm in chaos — professionals do not panic, they solve.',
+      romcom:       'ROMCOM tone: Light and self-aware. The protagonist notices embarrassing details and their own awkward reactions. Internal commentary is funny. Warmth through small specific moments, not declarations.',
+      drama:        'DRAMA tone: Emotional weight through ACTIONS and DECISIONS, not descriptions of feelings. Characters do things that reveal how they feel. Consequences are concrete. "She put the letter on the table and walked out. I did not open it until the next morning."',
+      slice_of_life:'SLICE OF LIFE tone: Grounded and specific. Small moments described with sensory detail. No big events — the beauty is in noticing ordinary things: the smell of rain, a conversation that goes nowhere, a familiar routine.',
+      terror:       'HORROR tone: Short factual sentences. The protagonist describes EXACTLY what they see and hear. No screaming in the narration — the reader screams for them. "The door was open. I had closed it."',
+      psicologico:  'PSYCHOLOGICAL tone: The protagonist reports what they perceive, but the reader senses something is off. Calm surface, unstable underneath. Contradictions described without labeling them as contradictions.',
+      misterio:     'MYSTERY tone: The protagonist notices details and notes them without explaining why. Questions build naturally. "Third time she looked at her watch. The meeting had not started yet."',
+      deportes:     'SPORTS tone: Body awareness and competitive instinct. The protagonist feels their muscles, reads the opponent, calculates. Training and game moments described from inside the experience.',
+      sci_fi:       'SCI-FI tone: The future is normal to the protagonist. Advanced technology described casually, like someone today describes using a phone. The interesting part is what the technology reveals about people.',
+      aventura:     'ADVENTURE tone: Forward momentum. New things discovered described concretely. Problems solved practically. The world expands with each scene.',
+      sobrenatural: 'SUPERNATURAL tone: Powers and spirits treated matter-of-factly by the protagonist. Other people react with shock — the protagonist has seen enough to be practical about it.',
+      supervivencia:'SURVIVAL tone: Resource counting. Physical state constantly noted. Short-term goals. Every decision has a cost. Calm narration under pressure — panicking wastes energy.',
     };
-    const genreTone = GENRE_TONE[genero] || 'TONE: Match the genre atmosphere — keep it specific and immersive.';
+    const genreTone = GENRE_TONE[genero] || 'Casual first person. Specific details. Let situations create impact, not emotional adjectives.';
 
     const SCENE_ENDING = {
       accion:       'Each scene ends with an exciting moment, a power move, or a clash that makes you want to see the next second.',
@@ -1497,23 +1496,29 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     };
     const sceneEnding = SCENE_ENDING[genero] || 'Each scene ends naturally for the genre — no forced drama.';
 
-    const sysBase = `You are a viral anime scriptwriter for Facebook Reels. Write stories in FIRST PERSON that hook viewers.
+    const sysBase = `You are a viral anime/manhua scriptwriter for Facebook Reels. Your model is the viral Chinese web novel style: casual, sharp, specific. Tension comes from SITUATIONS and CONCRETE DETAILS — never from dramatic language.
 
-CRITICAL: The JSON field for story text MUST be called "narration" (English spelling, no accent).
+CRITICAL: The JSON field MUST be called "narration" (English, no accent mark).
 
-GENRE TONE — MANDATORY — this defines the entire feel of every scene:
+ANTI-DRAMA RULE — mandatory for ALL genres except "drama":
+FORBIDDEN phrases: "el corazón me latió fuerte", "sentí un escalofrío", "la emoción me invadió", "no podía creer lo que veía", "todo cambió en ese momento", "el peso del destino", "las lágrimas amenazaban". These feel fake and kill engagement.
+INSTEAD: describe what the character SEES, DOES, and THINKS. Let facts create emotion.
+BAD: "Sentí que mi corazón se paralizaba de terror al ver aquella escena."
+GOOD: "Me detuve. La puerta estaba abierta. Yo la había cerrado con llave."
+
+GENRE TONE — MANDATORY:
 ${genreTone}
 
-SCENE ENDING RULE — apply this to every scene:
+SCENE ENDING RULE:
 ${sceneEnding}
 
-NARRATION RULES — write the "narration" field in Spanish:
-- First person narrator (YO), present or immediate past tense
-- Each scene: EXACTLY 75-80 Spanish words. Count before responding.
-- First sentence = immediate hook for this genre's tone. NEVER start with scenery description.
-- Specific details: character names, skill names, place names, numbers. Not generic descriptions.
-- Physical sensations appropriate to the genre (not always dramatic — can be exciting, warm, tense, or curious)
-- Short sentences. Max 15 words each. Match the genre rhythm.
+NARRATION RULES:
+- EXACTLY 75-80 Spanish words in the "narration" field. Count before responding.
+- First person (YO), present or immediate past tense
+- First sentence: drop into the action or situation immediately. No setup.
+- Specific over vague: numbers, names, technical terms, exact observations
+- Short sentences, max 15 words. Natural rhythm — not all sentences the same length.
+- Dialogue can appear naturally: Ella dijo: "¿De verdad puede repararlo?" — Sonreí.
 ${isGrounded ? `
 MODO COTIDIANO ACTIVO (Slice of Life):
 - Narra el día a día con detalles reales y específicos
@@ -1734,7 +1739,7 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA:
 
     const batchRules = `REGLAS ESTRUCTURA:
 - 10 escenas en total — estructura: cold_open (1-2), act1 (3-5), act2 (6-8), clímax (9), resolución (10)
-- The "narration" field: EXACTLY 75-80 Spanish words, FIRST PERSON (YO). Count words. Hook in first sentence, tension at the end.
+- The "narration" field: EXACTLY 75-80 Spanish words, FIRST PERSON (YO). Count words. Drop into the scene immediately. End naturally for the genre — not forced tension.
 - imagePromptA = first visual moment of the scene (character in action, specific setting)
 - imagePromptB = DIRECT CONTINUATION of imagePromptA — same characters, same exact location, 3-5 seconds later. Describe the NEXT action or position in sequence. If A shows "charging toward enemy", B shows "striking the enemy mid-swing". NEVER a different location or completely different action. The viewer must feel A and B are two frames of the same continuous shot.
 - FINALE (escena 10): resolución PARCIAL + misterio abierto que engancha al episodio ${epNum + 1}
@@ -2567,7 +2572,7 @@ document.getElementById('btnRepairScenes').addEventListener('click', async () =>
     const sysBase = `You are a viral anime scriptwriter for Facebook Reels. Write first-person narrations in Spanish.
 RULES:
 - JSON field MUST be "narration" (English, no accent mark). EXACTLY 75-80 Spanish words. Count them.
-- Hook in first sentence. Physical sensations. Tension at the end. No metaphors.
+- Drop into the scene immediately. Specific details over vague descriptions. End naturally for the genre.
 - imagePromptA and imagePromptB in ENGLISH, starting with "Scene with [exact name]:" with outfit/hair/expression/setting
 - NEVER use "a man"/"the protagonist" — always the real character name
 - Respond ONLY with valid JSON, no markdown`;
@@ -2593,9 +2598,9 @@ RULES:
 
     const lastGoodRef = lastGood ? `\nEscena anterior (${lastGood.num}): "${lastGood.narration}"` : '';
 
-    const sceneExample = `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"EXACTAMENTE 75-80 palabras primera persona, gancho inicial, tensión final","imagePromptA":"Scene with [nombre exacto]: ...","imagePromptB":"Scene with [nombre exacto]: ..."}`;
+    const sceneExample = `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"EXACTAMENTE 75-80 palabras primera persona, entra directo a la escena, estilo natural del género","imagePromptA":"Scene with [nombre exacto]: ...","imagePromptB":"Scene with [nombre exacto]: ..."}`;
 
-    const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: 10 escenas.\nCada escena DEBE tener narration (EXACTAMENTE 75-80 palabras, primera persona, gancho inicial, tensión final), imagePromptA e imagePromptB (ambos en inglés).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
+    const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: 10 escenas.\nCada escena DEBE tener narration (EXACTAMENTE 75-80 palabras, primera persona, estilo natural del género — sin dramatismo forzado), imagePromptA e imagePromptB (ambos en inglés).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
 
     let newScenes = [];
     for (let attempt = 0; attempt < 3 && newScenes.length < count; attempt++) {
