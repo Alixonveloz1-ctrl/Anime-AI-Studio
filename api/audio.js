@@ -109,13 +109,12 @@ export default async function handler(req) {
     const spd = parseFloat(speed) || 1.0;
     const speedTag = spd <= 0.6 ? '[slow] ' : spd >= 1.8 ? '[fast] '
                    : spd >= 1.4 ? '[slightly fast] ' : spd <= 0.8 ? '[slightly slow] ' : '';
-    let tag = '';
-    if (emotion === 'subtle') {
-      tag = voice === 'climax' ? '[slightly intense] ' : voice === 'resolution' ? '[calm] ' : '';
-    }
+
+    // Style instruction: conversational, not theatrical
+    const styleTag = '[Read in a natural conversational tone, calm and engaging, like a narrator telling a story to a friend — NOT theatrical, NOT dramatic, NOT overly expressive] ';
 
     const reqBody = JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: speedTag + tag + text }] }],
+      contents: [{ role: 'user', parts: [{ text: styleTag + speedTag + text }] }],
       generationConfig: {
         responseModalities: ['AUDIO'],
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
