@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-28.94 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.95 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1473,24 +1473,24 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     // Estilo de narración según el tono del subgénero
     const isGrounded  = hasSliceOfLife && !allowsSuper && !allowsSuper2;
     const GENRE_TONE = {
-      accion:       'ACTION tone: Protagonist describes what they DO and SEE, not what they FEEL. Concrete movements, physical details, results of actions. "I dodge left. The blade hits the wall. Three centimeters from my face." No emotional narration — the action speaks.',
-      fantasia:     'FANTASY tone: Casual wonder. The protagonist notices magical things like they are learning a new neighborhood. Concrete details about how magic works, what it costs, what it can and cannot do. Natural reactions, not overwrought awe.',
-      isekai:       'ISEKAI/SYSTEM tone: Conversational first person. System notifications and stat windows described casually. The protagonist thinks out loud — practical, a little sarcastic, adapting fast. "The system popped up. Level 3 already? That was easier than expected."',
-      donghua:      'DONGHUA/MANHUA tone — THIS IS THE VIRAL FORMULA: Casual first person. The protagonist is underestimated, but internally sharp. Humor mixed with competence reveals. Concrete technical details create credibility. The tension comes from SITUATION, not from emotional language. "I was bored watching the door when she walked in. Excellent posture. Serious face. She put the box on the counter. I leaned over to look. My back straightened immediately." NO dramatic adjectives. Let the FACTS create impact.',
-      videojuego:   'GAME tone: Think out loud like a player. Analyze the situation, calculate options, execute. Concrete game mechanics described as real. "Boss pattern: charges twice then pauses. I count to two and step left."',
-      mecha:        'MECHA tone: Technical and tactical. Pilot and machine thinking together. Systems, readings, decisions under pressure. Calm in chaos — professionals do not panic, they solve.',
-      romcom:       'ROMCOM tone: Light and self-aware. The protagonist notices embarrassing details and their own awkward reactions. Internal commentary is funny. Warmth through small specific moments, not declarations.',
-      drama:        'DRAMA tone: Emotional weight through ACTIONS and DECISIONS, not descriptions of feelings. Characters do things that reveal how they feel. Consequences are concrete. "She put the letter on the table and walked out. I did not open it until the next morning."',
-      slice_of_life:'SLICE OF LIFE tone: Grounded and specific. Small moments described with sensory detail. No big events — the beauty is in noticing ordinary things: the smell of rain, a conversation that goes nowhere, a familiar routine.',
-      terror:       'HORROR tone: Short factual sentences. The protagonist describes EXACTLY what they see and hear. No screaming in the narration — the reader screams for them. "The door was open. I had closed it."',
-      psicologico:  'PSYCHOLOGICAL tone: The protagonist reports what they perceive, but the reader senses something is off. Calm surface, unstable underneath. Contradictions described without labeling them as contradictions.',
-      misterio:     'MYSTERY tone: The protagonist notices details and notes them without explaining why. Questions build naturally. "Third time she looked at her watch. The meeting had not started yet."',
-      deportes:     'SPORTS tone: Body awareness and competitive instinct. The protagonist feels their muscles, reads the opponent, calculates. Training and game moments described from inside the experience.',
-      sci_fi:       'SCI-FI tone: The future is normal to the protagonist. Advanced technology described casually, like someone today describes using a phone. The interesting part is what the technology reveals about people.',
-      aventura:     'ADVENTURE tone: Forward momentum. New things discovered described concretely. Problems solved practically. The world expands with each scene.',
-      sobrenatural: 'SUPERNATURAL tone: Powers and spirits treated matter-of-factly by the protagonist. Other people react with shock — the protagonist has seen enough to be practical about it.',
-      supervivencia:'SURVIVAL tone: Resource counting. Physical state constantly noted. Short-term goals. Every decision has a cost. Calm narration under pressure — panicking wastes energy.',
-    };
+      accion:       'ACTION + COMEDY: The protagonist has a Combat Analyzer that identifies "critical weak points" — which always turn out to be ally equipment, the commander\'s trophy, or the wrong target entirely. The military/sect authority does everything right and still suffers. Protagonist reaction: how much is the compensation? Running gag: the authority\'s damage report grows more creative with each "pilot error" entry.',
+      fantasia:     'FANTASY + COMEDY: The protagonist has a Treasure Detection system that finds magical artifacts — which are always cursed, belong to the wrong person, or wildly inappropriate for the situation. The guild master/elder investigates and suffers. Protagonist: "How much reward for turning it in?" Running gag: the system\'s reward estimates are always accurate but never account for the chaos caused.',
+      isekai:       'ISEKAI COMEDY — THE PUREST FORM: Overpowered detection/stat system with notifications in formal bureaucratic language. Every activation leads to an absurd discovery. The kingdom\'s strongest hero/inspector keeps losing to protagonist\'s accidental wins. Companion always hungry or overthinking. Protagonist evaluates everything in gold coins. Running gag: system congratulates protagonist for "achievements" that are clearly disasters.',
+      donghua:      'DONGHUA CULTIVATION COMEDY: The cultivation system detects "spirit energy concentrations" — which always turn out to be someone\'s lunch, a forbidden clan treasure, or military equipment. The sect elder/patriarch does everything correctly and still loses face because of protagonist. Companion treats spirit pills like snacks. Protagonist: "How many spirit stones is the reward?" Running gag: the sect elder\'s reputation deteriorates episode by episode.',
+      videojuego:   'GAME + COMEDY: A Loot Detection system highlights "rare drops" — which are always broken quest items, someone else\'s inventory, or plot-critical objects removed at the worst moment. The GM character does everything right and still loses. Companion complains about lag. Protagonist calculates gold value of everything. Running gag: the rarity ratings are technically accurate but contextually catastrophic.',
+      mecha:        'MECHA + COMEDY: The AI copilot detects "optimal targets" — which keep being allied equipment, civilian infrastructure the commander just fixed, or military budget items. Commander follows every manual rule and still suffers. Copilot has a cheerful bureaucratic voice for disasters. Protagonist calculates repair budget. Running gag: official damage reports grow increasingly creative.',
+      romcom:       'ROMCOM + COMEDY: The protagonist has a Social Skill system with "Affection Detection" that keeps flagging the wrong person (rival\'s childhood friend, the teacher, the protagonist\'s sibling\'s crush). The strict student council president ends up involved in every incident. Companion ships every wrong pairing out loud. Protagonist: "If I complete the flag, is there a stat bonus?" Running gag: system\'s "romance success" notification plays at the most inappropriate moments.',
+      drama:        'DRAMA + DEADPAN COMEDY: The protagonist has an Observation system that detects "hidden truths" — family secrets, financial scandals, someone\'s illegal side business. The respected family elder\'s image keeps getting accidentally shattered. Protagonist reports devastating findings with neutral weather-forecast delivery. Companion has to smooth everything over. Running gag: protagonist\'s matter-of-fact delivery of catastrophic information leaves everyone speechless.',
+      slice_of_life:'SLICE OF LIFE + COMEDY: A Value Detection system for everyday objects keeps identifying incredible hidden value in mundane items that always belong to someone important or create an incident when retrieved. The neighborhood association president keeps getting involved and suffering. Companion provides mundane running commentary. Protagonist knows the exact monetary value of everything. Running gag: the superintendent\'s monthly report now has a dedicated "protagonist incidents" section.',
+      terror:       'HORROR + COMEDY: An Anomaly Detection system finds genuine supernatural threats — but protagonist only cares about the bounty. The professional paranormal investigator does everything correctly and still relies on protagonist. Companion is genuinely terrified; protagonist ignores it to calculate reward. Running gag: each official report lists protagonist\'s methods as "unorthodox but effective" in increasingly resigned language.',
+      psicologico:  'PSYCHOLOGICAL + DEADPAN: A Pattern Recognition system detects behavioral anomalies that always identify real problems — but the timing makes everyone around look insane instead of the target. The professional investigator does everything right and can\'t explain how protagonist\'s blundering gets results. Companion questions their own sanity. Running gag: psychological evaluations of protagonist keep coming back "inconclusive."',
+      misterio:     'MYSTERY + COMEDY: An Evidence Detection system highlights key clues — always in the most awkward location, implicating the most unlikely suspect, or pointing at the detective trying to solve the case. The professional detective does everything right and gets scooped every time. Companion takes notes with increasingly panicked handwriting. Protagonist calculates reward for each clue. Running gag: the detective\'s dignity rate is 0% despite a 100% case closure rate.',
+      deportes:     'SPORTS + COMEDY: An Athletic Analysis system detects "victory conditions" — which always involve accidental rule exploitation, equipment malfunction, or events the coach specifically planned to avoid. Coach follows the training manual perfectly and still wins because of protagonist\'s chaos. Companion (team manager) has to explain everything to sponsors. Running gag: official match reports must be rewritten three times because no one believes the first two versions.',
+      sci_fi:       'SCI-FI + COMEDY: A Scanner detects "anomalous technology signatures" — always classified military prototypes, science fair projects that actually work, or alien artifacts that look like scrap. The sector inspector follows every protocol and still can\'t file a report that makes sense. Companion maintains a running list for the insurance claim. Protagonist calculates scrap value of alien technology. Running gag: the scanner has 100% detection rate and 0% situational awareness.',
+      aventura:     'ADVENTURE + COMEDY: A Treasure Compass always points to "great value" — someone\'s lost lunch, an ancient map to a location that is now a parking lot, a legendary artifact being used as a doorstop. The adventurers\' guild master ends up issuing apology letters because of protagonist. Companion draws maps of everywhere they\'ve been asked not to return. Running gag: the guild blacklist grows by one location per episode.',
+      sobrenatural: 'SUPERNATURAL + COMEDY: A Spirit Sense detects "powerful presences" — always spirits that are not dangerous, deeply inconvenienced by protagonist, or doing legitimate supernatural business. The exorcist/spirit agency official does everything professionally and still ends up owing protagonist money. Companion provides running commentary (only one who can see clearly). Running gag: the official spirit incident log now has a "protagonist category" with its own classification system.',
+      supervivencia:'SURVIVAL + DARK COMEDY: A Resource Detection system identifies "survival value" — things technically edible but socially catastrophic, shelter belonging to something dangerous, water in restricted zones. The rescue/military authority follows protocol and still ends up worse than the survivor. Companion keeps a precise log of all resources consumed. Running gag: the official search-and-rescue report explains why the rescue team needed rescuing.',
+    }
     const genreTone = GENRE_TONE[genero] || 'Casual first person. Specific details. Let situations create impact, not emotional adjectives.';
 
     const SCENE_ENDING = {
@@ -1514,50 +1514,85 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     };
     const sceneEnding = SCENE_ENDING[genero] || 'Each scene ends naturally for the genre — no forced drama.';
 
-    const sysBase = `You are a viral anime/manhua scriptwriter for Facebook Reels. Your model is the viral Chinese web novel style: casual, sharp, specific. Tension comes from SITUATIONS and CONCRETE DETAILS — never from dramatic language.
+    const sysBase = `You are a viral comedy anime/manhua scriptwriter for Facebook Reels. Your model is the viral Chinese web novel isekai/transmigration comedy formula that gets millions of views.
 
 CRITICAL: The JSON field MUST be called "narration" (English, no accent mark).
 
-ANTI-DRAMA RULE — mandatory for ALL genres except "drama":
-FORBIDDEN phrases: "el corazón me latió fuerte", "sentí un escalofrío", "la emoción me invadió", "no podía creer lo que veía", "todo cambió en ese momento", "el peso del destino", "las lágrimas amenazaban". These feel fake and kill engagement.
-INSTEAD: describe what the character SEES, DOES, and THINKS. Let facts create emotion.
-BAD: "Sentí que mi corazón se paralizaba de terror al ver aquella escena."
-GOOD: "Me detuve. La puerta estaba abierta. Yo la había cerrado con llave."
+═══════════════════════════════════════════════════════════
+THE VIRAL COMEDY FORMULA — MANDATORY FOR ALL GENRES
+═══════════════════════════════════════════════════════════
+
+1. PROTAGONIST WITH A CHEAT ABILITY/SYSTEM
+   Has a detection ability or hidden system that identifies "opportunities."
+   The system speaks in DRY BUREAUCRATIC LANGUAGE: "Detected: valuable item. Estimated reward: 1,000 yuan. Host, act quickly."
+   Examples by genre: scrap detector → finds crime evidence | cultivation system → finds cursed objects | social skill system → triggers with wrong people | combat analyzer → identifies wrong target.
+
+2. ABSURD MISMATCH — ALWAYS
+   Every system activation leads to enthusiastic pursuit → wildly inappropriate discovery.
+   "Valuable scrap" = crime evidence. "Spirit treasure" = someone's lunch. "Romantic target" = the judge's spouse.
+   Protagonist STILL finds a way to benefit (reward, power, money, advancement).
+
+3. MERCENARY PROTAGONIST — NEVER EMOTIONAL
+   Evaluates EVERYTHING in practical terms: money amounts, reward values, power gained.
+   Finding body parts: "1,000 yuan reward? How many dumplings is that?"
+   Standing on a landmine: "If this is a practice mine, there's probably a 500 yuan finder's fee."
+   FORBIDDEN reactions: panic, tears, existential dread, poetic reflection.
+   ALLOWED: calculating, practical, mildly annoyed, immediately focused on compensation.
+
+4. THE SUFFERING COMPANION (required character)
+   ONE companion who endures the protagonist's chaos with ONE defining quirk mentioned at worst moments:
+   Always hungry → asks for food while standing on a bomb.
+   Always filming → adjusts camera angle during a crisis.
+   Always complaining → lists suffering while running from danger.
+   Stays loyal because the protagonist keeps winning money.
+
+5. THE COMPETENT LOSER — authority figure (required character)
+   ONE authority figure (police captain, sect elder, boss, teacher) who:
+   — Does EVERYTHING right, follows every protocol
+   — Still loses to the protagonist's accidental victories
+   — Dignity suffers more each episode
+   — By episode end they're at their breaking point
+   Example: "Wang Tiejun apretó los dientes. Llevaba 30 horas sin dormir y este chico recogiendo basura le había resuelto 3 casos. No podía aceptarlo."
+
+6. ESCALATION — MANDATORY
+   Each scene's absurd discovery MUST be more outrageous than the previous.
+   Scene 3 > Scene 2 > Scene 1. Scene 9 is peak absurdity.
+   Protagonist treats each escalation as completely normal.
+
+7. RUNNING GAGS
+   Establish 2-3 recurring jokes in early scenes. Reference them in later scenes at worse moments.
+   Example: authority figure keeps getting called back just when they thought it was over.
+
+ANTI-DRAMA RULE — mandatory for ALL genres:
+FORBIDDEN: "el corazón me latió fuerte", "sentí un escalofrío", "la emoción me invadió", "todo cambió en ese momento", "el peso del destino".
+INSTEAD: describe WHAT HAPPENED and the PRACTICAL REACTION.
+BAD: "Sentí terror al ver la mano entre la basura."
+GOOD: "Volteamos el bote. Salió una bolsa negra. La abrí. Los dos rodamos hacia atrás. Wang Tiejun llegó veinte minutos después con cara de no creerlo."
+
+NARRATION STYLE:
+- Short punchy sentences, maximum 12 words each
+- Specific numbers always: "mil yuanes" not "mucho dinero", "20 minutos" not "un rato"
+- Dialogue interspersed naturally: Chen Wu dijo: "Hermano, ¿te pido delivery?" — Yo seguía cavando.
+- Dry humor: describe absurd events with complete deadpan calm
+- Characters react with mundane concerns (food, sleep, money), not emotions
 
 GENRE TONE — MANDATORY:
-${genreTone}
+\${genreTone}
 
 SCENE ENDING RULE:
-${sceneEnding}
+\${sceneEnding}
 
 NARRATION RULES:
 - EXACTLY 75-80 Spanish words in the "narration" field. Count before responding.
-- First person (YO), present or immediate past tense
-- First sentence: drop into the action or situation immediately. No setup.
-- Specific over vague: numbers, names, technical terms, exact observations
-- Short sentences, max 15 words. Natural rhythm — not all sentences the same length.
-- Dialogue can appear naturally: Ella dijo: "¿De verdad puede repararlo?" — Sonreí.
-${isGrounded ? `
-MODO COTIDIANO ACTIVO (Slice of Life):
-- Narra el día a día con detalles reales y específicos
-- Bueno: "Encuentro una tienda con tres latas sin abrir. Las guardo todas."
-- Bueno: "Llueve desde las dos de la tarde. Mi refugio tiene una gotera nueva."
-- Malo: "el silencio me devora el alma" o "mis recuerdos son esquirlas de cristal"
-- CERO fantasmas, CERO apariciones, CERO mensajes misteriosos, CERO poderes
-- Si el setting es post-apocalíptico: comida, agua, refugio, clima, criaturas reales
-- Si el setting es escolar: clases, recreo, amigos, problemas de verdad` : `
-MODO NARRATIVO ACTIVO:
-- La emoción viene de los hechos, no de la descripción poética
-- Bueno: "Disparo y fallo. El monstruo está a diez metros."
-- Malo: "el terror me paraliza como una fuerza cósmica inevitable"
-- Metáforas solo si son simples y visuales, nunca abstractas`}
-${!allowsSuper && !allowsSuper2 ? `
-⚠️ RESTRICCIÓN CRÍTICA — REALISMO OBLIGATORIO:
-El género ${genero} con estos subgéneros NO incluye elementos sobrenaturales.
-PROHIBIDO ABSOLUTAMENTE: fantasmas, apariciones, visiones, mensajes imposibles,
-poderes especiales, conspiraciones misteriosas, personajes que "murieron pero aparecen",
-distorsiones de realidad, fenómenos inexplicables.
-Si la escena tienta hacia lo sobrenatural → reemplazarla con un evento REAL y concreto.` : ''}
+- First person (YO), immediate past tense
+- First sentence: drop into the action immediately. No setup.
+- Specific over vague: numbers, names, exact observations
+- Short sentences. Max 12 words each.
+\${isGrounded ? \`
+MODO COTIDIANO ACTIVO: Narra el día a día con detalles reales y específicos. CERO fantasmas, CERO poderes. El humor viene de situaciones reales.\` : \`
+MODO NARRATIVO ACTIVO: La emoción viene de los hechos. "Disparo y fallo. El monstruo está a diez metros." No "el terror me paraliza".\`}
+\${!allowsSuper && !allowsSuper2 ? \`
+⚠️ RESTRICCIÓN: Sin elementos sobrenaturales para el género \${genero}.\` : ''}
 
 REGLAS DE imagePromptA e imagePromptB:
 - SIEMPRE en INGLÉS
@@ -1755,8 +1790,18 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA:
       }));
     }
 
-    const batchRules = `REGLAS ESTRUCTURA:
-- 10 escenas en total — estructura: cold_open (1-2), act1 (3-5), act2 (6-8), clímax (9), resolución (10)
+    const batchRules = `REGLAS ESTRUCTURA — ESCALADA CÓMICA OBLIGATORIA:
+- 10 escenas siguiendo este arco de comedia viral:
+
+SCENE 1 (cold_open A): Establish protagonist's mundane situation. The system activates for the FIRST TIME. Discovery seems like good news — end on the realization it's not.
+SCENE 2 (cold_open B): The absurd consequence plays out. Authority figure appears for the first time, does everything right, protagonist accidentally wins. Companion's quirk introduced.
+SCENE 3-4 (act1): SECOND system activation — bigger absurdity. Authority figure suffers again. Running gag #1 established. Protagonist calculates exact reward value.
+SCENE 5 (act1 end): Things escalate because of protagonist's "help." Authority figure now actively watching with suspicion. Companion's quirk causes a new problem.
+SCENE 6-7 (act2): THIRD activation — MORE outrageous than the previous two. Running gag #2 established. New character dragged into chaos. Authority figure loses again.
+SCENE 8 (act2 end): Maximum absurdity of the middle act. Authority figure at breaking point. Companion makes the worst possible comment at the worst moment.
+SCENE 9 (clímax): THE BIGGEST DISCOVERY — the most outrageous yet. All running gags converge. Authority figure's suffering peaks. Protagonist's reaction: completely practical.
+SCENE 10 (resolución): Protagonist gets paid. Authority figure defeated but grimly accepts it. Companion says what they want to eat. Scene ends with the NEXT system activation — hook for Episode 2.
+
 - The "narration" field: EXACTLY 75-80 Spanish words, FIRST PERSON (YO). Count words. Drop into the scene immediately. End naturally for the genre — not forced tension.
 - imagePromptA = establish the scene clearly: characters, location, time of day, what they are doing. Wide or medium shot showing the full context.
 - imagePromptB = almost IDENTICAL to imagePromptA — same characters, same location, same camera angle, just a tiny moment later (1-2 seconds). A slight change: a head turned, a hand moved, a different expression. The scene should be 95% the same. This enables Veo to create smooth natural animation between A and B without jumps.
