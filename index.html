@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.97 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.98 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1666,25 +1666,21 @@ ${subgenreText}`;
         protagonistGender = 'female';
       } else if (numCharsChoice !== 'auto') {
         numChars = parseInt(numCharsChoice);
-        if (numChars === 2) { numFemales = 1; numMales = 1; }
-        else if (numChars === 3) { numFemales = 2; numMales = 1; }
-        else if (numChars === 4) { numFemales = 3; numMales = 1; }
-        else { numFemales = 3; numMales = 2; }
-        protagonistGender = 'libre (el que mejor sirva al género)';
+        numFemales = null; numMales = null;
+        protagonistGender = 'libre (el que mejor sirva al género y la historia)';
       } else {
         numChars = 3 + Math.floor(Math.random() * 3);
-        if (numChars === 3) { numFemales = 2; numMales = 1; }
-        else if (numChars === 4) { numFemales = 3; numMales = 1; }
-        else { numFemales = 3; numMales = 2; }
-        protagonistGender = 'libre (el que mejor sirva al género)';
+        numFemales = null; numMales = null;
+        protagonistGender = 'libre (el que mejor sirva al género y la historia)';
       }
 
     const charRules = `REGLAS OBLIGATORIAS DE REPARTO:
-- Crear EXACTAMENTE ${numChars} personajes: ${numFemales} femeninos + ${numMales} masculino${numMales > 1 ? 's' : ''}
+- Crear EXACTAMENTE ${numChars} personajes
+- El género de cada personaje (masculino/femenino) debe ser el que mejor sirva a la historia, el género seleccionado y el concepto dado. NO impongas una mayoría femenina salvo que la historia lo requiera.
 - Protagonista: ${protagonistGender}
-- Nombres japoneses reales y coherentes con la demografía y época del setting
+- Nombres coherentes con la demografía y época del setting (japoneses, chinos, occidentales, según corresponda)
 - Variedad visual: distintos colores de cabello, ojos, estilos de ropa
-- Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${mod === 'harem' || mod === 'ecchi' ? '\\n- Personajes femeninos con arquetipos marcados (tsundere, kuudere, genki, dandere, onee-san, etc)' : ''}${mod === 'harem_inverso' ? '\\n- Personajes masculinos con arquetipos marcados (cool, principesco, deportista, intelectual, salvaje, etc)' : ''}
+- Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${mod === 'ecchi' ? '\\n- Personajes femeninos con arquetipos marcados (tsundere, kuudere, genki, dandere, onee-san, etc)' : ''}${mod === 'harem_inverso' ? '\\n- Personajes masculinos con arquetipos marcados (cool, principesco, deportista, intelectual, salvaje, etc)' : ''}
 
 REGLAS DE PERSONAJES FEMENINOS (TODOS los géneros):
 - Cabello LARGO obligatorio (hasta los hombros o más largo). Nunca corto tipo bob/pixie.
@@ -1711,8 +1707,8 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA:
 - Edad: TODOS los personajes 18+ años. Especificar edad en la descripción`;
 
       const chRaw = await callGemini(
-        `${ctx}\\n\\n${charRules}\\n\\nCrea ${numChars} personajes únicos (${numFemales} mujeres + ${numMales} hombre${numMales > 1 ? 's' : ''}) que pertenezcan al género "${genero}" — sus profesiones, vestimenta y trasfondos deben encajar con ese género${isEcchi ? ' y con el tono ecchi (ropa que muestre su atractivo)' : ''}. Devuelve SOLO:
-{"characters":[{"id":"c1","name":"nombre japonés","role":"protagonista o rol","gender":"female o male","age":"edad numérica (18+)","appearance":"descripción visual ${isEcchi ? 'atractiva y sugerente (figura, ropa que enfatiza)' : 'neutra y descriptiva'}","personality":"2 frases","backstory":"2 frases"}]}`,
+        `${ctx}\n\n${charRules}\n\nCrea ${numChars} personajes únicos que pertenezcan al género "${genero}" — sus géneros, profesiones, vestimenta y trasfondos deben encajar con el género y el concepto de la historia${isEcchi ? ' y con el tono ecchi (personajes femeninos atractivos)' : ''}. Devuelve SOLO:
+{"characters":[{"id":"c1","name":"nombre","role":"protagonista o rol","gender":"female o male","age":"edad numérica (18+)","appearance":"descripción visual ${isEcchi ? 'atractiva y sugerente (figura, ropa que enfatiza)' : 'neutra y descriptiva'}","personality":"2 frases","backstory":"2 frases"}]}`,
         sysBase + genreExtra
       );
       state.characters = safeParseJSON(chRaw).characters || [];
