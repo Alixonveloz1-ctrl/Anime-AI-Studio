@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.99 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.100 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1674,28 +1674,39 @@ ${subgenreText}`;
         protagonistGender = 'libre (el que mejor sirva al género y la historia)';
       }
 
-    const charRules = `REGLAS OBLIGATORIAS DE REPARTO:
+      const charRules = `REGLAS OBLIGATORIAS DE REPARTO:
 - Crear EXACTAMENTE ${numChars} personajes
 - El género de cada personaje (masculino/femenino) debe ser el que mejor sirva a la historia, el género seleccionado y el concepto dado. NO impongas una mayoría femenina salvo que la historia lo requiera.
 - Protagonista: ${protagonistGender}
 - Nombres coherentes con la demografía y época del setting (japoneses, chinos, occidentales, según corresponda)
 - Variedad visual: distintos colores de cabello, ojos, estilos de ropa
-- Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${mod === 'ecchi' ? '\\n- Personajes femeninos con arquetipos marcados (tsundere, kuudere, genki, dandere, onee-san, etc)' : ''}${mod === 'harem_inverso' ? '\\n- Personajes masculinos con arquetipos marcados (cool, principesco, deportista, intelectual, salvaje, etc)' : ''}
+- Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${mod === 'ecchi' ? '\n- Personajes femeninos con arquetipos marcados (tsundere, kuudere, genki, dandere, onee-san, etc)' : ''}${mod === 'harem_inverso' ? '\n- Personajes masculinos con arquetipos marcados (cool, principesco, deportista, intelectual, salvaje, etc)' : ''}
+- Si el género es isekai, donghua o videojuego: incluye SIEMPRE un COMPAÑERO con un rasgo cómico definidor (hambriento, filmador, quejumbroso) y una FIGURA DE AUTORIDAD competente que sufrirá las consecuencias de los éxitos accidentales del protagonista
 
-REGLAS DE PERSONAJES FEMENINOS (TODOS los géneros):
+⚠️ PERSONAJE NO-HUMANO — LEE EL CONCEPTO CON CUIDADO:
+Si el concepto/hook de la historia indica que el protagonista (u otro personaje) transmigró, se reencarnó, o habita el cuerpo de un animal, criatura, objeto u otra entidad NO humana — ESE PERSONAJE DEBE SER CREADO IGUAL, respetando el esquema JSON completo (name, role, gender, age, appearance, personality, backstory). NO lo omitas y NO lo conviertas en humano.
+- "name": el nombre que le da su ama/dueño/entorno (ej: "Mantequilla")
+- "role": indica su naturaleza, ej: "protagonista (alma humana en cuerpo de Golden Retriever)"
+- "gender": el género de la CONSCIENCIA/alma que lo habita (no necesariamente el del cuerpo)
+- "age": edad de la consciencia + nota del cuerpo, ej: "26 (en cuerpo de perro adulto)"
+- "appearance": descripción FÍSICA REAL de ese cuerpo/especie — raza, pelaje, color, tamaño, rasgos distintivos. SIN ropa, SIN accesorios humanos salvo que el concepto los mencione (collar, etc.)
+- "personality": cómo PIENSA internamente (sigue siendo humano por dentro) vs. cómo actúa externamente (limitado por su cuerpo/especie)
+Las reglas de ropa/vestimenta de más abajo NO aplican a este personaje — solo a personajes humanos.
+
+REGLAS DE PERSONAJES FEMENINOS (TODOS los géneros humanos):
 - Cabello LARGO obligatorio (hasta los hombros o más largo). Nunca corto tipo bob/pixie.
 - Figura femenina BONITA pero NO exagerada: cintura definida, proporciones equilibradas, esbelta. NO musculosas, NO atléticas marcadas. NO "voluptuosas" extremas.
 - Aspecto INOCENTE: rasgos suaves, ojos grandes y expresivos, sonrisa amable o expresión dulce
 - Piel limpia, sin cicatrices, sin heridas, sin ojeras pronunciadas
 - Ropa adecuada al rol pero femenina
 
-REGLAS DE APARIENCIA PARA TODOS LOS PERSONAJES (estilo anime — OBLIGATORIO):
+REGLAS DE APARIENCIA PARA PERSONAJES HUMANOS (estilo anime — OBLIGATORIO):
 - La ropa se ve siempre LIMPIA, ENTERA y BIEN PUESTA. En anime nadie tiene ropa sucia, rota ni arrugada.
 - PROHIBIDO: "manchado", "arrugado", "roto", "desgastado", "viejo", "sucio", "raído", "deteriorado", "gastado", "desordenado"
 - Un barista lleva delantal limpio de lino. Un guerrero lleva armadura pulida. Un estudiante lleva uniforme impecable. Siempre.
 - Describir la ropa por ESTILO y COLOR únicamente: "delantal verde oscuro de lino", "camisa blanca de manga corta", "armadura plateada con detalles azules"
 
-${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA:
+${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA (solo personajes humanos):
 - Personajes femeninos (18+) con figuras atractivas estilo ecchi anime: "graceful hourglass silhouette", "long slender legs", "delicate collarbone", "slim waist", "soft delicate features"
 - Ropa fan service típica del género: falda corta escolar, uniforme ajustado, traje de baño, pijama corto, lencería anime (encajes, lazos), ropa deportiva ajustada
 - Vocabulario que funciona con Gemini: "form-fitting uniform", "short pleated skirt", "fitted sports outfit", "swimsuit", "lace-trim sleepwear", "attractive silhouette"
@@ -1704,13 +1715,32 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA:
 - En appearance NO usar: voluptuosa, sensual, seductora, escote, busto, curvas pronunciadas, ajustado que realza, translúcida, provocativa
 - USAR: elegante, delicada, dulce, bonita, encantadora, refinada, esbelta`}
 
-- Edad: TODOS los personajes 18+ años. Especificar edad en la descripción`;
+- Edad: TODOS los personajes humanos 18+ años. Especificar edad en la descripción`;
 
-      const chRaw = await callGemini(
-        `${ctx}\n\n${charRules}\n\nCrea ${numChars} personajes únicos que pertenezcan al género "${genero}" — sus géneros, profesiones, vestimenta y trasfondos deben encajar con el género y el concepto de la historia${isEcchi ? ' y con el tono ecchi (personajes femeninos atractivos)' : ''}. Devuelve SOLO:
-{"characters":[{"id":"c1","name":"nombre","role":"protagonista o rol","gender":"female o male","age":"edad numérica (18+)","appearance":"descripción visual ${isEcchi ? 'atractiva y sugerente (figura, ropa que enfatiza)' : 'neutra y descriptiva'}","personality":"2 frases","backstory":"2 frases"}]}`,
-        sysBase + genreExtra
-      );
+      // Lean, dedicated system prompt for character creation (avoids sending the
+      // full ~7000-char scene-writing sysBase, which was pushing Edge Function
+      // latency past Vercel's response-start limit and causing timeouts).
+      const charSysPrompt = `Eres un diseñador de personajes para anime/manhua cómico viral.
+FÓRMULA DE COMEDIA — arquetipos de referencia:
+${genreTone}
+Los personajes deben encajar en la fórmula: protagonista mercenario/práctico (nunca dramático), compañero con UN rasgo cómico fijo, figura de autoridad competente que sufre las consecuencias.
+IMPORTANTE: si el concepto de la historia indica que el protagonista (u otro personaje) es un animal, criatura u objeto habitado por una consciencia humana, DEBES crear ese personaje igualmente y con el mismo detalle que los demás — nunca lo omitas ni lo humanices por defecto.
+Nombres reales y coherentes con el setting (japoneses, chinos u occidentales según corresponda). Responde SOLO JSON válido sin markdown.`;
+
+      let chRaw = null;
+      let charAttempt = 0;
+      const charPrompt = `${ctx}\n\n${charRules}\n\nCrea ${numChars} personajes únicos que pertenezcan al género "${genero}" y encajen con el concepto exacto de la historia (incluyendo protagonistas no-humanos si el concepto lo indica)${isEcchi ? '. Tono ecchi para los personajes humanos femeninos' : ''}. Devuelve SOLO:
+{"characters":[{"id":"c1","name":"nombre","role":"protagonista o rol (indica su naturaleza si no es humano)","gender":"female o male","age":"edad numérica (18+)","appearance":"descripción visual ${isEcchi ? 'atractiva y sugerente para humanos (figura, ropa que enfatiza); fiel a la especie/naturaleza si no es humano' : 'neutra y descriptiva; fiel a la especie/naturaleza si no es humano'}","personality":"2 frases","backstory":"2 frases"}]}`;
+      while (charAttempt < 3 && !chRaw) {
+        try {
+          chRaw = await callGemini(charPrompt, charSysPrompt);
+        } catch(e) {
+          charAttempt++;
+          console.warn(`Personajes intento ${charAttempt}:`, e.message);
+          if (charAttempt >= 3) throw new Error(`No se pudieron generar personajes tras 3 intentos (${e.message}). Puede ser un timeout temporal — intenta de nuevo.`);
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
       state.characters = safeParseJSON(chRaw).characters || [];
       saveState();
       renderCharacters();
@@ -1723,7 +1753,7 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA:
         try {
           const existingCharList = state.characters.map(ch => '- ' + ch.name + ' (' + (ch.role||'') + '): ' + (ch.appearance||'')).join('\n');
           const newCharPrompt = ctx + '\n\nPERSONAJES EXISTENTES (NO recrear):\n' + existingCharList + '\n\nPersonajes nuevos a crear:\n"' + newCharsDesc + '"\n\nCrea SOLO los personajes nuevos. Devuelve SOLO:\n{"characters":[{"id":"c_new1","name":"nombre","role":"rol","gender":"female o male","age":"18+","appearance":"descripción visual detallada","personality":"2 frases","backstory":"2 frases"}]}';
-          const newCharRaw = await callGemini(newCharPrompt, sysBase + genreExtra);
+          const newCharRaw = await callGemini(newCharPrompt, `Eres un diseñador de personajes para anime/manhua cómico viral.\nFÓRMULA DE COMEDIA — arquetipos de referencia:\n${genreTone}\nLos personajes deben encajar en la fórmula: protagonista mercenario/práctico (nunca dramático), compañero con UN rasgo cómico fijo, figura de autoridad competente que sufre las consecuencias.\nNombres reales y coherentes con el setting. Responde SOLO JSON válido sin markdown.`);
           const newChars = safeParseJSON(newCharRaw).characters || [];
           if (newChars.length) {
             // Give unique IDs to avoid collision
@@ -1822,8 +1852,8 @@ SCENE 10 (resolución): Protagonist gets paid. Authority figure defeated but gri
 REGLAS CRÍTICAS PARA imagePromptA e imagePromptB:
 - SIEMPRE empezar imagePromptA y imagePromptB con el estilo visual del género: para "donghua" → "Chinese donghua animation, bilibili aesthetic, 2D cel-shaded, thick ink outlines," — para todos los demás géneros → "2D hand-drawn anime frame, thick black ink outlines, flat cel-shading, vibrant colors, TV anime quality,"
 - SIEMPRE usar el nombre EXACTO del personaje (ej: "Scene with Kenji:")
-- SIEMPRE incluir descripción de ropa específica del personaje según su ficha
-- SIEMPRE incluir color y estilo de cabello
+- Personajes HUMANOS: SIEMPRE incluir ropa específica según su ficha + color y estilo de cabello
+- Personajes NO-HUMANOS (animal/criatura/objeto poseído): describir su apariencia física real (especie, pelaje/textura, color, tamaño) — JAMÁS inventarle ropa humana salvo que su ficha la mencione explícitamente
 - NUNCA decir solo "the protagonist" o "a man" — usar el nombre real
 - Si 2+ personajes: "Scene with Kenji and Ayame:" y describir apariencia de cada uno
 - Máximo 3 personajes por imagen
