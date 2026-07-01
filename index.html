@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.100 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.101 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1419,8 +1419,20 @@ Devuelve JSON:
   "subgenres": ${JSON.stringify(subgenres)}
 }`;
 
-    const raw = await callGemini(prompt, system);
-    state.universe = safeParseJSON(raw);
+    let parsedUniverse = null;
+    let uniAttempt = 0;
+    while (uniAttempt < 3 && !parsedUniverse) {
+      try {
+        const raw = await callGemini(prompt, system);
+        parsedUniverse = safeParseJSON(raw);
+      } catch(e) {
+        uniAttempt++;
+        console.warn(`Universo intento ${uniAttempt}:`, e.message);
+        if (uniAttempt >= 3) throw new Error(`No se pudo generar el universo tras 3 intentos (${e.message}). Puede ser un timeout temporal del servidor — intenta de nuevo.`);
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+    state.universe = parsedUniverse;
     state.characters = [];
     state.scenes = [];
     saveState();
@@ -1727,13 +1739,14 @@ Los personajes deben encajar en la fórmula: protagonista mercenario/práctico (
 IMPORTANTE: si el concepto de la historia indica que el protagonista (u otro personaje) es un animal, criatura u objeto habitado por una consciencia humana, DEBES crear ese personaje igualmente y con el mismo detalle que los demás — nunca lo omitas ni lo humanices por defecto.
 Nombres reales y coherentes con el setting (japoneses, chinos u occidentales según corresponda). Responde SOLO JSON válido sin markdown.`;
 
-      let chRaw = null;
-      let charAttempt = 0;
       const charPrompt = `${ctx}\n\n${charRules}\n\nCrea ${numChars} personajes únicos que pertenezcan al género "${genero}" y encajen con el concepto exacto de la historia (incluyendo protagonistas no-humanos si el concepto lo indica)${isEcchi ? '. Tono ecchi para los personajes humanos femeninos' : ''}. Devuelve SOLO:
 {"characters":[{"id":"c1","name":"nombre","role":"protagonista o rol (indica su naturaleza si no es humano)","gender":"female o male","age":"edad numérica (18+)","appearance":"descripción visual ${isEcchi ? 'atractiva y sugerente para humanos (figura, ropa que enfatiza); fiel a la especie/naturaleza si no es humano' : 'neutra y descriptiva; fiel a la especie/naturaleza si no es humano'}","personality":"2 frases","backstory":"2 frases"}]}`;
-      while (charAttempt < 3 && !chRaw) {
+      let parsedChars = null;
+      let charAttempt = 0;
+      while (charAttempt < 3 && !parsedChars) {
         try {
-          chRaw = await callGemini(charPrompt, charSysPrompt);
+          const chRaw = await callGemini(charPrompt, charSysPrompt);
+          parsedChars = safeParseJSON(chRaw);
         } catch(e) {
           charAttempt++;
           console.warn(`Personajes intento ${charAttempt}:`, e.message);
@@ -1741,7 +1754,7 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
           await new Promise(r => setTimeout(r, 2000));
         }
       }
-      state.characters = safeParseJSON(chRaw).characters || [];
+      state.characters = parsedChars.characters || [];
       saveState();
       renderCharacters();
       setProg(20, `✅ ${state.characters.length} personajes — Paso 2/2: Generando escenas...`);
