@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.102 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.104 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -372,7 +372,7 @@
 
     <div class="card" id="cardGenerarEpisodio" style="display:none">
       <h2>🎬 Generar Episodio</h2>
-      <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px">Crea 10 escenas con narración y 20 imágenes (2 por escena). Duración estimada: ~5 minutos.</p>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px">Crea 15 escenas con narración y 15 imágenes (1 por escena). Duración estimada: ~5 minutos.</p>
       <!-- Episode navigation -->
       <div id="episodeNav" style="display:none;margin-bottom:14px">
         <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">Episodios generados:</div>
@@ -592,10 +592,8 @@ const sceneImgKey  = id => `si_${state.projectId}_${id}`;
 // Episode suffix: episode 1 uses legacy keys (no prefix) for backwards compat
 const epSfx = () => (state.currentEpisode || 1) > 1 ? `_ep${state.currentEpisode}` : '';
 const sceneImgKeyA = id => `sia_${state.projectId}${epSfx()}_${id}`;
-const sceneImgKeyB = id => `sib_${state.projectId}${epSfx()}_${id}`;
 const sceneAudKey  = id => `sa_${state.projectId}${epSfx()}_${id}`;
 const sceneVidKeyA = id => `sva_${state.projectId}${epSfx()}_${id}`;
-const sceneVidKeyB = id => `svb_${state.projectId}${epSfx()}_${id}`;
 
 // Build a video prompt from the scene (English, motion-focused)
 // Studio references by genre — matched to studios known for that genre
@@ -627,8 +625,8 @@ const STUDIO_BY_DEMO = {
   donghua:      ', Chinese xianxia animation fluidity',
 };
 
-function buildVideoPrompt(s, ab) {
-  const base      = (ab === 'B' ? (s.imagePromptB || s.imagePromptA) : (s.imagePromptA || s.narration) || '').replace(/"/g,'').slice(0, 200);
+function buildVideoPrompt(s) {
+  const base      = (s.imagePromptA || s.narration || '').replace(/"/g,'').slice(0, 200);
   const genre     = document.getElementById('generoSelect')?.value || 'accion';
   const demo      = document.getElementById('demoSelect')?.value   || 'shonen';
   const studio   = STUDIO_BY_GENRE[genre]  || STUDIO_BY_GENRE['accion'];
@@ -694,7 +692,7 @@ function updateEpisodeNav() {
 
   // Show "Generar siguiente episodio" if current is complete
   const curScenes = state.episodes[cur] || [];
-  const isComplete = curScenes.length >= 10 && curScenes.every(s => s.narration && s.imagePromptA);
+  const isComplete = curScenes.length >= 15 && curScenes.every(s => s.narration && s.imagePromptA);
   nextBtn.style.display = isComplete ? 'block' : 'none';
   nextBtn.textContent = `➕ Generar Episodio ${cur + 1}`;
 
@@ -715,24 +713,6 @@ window.switchEpisode = function(ep) {
 // ════════════════════════════════════════════════════════════════
 // FRAME CAPTURE → Image B
 // ════════════════════════════════════════════════════════════════
-window.captureVideoFrame = async function(sceneId) {
-  const vid = document.querySelector(`video[data-sid="${sceneId}"]`);
-  if (!vid) { showToast('No hay video A para capturar', 'error'); return; }
-  if (vid.readyState < 2) { showToast('El video aún no está listo — espera un momento', 'error'); return; }
-  try {
-    const canvas = document.createElement('canvas');
-    canvas.width  = vid.videoWidth  || 720;
-    canvas.height = vid.videoHeight || 1280;
-    canvas.getContext('2d').drawImage(vid, 0, 0, canvas.width, canvas.height);
-    const b64 = canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, '');
-    await dbSet(sceneImgKeyB(sceneId), b64);
-    showToast('✅ Fotograma guardado como Imagen B', 'success');
-    renderScenes();
-  } catch(e) {
-    showToast('No se pudo capturar (CORS). Pausa el video, toma captura de pantalla y úsala como Imagen B manualmente.', 'error');
-  }
-};
-
 function saveState() {
   if (!state.projectId) return;
   // Sync current episode scenes into episodes map
@@ -1632,7 +1612,7 @@ MODO NARRATIVO ACTIVO: La emoción viene de los hechos. "Disparo y fallo. El mon
 ${!allowsSuper && !allowsSuper2 ? `
 ⚠️ RESTRICCIÓN: Sin elementos sobrenaturales para el género ${genero}.` : ''}
 
-REGLAS DE imagePromptA e imagePromptB:
+REGLAS DE imagePromptA (una sola imagen por escena):
 - SIEMPRE en INGLÉS
 - SIEMPRE empezar con "Scene with [nombre exacto]:"
 - SIEMPRE incluir: nombre + ropa específica + cabello + expresión + entorno + iluminación
@@ -1817,8 +1797,8 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
 
     const charRefShort = state.characters.map(c => c.name).join(', ');
 
-    // 15 scenes x 2 images = 30 images, ~10 min total
-    const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"EXACTAMENTE 75-80 palabras en primera persona (YO). Gancho en la primera frase. Sensaciones físicas concretas. Termina con tensión. Cuenta las palabras.","imagePromptA":"Scene with [nombre exacto]: [descripción visual detallada — ropa, cabello, expresión, entorno, iluminación]","imagePromptB":"Scene with [nombre exacto]: [CONTINUATION of imagePromptA — same location, 3-5 seconds later, next action in sequence]"}`;
+    // 15 escenas × 1 imagen = 15 imágenes por episodio
+    const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"EXACTAMENTE 75-80 palabras en primera persona (YO). Gancho en la primera frase. Sensaciones físicas concretas. Cuenta las palabras.","imagePromptA":"Scene with [nombre exacto]: [descripción visual detallada — ropa, cabello, expresión, entorno, iluminación]"}`;
 
     async function generateSceneBatch(batchPrompt, expectedCount, startNum, batchName) {
       let bestResult = [];
@@ -1829,7 +1809,7 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
           const arr = parsed.scenes || [];
           // Normalize: Gemini sometimes returns "narración" (Spanish) instead of "narration"
           arr.forEach(s => { if (s && s['narración'] && !s.narration) s.narration = s['narración']; });
-          const valid = arr.filter(s => s && s.narration && s.imagePromptA && s.imagePromptB && s.title);
+          const valid = arr.filter(s => s && s.narration && s.imagePromptA && s.title);
           if (valid.length > bestResult.length) bestResult = valid;
           if (valid.length >= expectedCount) {
             return valid.slice(0, expectedCount).map((s, i) => ({
@@ -1847,40 +1827,35 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
         const result = bestResult.map((s, i) => ({ ...s, id: `s${startNum + i}`, num: startNum + i, act: s.act || 'act1' }));
         while (result.length < expectedCount) {
           const num = startNum + result.length;
-          result.push({ id: `s${num}`, num, act: 'act1', title: `Escena ${num} (pendiente)`, narration: '', dialogue: [], imagePromptA: '', imagePromptB: '' });
+          result.push({ id: `s${num}`, num, act: 'act1', title: `Escena ${num} (pendiente)`, narration: '', dialogue: [], imagePromptA: '' });
         }
         return result;
       }
       return Array.from({ length: expectedCount }, (_, i) => ({
         id: `s${startNum + i}`, num: startNum + i, act: 'act1',
-        title: `Escena ${startNum + i} (pendiente)`, narration: '', dialogue: [], imagePromptA: '', imagePromptB: '',
+        title: `Escena ${startNum + i} (pendiente)`, narration: '', dialogue: [], imagePromptA: '',
       }));
     }
 
     const batchRules = `REGLAS ESTRUCTURA — ESCALADA CÓMICA OBLIGATORIA:
-- 10 escenas siguiendo este arco de comedia viral:
+- 15 escenas siguiendo este arco de comedia viral:
 
-SCENE 1 (cold_open A): Establish protagonist's mundane situation. The system activates for the FIRST TIME. Discovery seems like good news — end on the realization it's not.
-SCENE 2 (cold_open B): The absurd consequence plays out. Authority figure appears for the first time, does everything right, protagonist accidentally wins. Companion's quirk introduced.
-SCENE 3-4 (act1): SECOND system activation — bigger absurdity. Authority figure suffers again. Running gag #1 established. Protagonist calculates exact reward value.
-SCENE 5 (act1 end): Things escalate because of protagonist's "help." Authority figure now actively watching with suspicion. Companion's quirk causes a new problem.
-SCENE 6-7 (act2): THIRD activation — MORE outrageous than the previous two. Running gag #2 established. New character dragged into chaos. Authority figure loses again.
-SCENE 8 (act2 end): Maximum absurdity of the middle act. Authority figure at breaking point. Companion makes the worst possible comment at the worst moment.
-SCENE 9 (clímax): THE BIGGEST DISCOVERY — the most outrageous yet. All running gags converge. Authority figure's suffering peaks. Protagonist's reaction: completely practical.
-SCENE 10 (resolución): Protagonist gets paid. Authority figure defeated but grimly accepts it. Companion says what they want to eat. Scene ends with the NEXT system activation — hook for Episode 2.
+SCENE 1-2 (cold_open): Establish protagonist's mundane situation. The system activates for the FIRST TIME. Discovery seems like good news — end on the realization it's not. Authority figure appears, does everything right, protagonist accidentally wins. Companion's quirk introduced.
+SCENE 3-6 (act1): SECOND and THIRD system activations — bigger absurdity each time. Authority figure suffers again. Running gag #1 established. Protagonist calculates exact reward value. Things escalate because of protagonist's "help." Authority figure now actively watching with suspicion.
+SCENE 7-12 (act2): MULTIPLE activations — MORE outrageous than act1. Running gag #2 established. New character(s) dragged into chaos. Authority figure loses again and again. Maximum absurdity of the middle act. Authority figure at breaking point. Companion makes the worst possible comment at the worst moment.
+SCENE 13-14 (clímax): THE BIGGEST DISCOVERY — the most outrageous yet. All running gags converge. Authority figure's suffering peaks. Protagonist's reaction: completely practical.
+SCENE 15 (resolución): Protagonist gets paid. Authority figure defeated but grimly accepts it. Companion says what they want to eat. Scene ends with the NEXT system activation — hook for Episode ${epNum + 1}.
 
 - The "narration" field: EXACTLY 75-80 Spanish words, FIRST PERSON (YO). Count words. Drop into the scene immediately. End naturally for the genre — not forced tension.
-- imagePromptA = establish the scene clearly: characters, location, time of day, what they are doing. Wide or medium shot showing the full context.
-- imagePromptB = almost IDENTICAL to imagePromptA — same characters, same location, same camera angle, just a tiny moment later (1-2 seconds). A slight change: a head turned, a hand moved, a different expression. The scene should be 95% the same. This enables Veo to create smooth natural animation between A and B without jumps.
-- FINALE (escena 10): resolución PARCIAL + misterio abierto que engancha al episodio ${epNum + 1}
+- imagePromptA = the ONE image for this scene. Since there is only one image per scene, it must capture the single most important visual moment: characters, location, specific action, expression, camera angle — as clear and complete as possible.
 
 REGLAS CRÍTICAS DE REPARTO EN LAS ESCENAS:
-- ⚠️ OBLIGATORIO: debes usar TODOS o la GRAN MAYORÍA de los personajes listados en "PERSONAJES DEL EPISODIO" a lo largo de las 10 escenas — NUNCA ignores a los personajes secundarios y te enfoques solo en 2. Si se crearon 5 personajes, los 5 deben aparecer en al menos 1-2 escenas cada uno.
+- ⚠️ OBLIGATORIO: debes usar TODOS o la GRAN MAYORÍA de los personajes listados en "PERSONAJES DEL EPISODIO" a lo largo de las 15 escenas — NUNCA ignores a los personajes secundarios y te enfoques solo en 2. Si se crearon 5 personajes, los 5 deben aparecer en al menos 1-2 escenas cada uno.
 - Distribuye la aparición de personajes de forma natural según su rol: el compañero y la figura de autoridad deben aparecer en varias escenas (no solo la primera), personajes secundarios pueden tener apariciones más puntuales pero SIGNIFICATIVAS.
-- Antes de responder, revisa mentalmente: ¿aparecieron TODOS los personajes de la lista al menos una vez en las 10 escenas? Si falta alguno, ajusta las escenas para incluirlo.
+- Antes de responder, revisa mentalmente: ¿aparecieron TODOS los personajes de la lista al menos una vez en las 15 escenas? Si falta alguno, ajusta las escenas para incluirlo.
 
-REGLAS CRÍTICAS PARA imagePromptA e imagePromptB:
-- SIEMPRE empezar imagePromptA y imagePromptB con el estilo visual del género: para "donghua" → "Chinese donghua animation, bilibili aesthetic, 2D cel-shaded, thick ink outlines," — para todos los demás géneros → "2D hand-drawn anime frame, thick black ink outlines, flat cel-shading, vibrant colors, TV anime quality,"
+REGLAS CRÍTICAS PARA imagePromptA:
+- SIEMPRE empezar imagePromptA con el estilo visual del género: para "donghua" → "Chinese donghua animation, bilibili aesthetic, 2D cel-shaded, thick ink outlines," — para todos los demás géneros → "2D hand-drawn anime frame, thick black ink outlines, flat cel-shading, vibrant colors, TV anime quality,"
 - SIEMPRE usar el nombre EXACTO del personaje (ej: "Scene with Kenji:")
 - Personajes HUMANOS: SIEMPRE incluir ropa específica según su ficha + color y estilo de cabello
 - Personajes NO-HUMANOS (animal/criatura/objeto poseído): describir su apariencia física real (especie, pelaje/textura, color, tamaño) — JAMÁS inventarle ropa humana salvo que su ficha la mencione explícitamente
@@ -1889,12 +1864,14 @@ REGLAS CRÍTICAS PARA imagePromptA e imagePromptB:
 - Máximo 3 personajes por imagen
 - CRÍTICO: el personaje NUNCA mira a la cámara. Describe la acción que está haciendo. Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"`;
 
-    // ─── Single call: 10 scenes ───
-    setProg(40, 'Generando 10 escenas...');
+    // ─── Single call: 15 scenes, one image prompt each (no A/B split — a
+    // previous 2-batch attempt caused Gemini to lose narrative context
+    // between calls and duplicate scenes; single call preserves continuity) ───
+    setProg(40, 'Generando 15 escenas...');
     const prevEpSummary = buildPrevEpisodesSummary();
     const scenes = await generateSceneBatch(
-      `${ctx}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${batchRules}\n\nGenera EXACTAMENTE 10 escenas numeradas 1-10:\n- Escenas 1-2: cold_open\n- Escenas 3-5: act1\n- Escenas 6-8: act2\n- Escena 9: clímax\n- Escena 10: FINALE — resolución parcial + pregunta abierta para episodio ${epNum + 1}\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con exactamente 10 objetos numerados 1-10.`,
-      10, 1, 'Escenas 1-10'
+      `${ctx}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${batchRules}\n\nGenera EXACTAMENTE 15 escenas numeradas 1-15:\n- Escenas 1-2: cold_open\n- Escenas 3-6: act1\n- Escenas 7-12: act2\n- Escenas 13-14: clímax\n- Escena 15: FINALE — resolución parcial + pregunta abierta para episodio ${epNum + 1}\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con exactamente 15 objetos numerados 1-15.`,
+      15, 1, 'Escenas 1-15'
     );
 
     state.scenes = scenes;
@@ -1905,11 +1882,11 @@ REGLAS CRÍTICAS PARA imagePromptA e imagePromptB:
 
     const pendingCount = scenes.filter(s => !s.narration || !s.imagePromptA).length;
     if (pendingCount > 0) {
-      setProg(100, `⚠️ ${scenes.length - pendingCount}/10 escenas — ${pendingCount} pendientes`);
+      setProg(100, `⚠️ ${scenes.length - pendingCount}/15 escenas — ${pendingCount} pendientes`);
       showToast(`${pendingCount} escenas pendientes. Usa "Reparar escenas vacías".`, 'error');
     } else {
-      setProg(100, `✅ Episodio ${epNum} completo — 10 escenas × 2 imágenes = 20 imágenes`);
-      showToast(`Episodio ${epNum}: ${state.characters.length} personajes y 10 escenas listas`, 'success');
+      setProg(100, `✅ Episodio ${epNum} completo — 15 escenas × 1 imagen = 15 imágenes`);
+      showToast(`Episodio ${epNum}: ${state.characters.length} personajes y 15 escenas listas`, 'success');
     }
     setTimeout(() => { progress.style.display = 'none'; setProg(0, ''); }, 3000);
     updateEpisodeNav();
@@ -2021,56 +1998,45 @@ async function renderScenes() {
   }
 
   const items = await Promise.all(state.scenes.map(async s => {
-    const imgA    = await dbGet(sceneImgKeyA(s.id));
-    const imgB    = await dbGet(sceneImgKeyB(s.id));
+    const img     = await dbGet(sceneImgKeyA(s.id));
     const audData = await dbGet(sceneAudKey(s.id));
-    const vidUrlA = await dbGet(sceneVidKeyA(s.id));
-    const vidUrlB = await dbGet(sceneVidKeyB(s.id));
-    return { s, imgA, imgB, audData, vidUrlA, vidUrlB };
+    const vidUrl  = await dbGet(sceneVidKeyA(s.id));
+    return { s, img, audData, vidUrl };
   }));
 
-  // Helper: render one image column with buttons OUTSIDE the image div
   const selRatio = document.getElementById('aspectRatio')?.value || '9:16';
   const cssRatio = selRatio === '16:9' ? '16/9' : '9/16';
-  const imgCol = (sceneId, num, ab, img, vidUrl) => {
-    const pad = String(num).padStart(2,'0');
-    return `
-    <div style="flex:1;display:flex;flex-direction:column;gap:4px">
-      <div class="scene-img" style="aspect-ratio:${cssRatio};overflow:hidden">
-        ${img
-          ? `<img src="data:image/png;base64,${img}" style="width:100%;height:100%;object-fit:contain;display:block;background:#000">`
-          : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-dim)">Sin imagen ${ab}</div>`}
-      </div>
-      <div style="display:flex;gap:4px;justify-content:center">
-        <button class="btn-sec" style="font-size:11px;padding:4px 8px;flex:1" onclick="generateSceneImageAB('${sceneId}','${ab}')">🖼️ ${img ? ab : '+ '+ab}</button>
-        <button id="btnVid_${sceneId}_${ab}" class="btn-sec" style="font-size:11px;padding:4px 8px;flex:1;border-color:rgba(0,229,255,0.3);color:var(--accent2)"
-          onclick="generateSceneVideo('${sceneId}','${ab}')">🎬 ${vidUrl ? '↺'+ab : ab}</button>
-      </div>
-      <div id="vidStatus_${sceneId}_${ab}" style="font-size:10px;color:var(--text-dim);text-align:center;min-height:12px"></div>
-      ${vidUrl ? `
-      <div style="border-radius:6px;overflow:hidden;background:#000">
-        <video data-sid="${sceneId}" src="${vidUrl}" crossorigin="anonymous"
-          controls playsinline style="width:100%;display:block;border-radius:6px"></video>
-      </div>
-      ${ab === 'A' ? `<button class="btn-sec" style="width:100%;margin-top:4px;font-size:11px;border-color:rgba(255,200,0,0.4);color:#ffd700"
-        onclick="captureVideoFrame('${sceneId}')">📸 Capturar fotograma → Imagen B</button>` : ''}
-      <button class="btn-sec" style="width:100%;margin-top:4px;border-color:rgba(0,229,255,0.4);color:var(--accent2);font-size:11px"
-        onclick="downloadVideo('${vidUrl}','escena_${pad}${ab}.mp4')">⬇️ Descargar Video ${ab}</button>` : ''}
-    </div>`;
-  };
 
-  c.innerHTML = items.map(({ s, imgA, imgB, audData, vidUrlA, vidUrlB }) => `
+  c.innerHTML = items.map(({ s, img, audData, vidUrl }) => {
+    const pad = String(s.num).padStart(2,'0');
+    return `
     <div class="scene-card">
       <div class="scene-header">
         <div class="scene-num">Escena ${s.num}</div>
         <div style="display:flex;align-items:center;gap:6px">
           <div class="scene-act">${s.act}</div>
-          <button class="btn-sec" style="font-size:10px;padding:3px 8px;border-color:rgba(224,64,251,0.3);color:var(--accent)" onclick="editScenePrompts('${s.id}')">✏️ Prompts</button>
+          <button class="btn-sec" style="font-size:10px;padding:3px 8px;border-color:rgba(224,64,251,0.3);color:var(--accent)" onclick="editScenePrompts('${s.id}')">✏️ Prompt</button>
         </div>
       </div>
-      <div style="display:flex;gap:6px">
-        ${imgCol(s.id, s.num, 'A', imgA, vidUrlA)}
-        ${imgCol(s.id, s.num, 'B', imgB, vidUrlB)}
+      <div style="flex:1;display:flex;flex-direction:column;gap:4px">
+        <div class="scene-img" style="aspect-ratio:${cssRatio};overflow:hidden">
+          ${img
+            ? `<img src="data:image/png;base64,${img}" style="width:100%;height:100%;object-fit:contain;display:block;background:#000">`
+            : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-dim)">Sin imagen</div>`}
+        </div>
+        <div style="display:flex;gap:4px;justify-content:center">
+          <button class="btn-sec" style="font-size:11px;padding:4px 8px;flex:1" onclick="generateSceneImageAB('${s.id}','A')">🖼️ ${img ? 'Regenerar' : '+ Imagen'}</button>
+          <button id="btnVid_${s.id}_A" class="btn-sec" style="font-size:11px;padding:4px 8px;flex:1;border-color:rgba(0,229,255,0.3);color:var(--accent2)"
+            onclick="generateSceneVideo('${s.id}','A')">🎬 ${vidUrl ? 'Regenerar' : 'Video'}</button>
+        </div>
+        <div id="vidStatus_${s.id}_A" style="font-size:10px;color:var(--text-dim);text-align:center;min-height:12px"></div>
+        ${vidUrl ? `
+        <div style="border-radius:6px;overflow:hidden;background:#000">
+          <video data-sid="${s.id}" src="${vidUrl}" crossorigin="anonymous"
+            controls playsinline style="width:100%;display:block;border-radius:6px"></video>
+        </div>
+        <button class="btn-sec" style="width:100%;margin-top:4px;border-color:rgba(0,229,255,0.4);color:var(--accent2);font-size:11px"
+          onclick="downloadVideo('${vidUrl}','escena_${pad}.mp4')">⬇️ Descargar Video</button>` : ''}
       </div>
       <div class="scene-narration">${s.narration || ""}</div>
       <div class="scene-actions">
@@ -2081,7 +2047,7 @@ async function renderScenes() {
         }
       </div>
     </div>
-  `).join('');
+  `;}).join('');
 }
 
 window.editScenePrompts = function(sceneId) {
@@ -2094,28 +2060,25 @@ window.editScenePrompts = function(sceneId) {
     .replace(/>/g, '&gt;');
 
   const rawA = esc(s.imagePromptA || s.imagePromptEN || s.narration || '');
-  const rawB = esc(s.imagePromptB || s.imagePromptEN || s.narration || '');
 
   openModal(`
     <div class="modal-handle"></div>
-    <h3>✏️ Editar Prompts — Escena ${s.num}</h3>
+    <h3>✏️ Editar Prompt — Escena ${s.num}</h3>
     <p style="font-size:12px;color:var(--text-dim);margin:0 0 12px;line-height:1.5">
-      Edita y traduce los prompts. Luego guarda y regenera la imagen.
+      Edita y traduce el prompt. Luego guarda y regenera la imagen.
     </p>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-      <label style="margin:0">Prompt imagen A</label>
+      <label style="margin:0">Prompt de imagen</label>
       <button id="btnTranslate" class="btn-sec" style="font-size:11px;padding:3px 10px;width:auto;border-color:rgba(0,229,255,0.4);color:var(--accent2)" onclick="translatePrompts('${sceneId}')">🌐 Traducir al español</button>
     </div>
     <textarea id="editPromptA" style="height:110px;font-size:13px">${rawA}</textarea>
-    <label>Prompt imagen B</label>
-    <textarea id="editPromptB" style="height:110px;font-size:13px">${rawB}</textarea>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
       <button class="btn-sec" onclick="closeModal()">Cancelar</button>
+
       <button class="btn" onclick="saveScenePrompts('${sceneId}')">💾 Guardar</button>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
-      <button class="btn-sec" style="font-size:12px" onclick="saveAndRegenAB('${sceneId}','A')">🖼️ Guardar y generar A</button>
-      <button class="btn-sec" style="font-size:12px" onclick="saveAndRegenAB('${sceneId}','B')">🖼️ Guardar y generar B</button>
+    <div style="margin-top:8px">
+      <button class="btn-sec" style="font-size:12px;width:100%" onclick="saveAndRegenAB('${sceneId}','A')">🖼️ Guardar y regenerar imagen</button>
     </div>
   `);
 };
@@ -2123,8 +2086,7 @@ window.editScenePrompts = function(sceneId) {
 window.translatePrompts = async function(sceneId) {
   const btn = document.getElementById('btnTranslate');
   const taA = document.getElementById('editPromptA');
-  const taB = document.getElementById('editPromptB');
-  if (!btn || !taA || !taB) return;
+  if (!btn || !taA) return;
 
   btn.disabled = true;
   btn.textContent = '⏳ Traduciendo...';
@@ -2133,9 +2095,8 @@ window.translatePrompts = async function(sceneId) {
     const keys = getKeys();
     if (!keys.claude) throw new Error('Falta Claude API key');
     const rawA = taA.value.trim();
-    const rawB = taB.value.trim();
 
-    const userContent = 'Traduce estos dos prompts de imagen al español. Mantén nombres propios igual. Responde SOLO con JSON válido, nada más:\n{"a":"traducción A","b":"traducción B"}\n\nPrompt A: ' + rawA + '\n\nPrompt B: ' + rawB;
+    const userContent = 'Traduce este prompt de imagen al español. Mantén nombres propios igual. Responde SOLO con JSON válido, nada más:\n{"a":"traducción"}\n\nPrompt: ' + rawA;
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -2147,7 +2108,7 @@ window.translatePrompts = async function(sceneId) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 600,
+        max_tokens: 400,
         messages: [{ role: 'user', content: userContent }]
       })
     });
@@ -2167,10 +2128,9 @@ window.translatePrompts = async function(sceneId) {
         try { parsed = JSON.parse(text.slice(start, end + 1)); } catch(e) {}
       }
     }
-    if (!parsed || (!parsed.a && !parsed.b)) throw new Error('Respuesta sin JSON válido');
+    if (!parsed || !parsed.a) throw new Error('Respuesta sin JSON válido');
 
-    if (parsed.a) taA.value = parsed.a;
-    if (parsed.b) taB.value = parsed.b;
+    taA.value = parsed.a;
     btn.textContent = '✅ Traducido';
   } catch(e) {
     btn.textContent = '❌ Reintentar';
@@ -2184,12 +2144,10 @@ window.saveScenePrompts = function(sceneId) {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
   const newA = document.getElementById('editPromptA')?.value.trim();
-  const newB = document.getElementById('editPromptB')?.value.trim();
   if (newA) s.imagePromptA = newA;
-  if (newB) s.imagePromptB = newB;
   saveState();
   closeModal();
-  showToast('Prompts guardados', 'success');
+  showToast('Prompt guardado', 'success');
 };
 
 window.saveAndRegenAB = async function(sceneId, ab) {
@@ -2200,10 +2158,8 @@ window.saveAndRegenAB = async function(sceneId, ab) {
 window.generateSceneImageAB = async function(sceneId, ab) {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
-  const prompt = ab === 'A'
-    ? (s.imagePromptA || s.imagePromptEN || s.narration)
-    : (s.imagePromptB || s.imagePromptA || s.imagePromptEN || s.narration);
-  showToast(`Generando imagen ${ab} escena ${s.num}...`, 'success');
+  const prompt = s.imagePromptA || s.imagePromptEN || s.narration;
+  showToast(`Generando imagen escena ${s.num}...`, 'success');
   try {
     // Only pass refs for characters mentioned in THIS prompt
     const refs = await getRefsForPrompt(prompt);
@@ -2223,12 +2179,11 @@ window.generateSceneImageAB = async function(sceneId, ab) {
       }
     }
     if (!imgB64) throw lastErr;
-    const key = ab === 'A' ? sceneImgKeyA(s.id) : sceneImgKeyB(s.id);
-    await dbSet(key, imgB64);
+    await dbSet(sceneImgKeyA(s.id), imgB64);
     renderScenes();
-    showToast(`Imagen ${ab} escena ${s.num} lista`, 'success');
+    showToast(`Imagen escena ${s.num} lista`, 'success');
   } catch(e) {
-    openErrorModal(`Error imagen ${ab} escena ${s.num}`, e.message);
+    openErrorModal(`Error imagen escena ${s.num}`, e.message);
   }
 };
 
@@ -2374,9 +2329,9 @@ async function pollVideoStatus(operationName, projectId, onProgress) {
 
 window.generateSceneVideo = async function(sceneId, ab) {
   const s = state.scenes.find(x => x.id === sceneId);
-  if (!s || !ab) return;
-  const btn = document.getElementById(`btnVid_${sceneId}_${ab}`);
-  const statusEl = document.getElementById(`vidStatus_${sceneId}_${ab}`);
+  if (!s) return;
+  const btn = document.getElementById(`btnVid_${sceneId}_A`);
+  const statusEl = document.getElementById(`vidStatus_${sceneId}_A`);
 
   const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
   const setBtn = (text, disabled = true) => { if (btn) { btn.textContent = text; btn.disabled = disabled; } };
@@ -2385,16 +2340,14 @@ window.generateSceneVideo = async function(sceneId, ab) {
   setStatus('Iniciando...');
 
   try {
-    // Get the specific image for this video (A or B)
-    const imgKey = ab === 'A' ? sceneImgKeyA(sceneId) : sceneImgKeyB(sceneId);
-    const imgData = await dbGet(imgKey);
+    const imgData = await dbGet(sceneImgKeyA(sceneId));
 
     const aspectRatio = document.getElementById('aspectRatio')?.value || '9:16';
     const res = await fetch('/api/video-start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        prompt: buildVideoPrompt(s, ab),
+        prompt: buildVideoPrompt(s),
         imageA: imgData || null,
         aspectRatio,
         generateAudio: false,
@@ -2413,15 +2366,13 @@ window.generateSceneVideo = async function(sceneId, ab) {
       (attempt, max) => setStatus(`${attempt * 10}s / ~${max * 10}s`)
     );
 
-    // Save URL in IndexedDB with A/B key
-    const vidKey = ab === 'A' ? sceneVidKeyA(sceneId) : sceneVidKeyB(sceneId);
-    await dbSet(vidKey, publicUrl);
+    await dbSet(sceneVidKeyA(sceneId), publicUrl);
     await renderScenes();
-    showToast(`Video ${s.num}${ab} listo 🎬`, 'success');
+    showToast(`Video ${s.num} listo 🎬`, 'success');
   } catch(e) {
-    setBtn(`🎬 ${ab}`, false);
+    setBtn('🎬 Video', false);
     setStatus('');
-    showToast(`Error video ${s.num}${ab}: ${e.message}`, 'error');
+    showToast(`Error video ${s.num}: ${e.message}`, 'error');
   }
 };
 
@@ -2429,21 +2380,18 @@ window.generateAllVideos = async function() {
   const scenes = state.scenes.filter(s => s.narration && s.imagePromptA);
   if (!scenes.length) { showToast('Genera las escenas primero', 'error'); return; }
 
-  showToast(`Generando todos los videos A y B (secuencial)...`, 'success');
+  showToast(`Generando todos los videos (secuencial)...`, 'success');
   let done = 0, errors = 0;
 
   for (const s of scenes) {
-    for (const ab of ['A', 'B']) {
-      const vidKey = ab === 'A' ? sceneVidKeyA(s.id) : sceneVidKeyB(s.id);
-      const existing = await dbGet(vidKey);
-      if (existing) { done++; continue; }
-      try {
-        await window.generateSceneVideo(s.id, ab);
-        done++;
-      } catch(e) {
-        errors++;
-        console.warn(`Video ${s.num}${ab}:`, e.message);
-      }
+    const existing = await dbGet(sceneVidKeyA(s.id));
+    if (existing) { done++; continue; }
+    try {
+      await window.generateSceneVideo(s.id, 'A');
+      done++;
+    } catch(e) {
+      errors++;
+      console.warn(`Video ${s.num}:`, e.message);
     }
   }
   showToast(`Videos: ${done} listos${errors ? ', ' + errors + ' fallidos' : ''} 🎬`, errors ? 'error' : 'success');
@@ -2502,14 +2450,12 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
     return [...matched.values()];
   }
 
-  // Build list of all images needed: A and B for each scene
+  // Build list of all images needed: one per scene
   const queue = [];
   for (const s of state.scenes) {
     if (!s.imagePromptA && !s.narration) continue;
     const existingA = await dbGet(sceneImgKeyA(s.id));
-    const existingB = await dbGet(sceneImgKeyB(s.id));
     if (!existingA) queue.push({ s, ab: 'A', prompt: s.imagePromptA || s.imagePromptEN || s.narration });
-    if (!existingB) queue.push({ s, ab: 'B', prompt: s.imagePromptB || s.imagePromptA || s.imagePromptEN || s.narration });
   }
 
   const total = queue.length;
@@ -2519,14 +2465,13 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   for (let i = 0; i < queue.length; i++) {
     const { s, ab, prompt } = queue[i];
     bb.style.width = Math.round((i / total) * 100) + '%';
-    bt.textContent = `Imagen ${i + 1}/${total} — Escena ${s.num}${ab}...`;
+    bt.textContent = `Imagen ${i + 1}/${total} — Escena ${s.num}...`;
 
     let success = false, attempt = 0;
     while (!success && attempt < 8) {
       try {
         const imgB64 = await generateImageRaw(prompt, getRefsFromCache(prompt));
-        const key = ab === 'A' ? sceneImgKeyA(s.id) : sceneImgKeyB(s.id);
-        await dbSet(key, imgB64);
+        await dbSet(sceneImgKeyA(s.id), imgB64);
         success = true; completed++;
         renderScenes(); // update UI immediately so user sees each image appear
       } catch(e) {
@@ -2537,14 +2482,14 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
           bt.textContent = `⏳ Rate limit — esperando ${w}s (intento ${attempt}/8)...`;
           await new Promise(r => setTimeout(r, w * 1000));
         } else if (e.message.toLowerCase().includes('block') || e.message.toLowerCase().includes('safety')) {
-          bt.textContent = `⚠️ Escena ${s.num}${ab} bloqueada, continuando...`;
+          bt.textContent = `⚠️ Escena ${s.num} bloqueada, continuando...`;
           await new Promise(r => setTimeout(r, 2000)); break;
         } else {
           await new Promise(r => setTimeout(r, 5000));
         }
       }
     }
-    if (!success) { failed++; failedIds.push(`${s.num}${ab}`); }
+    if (!success) { failed++; failedIds.push(`${s.num}`); }
   }
 
   bb.style.width = '100%';
@@ -2711,7 +2656,7 @@ document.getElementById('btnRepairScenes').addEventListener('click', async () =>
 RULES:
 - JSON field MUST be "narration" (English, no accent mark). EXACTLY 75-80 Spanish words. Count them.
 - Drop into the scene immediately. Specific details over vague descriptions. End naturally for the genre.
-- imagePromptA and imagePromptB in ENGLISH, starting with "Scene with [exact name]:" with outfit/hair/expression/setting
+- imagePromptA in ENGLISH, starting with "Scene with [exact name]:" with outfit/hair/expression/setting
 - NEVER use "a man"/"the protagonist" — always the real character name
 - Respond ONLY with valid JSON, no markdown`;
 
@@ -2722,23 +2667,20 @@ RULES:
 
     const firstBroken = brokenIndices[0];
     const lastGood = firstBroken > 0 ? state.scenes[firstBroken - 1] : null;
-    const totalScenes = state.scenes.length;
     const startNum = firstBroken + 1;
     const endNum = brokenIndices[brokenIndices.length - 1] + 1;
     const count = brokenIndices.length;
 
     let act = 'act2';
     if (startNum <= 2) act = 'cold_open';
-    else if (startNum <= 7) act = 'act1';
+    else if (startNum <= 6) act = 'act1';
     else if (startNum <= 12) act = 'act2';
     else if (startNum <= 14) act = 'climax';
     else act = 'resolution';
 
     const lastGoodRef = lastGood ? `\nEscena anterior (${lastGood.num}): "${lastGood.narration}"` : '';
-
-    const sceneExample = `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"EXACTAMENTE 75-80 palabras primera persona, entra directo a la escena, estilo natural del género","imagePromptA":"Scene with [nombre exacto]: ...","imagePromptB":"Scene with [nombre exacto]: ..."}`;
-
-    const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: 10 escenas.\nCada escena DEBE tener narration (EXACTAMENTE 75-80 palabras, primera persona, estilo natural del género — sin dramatismo forzado), imagePromptA e imagePromptB (ambos en inglés).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
+    const sceneExample = `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"EXACTAMENTE 75-80 palabras primera persona, entra directo a la escena, estilo natural del género","imagePromptA":"Scene with [nombre exacto]: ..."}`;
+    const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: 15 escenas.\nCada escena DEBE tener narration (EXACTAMENTE 75-80 palabras, primera persona, estilo natural del género — sin dramatismo forzado) e imagePromptA (en inglés).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
 
     let newScenes = [];
     for (let attempt = 0; attempt < 3 && newScenes.length < count; attempt++) {
@@ -2747,7 +2689,7 @@ RULES:
         const parsed = safeParseJSON(raw);
         // Normalize: Gemini sometimes returns "narración" (Spanish) instead of "narration"
         (parsed.scenes || []).forEach(s => { if (s && s['narración'] && !s.narration) s.narration = s['narración']; });
-        const arr = (parsed.scenes || []).filter(s => s && s.narration && s.imagePromptA && s.imagePromptB && s.title);
+        const arr = (parsed.scenes || []).filter(s => s && s.narration && s.imagePromptA && s.title);
         if (arr.length >= count) {
           newScenes = arr.slice(0, count).map((s, i) => ({
             ...s,
@@ -2964,29 +2906,25 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
 
     for (const s of state.scenes) {
       const imgA   = await dbGet(sceneImgKeyA(s.id));
-      const imgB   = await dbGet(sceneImgKeyB(s.id));
       const audStored = await dbGet(sceneAudKey(s.id));
       const vidUrlA = await dbGet(sceneVidKeyA(s.id));
-      const vidUrlB = await dbGet(sceneVidKeyB(s.id));
       const pad     = String(s.num).padStart(2, '0');
 
       // imagenes/ folder
-      if (imgA) zip.file(`imagenes/${pad}A.png`, imgA, { base64: true });
-      if (imgB) zip.file(`imagenes/${pad}B.png`, imgB, { base64: true });
+      if (imgA) zip.file(`imagenes/${pad}.png`, imgA, { base64: true });
 
       // videos/ folder — fetch from GCS and include
-      for (const [ab, vidUrl] of [['A', vidUrlA], ['B', vidUrlB]]) {
-        if (!vidUrl) continue;
-        btn.innerHTML = `<div class="spinner"></div> Descargando video ${s.num}${ab}...`;
+      if (vidUrlA) {
+        btn.innerHTML = `<div class="spinner"></div> Descargando video ${s.num}...`;
         try {
-          const vRes = await fetch(vidUrl);
+          const vRes = await fetch(vidUrlA);
           if (vRes.ok) {
             const vBuf = await vRes.arrayBuffer();
-            zip.file(`videos/${pad}${ab}.mp4`, vBuf);
+            zip.file(`videos/${pad}.mp4`, vBuf);
           }
         } catch(e) {
-          console.warn(`Video ${s.num}${ab} no descargado:`, e.message);
-          zip.file(`videos/${pad}${ab}_url.txt`, vidUrl);
+          console.warn(`Video ${s.num} no descargado:`, e.message);
+          zip.file(`videos/${pad}_url.txt`, vidUrlA);
         }
       }
 
