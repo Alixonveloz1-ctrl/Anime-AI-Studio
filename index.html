@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.101 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.102 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1036,7 +1036,7 @@ async function generateImage(prompt, characterRefs = null, forceModel = null) {
   const styleSpec = sceneGenre === 'donghua'
     ? 'Chinese donghua animation, bilibili iQIYI style. 2D cel-shaded characters with thick clean ink outlines. Detailed semi-realistic backgrounds with soft lighting. Smooth modern character designs. Hand-drawn 2D animation frame. NOT 3D, NOT CGI, NOT photorealistic.'
     : 'Japanese anime style. 2D hand-drawn animation frame extracted from a professional TV anime episode. Thick clean black ink outlines on all elements. Flat color fills with exactly 2-3 tone cel-shading, NO gradients, NO textures. Large expressive anime eyes, simplified nose and mouth, smooth face. Vibrant saturated anime color palette. Background in anime painterly style. MAPPA or Madhouse or Ufotable animation quality. This must look EXACTLY like a screenshot from a real anime series — NOT 3D, NOT CGI, NOT video game, NOT photorealistic, NOT western cartoon, NOT realistic skin, NOT Pixar.';
-  const noLookSuffix = ' ' + styleSpec + ' Character actively in the scene, NOT posing, NOT looking at camera. Side angle or 3/4 view.';
+  const noLookSuffix = ' ' + styleSpec + ' Character actively in the scene, NOT posing, NOT looking at camera. Side angle or 3/4 view. FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side. The artwork must extend completely to all four edges of the image.';
   const cleanPrompt = (String(prompt || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -1387,6 +1387,7 @@ REGLAS ABSOLUTAS:
 - El "hook" y el "conflicto" DEBEN reflejar la comedia absurda del género, no drama épico.
 - NO mezclar géneros no solicitados.
 - En "hook" describe UNA situación cómica concreta del primer episodio, no una promesa vaga.
+${concepto ? `- ⚠️ CRÍTICO — HAY UN CONCEPTO SEMILLA PROPORCIONADO POR EL USUARIO: ese concepto es CANON OBLIGATORIO, no una sugerencia. DEBES preservar EXACTAMENTE: los nombres de personajes que menciona (no los cambies, no los reemplaces con otros), la premisa central, y cada detalle específico que describe. Tu trabajo es EXPANDIR ese concepto (agregar ambientación, personajes secundarios coherentes, detalles del mundo) — NUNCA inventar una historia distinta ni renombrar lo que ya está definido. Si el concepto dice que un personaje se llama "Sofía", el universo resultante DEBE tener un personaje llamado "Sofía" — no "Yuki", no "Yuri", no ningún otro nombre.` : '- No hay concepto semilla: tienes libertad creativa total para inventar un universo ORIGINAL fiel al género.'}
 - Responde SOLO JSON válido sin markdown`;
 
     const prompt = `${DEMO_PROMPTS[demo] || ''}
@@ -1396,9 +1397,17 @@ ${GENRE_PROMPTS[genero] || ''}
 ${subgenreText}
 
 Tono: ${tono || 'neutral'}
-${concepto ? 'Concepto semilla: ' + concepto : ''}
+${concepto ? `
 
-Crea un universo ORIGINAL y único que sea ESTRICTAMENTE FIEL al género "${genero}" con los subgéneros seleccionados integrados naturalmente.
+═══════════════════════════════════════════
+CONCEPTO SEMILLA — TEXTO LITERAL DEL USUARIO (CANON OBLIGATORIO):
+"${concepto}"
+═══════════════════════════════════════════
+
+INSTRUCCIÓN: El universo que generes DEBE ser este concepto, expandido con más detalle — no una historia diferente "inspirada" en él. Conserva cada nombre propio, cada relación entre personajes, y la premisa exacta tal como está escrita arriba. Tu única tarea creativa es AÑADIR: ambientación específica, personajes secundarios que complementen (sin reemplazar a los ya mencionados), y estructura narrativa para el episodio 1.
+` : ''}
+
+${concepto ? 'Expande el concepto semilla de arriba en un universo completo' : 'Crea un universo ORIGINAL y único'} que sea ESTRICTAMENTE FIEL al género "${genero}" con los subgéneros seleccionados integrados naturalmente.
 
 IMPORTANTE: Si el género es isekai o videojuego, el universo DEBE incluir:
 - Protagonista con un sistema/habilidad de detección que activa situaciones absurdas
@@ -1410,7 +1419,7 @@ Devuelve JSON:
 {
   "title": "Título con subtítulo español",
   "tagline": "Frase gancho cómica y directa (máx 12 palabras)",
-  "concepto": "Mundo y premisa en 2-3 frases, incluyendo qué hace el sistema/habilidad del protagonista",
+  "concepto": "${concepto ? 'El concepto semilla EXPANDIDO con más detalle — mismos nombres, misma premisa, más contexto (3-4 frases)' : 'Mundo y premisa en 2-3 frases, incluyendo qué hace el sistema/habilidad del protagonista'}",
   "conflicto": "El choque cómico central: qué busca el protagonista vs qué pasa realmente cada vez que usa su habilidad",
   "hook": "La situación absurda ESPECÍFICA del episodio 1 (concreta, no vaga)",
   "setting": "Lugar y época",
@@ -1433,6 +1442,7 @@ Devuelve JSON:
       }
     }
     state.universe = parsedUniverse;
+    state.universe.conceptoOriginal = concepto || '';
     state.characters = [];
     state.scenes = [];
     saveState();
@@ -1651,7 +1661,7 @@ Género: ${genero}
 Concepto: ${u.concepto}
 Conflicto: ${u.conflicto}
 Setting: ${u.setting}
-${episodeInstructions ? '\nINSTRUCCIONES ESPECIALES PARA ESTE EPISODIO:\n' + episodeInstructions : ''}
+${u.conceptoOriginal ? `\n⚠️ CONCEPTO SEMILLA ORIGINAL DEL USUARIO (CANON — usa EXACTAMENTE estos nombres y esta premisa, no los cambies ni inventes otros):\n"${u.conceptoOriginal}"\n` : ''}${episodeInstructions ? '\nINSTRUCCIONES ESPECIALES PARA ESTE EPISODIO:\n' + episodeInstructions : ''}
 
 ${DEMO_PROMPTS[demo] || ''}
 
@@ -1688,9 +1698,10 @@ ${subgenreText}`;
 
       const charRules = `REGLAS OBLIGATORIAS DE REPARTO:
 - Crear EXACTAMENTE ${numChars} personajes
+- ⚠️ Si el CONCEPTO SEMILLA ORIGINAL (arriba) menciona nombres de personajes específicos, DEBES usar esos nombres EXACTOS — no los cambies, no los sustituyas por otros nombres "similares". Si dice "Sofía", el personaje se llama Sofía, no Yuki, no Yuri, no ningún otro nombre.
 - El género de cada personaje (masculino/femenino) debe ser el que mejor sirva a la historia, el género seleccionado y el concepto dado. NO impongas una mayoría femenina salvo que la historia lo requiera.
 - Protagonista: ${protagonistGender}
-- Nombres coherentes con la demografía y época del setting (japoneses, chinos, occidentales, según corresponda)
+- Nombres coherentes con la demografía y época del setting (japoneses, chinos, occidentales, según corresponda) — SOLO para personajes NUEVOS que no estén ya nombrados en el concepto semilla
 - Variedad visual: distintos colores de cabello, ojos, estilos de ropa
 - Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${mod === 'ecchi' ? '\n- Personajes femeninos con arquetipos marcados (tsundere, kuudere, genki, dandere, onee-san, etc)' : ''}${mod === 'harem_inverso' ? '\n- Personajes masculinos con arquetipos marcados (cool, principesco, deportista, intelectual, salvaje, etc)' : ''}
 - Si el género es isekai, donghua o videojuego: incluye SIEMPRE un COMPAÑERO con un rasgo cómico definidor (hambriento, filmador, quejumbroso) y una FIGURA DE AUTORIDAD competente que sufrirá las consecuencias de los éxitos accidentales del protagonista
@@ -1737,7 +1748,8 @@ FÓRMULA DE COMEDIA — arquetipos de referencia:
 ${genreTone}
 Los personajes deben encajar en la fórmula: protagonista mercenario/práctico (nunca dramático), compañero con UN rasgo cómico fijo, figura de autoridad competente que sufre las consecuencias.
 IMPORTANTE: si el concepto de la historia indica que el protagonista (u otro personaje) es un animal, criatura u objeto habitado por una consciencia humana, DEBES crear ese personaje igualmente y con el mismo detalle que los demás — nunca lo omitas ni lo humanices por defecto.
-Nombres reales y coherentes con el setting (japoneses, chinos u occidentales según corresponda). Responde SOLO JSON válido sin markdown.`;
+⚠️ FIDELIDAD DE NOMBRES: si el usuario proporcionó un concepto semilla con nombres de personajes específicos, ESOS SON LOS NOMBRES CORRECTOS Y OBLIGATORIOS — no los cambies, no los "mejores", no inventes alternativas. Úsalos exactamente como fueron escritos.
+Nombres reales y coherentes con el setting (japoneses, chinos u occidentales según corresponda) SOLO para personajes que el usuario no haya nombrado ya. Responde SOLO JSON válido sin markdown.`;
 
       const charPrompt = `${ctx}\n\n${charRules}\n\nCrea ${numChars} personajes únicos que pertenezcan al género "${genero}" y encajen con el concepto exacto de la historia (incluyendo protagonistas no-humanos si el concepto lo indica)${isEcchi ? '. Tono ecchi para los personajes humanos femeninos' : ''}. Devuelve SOLO:
 {"characters":[{"id":"c1","name":"nombre","role":"protagonista o rol (indica su naturaleza si no es humano)","gender":"female o male","age":"edad numérica (18+)","appearance":"descripción visual ${isEcchi ? 'atractiva y sugerente para humanos (figura, ropa que enfatiza); fiel a la especie/naturaleza si no es humano' : 'neutra y descriptiva; fiel a la especie/naturaleza si no es humano'}","personality":"2 frases","backstory":"2 frases"}]}`;
@@ -1861,6 +1873,11 @@ SCENE 10 (resolución): Protagonist gets paid. Authority figure defeated but gri
 - imagePromptA = establish the scene clearly: characters, location, time of day, what they are doing. Wide or medium shot showing the full context.
 - imagePromptB = almost IDENTICAL to imagePromptA — same characters, same location, same camera angle, just a tiny moment later (1-2 seconds). A slight change: a head turned, a hand moved, a different expression. The scene should be 95% the same. This enables Veo to create smooth natural animation between A and B without jumps.
 - FINALE (escena 10): resolución PARCIAL + misterio abierto que engancha al episodio ${epNum + 1}
+
+REGLAS CRÍTICAS DE REPARTO EN LAS ESCENAS:
+- ⚠️ OBLIGATORIO: debes usar TODOS o la GRAN MAYORÍA de los personajes listados en "PERSONAJES DEL EPISODIO" a lo largo de las 10 escenas — NUNCA ignores a los personajes secundarios y te enfoques solo en 2. Si se crearon 5 personajes, los 5 deben aparecer en al menos 1-2 escenas cada uno.
+- Distribuye la aparición de personajes de forma natural según su rol: el compañero y la figura de autoridad deben aparecer en varias escenas (no solo la primera), personajes secundarios pueden tener apariciones más puntuales pero SIGNIFICATIVAS.
+- Antes de responder, revisa mentalmente: ¿aparecieron TODOS los personajes de la lista al menos una vez en las 10 escenas? Si falta alguno, ajusta las escenas para incluirlo.
 
 REGLAS CRÍTICAS PARA imagePromptA e imagePromptB:
 - SIEMPRE empezar imagePromptA y imagePromptB con el estilo visual del género: para "donghua" → "Chinese donghua animation, bilibili aesthetic, 2D cel-shaded, thick ink outlines," — para todos los demás géneros → "2D hand-drawn anime frame, thick black ink outlines, flat cel-shading, vibrant colors, TV anime quality,"
@@ -2550,7 +2567,7 @@ async function generateImageRaw(prompt, preCompressedRefs) {
   const cleanPrompt = String(prompt || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim() + ' FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side.';
 
   const isEcchi = (state.universe?.subgenres || []).some(s => ['ecchi','harem','harem_inverso'].includes(s));
 
