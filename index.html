@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.95 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.96 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1272,11 +1272,14 @@ const GENRE_PROMPTS = {
 - Mundo con MAGIA, criaturas sobrenaturales o sistemas de poder fantásticos
 - Reglas internas claras del sistema mágico
 - NO es el mundo real moderno — es un universo de fantasía propio`,
-  isekai: `GÉNERO: Isekai. REGLA OBLIGATORIA E INNEGOCIABLE:
-- El protagonista DEBE ser transportado, reencarnado o invocado desde el mundo moderno a un mundo paralelo o de fantasía
-- La escena 1 o 2 DEBE mostrar/mencionar el momento de transición (muerte, portal, invocación, accidente)
-- El mundo destino es de fantasía/RPG con niveles, clases, magia o monstruos
-- NO es una historia ambientada solo en Japón moderno — el cambio de mundo es OBLIGATORIO`,
+  isekai: `GÉNERO: Isekai COMEDIA. REGLAS OBLIGATORIAS:
+- El protagonista transmigra a un nuevo mundo o cuerpo. Puede ser mundo fantástico, Japón moderno, China antigua, o cualquier setting donde sea un "recién llegado".
+- OBLIGATORIO: El protagonista recibe un SISTEMA o habilidad especial con notificaciones en lenguaje burocrático seco: "Detección activada. Objetivo identificado. Recompensa estimada: X."
+- El sistema siempre identifica "oportunidades valiosas" que resultan ser absurdamente inapropiadas para la situación.
+- El protagonista reacciona de forma práctica/mercenaria: siempre calcula la recompensa, nunca se pone dramático.
+- Hay un COMPAÑERO con UN rasgo definidor que menciona en los peores momentos (siempre tiene hambre / siempre filma / siempre se queja).
+- Hay una FIGURA DE AUTORIDAD competente que hace todo bien pero siempre pierde contra los éxitos accidentales del protagonista.
+- El tono es COMEDIA ABSURDA: la gracia viene de la diferencia entre lo que el sistema promete y lo que realmente ocurre.`,
   mecha: `GÉNERO: Mecha.
 - Protagonista pilota un robot gigante de combate
 - Escenas de batalla entre mechas, política militar, tecnología avanzada
@@ -1326,10 +1329,13 @@ const GENRE_PROMPTS = {
 - El protagonista lucha por sobrevivir en un entorno hostil (apocalipsis, isla, juego mortal, etc.)
 - Recursos escasos, decisiones desesperadas, dilemas morales bajo presión extrema
 - La muerte es una amenaza real y constante — la tensión nunca baja`,
-  videojuego: `GÉNERO: Videojuego/Sistema.
-- El protagonista interactúa con un SISTEMA tipo videojuego: niveles, stats, habilidades, misiones, notificaciones
-- Reglas claras de progresión (subir de nivel, desbloquear poderes)
-- Mezcla estrategia con acción, el protagonista explota las mecánicas del sistema`,
+  videojuego: `GÉNERO: Videojuego/Sistema — COMEDIA.
+- El protagonista tiene un SISTEMA con notificaciones formales y burocráticas: "Habilidad desbloqueada. Objetivo detectado. Valor estimado: X puntos."
+- El sistema SIEMPRE identifica objetivos o loot que resultan absurdamente inapropiados: el "objetivo débil" es el comandante aliado, el "ítem raro" es la comida de alguien, etc.
+- Protagonista: práctico, mercenario, siempre calculando compensación. NUNCA dramático.
+- Compañero fijo con UN rasgo: siempre tiene hambre, siempre se queja del lag, siempre pierde sus items.
+- Figura de autoridad (GM del juego, líder del gremio) que hace todo correcto y siempre sufre las consecuencias de las acciones accidentales del protagonista.
+- Humor absurdo: la gracia viene de la brecha entre lo que el sistema promete y lo que en realidad entrega.`,
 };
 
 const MOD_PROMPTS = {
@@ -1373,12 +1379,14 @@ document.getElementById('btnGenerarUniverso').addEventListener('click', async ()
   btn.innerHTML = '<div class="spinner"></div> Generando...';
 
   try {
-    const system = `Eres un guionista de anime viral para TikTok/Reels.
+    const system = `Eres un guionista de anime/manhua viral para Facebook Reels.
 REGLAS ABSOLUTAS:
-- Nombres japoneses REALES (Hiro, Yuki, Rin, Kaito, Mei, Sora, Aoi, Riku, Hana, Taro, Kenji, Nao)
-- NUNCA nombres inventados (nada de Aethernam, Kael, Zythara, etc.)
-- Fiel al género solicitado: si es isekai, DEBE haber transición a otro mundo; si es mecha, DEBE haber robots gigantes; si es deportes, DEBE girar en torno a un deporte específico
-- NO mezclar géneros que no fueron pedidos (ej: no agregar fantasía a un slice of life)
+- Nombres reales (japoneses: Hiro, Yuki, Rin, Kaito, Mei / chinos: Lin Yan, Chen Wu, Wang, Liu, Zhang).
+- NUNCA nombres inventados genéricos (nada de Aethernam, Kael, Zythara).
+- Fiel al género: si es isekai/videojuego, DEBE haber un SISTEMA de detección con notificaciones burocráticas y una figura de autoridad que siempre sufre.
+- El "hook" y el "conflicto" DEBEN reflejar la comedia absurda del género, no drama épico.
+- NO mezclar géneros no solicitados.
+- En "hook" describe UNA situación cómica concreta del primer episodio, no una promesa vaga.
 - Responde SOLO JSON válido sin markdown`;
 
     const prompt = `${DEMO_PROMPTS[demo] || ''}
@@ -1390,13 +1398,21 @@ ${subgenreText}
 Tono: ${tono || 'neutral'}
 ${concepto ? 'Concepto semilla: ' + concepto : ''}
 
-Crea un universo ORIGINAL y único que sea ESTRICTAMENTE FIEL al género "${genero}" con los subgéneros seleccionados integrados naturalmente. Devuelve JSON:
+Crea un universo ORIGINAL y único que sea ESTRICTAMENTE FIEL al género "${genero}" con los subgéneros seleccionados integrados naturalmente.
+
+IMPORTANTE: Si el género es isekai o videojuego, el universo DEBE incluir:
+- Protagonista con un sistema/habilidad de detección que activa situaciones absurdas
+- Un compañero con UN rasgo cómico definidor (siempre hambriento, siempre filmando, siempre quejándose)
+- Una figura de autoridad competente que será la víctima recurrente de los éxitos accidentales del protagonista
+- El "hook" describe la primera situación absurda concreta, NO una promesa épica
+
+Devuelve JSON:
 {
-  "title": "Título japonés con subtítulo español",
-  "tagline": "Frase gancho (máx 12 palabras)",
-  "concepto": "Mundo en 2-3 frases",
-  "conflicto": "Conflicto emocional central en 2 frases",
-  "hook": "Gancho del primer episodio (debe reflejar el género y subgéneros claramente)",
+  "title": "Título con subtítulo español",
+  "tagline": "Frase gancho cómica y directa (máx 12 palabras)",
+  "concepto": "Mundo y premisa en 2-3 frases, incluyendo qué hace el sistema/habilidad del protagonista",
+  "conflicto": "El choque cómico central: qué busca el protagonista vs qué pasa realmente cada vez que usa su habilidad",
+  "hook": "La situación absurda ESPECÍFICA del episodio 1 (concreta, no vaga)",
   "setting": "Lugar y época",
   "demo": "${demo}",
   "genero": "${genero}",
