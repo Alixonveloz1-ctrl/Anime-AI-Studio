@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.98 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.99 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1593,10 +1593,10 @@ NARRATION STYLE:
 - Characters react with mundane concerns (food, sleep, money), not emotions
 
 GENRE TONE — MANDATORY:
-\${genreTone}
+${genreTone}
 
 SCENE ENDING RULE:
-\${sceneEnding}
+${sceneEnding}
 
 NARRATION RULES:
 - EXACTLY 75-80 Spanish words in the "narration" field. Count before responding.
@@ -1604,11 +1604,11 @@ NARRATION RULES:
 - First sentence: drop into the action immediately. No setup.
 - Specific over vague: numbers, names, exact observations
 - Short sentences. Max 12 words each.
-\${isGrounded ? \`
-MODO COTIDIANO ACTIVO: Narra el día a día con detalles reales y específicos. CERO fantasmas, CERO poderes. El humor viene de situaciones reales.\` : \`
-MODO NARRATIVO ACTIVO: La emoción viene de los hechos. "Disparo y fallo. El monstruo está a diez metros." No "el terror me paraliza".\`}
-\${!allowsSuper && !allowsSuper2 ? \`
-⚠️ RESTRICCIÓN: Sin elementos sobrenaturales para el género \${genero}.\` : ''}
+${isGrounded ? `
+MODO COTIDIANO ACTIVO: Narra el día a día con detalles reales y específicos. CERO fantasmas, CERO poderes. El humor viene de situaciones reales.` : `
+MODO NARRATIVO ACTIVO: La emoción viene de los hechos. "Disparo y fallo. El monstruo está a diez metros." No "el terror me paraliza".`}
+${!allowsSuper && !allowsSuper2 ? `
+⚠️ RESTRICCIÓN: Sin elementos sobrenaturales para el género ${genero}.` : ''}
 
 REGLAS DE imagePromptA e imagePromptB:
 - SIEMPRE en INGLÉS
