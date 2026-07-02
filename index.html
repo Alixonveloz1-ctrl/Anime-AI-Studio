@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.104 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.105 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1534,6 +1534,8 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
 
     const sysBase = `You are a viral comedy anime/manhua scriptwriter for Facebook Reels. Your model is the viral Chinese web novel isekai/transmigration comedy formula that gets millions of views.
 
+ADULT AUDIENCE PROJECT: This content is for an adult audience, not children. Do not sanitize or soften the narration into family-friendly territory. Write with the same directness, wit, and edge as the source material — the only real limit is what Gemini's own content policies actually block, not an imagined stricter standard. Do not self-censor below that line.
+
 CRITICAL: The JSON field MUST be called "narration" (English, no accent mark).
 
 ═══════════════════════════════════════════════════════════
@@ -1594,8 +1596,10 @@ NARRATION STYLE:
 - Dry humor: describe absurd events with complete deadpan calm
 - Characters react with mundane concerns (food, sleep, money), not emotions
 
-GENRE TONE — MANDATORY:
+GENRE TONE — MANDATORY (mecánica de comedia, NO necesariamente estética):
 ${genreTone}
+⚠️ IMPORTANTE: lo anterior describe la MECÁNICA CÓMICA del género (el tipo de sistema, el tipo de autoridad que sufre, el tipo de running gag) — NO impone una estética visual obligatoria. Términos como "kingdom", "hero" o "guild" son solo ejemplos ilustrativos, no un mandato de ambientación medieval/fantástica.
+${u.conceptoOriginal ? `\n🎯 EL SETTING LO DEFINE EL CONCEPTO SEMILLA, NO EL TONO DE GÉNERO: el concepto semilla del usuario (arriba, marcado como CANON) ya establece la ambientación exacta de esta historia. Si ese concepto describe un mundo contemporáneo, realista o cotidiano, la historia DEBE mantenerse en ese mundo — NO agregues reinos, magia, tecnología futurista, u otros elementos de fantasía/sci-fi que no estén en el concepto, aunque el tono del género arriba use ese tipo de lenguaje. Aplica SOLO la mecánica cómica (sistema, autoridad, running gags) al escenario que el usuario ya definió.` : ''}
 
 SCENE ENDING RULE:
 ${sceneEnding}
@@ -1612,26 +1616,25 @@ MODO NARRATIVO ACTIVO: La emoción viene de los hechos. "Disparo y fallo. El mon
 ${!allowsSuper && !allowsSuper2 ? `
 ⚠️ RESTRICCIÓN: Sin elementos sobrenaturales para el género ${genero}.` : ''}
 
-REGLAS DE imagePromptA (una sola imagen por escena):
-- SIEMPRE en INGLÉS
-- SIEMPRE empezar con "Scene with [nombre exacto]:"
-- SIEMPRE incluir: nombre + ropa específica + cabello + expresión + entorno + iluminación
-- Ejemplo: "Scene with Kenji (short black hair, white hospital shirt, gray pants): sitting on hospital bed, looking at window, tired expression, afternoon light, clinical room"
-- NUNCA "a man", "a woman", "the protagonist" — SIEMPRE el nombre real
-- PROHIBIDO en imagePrompt: naked, nude, explicit, sexual, genitals, nipples
-- NO texto, NO letras, NO marcas de agua
-- Solo personajes presentes en esa escena
-- Responde SOLO JSON válido sin markdown`;
+Este paso SOLO genera narración de escenas — NO generes descripciones de imagen todavía, eso es un paso separado.
+Responde SOLO JSON válido sin markdown`;
 
+    // Split ecchi rules: narration guidance goes with the narration call,
+    // visual/camera language goes with the image-prompt call.
     const genreExtra = hasEcchi
-      ? `\n\nECCHI/HAREM ACTIVO — REGLAS OBLIGATORIAS:
-NARRACIÓN: Cada escena incluye al menos UN momento de fan service real. La narración describe lo que el protagonista VE y SIENTE: curvas, piel, ropa ajustada, momentos accidentales. Tono sugerente y picante — el espectador quiere seguir mirando.
+      ? `\n\nECCHI/HAREM ACTIVO — CONTENIDO PARA AUDIENCIA ADULTA — REGLAS OBLIGATORIAS:
+Este proyecto es anime para adultos. La narración NO debe sonar sanitizada ni infantil — sé tan sugerente y directo como el máximo permitido por las políticas de Gemini.
+NARRACIÓN: Cada escena incluye al menos UN momento de fan service real, descrito con detalle sensorial genuino — no de forma tímida o edulcorada. La narración describe lo que el protagonista VE y SIENTE con lenguaje directo: curvas, piel, ropa ajustada, momentos accidentales, tensión sexual. Tono sugerente, picante y adulto — el espectador quiere seguir mirando.
 SITUACIONES CLÁSICAS DE FAN SERVICE: caída accidental encima de alguien, ropa mojada tras la lluvia, cambio de ropa interrumpido, uniforme con falda que se levanta con el viento, escena de playa o piscina, toalla que casi cae, uniforme de gimnasio ajustado, pijama corto en el pasillo, inclinarse hacia adelante sin darse cuenta.
-LENGUAJE DE CÁMARA ECCHI para imagePromptA/B: "low angle shot revealing her thighs", "wind lifting her skirt she blushes", "her uniform barely covers as she leans forward", "wet shirt clinging to her figure after rain", "she wraps towel around herself surprised expression", "swimsuit scene at pool side profile view", "gym uniform form-fitting surprised mid-motion", "short nightgown in hallway embarrassed expression", "side view leaning over desk skirt riding up"
-APARIENCIA: figuras atractivas con outfits sugerentes — uniforme escolar con falda corta, bikini, lingerie estilo anime (lace trim, ribbon details), ropa ajustada que marca la silueta, vestido corto, traje de baño. Describir la silueta con: "hourglass silhouette", "long slender legs", "delicate collarbone visible", "graceful figure", "fitted uniform emphasizing her shape"
-LÍMITE: sin desnudez explícita, sin partes íntimas visibles — ecchi, no hentai`
+LÍMITE REAL: el único límite es lo que Gemini realmente bloquea (desnudez explícita, partes íntimas visibles). Todo lo demás — sugerencia, sensualidad, tensión — está permitido y es DESEABLE. No te autocensures por debajo de ese límite.`
       : '';
 
+    const genreExtraImage = hasEcchi
+      ? `\n\nECCHI ACTIVO — LENGUAJE VISUAL:
+LENGUAJE DE CÁMARA ECCHI: "low angle shot revealing her thighs", "wind lifting her skirt she blushes", "her uniform barely covers as she leans forward", "wet shirt clinging to her figure after rain", "she wraps towel around herself surprised expression", "swimsuit scene at pool side profile view", "gym uniform form-fitting surprised mid-motion", "short nightgown in hallway embarrassed expression", "side view leaning over desk skirt riding up"
+APARIENCIA: figuras atractivas y sensuales con outfits sugerentes — uniforme escolar con falda corta, bikini, lingerie estilo anime (lace trim, ribbon details), ropa ajustada que marca la silueta, vestido corto, traje de baño. Describir la silueta con: "hourglass silhouette", "voluptuous figure", "long slender legs", "delicate collarbone visible", "curvy figure", "fitted uniform emphasizing her shape"
+LÍMITE: sin desnudez explícita, sin partes íntimas visibles — todo lo demás (sensual, sugerente, provocativo) está permitido.`
+      : '';
 
     const episodeInstructions = document.getElementById('episodeInstructions')?.value.trim() || '';
 
@@ -1653,7 +1656,7 @@ ${subgenreText}`;
     const isEcchi = mod === 'ecchi';
 
     if (epNum === 1 || !state.characters?.length) {
-      setProg(5, 'Paso 1/2: Creando personajes...');
+      setProg(5, 'Paso 1/3: Creando personajes...');
 
       let numChars, numFemales, numMales, protagonistGender;
       const numCharsChoice = document.getElementById('numCharsSelect')?.value || 'auto';
@@ -1686,8 +1689,8 @@ ${subgenreText}`;
 - Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${mod === 'ecchi' ? '\n- Personajes femeninos con arquetipos marcados (tsundere, kuudere, genki, dandere, onee-san, etc)' : ''}${mod === 'harem_inverso' ? '\n- Personajes masculinos con arquetipos marcados (cool, principesco, deportista, intelectual, salvaje, etc)' : ''}
 - Si el género es isekai, donghua o videojuego: incluye SIEMPRE un COMPAÑERO con un rasgo cómico definidor (hambriento, filmador, quejumbroso) y una FIGURA DE AUTORIDAD competente que sufrirá las consecuencias de los éxitos accidentales del protagonista
 
-⚠️ PERSONAJE NO-HUMANO — LEE EL CONCEPTO CON CUIDADO:
-Si el concepto/hook de la historia indica que el protagonista (u otro personaje) transmigró, se reencarnó, o habita el cuerpo de un animal, criatura, objeto u otra entidad NO humana — ESE PERSONAJE DEBE SER CREADO IGUAL, respetando el esquema JSON completo (name, role, gender, age, appearance, personality, backstory). NO lo omitas y NO lo conviertas en humano.
+⚠️ PERSONAJE NO-HUMANO — LEE EL CONCEPTO CON MUCHO CUIDADO:
+Si el CONCEPTO SEMILLA ORIGINAL menciona EXPLÍCITAMENTE que un personaje específico (normalmente el protagonista) transmigró, se reencarnó, o habita el cuerpo de un animal, criatura, objeto u otra entidad NO humana — SOLO ESE personaje específico debe crearse como no-humano, respetando el esquema JSON completo (name, role, gender, age, appearance, personality, backstory). NO lo omitas y NO lo conviertas en humano.
 - "name": el nombre que le da su ama/dueño/entorno (ej: "Mantequilla")
 - "role": indica su naturaleza, ej: "protagonista (alma humana en cuerpo de Golden Retriever)"
 - "gender": el género de la CONSCIENCIA/alma que lo habita (no necesariamente el del cuerpo)
@@ -1696,10 +1699,11 @@ Si el concepto/hook de la historia indica que el protagonista (u otro personaje)
 - "personality": cómo PIENSA internamente (sigue siendo humano por dentro) vs. cómo actúa externamente (limitado por su cuerpo/especie)
 Las reglas de ropa/vestimenta de más abajo NO aplican a este personaje — solo a personajes humanos.
 
+🚫 PROHIBIDO INVENTAR MÁS PERSONAJES NO-HUMANOS: si el concepto solo describe UN personaje como no-humano (ej: solo el protagonista es un perro), TODOS los demás personajes (ex parejas, familiares, vecinos, figuras de autoridad, etc.) DEBEN ser humanos normales — sin excepción, aunque parezca "consistente" con el tono de la historia inventar otro personaje no-humano. No agregues gatos parlantes, mascotas con poderes, ni ninguna otra criatura no mencionada explícitamente en el concepto. Un mundo con UN personaje no-humano no significa que el mundo entero tenga animales que hablan — sigue siendo el mundo real, con UNA excepción puntual.
+
 REGLAS DE PERSONAJES FEMENINOS (TODOS los géneros humanos):
 - Cabello LARGO obligatorio (hasta los hombros o más largo). Nunca corto tipo bob/pixie.
-- Figura femenina BONITA pero NO exagerada: cintura definida, proporciones equilibradas, esbelta. NO musculosas, NO atléticas marcadas. NO "voluptuosas" extremas.
-- Aspecto INOCENTE: rasgos suaves, ojos grandes y expresivos, sonrisa amable o expresión dulce
+- Figura femenina atractiva y bien proporcionada: cintura definida, esbelta, elegante.
 - Piel limpia, sin cicatrices, sin heridas, sin ojeras pronunciadas
 - Ropa adecuada al rol pero femenina
 
@@ -1710,24 +1714,22 @@ REGLAS DE APARIENCIA PARA PERSONAJES HUMANOS (estilo anime — OBLIGATORIO):
 - Describir la ropa por ESTILO y COLOR únicamente: "delantal verde oscuro de lino", "camisa blanca de manga corta", "armadura plateada con detalles azules"
 
 ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA (solo personajes humanos):
-- Personajes femeninos (18+) con figuras atractivas estilo ecchi anime: "graceful hourglass silhouette", "long slender legs", "delicate collarbone", "slim waist", "soft delicate features"
+- Personajes femeninos (18+) con figuras atractivas y sensuales estilo ecchi anime: "graceful hourglass silhouette", "long slender legs", "delicate collarbone", "slim waist", "voluptuous figure", "curvy silhouette"
 - Ropa fan service típica del género: falda corta escolar, uniforme ajustado, traje de baño, pijama corto, lencería anime (encajes, lazos), ropa deportiva ajustada
-- Vocabulario que funciona con Gemini: "form-fitting uniform", "short pleated skirt", "fitted sports outfit", "swimsuit", "lace-trim sleepwear", "attractive silhouette"
-- NO usar en appearance: "naked", "nude", "explicit", "nipples", "genitals" — sin desnudez explícita
-- SIEMPRE especificar la edad (18-25 años)` : `RESTRICCIÓN DE LENGUAJE (importante para no activar filtros):
-- En appearance NO usar: voluptuosa, sensual, seductora, escote, busto, curvas pronunciadas, ajustado que realza, translúcida, provocativa
-- USAR: elegante, delicada, dulce, bonita, encantadora, refinada, esbelta`}
+- Vocabulario que funciona con Gemini: "form-fitting uniform", "short pleated skirt", "fitted sports outfit", "swimsuit", "lace-trim sleepwear", "attractive silhouette", "sensual pose"
+- NO usar en appearance: "naked", "nude", "explicit", "nipples", "genitals" — sin desnudez explícita, todo lo demás (sensual, sugerente, provocativo) está permitido
+- SIEMPRE especificar la edad (18-25 años)` : `- Descripción de apariencia libre y natural — sin restricciones artificiales de vocabulario, mientras sea apropiado para el género y tono elegidos`}
 
 - Edad: TODOS los personajes humanos 18+ años. Especificar edad en la descripción`;
 
       // Lean, dedicated system prompt for character creation (avoids sending the
       // full ~7000-char scene-writing sysBase, which was pushing Edge Function
       // latency past Vercel's response-start limit and causing timeouts).
-      const charSysPrompt = `Eres un diseñador de personajes para anime/manhua cómico viral.
-FÓRMULA DE COMEDIA — arquetipos de referencia:
+      const charSysPrompt = `Eres un diseñador de personajes para anime/manhua cómico viral para audiencia adulta.
+FÓRMULA DE COMEDIA — arquetipos de referencia (esto es MECÁNICA cómica, no estética visual obligatoria):
 ${genreTone}
 Los personajes deben encajar en la fórmula: protagonista mercenario/práctico (nunca dramático), compañero con UN rasgo cómico fijo, figura de autoridad competente que sufre las consecuencias.
-IMPORTANTE: si el concepto de la historia indica que el protagonista (u otro personaje) es un animal, criatura u objeto habitado por una consciencia humana, DEBES crear ese personaje igualmente y con el mismo detalle que los demás — nunca lo omitas ni lo humanices por defecto.
+${u.conceptoOriginal ? `🎯 EL SETTING LO DEFINE EL CONCEPTO SEMILLA: el mundo, época y nivel tecnológico de los personajes deben coincidir con lo que describe el concepto semilla del usuario (canon), no con la estética típica del género. Si el concepto es contemporáneo/realista, los personajes son gente normal de hoy — sin reinos, magia, ni tecnología futurista que el concepto no mencione.\n` : ''}IMPORTANTE: si el concepto de la historia indica EXPLÍCITAMENTE que un personaje concreto (normalmente el protagonista) es un animal, criatura u objeto habitado por una consciencia humana, DEBES crear ese personaje igualmente y con el mismo detalle que los demás — nunca lo omitas ni lo humanices por defecto. Pero SOLO ese personaje específico: no inventes otros personajes no-humanos que el concepto no menciona. Si el concepto no dice nada sobre naturaleza no-humana, TODOS los personajes son humanos normales.
 ⚠️ FIDELIDAD DE NOMBRES: si el usuario proporcionó un concepto semilla con nombres de personajes específicos, ESOS SON LOS NOMBRES CORRECTOS Y OBLIGATORIOS — no los cambies, no los "mejores", no inventes alternativas. Úsalos exactamente como fueron escritos.
 Nombres reales y coherentes con el setting (japoneses, chinos u occidentales según corresponda) SOLO para personajes que el usuario no haya nombrado ya. Responde SOLO JSON válido sin markdown.`;
 
@@ -1749,12 +1751,12 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
       state.characters = parsedChars.characters || [];
       saveState();
       renderCharacters();
-      setProg(20, `✅ ${state.characters.length} personajes — Paso 2/2: Generando escenas...`);
+      setProg(20, `✅ ${state.characters.length} personajes — Paso 2/3: Generando escenas...`);
     } else {
       // Episode 2+ — reuse existing characters, skip regeneration
       const newCharsDesc = document.getElementById('newCharsInput')?.value.trim() || '';
       if (newCharsDesc) {
-        setProg(10, `Paso 1/2: Generando personajes nuevos para Episodio ${epNum}...`);
+        setProg(10, `Paso 1/3: Generando personajes nuevos para Episodio ${epNum}...`);
         try {
           const existingCharList = state.characters.map(ch => '- ' + ch.name + ' (' + (ch.role||'') + '): ' + (ch.appearance||'')).join('\n');
           const newCharPrompt = ctx + '\n\nPERSONAJES EXISTENTES (NO recrear):\n' + existingCharList + '\n\nPersonajes nuevos a crear:\n"' + newCharsDesc + '"\n\nCrea SOLO los personajes nuevos. Devuelve SOLO:\n{"characters":[{"id":"c_new1","name":"nombre","role":"rol","gender":"female o male","age":"18+","appearance":"descripción visual detallada","personality":"2 frases","backstory":"2 frases"}]}';
@@ -1798,7 +1800,7 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
     const charRefShort = state.characters.map(c => c.name).join(', ');
 
     // 15 escenas × 1 imagen = 15 imágenes por episodio
-    const sceneShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"EXACTAMENTE 75-80 palabras en primera persona (YO). Gancho en la primera frase. Sensaciones físicas concretas. Cuenta las palabras.","imagePromptA":"Scene with [nombre exacto]: [descripción visual detallada — ropa, cabello, expresión, entorno, iluminación]"}`;
+    const narrationShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"EXACTAMENTE 75-80 palabras en primera persona (YO). Gancho en la primera frase. Sensaciones físicas concretas. Cuenta las palabras."}`;
 
     async function generateSceneBatch(batchPrompt, expectedCount, startNum, batchName) {
       let bestResult = [];
@@ -1809,7 +1811,7 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
           const arr = parsed.scenes || [];
           // Normalize: Gemini sometimes returns "narración" (Spanish) instead of "narration"
           arr.forEach(s => { if (s && s['narración'] && !s.narration) s.narration = s['narración']; });
-          const valid = arr.filter(s => s && s.narration && s.imagePromptA && s.title);
+          const valid = arr.filter(s => s && s.narration && s.title);
           if (valid.length > bestResult.length) bestResult = valid;
           if (valid.length >= expectedCount) {
             return valid.slice(0, expectedCount).map((s, i) => ({
@@ -1847,32 +1849,73 @@ SCENE 13-14 (clímax): THE BIGGEST DISCOVERY — the most outrageous yet. All ru
 SCENE 15 (resolución): Protagonist gets paid. Authority figure defeated but grimly accepts it. Companion says what they want to eat. Scene ends with the NEXT system activation — hook for Episode ${epNum + 1}.
 
 - The "narration" field: EXACTLY 75-80 Spanish words, FIRST PERSON (YO). Count words. Drop into the scene immediately. End naturally for the genre — not forced tension.
-- imagePromptA = the ONE image for this scene. Since there is only one image per scene, it must capture the single most important visual moment: characters, location, specific action, expression, camera angle — as clear and complete as possible.
 
 REGLAS CRÍTICAS DE REPARTO EN LAS ESCENAS:
 - ⚠️ OBLIGATORIO: debes usar TODOS o la GRAN MAYORÍA de los personajes listados en "PERSONAJES DEL EPISODIO" a lo largo de las 15 escenas — NUNCA ignores a los personajes secundarios y te enfoques solo en 2. Si se crearon 5 personajes, los 5 deben aparecer en al menos 1-2 escenas cada uno.
 - Distribuye la aparición de personajes de forma natural según su rol: el compañero y la figura de autoridad deben aparecer en varias escenas (no solo la primera), personajes secundarios pueden tener apariciones más puntuales pero SIGNIFICATIVAS.
-- Antes de responder, revisa mentalmente: ¿aparecieron TODOS los personajes de la lista al menos una vez en las 15 escenas? Si falta alguno, ajusta las escenas para incluirlo.
+- Antes de responder, revisa mentalmente: ¿aparecieron TODOS los personajes de la lista al menos una vez en las 15 escenas? Si falta alguno, ajusta las escenas para incluirlo.`;
 
-REGLAS CRÍTICAS PARA imagePromptA:
-- SIEMPRE empezar imagePromptA con el estilo visual del género: para "donghua" → "Chinese donghua animation, bilibili aesthetic, 2D cel-shaded, thick ink outlines," — para todos los demás géneros → "2D hand-drawn anime frame, thick black ink outlines, flat cel-shading, vibrant colors, TV anime quality,"
-- SIEMPRE usar el nombre EXACTO del personaje (ej: "Scene with Kenji:")
+    // ─── CALL 1: narration only for all 15 scenes (one story, uninterrupted) ───
+    setProg(30, 'Paso 2/3: Escribiendo las 15 narraciones...');
+    const prevEpSummary = buildPrevEpisodesSummary();
+    const scenesNoImg = await generateSceneBatch(
+      `${ctx}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${batchRules}\n\nGenera EXACTAMENTE 15 escenas numeradas 1-15:\n- Escenas 1-2: cold_open\n- Escenas 3-6: act1\n- Escenas 7-12: act2\n- Escenas 13-14: clímax\n- Escena 15: FINALE — resolución parcial + pregunta abierta para episodio ${epNum + 1}\nDevuelve SOLO: {"scenes":[${narrationShape},...]} con exactamente 15 objetos numerados 1-15.`,
+      15, 1, 'Narración 1-15'
+    );
+
+    // ─── CALL 2: image prompts, based on the narration already written above.
+    // This call does NOT continue the story — it only translates finished
+    // text into visual descriptions, so there is no narrative context to
+    // lose or duplicate (unlike splitting the STORY itself into 2 calls,
+    // which caused scene 10 to repeat scene 5 in an earlier attempt). ───
+    setProg(70, 'Paso 3/3: Generando descripciones visuales...');
+
+    const imageSysPrompt = `Eres un director de arte para anime/manhua. Tu única tarea es escribir UN prompt de imagen en inglés por escena, basado en la narración YA ESCRITA que se te entrega — no inventas historia nueva, solo describes visualmente lo que ya ocurre en cada escena.
+
+REGLAS DE imagePromptA:
+- SIEMPRE en INGLÉS
+- SIEMPRE empezar con el estilo visual del género: para "donghua" → "Chinese donghua animation, bilibili aesthetic, 2D cel-shaded, thick ink outlines," — para todos los demás géneros → "2D hand-drawn anime frame, thick black ink outlines, flat cel-shading, vibrant colors, TV anime quality,"
+- Luego "Scene with [nombre exacto]:" seguido de la descripción visual
 - Personajes HUMANOS: SIEMPRE incluir ropa específica según su ficha + color y estilo de cabello
 - Personajes NO-HUMANOS (animal/criatura/objeto poseído): describir su apariencia física real (especie, pelaje/textura, color, tamaño) — JAMÁS inventarle ropa humana salvo que su ficha la mencione explícitamente
-- NUNCA decir solo "the protagonist" o "a man" — usar el nombre real
-- Si 2+ personajes: "Scene with Kenji and Ayame:" y describir apariencia de cada uno
+- NUNCA decir solo "the protagonist" o "a man" — SIEMPRE el nombre real
+- Si 2+ personajes en la escena: "Scene with Kenji and Ayame:" y describir apariencia de cada uno
 - Máximo 3 personajes por imagen
-- CRÍTICO: el personaje NUNCA mira a la cámara. Describe la acción que está haciendo. Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"`;
+- CRÍTICO: el personaje NUNCA mira a la cámara. Describe la acción que está haciendo según la narración. Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"
+- PROHIBIDO en imagePrompt: naked, nude, explicit, sexual, genitals, nipples
+- NO texto, NO letras, NO marcas de agua${genreExtraImage}
+Responde SOLO JSON válido sin markdown`;
 
-    // ─── Single call: 15 scenes, one image prompt each (no A/B split — a
-    // previous 2-batch attempt caused Gemini to lose narrative context
-    // between calls and duplicate scenes; single call preserves continuity) ───
-    setProg(40, 'Generando 15 escenas...');
-    const prevEpSummary = buildPrevEpisodesSummary();
-    const scenes = await generateSceneBatch(
-      `${ctx}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${batchRules}\n\nGenera EXACTAMENTE 15 escenas numeradas 1-15:\n- Escenas 1-2: cold_open\n- Escenas 3-6: act1\n- Escenas 7-12: act2\n- Escenas 13-14: clímax\n- Escena 15: FINALE — resolución parcial + pregunta abierta para episodio ${epNum + 1}\nDevuelve SOLO: {"scenes":[${sceneShape},...]} con exactamente 15 objetos numerados 1-15.`,
-      15, 1, 'Escenas 1-15'
-    );
+    async function generateImagePromptsBatch(scenesForPrompt) {
+      const scenesText = scenesForPrompt.map(s =>
+        `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`
+      ).join('\n\n');
+      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\nESCENAS YA ESCRITAS — genera UN imagePromptA por escena que capture visualmente el momento más importante de cada una:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"imagePromptA":"Scene with..."},...]} con exactamente ${scenesForPrompt.length} objetos, uno por cada número de escena de arriba.`;
+
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          const raw = await callGemini(prompt, imageSysPrompt);
+          const parsed = safeParseJSON(raw);
+          const arr = parsed.imagePrompts || [];
+          const map = new Map(arr.filter(p => p && p.num && p.imagePromptA).map(p => [p.num, p.imagePromptA]));
+          if (map.size >= scenesForPrompt.length) {
+            return scenesForPrompt.map(s => ({ ...s, imagePromptA: map.get(s.num) || '' }));
+          }
+          console.warn(`Image prompts intento ${attempt+1}: ${map.size}/${scenesForPrompt.length}`);
+          if (attempt === 3) return scenesForPrompt.map(s => ({ ...s, imagePromptA: map.get(s.num) || '' }));
+          await new Promise(r => setTimeout(r, 3000));
+        } catch(e) {
+          console.error(`Image prompts intento ${attempt+1}:`, e.message);
+          if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
+          else return scenesForPrompt.map(s => ({ ...s, imagePromptA: '' }));
+        }
+      }
+      return scenesForPrompt.map(s => ({ ...s, imagePromptA: '' }));
+    }
+
+    const scenes = (scenesNoImg.some(s => s.narration))
+      ? await generateImagePromptsBatch(scenesNoImg)
+      : scenesNoImg.map(s => ({ ...s, imagePromptA: '' }));
 
     state.scenes = scenes;
     state.episodes[epNum] = scenes;
