@@ -642,6 +642,59 @@ const ANIME_VISUAL_STYLE_CORE = 'high-budget cinematic 2D anime film quality, re
 // Short version for LLM-authored prompt lead-ins (keeps token cost low across 15 scenes)
 const ANIME_STYLE_LEAD_IN = 'Cinematic 2D anime key visual, fine detailed linework, soft gradient cel-shading, richly detailed background,';
 
+// ════════════════════════════════════════════════════════════════
+// COMPANION QUIRK POOL — fixes a bug where the companion character
+// was ALWAYS "hungry": every prompt that mentioned the companion's
+// trait listed the same 2-3 examples ("hungry, filming, complaining")
+// with "hungry" first, so Gemini defaulted to it almost every time
+// (models strongly anchor to the first example in a short list,
+// especially across near-identical repeated calls). The fix: pick
+// ONE quirk with JS randomness (genuinely random, unlike asking the
+// model to "choose") ONCE per universe, store it, and inject that
+// SPECIFIC concrete quirk into every prompt that needs it — instead
+// of leaving it as an open example list for the model to default on.
+// ════════════════════════════════════════════════════════════════
+const COMPANION_QUIRKS = [
+  'always hungry, brings up food and snacks even during the worst crises',
+  'constantly filming everything for content, narrates the chaos like a livestreamer',
+  'chronic complainer about tiny inconveniences while ignoring the actual danger',
+  'obsessively frugal, tries to haggle or save money at the worst possible moments',
+  'easily terrified, hides or screams at things the protagonist finds mundane',
+  'deeply superstitious, blames every mishap on bad luck, omens, or feng shui',
+  'hopeless romantic, tries to matchmake or ship people during emergencies',
+  "backseat-driver personality, criticizes the protagonist's every decision out loud",
+  'obsessed with a random hobby (fishing, card collecting, bird-watching) and brings it up constantly',
+  'always exhausted, keeps trying to nap or complains about being tired at critical moments',
+  'convinced everything is a conspiracy, connects unrelated events into wild theories',
+  'germaphobe, worried about cleanliness and germs even mid-disaster',
+  'brutally, tactlessly honest, blurts out the worst possible truth at the worst time',
+  'compulsive collector of oddly specific junk, picks up random items during chaos',
+  'glued to their phone, distracted by notifications and social media during emergencies',
+  'obsessively formal and etiquette-focused, corrects manners during life-or-death moments',
+  'gambling addict, tries to bet on outcomes of dangerous situations',
+  'hyper-competitive, turns any situation into a contest to win',
+  'fitness-obsessed, brings up gym routines, protein, or macros at random moments',
+  'always freezing cold, complains about the temperature no matter the situation',
+  'wannabe entrepreneur, tries to monetize or sell things in the middle of a crisis',
+  'narrates their own life like a dramatic novel, over-the-top theatrical commentary',
+  'obsessed with a specific celebrity or idol, compares everyone and everything to them',
+  'clumsy and accident-prone, causes small unrelated chaos in the middle of the main plot',
+];
+function pickCompanionQuirk() {
+  return COMPANION_QUIRKS[Math.floor(Math.random() * COMPANION_QUIRKS.length)];
+}
+// Lazily picks ONE quirk per universe (first call) and persists it, so every
+// later prompt (characters, scenes, new episodes) references the SAME trait.
+// Falls back gracefully for projects saved before this fix existed.
+function getCompanionQuirk() {
+  if (!state.universe) return pickCompanionQuirk();
+  if (!state.universe.companionQuirk) {
+    state.universe.companionQuirk = pickCompanionQuirk();
+    saveState();
+  }
+  return state.universe.companionQuirk;
+}
+
 function buildVideoPrompt(s) {
   const base      = (s.imagePromptA || s.narration || '').replace(/"/g,'').slice(0, 200);
   const genre     = document.getElementById('generoSelect')?.value || 'accion';
@@ -1267,7 +1320,7 @@ const GENRE_PROMPTS = {
 - OBLIGATORIO: El protagonista recibe un SISTEMA o habilidad especial con notificaciones en lenguaje burocrático seco: "Detección activada. Objetivo identificado. Recompensa estimada: X."
 - El sistema siempre identifica "oportunidades valiosas" que resultan ser absurdamente inapropiadas para la situación.
 - El protagonista reacciona de forma práctica/mercenaria: siempre calcula la recompensa, nunca se pone dramático.
-- Hay un COMPAÑERO con UN rasgo definidor que menciona en los peores momentos (siempre tiene hambre / siempre filma / siempre se queja).
+- Hay un COMPAÑERO con UN rasgo definidor fijo (asignado por separado) que menciona en los peores momentos.
 - Hay una FIGURA DE AUTORIDAD competente que hace todo bien pero siempre pierde contra los éxitos accidentales del protagonista.
 - El tono es COMEDIA ABSURDA: la gracia viene de la diferencia entre lo que el sistema promete y lo que realmente ocurre.`,
   mecha: `GÉNERO: Mecha.
@@ -1323,7 +1376,7 @@ const GENRE_PROMPTS = {
 - El protagonista tiene un SISTEMA con notificaciones formales y burocráticas: "Habilidad desbloqueada. Objetivo detectado. Valor estimado: X puntos."
 - El sistema SIEMPRE identifica objetivos o loot que resultan absurdamente inapropiados: el "objetivo débil" es el comandante aliado, el "ítem raro" es la comida de alguien, etc.
 - Protagonista: práctico, mercenario, siempre calculando compensación. NUNCA dramático.
-- Compañero fijo con UN rasgo: siempre tiene hambre, siempre se queja del lag, siempre pierde sus items.
+- Compañero fijo con UN rasgo cómico (asignado por separado).
 - Figura de autoridad (GM del juego, líder del gremio) que hace todo correcto y siempre sufre las consecuencias de las acciones accidentales del protagonista.
 - Humor absurdo: la gracia viene de la brecha entre lo que el sistema promete y lo que en realidad entrega.`,
 };
@@ -1401,7 +1454,7 @@ ${concepto ? 'Expande el concepto semilla de arriba en un universo completo' : '
 
 IMPORTANTE: Si el género es isekai o videojuego, el universo DEBE incluir:
 - Protagonista con un sistema/habilidad de detección que activa situaciones absurdas
-- Un compañero con UN rasgo cómico definidor (siempre hambriento, siempre filmando, siempre quejándose)
+- Un compañero con UN rasgo cómico definidor fijo (el rasgo específico se asigna en el paso de creación de personajes)
 - Una figura de autoridad competente que será la víctima recurrente de los éxitos accidentales del protagonista
 - El "hook" describe la primera situación absurda concreta, NO una promesa épica
 
@@ -1503,8 +1556,8 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     const GENRE_TONE = {
       accion:       'ACTION + COMEDY: The protagonist has a Combat Analyzer that identifies "critical weak points" — which always turn out to be ally equipment, the commander\'s trophy, or the wrong target entirely. The military/sect authority does everything right and still suffers. Protagonist reaction: how much is the compensation? Running gag: the authority\'s damage report grows more creative with each "pilot error" entry.',
       fantasia:     'FANTASY + COMEDY: The protagonist has a Treasure Detection system that finds magical artifacts — which are always cursed, belong to the wrong person, or wildly inappropriate for the situation. The guild master/elder investigates and suffers. Protagonist: "How much reward for turning it in?" Running gag: the system\'s reward estimates are always accurate but never account for the chaos caused.',
-      isekai:       'ISEKAI COMEDY — THE PUREST FORM: Overpowered detection/stat system with notifications in formal bureaucratic language. Every activation leads to an absurd discovery. The kingdom\'s strongest hero/inspector keeps losing to protagonist\'s accidental wins. Companion always hungry or overthinking. Protagonist evaluates everything in gold coins. Running gag: system congratulates protagonist for "achievements" that are clearly disasters.',
-      donghua:      'DONGHUA CULTIVATION COMEDY: The cultivation system detects "spirit energy concentrations" — which always turn out to be someone\'s lunch, a forbidden clan treasure, or military equipment. The sect elder/patriarch does everything correctly and still loses face because of protagonist. Companion treats spirit pills like snacks. Protagonist: "How many spirit stones is the reward?" Running gag: the sect elder\'s reputation deteriorates episode by episode.',
+      isekai:       'ISEKAI COMEDY — THE PUREST FORM: Overpowered detection/stat system with notifications in formal bureaucratic language. Every activation leads to an absurd discovery. The kingdom\'s strongest hero/inspector keeps losing to protagonist\'s accidental wins. Companion has their own fixed quirk (assigned separately). Protagonist evaluates everything in gold coins. Running gag: system congratulates protagonist for "achievements" that are clearly disasters.',
+      donghua:      'DONGHUA CULTIVATION COMEDY: The cultivation system detects "spirit energy concentrations" — which always turn out to be someone\'s lunch, a forbidden clan treasure, or military equipment. The sect elder/patriarch does everything correctly and still loses face because of protagonist. Companion has their own fixed quirk (assigned separately). Protagonist: "How many spirit stones is the reward?" Running gag: the sect elder\'s reputation deteriorates episode by episode.',
       videojuego:   'GAME + COMEDY: A Loot Detection system highlights "rare drops" — which are always broken quest items, someone else\'s inventory, or plot-critical objects removed at the worst moment. The GM character does everything right and still loses. Companion complains about lag. Protagonist calculates gold value of everything. Running gag: the rarity ratings are technically accurate but contextually catastrophic.',
       mecha:        'MECHA + COMEDY: The AI copilot detects "optimal targets" — which keep being allied equipment, civilian infrastructure the commander just fixed, or military budget items. Commander follows every manual rule and still suffers. Copilot has a cheerful bureaucratic voice for disasters. Protagonist calculates repair budget. Running gag: official damage reports grow increasingly creative.',
       romcom:       'ROMCOM + COMEDY: The protagonist has a Social Skill system with "Affection Detection" that keeps flagging the wrong person (rival\'s childhood friend, the teacher, the protagonist\'s sibling\'s crush). The strict student council president ends up involved in every incident. Companion ships every wrong pairing out loud. Protagonist: "If I complete the flag, is there a stat bonus?" Running gag: system\'s "romance success" notification plays at the most inappropriate moments.',
@@ -1552,7 +1605,7 @@ VIRAL COMEDY FORMULA — mandatory:
 1. SYSTEM: protagonist has a detection ability with dry bureaucratic notifications ("Detected: valuable item. Reward: 1,000 yuan. Act quickly.")
 2. ABSURD MISMATCH: every activation leads to a wildly inappropriate discovery, but protagonist still benefits somehow.
 3. MERCENARY PROTAGONIST: reacts to everything in practical terms (money, reward, power) — never emotional. Forbidden: panic, tears, poetic reflection. Allowed: calculating, mildly annoyed.
-4. SUFFERING COMPANION (required): one recurring quirk mentioned at the worst moments (hungry, filming, complaining).
+4. SUFFERING COMPANION (required): the companion's fixed quirk for THIS story is "${getCompanionQuirk()}" — it resurfaces at the worst possible moments. Use ONLY this specific quirk, never substitute hunger/food unless that IS the assigned quirk above.
 5. COMPETENT LOSER authority figure (required): does everything right, still loses to protagonist's accidental wins, dignity drops each episode.
 6. ESCALATION: each scene's absurdity tops the last — scenes 13-14 are peak.
 7. RUNNING GAGS: 2-3 recurring jokes from early scenes, called back later at worse moments.
@@ -1640,7 +1693,7 @@ ${subgenreText}`;
 - Nombres coherentes con la demografía y época del setting (japoneses, chinos, occidentales, según corresponda) — SOLO para personajes NUEVOS que no estén ya nombrados en el concepto semilla
 - Variedad visual: distintos colores de cabello, ojos, estilos de ropa
 - Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${mod === 'ecchi' ? '\n- Personajes femeninos con arquetipos marcados (tsundere, kuudere, genki, dandere, onee-san, etc)' : ''}${mod === 'harem_inverso' ? '\n- Personajes masculinos con arquetipos marcados (cool, principesco, deportista, intelectual, salvaje, etc)' : ''}
-- Si el género es isekai, donghua o videojuego: incluye SIEMPRE un COMPAÑERO con un rasgo cómico definidor (hambriento, filmador, quejumbroso) y una FIGURA DE AUTORIDAD competente que sufrirá las consecuencias de los éxitos accidentales del protagonista
+- Si el género es isekai, donghua o videojuego: incluye SIEMPRE un COMPAÑERO cuyo rasgo cómico fijo es EXACTAMENTE "${getCompanionQuirk()}" (no otro) y una FIGURA DE AUTORIDAD competente que sufrirá las consecuencias de los éxitos accidentales del protagonista
 
 ⚠️ PERSONAJE NO-HUMANO — LEE EL CONCEPTO CON MUCHO CUIDADO:
 Si el CONCEPTO SEMILLA ORIGINAL menciona EXPLÍCITAMENTE que un personaje específico (normalmente el protagonista) transmigró, se reencarnó, o habita el cuerpo de un animal, criatura, objeto u otra entidad NO humana — SOLO ESE personaje específico debe crearse como no-humano, respetando el esquema JSON completo (name, role, gender, age, appearance, personality, backstory). NO lo omitas y NO lo conviertas en humano.
@@ -1681,9 +1734,10 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA (solo personajes 
       const charSysPrompt = `Eres un diseñador de personajes para anime/manhua cómico viral para audiencia adulta.
 FÓRMULA DE COMEDIA — arquetipos de referencia (esto es MECÁNICA cómica, no estética visual obligatoria):
 ${genreTone}
-Los personajes deben encajar en la fórmula: protagonista mercenario/práctico (nunca dramático), compañero con UN rasgo cómico fijo, figura de autoridad competente que sufre las consecuencias.
+Los personajes deben encajar en la fórmula: protagonista mercenario/práctico (nunca dramático), figura de autoridad competente que sufre las consecuencias, y un COMPAÑERO.
 ${u.conceptoOriginal ? `🎯 EL SETTING LO DEFINE EL CONCEPTO SEMILLA: el mundo, época y nivel tecnológico de los personajes deben coincidir con lo que describe el concepto semilla del usuario (canon), no con la estética típica del género. Si el concepto es contemporáneo/realista, los personajes son gente normal de hoy — sin reinos, magia, ni tecnología futurista que el concepto no mencione.\n` : ''}IMPORTANTE: si el concepto de la historia indica EXPLÍCITAMENTE que un personaje concreto (normalmente el protagonista) es un animal, criatura u objeto habitado por una consciencia humana, DEBES crear ese personaje igualmente y con el mismo detalle que los demás — nunca lo omitas ni lo humanices por defecto. Pero SOLO ese personaje específico: no inventes otros personajes no-humanos que el concepto no menciona. Si el concepto no dice nada sobre naturaleza no-humana, TODOS los personajes son humanos normales.
 ⚠️ FIDELIDAD DE NOMBRES: si el usuario proporcionó un concepto semilla con nombres de personajes específicos, ESOS SON LOS NOMBRES CORRECTOS Y OBLIGATORIOS — no los cambies, no los "mejores", no inventes alternativas. Úsalos exactamente como fueron escritos.
+🔒 RASGO CÓMICO DEL COMPAÑERO — OBLIGATORIO, IGNORA CUALQUIER OTRO EJEMPLO MENCIONADO ARRIBA: el compañero/a de esta historia específica tiene EXACTAMENTE este rasgo fijo, ni hambre ni ningún otro salvo que coincida: "${getCompanionQuirk()}". Este rasgo va reflejado claramente en su campo "personality". NO uses hambre/comida como rasgo salvo que sea textualmente el asignado arriba.
 Nombres reales y coherentes con el setting (japoneses, chinos u occidentales según corresponda) SOLO para personajes que el usuario no haya nombrado ya. Responde SOLO JSON válido sin markdown.`;
 
       const charPrompt = `${ctx}\n\n${charRules}\n\nCrea ${numChars} personajes únicos que pertenezcan al género "${genero}" y encajen con el concepto exacto de la historia (incluyendo protagonistas no-humanos si el concepto lo indica)${isEcchi ? '. Tono ecchi para los personajes humanos femeninos' : ''}. Devuelve SOLO:
@@ -1713,7 +1767,7 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
         try {
           const existingCharList = state.characters.map(ch => '- ' + ch.name + ' (' + (ch.role||'') + '): ' + (ch.appearance||'')).join('\n');
           const newCharPrompt = ctx + '\n\nPERSONAJES EXISTENTES (NO recrear):\n' + existingCharList + '\n\nPersonajes nuevos a crear:\n"' + newCharsDesc + '"\n\nCrea SOLO los personajes nuevos. Devuelve SOLO:\n{"characters":[{"id":"c_new1","name":"nombre","role":"rol","gender":"female o male","age":"18+","appearance":"descripción visual detallada","personality":"2 frases","backstory":"2 frases"}]}';
-          const newCharRaw = await callGemini(newCharPrompt, `Eres un diseñador de personajes para anime/manhua cómico viral.\nFÓRMULA DE COMEDIA — arquetipos de referencia:\n${genreTone}\nLos personajes deben encajar en la fórmula: protagonista mercenario/práctico (nunca dramático), compañero con UN rasgo cómico fijo, figura de autoridad competente que sufre las consecuencias.\nNombres reales y coherentes con el setting. Responde SOLO JSON válido sin markdown.`);
+          const newCharRaw = await callGemini(newCharPrompt, `Eres un diseñador de personajes para anime/manhua cómico viral.\nFÓRMULA DE COMEDIA — arquetipos de referencia:\n${genreTone}\nLos personajes deben encajar en la fórmula: protagonista mercenario/práctico (nunca dramático), figura de autoridad competente que sufre las consecuencias. El COMPAÑERO ya existente de esta historia tiene el rasgo fijo "${getCompanionQuirk()}" — no le asignes uno nuevo ni distinto si aparece en la lista de personajes existentes.\nNombres reales y coherentes con el setting. Responde SOLO JSON válido sin markdown.`);
           const newChars = safeParseJSON(newCharRaw).characters || [];
           if (newChars.length) {
             // Give unique IDs to avoid collision
