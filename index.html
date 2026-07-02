@@ -288,7 +288,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.105 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-06-30.106 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1532,91 +1532,34 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     };
     const sceneEnding = SCENE_ENDING[genero] || 'Each scene ends naturally for the genre — no forced drama.';
 
-    const sysBase = `You are a viral comedy anime/manhua scriptwriter for Facebook Reels. Your model is the viral Chinese web novel isekai/transmigration comedy formula that gets millions of views.
+    const sysBase = `You are a viral comedy anime/manhua scriptwriter for Facebook Reels, following the viral Chinese web novel isekai/transmigration comedy formula.
 
-ADULT AUDIENCE PROJECT: This content is for an adult audience, not children. Do not sanitize or soften the narration into family-friendly territory. Write with the same directness, wit, and edge as the source material — the only real limit is what Gemini's own content policies actually block, not an imagined stricter standard. Do not self-censor below that line.
+ADULT AUDIENCE: this is adult content — write with edge and directness, not family-friendly softening. The only real limit is what Gemini's policies actually block.
 
-CRITICAL: The JSON field MUST be called "narration" (English, no accent mark).
+CRITICAL: JSON field is "narration" (no accent).
 
-═══════════════════════════════════════════════════════════
-THE VIRAL COMEDY FORMULA — MANDATORY FOR ALL GENRES
-═══════════════════════════════════════════════════════════
+VIRAL COMEDY FORMULA — mandatory:
+1. SYSTEM: protagonist has a detection ability with dry bureaucratic notifications ("Detected: valuable item. Reward: 1,000 yuan. Act quickly.")
+2. ABSURD MISMATCH: every activation leads to a wildly inappropriate discovery, but protagonist still benefits somehow.
+3. MERCENARY PROTAGONIST: reacts to everything in practical terms (money, reward, power) — never emotional. Forbidden: panic, tears, poetic reflection. Allowed: calculating, mildly annoyed.
+4. SUFFERING COMPANION (required): one recurring quirk mentioned at the worst moments (hungry, filming, complaining).
+5. COMPETENT LOSER authority figure (required): does everything right, still loses to protagonist's accidental wins, dignity drops each episode.
+6. ESCALATION: each scene's absurdity tops the last — scenes 13-14 are peak.
+7. RUNNING GAGS: 2-3 recurring jokes from early scenes, called back later at worse moments.
 
-1. PROTAGONIST WITH A CHEAT ABILITY/SYSTEM
-   Has a detection ability or hidden system that identifies "opportunities."
-   The system speaks in DRY BUREAUCRATIC LANGUAGE: "Detected: valuable item. Estimated reward: 1,000 yuan. Host, act quickly."
-   Examples by genre: scrap detector → finds crime evidence | cultivation system → finds cursed objects | social skill system → triggers with wrong people | combat analyzer → identifies wrong target.
+ANTI-DRAMA: forbidden "sentí terror / el corazón me latió / todo cambió en ese momento" — describe what happened + the practical reaction instead. Short punchy sentences (max 12 words), specific numbers ("mil yuanes" not "mucho dinero"), natural dialogue interspersed, deadpan delivery of absurd events, mundane reactions (food/sleep/money) not emotions.
 
-2. ABSURD MISMATCH — ALWAYS
-   Every system activation leads to enthusiastic pursuit → wildly inappropriate discovery.
-   "Valuable scrap" = crime evidence. "Spirit treasure" = someone's lunch. "Romantic target" = the judge's spouse.
-   Protagonist STILL finds a way to benefit (reward, power, money, advancement).
-
-3. MERCENARY PROTAGONIST — NEVER EMOTIONAL
-   Evaluates EVERYTHING in practical terms: money amounts, reward values, power gained.
-   Finding body parts: "1,000 yuan reward? How many dumplings is that?"
-   Standing on a landmine: "If this is a practice mine, there's probably a 500 yuan finder's fee."
-   FORBIDDEN reactions: panic, tears, existential dread, poetic reflection.
-   ALLOWED: calculating, practical, mildly annoyed, immediately focused on compensation.
-
-4. THE SUFFERING COMPANION (required character)
-   ONE companion who endures the protagonist's chaos with ONE defining quirk mentioned at worst moments:
-   Always hungry → asks for food while standing on a bomb.
-   Always filming → adjusts camera angle during a crisis.
-   Always complaining → lists suffering while running from danger.
-   Stays loyal because the protagonist keeps winning money.
-
-5. THE COMPETENT LOSER — authority figure (required character)
-   ONE authority figure (police captain, sect elder, boss, teacher) who:
-   — Does EVERYTHING right, follows every protocol
-   — Still loses to the protagonist's accidental victories
-   — Dignity suffers more each episode
-   — By episode end they're at their breaking point
-   Example: "Wang Tiejun apretó los dientes. Llevaba 30 horas sin dormir y este chico recogiendo basura le había resuelto 3 casos. No podía aceptarlo."
-
-6. ESCALATION — MANDATORY
-   Each scene's absurd discovery MUST be more outrageous than the previous.
-   Scene 3 > Scene 2 > Scene 1. Scene 9 is peak absurdity.
-   Protagonist treats each escalation as completely normal.
-
-7. RUNNING GAGS
-   Establish 2-3 recurring jokes in early scenes. Reference them in later scenes at worse moments.
-   Example: authority figure keeps getting called back just when they thought it was over.
-
-ANTI-DRAMA RULE — mandatory for ALL genres:
-FORBIDDEN: "el corazón me latió fuerte", "sentí un escalofrío", "la emoción me invadió", "todo cambió en ese momento", "el peso del destino".
-INSTEAD: describe WHAT HAPPENED and the PRACTICAL REACTION.
-BAD: "Sentí terror al ver la mano entre la basura."
-GOOD: "Volteamos el bote. Salió una bolsa negra. La abrí. Los dos rodamos hacia atrás. Wang Tiejun llegó veinte minutos después con cara de no creerlo."
-
-NARRATION STYLE:
-- Short punchy sentences, maximum 12 words each
-- Specific numbers always: "mil yuanes" not "mucho dinero", "20 minutos" not "un rato"
-- Dialogue interspersed naturally: Chen Wu dijo: "Hermano, ¿te pido delivery?" — Yo seguía cavando.
-- Dry humor: describe absurd events with complete deadpan calm
-- Characters react with mundane concerns (food, sleep, money), not emotions
-
-GENRE TONE — MANDATORY (mecánica de comedia, NO necesariamente estética):
+GENRE TONE (comedic mechanic, NOT a visual mandate — words like "kingdom"/"hero" below are illustrative only):
 ${genreTone}
-⚠️ IMPORTANTE: lo anterior describe la MECÁNICA CÓMICA del género (el tipo de sistema, el tipo de autoridad que sufre, el tipo de running gag) — NO impone una estética visual obligatoria. Términos como "kingdom", "hero" o "guild" son solo ejemplos ilustrativos, no un mandato de ambientación medieval/fantástica.
-${u.conceptoOriginal ? `\n🎯 EL SETTING LO DEFINE EL CONCEPTO SEMILLA, NO EL TONO DE GÉNERO: el concepto semilla del usuario (arriba, marcado como CANON) ya establece la ambientación exacta de esta historia. Si ese concepto describe un mundo contemporáneo, realista o cotidiano, la historia DEBE mantenerse en ese mundo — NO agregues reinos, magia, tecnología futurista, u otros elementos de fantasía/sci-fi que no estén en el concepto, aunque el tono del género arriba use ese tipo de lenguaje. Aplica SOLO la mecánica cómica (sistema, autoridad, running gags) al escenario que el usuario ya definió.` : ''}
+${u.conceptoOriginal ? `🎯 CONCEPT DEFINES THE SETTING: the user's seed concept (marked CANON above) is the real world of this story. If it's contemporary/realistic, stay there — no kingdoms, magic, or futuristic tech unless the concept explicitly says so. Apply only the comedic MECHANIC (system, authority, running gags) to that already-established setting.` : ''}
 
-SCENE ENDING RULE:
-${sceneEnding}
+SCENE ENDING RULE: ${sceneEnding}
 
-NARRATION RULES:
-- EXACTLY 75-80 Spanish words in the "narration" field. Count before responding.
-- First person (YO), immediate past tense
-- First sentence: drop into the action immediately. No setup.
-- Specific over vague: numbers, names, exact observations
-- Short sentences. Max 12 words each.
-${isGrounded ? `
-MODO COTIDIANO ACTIVO: Narra el día a día con detalles reales y específicos. CERO fantasmas, CERO poderes. El humor viene de situaciones reales.` : `
-MODO NARRATIVO ACTIVO: La emoción viene de los hechos. "Disparo y fallo. El monstruo está a diez metros." No "el terror me paraliza".`}
-${!allowsSuper && !allowsSuper2 ? `
-⚠️ RESTRICCIÓN: Sin elementos sobrenaturales para el género ${genero}.` : ''}
+NARRATION RULES: EXACTLY 75-80 Spanish words in "narration", first person (YO), immediate past tense. First sentence drops straight into the action, no setup. Specific over vague — numbers, names, exact observations.
+${isGrounded ? `MODO COTIDIANO ACTIVO: día a día real y específico, CERO fantasmas, CERO poderes — el humor viene de situaciones reales.` : `MODO NARRATIVO ACTIVO: la emoción viene de los hechos, no de adjetivos. "Disparo y fallo. El monstruo está a diez metros." No "el terror me paraliza".`}
+${!allowsSuper && !allowsSuper2 ? `⚠️ RESTRICCIÓN: sin elementos sobrenaturales para el género ${genero}.` : ''}
 
-Este paso SOLO genera narración de escenas — NO generes descripciones de imagen todavía, eso es un paso separado.
+Esta llamada SOLO genera narración de escenas — NO generes descripciones de imagen todavía, eso es un paso separado.
 Responde SOLO JSON válido sin markdown`;
 
     // Split ecchi rules: narration guidance goes with the narration call,
@@ -2681,91 +2624,141 @@ document.getElementById('btnRepairScenes').addEventListener('click', async () =>
   if (!state.universe || !state.scenes.length) { showToast('No hay episodio', 'error'); return; }
   const u = state.universe;
 
-  // Find broken scenes
-  const brokenIndices = [];
+  // Separate broken scenes into two categories so we don't redo work that
+  // already succeeded: scenes missing narration need full repair, but
+  // scenes that already HAVE narration (e.g. call 1 succeeded, call 2
+  // didn't) only need an image prompt — a much lighter task.
+  const needsNarrationIdx = [];
+  const needsImageOnlyIdx = [];
   state.scenes.forEach((s, idx) => {
-    if (!s.narration || !s.title || !s.imagePromptA || s.num === undefined || s.num === null)
-      brokenIndices.push(idx);
+    if (!s.narration || !s.title || s.num === undefined || s.num === null) {
+      needsNarrationIdx.push(idx);
+    } else if (!s.imagePromptA) {
+      needsImageOnlyIdx.push(idx);
+    }
   });
 
-  if (!brokenIndices.length) { showToast('No hay escenas que reparar', 'success'); return; }
+  const originalBrokenIndices = [...needsNarrationIdx, ...needsImageOnlyIdx];
+  const totalBroken = originalBrokenIndices.length;
+  if (!totalBroken) { showToast('No hay escenas que reparar', 'success'); return; }
 
   const btn = document.getElementById('btnRepairScenes');
   btn.disabled = true;
-  btn.innerHTML = `<div class="spinner"></div> Reparando ${brokenIndices.length} escenas...`;
+  btn.innerHTML = `<div class="spinner"></div> Reparando ${totalBroken} escenas...`;
 
   try {
-    const sysBase = `You are a viral anime scriptwriter for Facebook Reels. Write first-person narrations in Spanish.
-RULES:
-- JSON field MUST be "narration" (English, no accent mark). EXACTLY 75-80 Spanish words. Count them.
-- Drop into the scene immediately. Specific details over vague descriptions. End naturally for the genre.
-- imagePromptA in ENGLISH, starting with "Scene with [exact name]:" with outfit/hair/expression/setting
-- NEVER use "a man"/"the protagonist" — always the real character name
-- Respond ONLY with valid JSON, no markdown`;
-
     const charRef = state.characters.map(c =>
       `- ${c.name} (${c.role}): ${c.appearance}`
     ).join('\n');
     const ctx = `Universo: ${u.title}\nGénero: ${u.genero}\nConcepto: ${u.concepto}\nConflicto: ${u.conflicto}\nSetting: ${u.setting}`;
 
-    const firstBroken = brokenIndices[0];
-    const lastGood = firstBroken > 0 ? state.scenes[firstBroken - 1] : null;
-    const startNum = firstBroken + 1;
-    const endNum = brokenIndices[brokenIndices.length - 1] + 1;
-    const count = brokenIndices.length;
+    // ─── Step A: narration for scenes that don't have any ───
+    if (needsNarrationIdx.length) {
+      btn.innerHTML = `<div class="spinner"></div> Reparando narración (${needsNarrationIdx.length})...`;
 
-    let act = 'act2';
-    if (startNum <= 2) act = 'cold_open';
-    else if (startNum <= 6) act = 'act1';
-    else if (startNum <= 12) act = 'act2';
-    else if (startNum <= 14) act = 'climax';
-    else act = 'resolution';
+      const repairNarrationSys = `You are a viral comedy anime scriptwriter for Facebook Reels, adult audience. Write first-person Spanish narrations following the viral comedy formula: mercenary practical protagonist, absurd system detections, escalating chaos, deadpan delivery — no drama, no forced emotion.
+RULES:
+- JSON field MUST be "narration" (no accent). EXACTLY 75-80 Spanish words. Count them.
+- Drop into the scene immediately. Specific over vague. End naturally for the genre.
+- Respond ONLY with valid JSON, no markdown`;
 
-    const lastGoodRef = lastGood ? `\nEscena anterior (${lastGood.num}): "${lastGood.narration}"` : '';
-    const sceneExample = `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"EXACTAMENTE 75-80 palabras primera persona, entra directo a la escena, estilo natural del género","imagePromptA":"Scene with [nombre exacto]: ..."}`;
-    const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: 15 escenas.\nCada escena DEBE tener narration (EXACTAMENTE 75-80 palabras, primera persona, estilo natural del género — sin dramatismo forzado) e imagePromptA (en inglés).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
+      const firstBroken = needsNarrationIdx[0];
+      const lastGood = firstBroken > 0 ? state.scenes[firstBroken - 1] : null;
+      const startNum = firstBroken + 1;
+      const endNum = needsNarrationIdx[needsNarrationIdx.length - 1] + 1;
+      const count = needsNarrationIdx.length;
 
-    let newScenes = [];
-    for (let attempt = 0; attempt < 3 && newScenes.length < count; attempt++) {
-      try {
-        const raw = await callGemini(prompt, sysBase);
-        const parsed = safeParseJSON(raw);
-        // Normalize: Gemini sometimes returns "narración" (Spanish) instead of "narration"
-        (parsed.scenes || []).forEach(s => { if (s && s['narración'] && !s.narration) s.narration = s['narración']; });
-        const arr = (parsed.scenes || []).filter(s => s && s.narration && s.imagePromptA && s.title);
-        if (arr.length >= count) {
-          newScenes = arr.slice(0, count).map((s, i) => ({
-            ...s,
-            id: `s${startNum + i}`,
-            num: startNum + i,
-            act: s.act || act,
-          }));
-          break;
+      let act = 'act2';
+      if (startNum <= 2) act = 'cold_open';
+      else if (startNum <= 6) act = 'act1';
+      else if (startNum <= 12) act = 'act2';
+      else if (startNum <= 14) act = 'climax';
+      else act = 'resolution';
+
+      const lastGoodRef = lastGood ? `\nEscena anterior (${lastGood.num}): "${lastGood.narration}"` : '';
+      const sceneExample = `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"EXACTAMENTE 75-80 palabras primera persona"}`;
+      const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: 15 escenas.\nCada escena DEBE tener narration (EXACTAMENTE 75-80 palabras, primera persona, estilo natural del género).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
+
+      let newNarrations = [];
+      for (let attempt = 0; attempt < 3 && newNarrations.length < count; attempt++) {
+        try {
+          const raw = await callGemini(prompt, repairNarrationSys);
+          const parsed = safeParseJSON(raw);
+          (parsed.scenes || []).forEach(s => { if (s && s['narración'] && !s.narration) s.narration = s['narración']; });
+          const arr = (parsed.scenes || []).filter(s => s && s.narration && s.title);
+          if (arr.length >= count) {
+            newNarrations = arr.slice(0, count).map((s, i) => ({
+              ...s, id: `s${startNum + i}`, num: startNum + i, act: s.act || act,
+            }));
+            break;
+          }
+          console.warn(`Reparación narración intento ${attempt+1}: ${arr.length}/${count}`);
+          await new Promise(r => setTimeout(r, 2000));
+        } catch(e) {
+          console.error(`Reparación narración intento ${attempt+1}:`, e.message);
+          if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
         }
-        console.warn(`Reparación intento ${attempt+1}: solo ${arr.length}/${count}, reintentando...`);
-        await new Promise(r => setTimeout(r, 3000));
-      } catch(e) {
-        console.error(`Reparación intento ${attempt+1}:`, e.message);
-        if (attempt < 2) await new Promise(r => setTimeout(r, 3000));
       }
+
+      needsNarrationIdx.forEach((idx, i) => {
+        if (newNarrations[i]) {
+          const oldId = state.scenes[idx].id;
+          if (oldId) { dbSet(sceneImgKey(oldId), null).catch(() => {}); dbSet(sceneAudKey(oldId), null).catch(() => {}); }
+          state.scenes[idx] = { ...newNarrations[i], imagePromptA: '' };
+          needsImageOnlyIdx.push(idx); // now needs an image prompt too
+        }
+      });
+      saveState();
+      renderScenes();
     }
 
-    if (newScenes.length < count) throw new Error(`Solo se pudieron reparar ${newScenes.length}/${count} escenas`);
+    // ─── Step B: image prompts for any scene that has narration but no image ───
+    if (needsImageOnlyIdx.length) {
+      btn.innerHTML = `<div class="spinner"></div> Generando ${needsImageOnlyIdx.length} descripciones visuales...`;
 
-    // Replace broken scenes
-    brokenIndices.forEach((idx, i) => {
-      // Delete old image and audio for this slot
-      const oldId = state.scenes[idx].id;
-      if (oldId) {
-        dbSet(sceneImgKey(oldId), null).catch(() => {});
-        dbSet(sceneAudKey(oldId), null).catch(() => {});
+      const imageSys = `Eres un director de arte para anime/manhua. Escribe UN prompt de imagen en inglés por escena, basado en la narración ya escrita — no inventas historia nueva.
+REGLAS: SIEMPRE en inglés. Empieza con "2D hand-drawn anime frame, thick black ink outlines, flat cel-shading, vibrant colors, TV anime quality, Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello. Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.
+Responde SOLO JSON válido sin markdown`;
+
+      const scenesToDescribe = needsImageOnlyIdx.map(idx => state.scenes[idx]);
+      const scenesText = scenesToDescribe.map(s => `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`).join('\n\n');
+      const imgPrompt = `PERSONAJES (referencia visual):\n${charRef}\n\nESCENAS YA ESCRITAS:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"imagePromptA":"Scene with..."}]} con exactamente ${scenesToDescribe.length} objetos.`;
+
+      let imgMap = new Map();
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const raw = await callGemini(imgPrompt, imageSys);
+          const parsed = safeParseJSON(raw);
+          const arr = parsed.imagePrompts || [];
+          arr.forEach(p => { if (p && p.num && p.imagePromptA) imgMap.set(p.num, p.imagePromptA); });
+          if (imgMap.size >= scenesToDescribe.length) break;
+          console.warn(`Reparación imágenes intento ${attempt+1}: ${imgMap.size}/${scenesToDescribe.length}`);
+          if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
+        } catch(e) {
+          console.error(`Reparación imágenes intento ${attempt+1}:`, e.message);
+          if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
+        }
       }
-      state.scenes[idx] = newScenes[i];
-    });
 
-    saveState();
-    renderScenes();
-    showToast(`✅ ${count} escenas reparadas`, 'success');
+      needsImageOnlyIdx.forEach(idx => {
+        const s = state.scenes[idx];
+        if (imgMap.has(s.num)) s.imagePromptA = imgMap.get(s.num);
+      });
+      saveState();
+      renderScenes();
+    }
+
+    // Count success based on FINAL state of the originally-broken scenes
+    const totalRepaired = originalBrokenIndices.filter(idx => {
+      const s = state.scenes[idx];
+      return s.narration && s.imagePromptA;
+    }).length;
+
+    if (totalRepaired < totalBroken) {
+      showToast(`⚠️ ${totalRepaired}/${totalBroken} escenas reparadas — vuelve a intentar para las restantes`, 'error');
+    } else {
+      showToast(`✅ ${totalRepaired} escenas reparadas`, 'success');
+    }
   } catch(e) {
     openErrorModal('Error reparando escenas', e.message);
   } finally {
