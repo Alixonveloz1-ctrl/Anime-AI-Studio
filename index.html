@@ -329,6 +329,7 @@
         <option value="sobrenatural">Sobrenatural — Poderes ocultos, demonios, espíritus</option>
         <option value="supervivencia">Supervivencia — Lucha por sobrevivir en entornos hostiles</option>
         <option value="videojuego">Videojuego / Sistema — Estadísticas, niveles, habilidades</option>
+        <option value="donghua">Donghua / Cultivación — Sistema de qi, sectas, rangos de cultivo</option>
       </select>
 
       <label>Subgéneros <span style="color:var(--text-dim);font-weight:400;font-size:11px">(selecciona varios — mantén presionado en desktop)</span></label>
@@ -1010,7 +1011,7 @@ function openProjectsModal() {
 document.getElementById('btnProjects').addEventListener('click', openProjectsModal);
 
 // ════════════════════════════════════════════════════════════════
-// CLAUDE API
+// GEMINI TEXT API (via /api/script → Vertex AI, gemini-3.1-pro-preview)
 // ════════════════════════════════════════════════════════════════
 async function callGemini(prompt, system) {
   const controller = new AbortController();
@@ -1189,55 +1190,12 @@ function speedLabel(v) {
   return `Rápido (${v.toFixed(2)}x)`;
 }
 
-async function generateElevenLabsAudio(text, voiceId) {
-  const key = getKeys().elevenlabs;
-  if (!key) throw new Error('Falta ElevenLabs API key — agrégala en el panel APIS');
-  if (!voiceId) throw new Error('Falta Voice ID — ingrésalo debajo del selector de voz');
-
-  const cleanText = cleanTextForTTS(text);
-  const speed = getVoiceSpeed(); // 0.5 – 2.0
-  const modelId = document.getElementById('elevenlabsModel')?.value || 'eleven_v3';
-
-  // speed in voice_settings is only supported by v2 models, NOT eleven_v3
-  const voiceSettings = {
-    stability: 0.45,
-    similarity_boost: 0.80,
-    style: 0.35,
-    use_speaker_boost: true,
-  };
-  if (modelId !== 'eleven_v3' && Math.abs(speed - 1.0) > 0.001) {
-    voiceSettings.speed = speed;
-  }
-
-  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-    method: 'POST',
-    headers: {
-      'xi-api-key': key,
-      'Content-Type': 'application/json',
-      'Accept': 'audio/mpeg',
-    },
-    body: JSON.stringify({
-      text: cleanText,
-      model_id: modelId,
-      voice_settings: voiceSettings,
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    const detail = err.detail?.message || err.detail || res.statusText;
-    throw new Error(`ElevenLabs ${res.status}: ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`);
-  }
-
-  const buf = await res.arrayBuffer();
-  const bytes = new Uint8Array(buf);
-  let bin = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-  }
-  return { audioData: btoa(bin), mimeType: 'audio/mpeg' };
-}
+// NOTE: a client-side generateElevenLabsAudio() function used to live here.
+// It was never called anywhere in the app (dead code), relied on an undefined
+// getKeys() function (guaranteed crash if ever invoked), and would have exposed
+// the ElevenLabs key directly in the browser. The real, working ElevenLabs path
+// is generateAudio() below → POST /api/audio → server-side key from Vercel env
+// vars (api/audio.js). Removed to avoid confusion for future edits.
 
 async function generateAudio(text, voice, act) {
   const cleanText = cleanTextForTTS(text);
@@ -1315,13 +1273,13 @@ const GENRE_PROMPTS = {
 - Mundo con MAGIA, criaturas sobrenaturales o sistemas de poder fantásticos
 - Reglas internas claras del sistema mágico
 - NO es el mundo real moderno — es un universo de fantasía propio`,
-  isekai: `GÉNERO: Isekai COMEDIA. REGLAS OBLIGATORIAS:
+  isekai: `GÉNERO: Isekai COMEDIA. Elementos característicos del género (ajusta según el concepto del usuario):
 - El protagonista transmigra a un nuevo mundo o cuerpo. Puede ser mundo fantástico, Japón moderno, China antigua, o cualquier setting donde sea un "recién llegado".
 - OBLIGATORIO: El protagonista recibe un SISTEMA o habilidad especial con notificaciones en lenguaje burocrático seco: "Detección activada. Objetivo identificado. Recompensa estimada: X."
 - El sistema siempre identifica "oportunidades valiosas" que resultan ser absurdamente inapropiadas para la situación.
 - El protagonista reacciona de forma práctica/mercenaria: siempre calcula la recompensa, nunca se pone dramático.
-- Hay un COMPAÑERO con UN rasgo definidor fijo (asignado por separado) que menciona en los peores momentos.
-- Hay una FIGURA DE AUTORIDAD competente que hace todo bien pero siempre pierde contra los éxitos accidentales del protagonista.
+- Suele haber un COMPAÑERO con UN rasgo definidor fijo (asignado por separado) que menciona en los peores momentos — salvo que el concepto del usuario indique lo contrario.
+- Suele haber una FIGURA DE AUTORIDAD competente que hace todo bien pero siempre pierde contra los éxitos accidentales del protagonista — salvo que el concepto del usuario indique lo contrario.
 - El tono es COMEDIA ABSURDA: la gracia viene de la diferencia entre lo que el sistema promete y lo que realmente ocurre.`,
   mecha: `GÉNERO: Mecha.
 - Protagonista pilota un robot gigante de combate
@@ -1376,10 +1334,18 @@ const GENRE_PROMPTS = {
 - El protagonista tiene un SISTEMA con notificaciones formales y burocráticas: "Habilidad desbloqueada. Objetivo detectado. Valor estimado: X puntos."
 - El sistema SIEMPRE identifica objetivos o loot que resultan absurdamente inapropiados: el "objetivo débil" es el comandante aliado, el "ítem raro" es la comida de alguien, etc.
 - Protagonista: práctico, mercenario, siempre calculando compensación. NUNCA dramático.
-- Compañero fijo con UN rasgo cómico (asignado por separado).
-- Figura de autoridad (GM del juego, líder del gremio) que hace todo correcto y siempre sufre las consecuencias de las acciones accidentales del protagonista.
+- Suele haber un compañero fijo con UN rasgo cómico (asignado por separado) — salvo que el concepto del usuario indique lo contrario.
+- Suele haber una figura de autoridad (GM del juego, líder del gremio) que hace todo correcto y siempre sufre las consecuencias de las acciones accidentales del protagonista — salvo que el concepto del usuario indique lo contrario.
 - Humor absurdo: la gracia viene de la brecha entre lo que el sistema promete y lo que en realidad entrega.`,
+  donghua: `GÉNERO: Donghua / Cultivación — COMEDIA.
+- Mundo de cultivación (qi, núcleo dorado, rangos de poder) ambientado en China antigua, moderna o fantástica.
+- El protagonista tiene un sistema o sentido de cultivación que detecta "concentraciones de energía espiritual" — que siempre resultan ser el almuerzo de alguien, un tesoro de secta prohibido, o equipo militar.
+- Protagonista: práctico, mercenario, siempre calculando cuántas piedras espirituales vale la recompensa. NUNCA dramático.
+- Suele haber un compañero fijo con UN rasgo cómico (asignado por separado) — salvo que el concepto del usuario indique lo contrario.
+- Suele haber un anciano/patriarca de secta competente que hace todo bien y aun así pierde prestigio por culpa del protagonista — salvo que el concepto del usuario indique lo contrario.
+- Humor absurdo: la gracia viene de la brecha entre lo que el sistema de cultivación promete y lo que realmente ocurre.`,
 };
+
 
 const MOD_PROMPTS = {
   none: '',
@@ -1426,7 +1392,7 @@ document.getElementById('btnGenerarUniverso').addEventListener('click', async ()
 REGLAS ABSOLUTAS:
 - Nombres reales (japoneses: Hiro, Yuki, Rin, Kaito, Mei / chinos: Lin Yan, Chen Wu, Wang, Liu, Zhang).
 - NUNCA nombres inventados genéricos (nada de Aethernam, Kael, Zythara).
-- Fiel al género: si es isekai/videojuego, DEBE haber un SISTEMA de detección con notificaciones burocráticas y una figura de autoridad que siempre sufre.
+- Fiel al género: si es isekai/videojuego/donghua, normalmente hay un SISTEMA de detección con notificaciones burocráticas; puede haber una figura de autoridad que sufre las consecuencias si encaja con la historia — no la fuerces si el concepto del usuario sugiere algo distinto.
 - El "hook" y el "conflicto" DEBEN reflejar la comedia absurda del género, no drama épico.
 - NO mezclar géneros no solicitados.
 - En "hook" describe UNA situación cómica concreta del primer episodio, no una promesa vaga.
@@ -1452,10 +1418,10 @@ INSTRUCCIÓN: El universo que generes DEBE ser este concepto, expandido con más
 
 ${concepto ? 'Expande el concepto semilla de arriba en un universo completo' : 'Crea un universo ORIGINAL y único'} que sea ESTRICTAMENTE FIEL al género "${genero}" con los subgéneros seleccionados integrados naturalmente.
 
-IMPORTANTE: Si el género es isekai o videojuego, el universo DEBE incluir:
+IMPORTANTE: Si el género es isekai, videojuego o donghua, el universo TÍPICAMENTE incluye lo siguiente (es el default probado, pero ajústalo si el concepto del usuario sugiere una estructura distinta — la fidelidad al concepto es más importante):
 - Protagonista con un sistema/habilidad de detección que activa situaciones absurdas
-- Un compañero con UN rasgo cómico definidor fijo (el rasgo específico se asigna en el paso de creación de personajes)
-- Una figura de autoridad competente que será la víctima recurrente de los éxitos accidentales del protagonista
+- Posiblemente un compañero con UN rasgo cómico definidor fijo (el rasgo específico se asigna en el paso de creación de personajes), solo si encaja con la historia
+- Posiblemente una figura de autoridad competente que será la víctima recurrente de los éxitos accidentales del protagonista, solo si encaja con la historia
 - El "hook" describe la primera situación absurda concreta, NO una promesa épica
 
 Devuelve JSON:
@@ -1548,7 +1514,7 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     const subgenreText = getSubgenreText(subgenres);
 
     // Generos que SIMAN permiten elementos sobrenaturales/fantasía
-    const allowsSuper = ['fantasia','isekai','mecha','sobrenatural','psicologico','terror','videojuego'].includes(genero);
+    const allowsSuper = ['fantasia','isekai','mecha','sobrenatural','psicologico','terror','videojuego','donghua'].includes(genero);
     const allowsSuper2 = subgenres.some(s => ['psicologico','reencarnacion','viaje_tiempo','misterio'].includes(s));
 
     // Estilo de narración según el tono del subgénero
@@ -1601,12 +1567,12 @@ ADULT AUDIENCE: this is adult content — write with edge and directness, not fa
 
 CRITICAL: JSON field is "narration" (no accent).
 
-VIRAL COMEDY FORMULA — mandatory:
-1. SYSTEM: protagonist has a detection ability with dry bureaucratic notifications ("Detected: valuable item. Reward: 1,000 yuan. Act quickly.")
-2. ABSURD MISMATCH: every activation leads to a wildly inappropriate discovery, but protagonist still benefits somehow.
+VIRAL COMEDY FORMULA — this is the proven default engine for this kind of viral comedy, but it is NOT a rigid checklist: adapt it to fit the actual concept and cast established below. If the user's concept (marked CANON, when present) doesn't call for a given element, don't force it in — concept fidelity beats formula completeness.
+1. SYSTEM: protagonist has a detection ability with dry bureaucratic notifications ("Detected: valuable item. Reward: 1,000 yuan. Act quickly.") — unless the concept clearly establishes a different comedic engine, in which case follow the concept instead.
+2. ABSURD MISMATCH: every activation/event leads to a wildly inappropriate discovery, but protagonist still benefits somehow.
 3. MERCENARY PROTAGONIST: reacts to everything in practical terms (money, reward, power) — never emotional. Forbidden: panic, tears, poetic reflection. Allowed: calculating, mildly annoyed.
-4. SUFFERING COMPANION (required): the companion's fixed quirk for THIS story is "${getCompanionQuirk()}" — it resurfaces at the worst possible moments. Use ONLY this specific quirk, never substitute hunger/food unless that IS the assigned quirk above.
-5. COMPETENT LOSER authority figure (required): does everything right, still loses to protagonist's accidental wins, dignity drops each episode.
+4. SUFFERING COMPANION (only if one exists in the cast below): if the character list includes a companion role, their fixed quirk for THIS story is "${getCompanionQuirk()}" — it resurfaces at the worst possible moments. Use ONLY this specific quirk, never substitute hunger/food unless that IS the assigned quirk above. If NO companion character was created for this story, do not invent one mid-scene.
+5. COMPETENT LOSER authority figure (only if one exists in the cast below): does everything right, still loses to protagonist's accidental wins, dignity drops each episode. If no authority-figure character was created, do not invent one mid-scene.
 6. ESCALATION: each scene's absurdity tops the last — scenes 13-14 are peak.
 7. RUNNING GAGS: 2-3 recurring jokes from early scenes, called back later at worse moments.
 
@@ -1693,7 +1659,7 @@ ${subgenreText}`;
 - Nombres coherentes con la demografía y época del setting (japoneses, chinos, occidentales, según corresponda) — SOLO para personajes NUEVOS que no estén ya nombrados en el concepto semilla
 - Variedad visual: distintos colores de cabello, ojos, estilos de ropa
 - Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${mod === 'ecchi' ? '\n- Personajes femeninos con arquetipos marcados (tsundere, kuudere, genki, dandere, onee-san, etc)' : ''}${mod === 'harem_inverso' ? '\n- Personajes masculinos con arquetipos marcados (cool, principesco, deportista, intelectual, salvaje, etc)' : ''}
-- Si el género es isekai, donghua o videojuego: incluye SIEMPRE un COMPAÑERO cuyo rasgo cómico fijo es EXACTAMENTE "${getCompanionQuirk()}" (no otro) y una FIGURA DE AUTORIDAD competente que sufrirá las consecuencias de los éxitos accidentales del protagonista
+- Evalúa si esta historia necesita un COMPAÑERO (con rasgo cómico fijo "${getCompanionQuirk()}", no otro) y/o una FIGURA DE AUTORIDAD que sufre las consecuencias de los éxitos accidentales del protagonista. Estos son roles PROBADOS para el humor viral y son un buen default para isekai/videojuego/donghua/sistema — pero NO son obligatorios: si el concepto proporcionado por el usuario no sugiere estos roles, o si no encajan naturalmente con la historia (ej: dramas serios, slice of life íntimo, conceptos con reparto reducido específico), NO los agregues forzosamente. Prioriza fidelidad al concepto del usuario sobre completar la fórmula.
 
 ⚠️ PERSONAJE NO-HUMANO — LEE EL CONCEPTO CON MUCHO CUIDADO:
 Si el CONCEPTO SEMILLA ORIGINAL menciona EXPLÍCITAMENTE que un personaje específico (normalmente el protagonista) transmigró, se reencarnó, o habita el cuerpo de un animal, criatura, objeto u otra entidad NO humana — SOLO ESE personaje específico debe crearse como no-humano, respetando el esquema JSON completo (name, role, gender, age, appearance, personality, backstory). NO lo omitas y NO lo conviertas en humano.
@@ -1734,10 +1700,10 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA (solo personajes 
       const charSysPrompt = `Eres un diseñador de personajes para anime/manhua cómico viral para audiencia adulta.
 FÓRMULA DE COMEDIA — arquetipos de referencia (esto es MECÁNICA cómica, no estética visual obligatoria):
 ${genreTone}
-Los personajes deben encajar en la fórmula: protagonista mercenario/práctico (nunca dramático), figura de autoridad competente que sufre las consecuencias, y un COMPAÑERO.
+Los personajes deben tener un protagonista mercenario/práctico (nunca dramático). Un COMPAÑERO y una figura de autoridad que sufre las consecuencias son roles PROBADOS para el humor viral y buen default — pero inclúyelos SOLO si encajan con el concepto/género de esta historia; si el concepto no los sugiere, no los fuerces.
 ${u.conceptoOriginal ? `🎯 EL SETTING LO DEFINE EL CONCEPTO SEMILLA: el mundo, época y nivel tecnológico de los personajes deben coincidir con lo que describe el concepto semilla del usuario (canon), no con la estética típica del género. Si el concepto es contemporáneo/realista, los personajes son gente normal de hoy — sin reinos, magia, ni tecnología futurista que el concepto no mencione.\n` : ''}IMPORTANTE: si el concepto de la historia indica EXPLÍCITAMENTE que un personaje concreto (normalmente el protagonista) es un animal, criatura u objeto habitado por una consciencia humana, DEBES crear ese personaje igualmente y con el mismo detalle que los demás — nunca lo omitas ni lo humanices por defecto. Pero SOLO ese personaje específico: no inventes otros personajes no-humanos que el concepto no menciona. Si el concepto no dice nada sobre naturaleza no-humana, TODOS los personajes son humanos normales.
 ⚠️ FIDELIDAD DE NOMBRES: si el usuario proporcionó un concepto semilla con nombres de personajes específicos, ESOS SON LOS NOMBRES CORRECTOS Y OBLIGATORIOS — no los cambies, no los "mejores", no inventes alternativas. Úsalos exactamente como fueron escritos.
-🔒 RASGO CÓMICO DEL COMPAÑERO — OBLIGATORIO, IGNORA CUALQUIER OTRO EJEMPLO MENCIONADO ARRIBA: el compañero/a de esta historia específica tiene EXACTAMENTE este rasgo fijo, ni hambre ni ningún otro salvo que coincida: "${getCompanionQuirk()}". Este rasgo va reflejado claramente en su campo "personality". NO uses hambre/comida como rasgo salvo que sea textualmente el asignado arriba.
+🔒 SI incluyes un COMPAÑERO en el reparto — IGNORA CUALQUIER OTRO EJEMPLO MENCIONADO ARRIBA sobre su rasgo: su rasgo cómico fijo debe ser EXACTAMENTE este, ni hambre ni ningún otro salvo que coincida: "${getCompanionQuirk()}". Este rasgo va reflejado claramente en su campo "personality". NO uses hambre/comida como rasgo salvo que sea textualmente el asignado arriba. Si decides que esta historia NO necesita un compañero, simplemente no crees ese rol — no pasa nada.
 Nombres reales y coherentes con el setting (japoneses, chinos u occidentales según corresponda) SOLO para personajes que el usuario no haya nombrado ya. Responde SOLO JSON válido sin markdown.`;
 
       const charPrompt = `${ctx}\n\n${charRules}\n\nCrea ${numChars} personajes únicos que pertenezcan al género "${genero}" y encajen con el concepto exacto de la historia (incluyendo protagonistas no-humanos si el concepto lo indica)${isEcchi ? '. Tono ecchi para los personajes humanos femeninos' : ''}. Devuelve SOLO:
@@ -1847,19 +1813,19 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
     }
 
     const batchRules = `REGLAS ESTRUCTURA — ESCALADA CÓMICA OBLIGATORIA:
-- 15 escenas siguiendo este arco de comedia viral:
+- 15 escenas siguiendo este arco de comedia viral. NOTA: las menciones de "Companion" y "Authority figure" abajo SOLO aplican si esos roles existen en "PERSONAJES DEL EPISODIO" — si esta historia no tiene compañero y/o figura de autoridad (el concepto no los pedía), simplemente omite esos beats específicos y deja que el arco avance con el reparto real que sí existe, sin inventar personajes nuevos para rellenar el hueco.
 
-SCENE 1-2 (cold_open): Establish protagonist's mundane situation. The system activates for the FIRST TIME. Discovery seems like good news — end on the realization it's not. Authority figure appears, does everything right, protagonist accidentally wins. Companion's quirk introduced.
-SCENE 3-6 (act1): SECOND and THIRD system activations — bigger absurdity each time. Authority figure suffers again. Running gag #1 established. Protagonist calculates exact reward value. Things escalate because of protagonist's "help." Authority figure now actively watching with suspicion.
-SCENE 7-12 (act2): MULTIPLE activations — MORE outrageous than act1. Running gag #2 established. New character(s) dragged into chaos. Authority figure loses again and again. Maximum absurdity of the middle act. Authority figure at breaking point. Companion makes the worst possible comment at the worst moment.
-SCENE 13-14 (clímax): THE BIGGEST DISCOVERY — the most outrageous yet. All running gags converge. Authority figure's suffering peaks. Protagonist's reaction: completely practical.
-SCENE 15 (resolución): Protagonist gets paid. Authority figure defeated but grimly accepts it. Companion says what they want to eat. Scene ends with the NEXT system activation — hook for Episode ${epNum + 1}.
+SCENE 1-2 (cold_open): Establish protagonist's mundane situation. The system activates for the FIRST TIME. Discovery seems like good news — end on the realization it's not. Authority figure appears (if one exists), does everything right, protagonist accidentally wins. Companion's quirk introduced (if a companion exists).
+SCENE 3-6 (act1): SECOND and THIRD system activations — bigger absurdity each time. Authority figure suffers again (if present). Running gag #1 established. Protagonist calculates exact reward value. Things escalate because of protagonist's "help." Authority figure now actively watching with suspicion (if present).
+SCENE 7-12 (act2): MULTIPLE activations — MORE outrageous than act1. Running gag #2 established. New character(s) dragged into chaos. Authority figure loses again and again (if present). Maximum absurdity of the middle act. Authority figure at breaking point (if present). Companion makes the worst possible comment at the worst moment (if present).
+SCENE 13-14 (clímax): THE BIGGEST DISCOVERY — the most outrageous yet. All running gags converge. Authority figure's suffering peaks (if present). Protagonist's reaction: completely practical.
+SCENE 15 (resolución): Protagonist gets paid. Authority figure defeated but grimly accepts it (if present). Companion says what they want (if present). Scene ends with the NEXT system activation — hook for Episode ${epNum + 1}.
 
 - The "narration" field: EXACTLY 75-80 Spanish words, FIRST PERSON (YO). Count words. Drop into the scene immediately. End naturally for the genre — not forced tension.
 
 REGLAS CRÍTICAS DE REPARTO EN LAS ESCENAS:
 - ⚠️ OBLIGATORIO: debes usar TODOS o la GRAN MAYORÍA de los personajes listados en "PERSONAJES DEL EPISODIO" a lo largo de las 15 escenas — NUNCA ignores a los personajes secundarios y te enfoques solo en 2. Si se crearon 5 personajes, los 5 deben aparecer en al menos 1-2 escenas cada uno.
-- Distribuye la aparición de personajes de forma natural según su rol: el compañero y la figura de autoridad deben aparecer en varias escenas (no solo la primera), personajes secundarios pueden tener apariciones más puntuales pero SIGNIFICATIVAS.
+- Distribuye la aparición de personajes de forma natural según su rol: si existen, el compañero y la figura de autoridad deben aparecer en varias escenas (no solo la primera); personajes secundarios pueden tener apariciones más puntuales pero SIGNIFICATIVAS.
 - Antes de responder, revisa mentalmente: ¿aparecieron TODOS los personajes de la lista al menos una vez en las 15 escenas? Si falta alguno, ajusta las escenas para incluirlo.`;
 
     // ─── CALL 1: narration only for all 15 scenes (one story, uninterrupted) ───
@@ -2142,42 +2108,19 @@ window.translatePrompts = async function(sceneId) {
   btn.textContent = '⏳ Traduciendo...';
 
   try {
-    const keys = getKeys();
-    if (!keys.claude) throw new Error('Falta Claude API key');
+    // NOTE: this used to call the Anthropic API directly from the browser with a
+    // "keys.claude" value from a getKeys() function that didn't exist anywhere in
+    // this file — it always failed instantly. Rerouted through the app's actual
+    // working Gemini text pipeline (same one used for stories/characters), which
+    // needs no separate key and already has valid credentials configured.
     const rawA = taA.value.trim();
+    if (!rawA) throw new Error('No hay texto para traducir');
 
-    const userContent = 'Traduce este prompt de imagen al español. Mantén nombres propios igual. Responde SOLO con JSON válido, nada más:\n{"a":"traducción"}\n\nPrompt: ' + rawA;
-
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': keys.claude,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 400,
-        messages: [{ role: 'user', content: userContent }]
-      })
-    });
-
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message || 'API error');
-
-    const text = (data.content && data.content[0] && data.content[0].text) ? data.content[0].text.trim() : '';
-    console.log('Traducción raw:', text);
-
-    let parsed = null;
-    try { parsed = JSON.parse(text); } catch(e) {}
-    if (!parsed) {
-      const start = text.indexOf('{');
-      const end = text.lastIndexOf('}');
-      if (start !== -1 && end > start) {
-        try { parsed = JSON.parse(text.slice(start, end + 1)); } catch(e) {}
-      }
-    }
+    const raw = await callGemini(
+      'Prompt: ' + rawA,
+      'Traduce este prompt de imagen al español. Mantén nombres propios igual. Responde SOLO JSON válido sin markdown: {"a":"traducción"}'
+    );
+    const parsed = safeParseJSON(raw);
     if (!parsed || !parsed.a) throw new Error('Respuesta sin JSON válido');
 
     taA.value = parsed.a;
