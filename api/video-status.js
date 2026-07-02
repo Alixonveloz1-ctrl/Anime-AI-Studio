@@ -1,10 +1,11 @@
 // ════════════════════════════════════════════════════════════════
-// VIDEO STATUS — Veo 3.1 polling (Edge Runtime)
+// VIDEO STATUS — Veo 3.1 polling (Node.js runtime)
 // Returns a V4 Signed URL (7 days) — works without public bucket access
 // MODEL_ID must match video-start.js exactly
+// Migrated off Edge runtime for consistency with the rest of api/ —
+// Edge Functions are deprecated on Vercel and hard-cap response-start
+// at 25s regardless of maxDuration.
 // ════════════════════════════════════════════════════════════════
-export const config = { runtime: 'edge' };
-
 const MODEL_ID = 'veo-3.1-lite-generate-001';
 const LOCATION  = 'us-central1';
 const CORS = {
@@ -79,13 +80,14 @@ async function generateSignedUrl(sa, bucket, objectPath, expiresSeconds = 604800
   return `https://storage.googleapis.com/${bucket}/${objectPath}?${queryParams}&X-Goog-Signature=${sigHex}`;
 }
 
-export default async function handler(req) {
-  if (req.method === 'OPTIONS') return new Response('', { headers: CORS });
-  if (req.method !== 'POST') return new Response(JSON.stringify({ error:'Method not allowed' }), { status:405, headers:CORS });
+module.exports = async function handler(req, res) {
+  Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error:'Method not allowed' });
 
   try {
-    const { operationName, projectId } = await req.json();
-    if (!operationName) return new Response(JSON.stringify({ error:'operationName requerido' }), { status:400, headers:CORS });
+    const { operationName, projectId } = req.body || {};
+    if (!operationName) return res.status(400).json({ error:'operationName requerido' });
 
     const sa = JSON.parse((process.env.GCP_SERVICE_ACCOUNT || '').trim());
     const pid = projectId || sa.project_id;
@@ -102,18 +104,18 @@ export default async function handler(req) {
     const data = await response.json();
     if (!response.ok) {
       const msg = data.error?.message || JSON.stringify(data).slice(0, 200);
-      return new Response(JSON.stringify({ error: `Status check: ${msg}` }), { status: response.status, headers: CORS });
+      return res.status(response.status).json({ error: `Status check: ${msg}` });
     }
 
-    if (!data.done) return new Response(JSON.stringify({ done: false }), { headers: CORS });
+    if (!data.done) return res.status(200).json({ done: false });
 
     if (data.response?.raiMediaFilteredCount > 0 && !data.response?.videos?.length) {
-      return new Response(JSON.stringify({ done: true, error: 'Video bloqueado por filtros de seguridad — modifica el prompt' }), { headers: CORS });
+      return res.status(200).json({ done: true, error: 'Video bloqueado por filtros de seguridad — modifica el prompt' });
     }
 
     const video = data.response?.videos?.[0];
     if (!video?.gcsUri) {
-      return new Response(JSON.stringify({ done: true, error: 'Veo terminó pero no devolvió video' }), { headers: CORS });
+      return res.status(200).json({ done: true, error: 'Veo terminó pero no devolvió video' });
     }
 
     const gcsUri = video.gcsUri;
@@ -137,9 +139,9 @@ export default async function handler(req) {
     // Generate V4 Signed URL — 7 days, no public access needed
     const signedUrl = await generateSignedUrl(sa, bucket, objPath, 604800);
 
-    return new Response(JSON.stringify({ done: true, gcsUri, publicUrl: signedUrl }), { headers: CORS });
+    return res.status(200).json({ done: true, gcsUri, publicUrl: signedUrl });
 
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: CORS });
+    return res.status(500).json({ error: e.message });
   }
-}
+};
