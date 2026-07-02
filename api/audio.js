@@ -1,8 +1,11 @@
 // ════════════════════════════════════════════════════════════════
 // AUDIO PROXY — Gemini TTS + ElevenLabs (keys from env vars)
+// Node.js runtime (NOT Edge): Vercel Edge Functions are deprecated
+// and hard-cap "must begin sending a response" at 25s regardless of
+// any maxDuration set in vercel.json — that 25s cap is exactly what
+// caused the earlier character-generation timeout bug on this project.
+// Node.js runtime + Fluid compute actually honors maxDuration.
 // ════════════════════════════════════════════════════════════════
-export const config = { runtime: 'edge' };
-
 const CORS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
@@ -65,37 +68,38 @@ function b64ToBase64(buf) {
   return btoa(bin);
 }
 
-export default async function handler(req) {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: { ...CORS, 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } });
-  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+module.exports = async function handler(req, res) {
+  Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { text, provider, voice, voiceId, speed, emotion } = await req.json();
-    if (!text) return new Response(JSON.stringify({ error: 'text required' }), { status: 400, headers: CORS });
+    const { text, provider, voice, voiceId, speed, emotion } = req.body || {};
+    if (!text) return res.status(400).json({ error: 'text required' });
 
     // ─── ElevenLabs via proxy (key from env var) ───
     if (provider === 'elevenlabs') {
       const elKey = (process.env.ELEVENLABS_API_KEY || '').trim();
-      if (!elKey) return new Response(JSON.stringify({ error: 'ELEVENLABS_API_KEY no configurado en Vercel' }), { status: 500, headers: CORS });
-      if (!voiceId) return new Response(JSON.stringify({ error: 'voiceId requerido para ElevenLabs' }), { status: 400, headers: CORS });
+      if (!elKey) return res.status(500).json({ error: 'ELEVENLABS_API_KEY no configurado en Vercel' });
+      if (!voiceId) return res.status(400).json({ error: 'voiceId requerido para ElevenLabs' });
 
       const modelId = 'eleven_v3';
       const voiceSettings = { stability: 0.45, similarity_boost: 0.80, style: 0.35, use_speaker_boost: true };
 
-      const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      const elRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
         method: 'POST',
         headers: { 'xi-api-key': elKey, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
         body: JSON.stringify({ text, model_id: modelId, voice_settings: voiceSettings }),
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const detail = err.detail?.message || err.detail || res.statusText;
-        return new Response(JSON.stringify({ error: `ElevenLabs ${res.status}: ${typeof detail === 'string' ? detail : JSON.stringify(detail)}` }), { status: res.status, headers: CORS });
+      if (!elRes.ok) {
+        const err = await elRes.json().catch(() => ({}));
+        const detail = err.detail?.message || err.detail || elRes.statusText;
+        return res.status(elRes.status).json({ error: `ElevenLabs ${elRes.status}: ${typeof detail === 'string' ? detail : JSON.stringify(detail)}` });
       }
 
-      const buf = await res.arrayBuffer();
-      return new Response(JSON.stringify({ audioData: b64ToBase64(buf), mimeType: 'audio/mpeg' }), { headers: CORS });
+      const buf = await elRes.arrayBuffer();
+      return res.status(200).json({ audioData: b64ToBase64(buf), mimeType: 'audio/mpeg' });
     }
 
     // ─── Google Cloud TTS (Neural2 / WaveNet) ───
@@ -106,7 +110,7 @@ export default async function handler(req) {
       const langCode  = voiceName.slice(0, 5);     // e.g. "es-US"
       const spd = parseFloat(speed) || 1.0;
 
-      const res = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
+      const gcpRes = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -116,11 +120,11 @@ export default async function handler(req) {
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.audioContent)
-        return new Response(JSON.stringify({ error: `GCP TTS: ${data.error?.message || res.status}` }), { status: res.status || 500, headers: CORS });
+      const data = await gcpRes.json();
+      if (!gcpRes.ok || !data.audioContent)
+        return res.status(gcpRes.status || 500).json({ error: `GCP TTS: ${data.error?.message || gcpRes.status}` });
 
-      return new Response(JSON.stringify({ audioData: data.audioContent, mimeType: 'audio/wav' }), { headers: CORS });
+      return res.status(200).json({ audioData: data.audioContent, mimeType: 'audio/wav' });
     }
 
     // ─── Gemini TTS via Vertex AI ───
@@ -135,8 +139,13 @@ export default async function handler(req) {
     const speedTag = spd <= 0.6 ? '[slow] ' : spd >= 1.8 ? '[fast] '
                    : spd >= 1.4 ? '[slightly fast] ' : spd <= 0.8 ? '[slightly slow] ' : '';
 
-    // Style instruction: conversational, not theatrical
-    const styleTag = '[Read in a natural conversational tone, calm and engaging, like a narrator telling a story to a friend — NOT theatrical, NOT dramatic, NOT overly expressive] ';
+    // Style instruction: conversational by default; 'subtle' allows light emotional
+    // emphasis at climactic/final moments. Previously this was hardcoded and ignored
+    // the emotion parameter the UI sends — the "Expresividad de voz" selector did
+    // nothing at all.
+    const styleTag = emotion === 'subtle'
+      ? '[Read in a natural conversational tone, like a narrator telling a story to a friend — allow a touch of genuine emotional emphasis at climactic or final moments, but stay grounded, NOT theatrical, NOT overacted] '
+      : '[Read in a natural conversational tone, calm and engaging, like a narrator telling a story to a friend — NOT theatrical, NOT dramatic, NOT overly expressive] ';
 
     const reqBody = JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: styleTag + speedTag + text }] }],
@@ -162,19 +171,19 @@ export default async function handler(req) {
     if (!r.ok && (r.status === 404 || r.status === 403 || r.status === 503)) {
       r = await callModel('gemini-2.5-flash-preview-tts', 'v1');
     }
-    if (!r.ok) return new Response(JSON.stringify({ error: `Gemini TTS: ${r.data?.error?.message || r.status}` }), { status: 500, headers: CORS });
+    if (!r.ok) return res.status(500).json({ error: `Gemini TTS: ${r.data?.error?.message || r.status}` });
 
     const part = r.data.candidates?.[0]?.content?.parts?.[0];
-    if (!part?.inlineData?.data) return new Response(JSON.stringify({ error: 'No audio en respuesta Gemini' }), { status: 500, headers: CORS });
+    if (!part?.inlineData?.data) return res.status(500).json({ error: 'No audio en respuesta Gemini' });
 
     const mime = part.inlineData.mimeType || 'audio/pcm';
     let audioData = part.inlineData.data;
     if (mime.includes('pcm') || mime.includes('l16') || mime.includes('raw')) {
       audioData = pcmToWav(audioData);
     }
-    return new Response(JSON.stringify({ audioData, mimeType: 'audio/wav' }), { headers: CORS });
+    return res.status(200).json({ audioData, mimeType: 'audio/wav' });
 
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: CORS });
+    return res.status(500).json({ error: e.message });
   }
-}
+};
