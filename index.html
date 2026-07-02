@@ -625,6 +625,23 @@ const STUDIO_BY_DEMO = {
   donghua:      ', Chinese xianxia animation fluidity',
 };
 
+// ════════════════════════════════════════════════════════════════
+// UNIFIED ANIME VISUAL STYLE — single source of truth, ALL genres.
+// This replaced a previous "flat 2-3 tone cel-shading, thick ink
+// outlines, simplified face" spec that was over-correcting against
+// 3D/CGI output and, as a side effect, produced a flat cheap-cartoon
+// look instead of a rich cinematic anime-film look. The fix targets
+// BOTH failure modes explicitly (too-3D AND too-flat/simplified).
+// Reference target: detailed seinen/cinematic anime key visuals —
+// gradient cel-shading, fine linework, dense photoreal-textured
+// backgrounds, motivated practical lighting. Applies regardless of
+// genre (donghua included) — only the narrative/setting content
+// differs by genre, not the rendering technique.
+// ════════════════════════════════════════════════════════════════
+const ANIME_VISUAL_STYLE_CORE = 'high-budget cinematic 2D anime film quality, reference-tier: MAPPA, Wit Studio, Ufotable, Kyoto Animation, and top-tier cinematic donghua production values. Fine, precise, variable-weight linework — NOT thick uniform cartoon outlines. Soft cel-shading with smooth gradient shadow transitions and subtle ambient occlusion — NOT flat 2-tone color blocks. Large detailed anime eyes with 2-4 specular highlights and iris gradient, expressive but anatomically grounded faces — NOT simplified, NOT chibi, NOT doll-flat. Individually-rendered hair strands with layered directional highlights. Richly detailed, near-photorealistic environment textures and materials behind clean 2D character linework — worn surfaces, reflections, atmospheric depth. Cinematic motivated lighting: practical light sources, warm/cool color contrast, rim light, volumetric glow, wet-surface reflections, filmic color grading — NOT flat even "kids cartoon" lighting. FORBIDDEN — both failure modes: (1) flat single-tone shading, thick block outlines, simplified/chibi/webtoon-flat cartoon look; (2) 3D render, CGI, photorealistic human skin, video game graphics, western cartoon, Disney/Pixar, motion-capture aesthetic.';
+// Short version for LLM-authored prompt lead-ins (keeps token cost low across 15 scenes)
+const ANIME_STYLE_LEAD_IN = 'Cinematic 2D anime key visual, fine detailed linework, soft gradient cel-shading, richly detailed background,';
+
 function buildVideoPrompt(s) {
   const base      = (s.imagePromptA || s.narration || '').replace(/"/g,'').slice(0, 200);
   const genre     = document.getElementById('generoSelect')?.value || 'accion';
@@ -634,11 +651,7 @@ function buildVideoPrompt(s) {
   const noCamera = 'CRITICAL: Characters must be ACTING and DOING things in the scene, fully immersed in the story — NEVER posing, NEVER looking at the camera, NEVER facing the viewer. Use side angles, 3/4 views, over-shoulder, or from-behind perspectives. Characters interact with each other or with their environment.';
   const audioRule = 'NO voice dialogue, NO narration, NO singing. ONLY instrumental background music fitting the scene mood and genre.';
 
-  const isDonghua = (genre === 'donghua');
-
-  const animeStyle = isDonghua
-    ? `STYLE — MANDATORY: Chinese donghua animation. Bilibili/iQIYI aesthetic. Clean cel-shaded 2D characters on detailed semi-realistic backgrounds. Smooth modern character designs. Art direction: ${studio}${demoRef}. NOT Japanese anime. NOT 3D. NOT CGI.`
-    : `STYLE — ABSOLUTELY MANDATORY: This clip must look like a screenshot from a real Japanese anime TV series. 2D hand-drawn animation. Thick clean black ink outlines on every character and element. Flat color fills with 2-3 tone cel-shading only — NO gradients, NO textures, NO realistic lighting. Expressive anime character designs: large detailed eyes, smooth simplified faces, vivid saturated colors. Backgrounds in classic anime painterly style. Animation quality reference: ${studio}${demoRef}. STRICTLY FORBIDDEN: 3D rendering, CGI, photorealism, Unreal Engine, video game graphics, western cartoon, Disney/Pixar, realistic human skin, motion capture aesthetic. IF IT LOOKS LIKE A VIDEO GAME CUTSCENE, IT IS WRONG.`;
+  const animeStyle = `STYLE — ABSOLUTELY MANDATORY: This clip must look like a still from a ${ANIME_VISUAL_STYLE_CORE} Animation quality reference: ${studio}${demoRef}. Target: a hand-painted, richly detailed 2D anime film frame — nothing simplified, nothing plastic-3D.`;
 
   const motionRule = `MOTION — CRITICAL: Subtle cinematic movement only. Gentle breathing, slow camera drift, small natural gestures (head tilt, eye blink, hand movement). Characters stay in position — NO jumping, NO teleporting, NO sudden changes. Smooth and natural like a real animated series.`;
 
@@ -1012,10 +1025,7 @@ async function generateImage(prompt, characterRefs = null, forceModel = null) {
   const model = forceModel || (modelSel ? modelSel.value : 'auto');
   const isEcchi = (state.universe?.subgenres || []).some(s => ['ecchi','harem','harem_inverso'].includes(s));
 
-  const sceneGenre = document.getElementById('generoSelect')?.value || 'accion';
-  const styleSpec = sceneGenre === 'donghua'
-    ? 'Chinese donghua animation, bilibili iQIYI style. 2D cel-shaded characters with thick clean ink outlines. Detailed semi-realistic backgrounds with soft lighting. Smooth modern character designs. Hand-drawn 2D animation frame. NOT 3D, NOT CGI, NOT photorealistic.'
-    : 'Japanese anime style. 2D hand-drawn animation frame extracted from a professional TV anime episode. Thick clean black ink outlines on all elements. Flat color fills with exactly 2-3 tone cel-shading, NO gradients, NO textures. Large expressive anime eyes, simplified nose and mouth, smooth face. Vibrant saturated anime color palette. Background in anime painterly style. MAPPA or Madhouse or Ufotable animation quality. This must look EXACTLY like a screenshot from a real anime series — NOT 3D, NOT CGI, NOT video game, NOT photorealistic, NOT western cartoon, NOT realistic skin, NOT Pixar.';
+  const styleSpec = ANIME_VISUAL_STYLE_CORE;
   const noLookSuffix = ' ' + styleSpec + ' Character actively in the scene, NOT posing, NOT looking at camera. Side angle or 3/4 view. FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side. The artwork must extend completely to all four edges of the image.';
   const cleanPrompt = (String(prompt || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
@@ -1817,7 +1827,7 @@ REGLAS CRÍTICAS DE REPARTO EN LAS ESCENAS:
 
 REGLAS DE imagePromptA:
 - SIEMPRE en INGLÉS
-- SIEMPRE empezar con el estilo visual del género: para "donghua" → "Chinese donghua animation, bilibili aesthetic, 2D cel-shaded, thick ink outlines," — para todos los demás géneros → "2D hand-drawn anime frame, thick black ink outlines, flat cel-shading, vibrant colors, TV anime quality,"
+- SIEMPRE empezar con: "${ANIME_STYLE_LEAD_IN}"
 - Luego "Scene with [nombre exacto]:" seguido de la descripción visual
 - Personajes HUMANOS: SIEMPRE incluir ropa específica según su ficha + color y estilo de cabello
 - Personajes NO-HUMANOS (animal/criatura/objeto poseído): describir su apariencia física real (especie, pelaje/textura, color, tamaño) — JAMÁS inventarle ropa humana salvo que su ficha la mencione explícitamente
@@ -2495,10 +2505,15 @@ async function generateImageRaw(prompt, preCompressedRefs) {
   const model = modelSel ? modelSel.value : 'auto';
   const aspectRatio = document.getElementById('aspectRatio')?.value || '9:16';
 
+  // NOTE: this is the bulk "generate all scene images" path — previously it
+  // relied ONLY on the short style lead-in the LLM wrote into imagePromptA,
+  // with no explicit style suffix. That inconsistency vs generateImage()
+  // (used for characters/single regen) was likely why results varied. Now
+  // both paths enforce the same unified style.
   const cleanPrompt = String(prompt || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim() + ' FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side.';
+    .trim() + ' ' + ANIME_VISUAL_STYLE_CORE + ' FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side.';
 
   const isEcchi = (state.universe?.subgenres || []).some(s => ['ecchi','harem','harem_inverso'].includes(s));
 
@@ -2717,7 +2732,7 @@ RULES:
       btn.innerHTML = `<div class="spinner"></div> Generando ${needsImageOnlyIdx.length} descripciones visuales...`;
 
       const imageSys = `Eres un director de arte para anime/manhua. Escribe UN prompt de imagen en inglés por escena, basado en la narración ya escrita — no inventas historia nueva.
-REGLAS: SIEMPRE en inglés. Empieza con "2D hand-drawn anime frame, thick black ink outlines, flat cel-shading, vibrant colors, TV anime quality, Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello. Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.
+REGLAS: SIEMPRE en inglés. Empieza con "${ANIME_STYLE_LEAD_IN} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello. Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.
 Responde SOLO JSON válido sin markdown`;
 
       const scenesToDescribe = needsImageOnlyIdx.map(idx => state.scenes[idx]);
