@@ -112,12 +112,12 @@ MANDATORY RULES:
 4. Match EACH character to THEIR reference image. Do not swap faces or designs.
 5. Female characters: long hair (shoulder-length or longer), soft anime features, clean skin.
 6. Faces must be clear, well-defined, anatomically correct — no blur, no distortion.
-7. Style: ${aspectStyle} anime scene illustration, professional quality, vibrant colors, detailed.${ecchiRules}
+7. Style: ${aspectStyle} cinematic anime key visual — fine detailed linework, soft gradient shading, richly detailed background, filmic lighting. NOT flat, NOT simplified.${ecchiRules}
 
 Scene to illustrate:
 ${cleanPrompt}` });
   } else {
-    parts.push({ text: `${aspectStyle} anime scene illustration. NO text, NO watermarks, NO letters anywhere. Clean faces, professional quality, vibrant colors. ${cleanPrompt}` });
+    parts.push({ text: `${aspectStyle} cinematic anime key visual illustration. NO text, NO watermarks, NO letters anywhere. Clean detailed faces, fine linework, soft gradient shading, richly detailed background. ${cleanPrompt}` });
   }
 
   // ─── Resolve model → correct endpoint ───────────────────────────
