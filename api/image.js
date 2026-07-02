@@ -1,9 +1,12 @@
 // ════════════════════════════════════════════════════════════════
 // IMAGE GENERATION PROXY — Vertex AI Gemini Image (Nano Banana)
 // Multi-region: us-central1 → europe-west4 → us-east4 on 429
+// Node.js runtime (NOT Edge): Vercel Edge Functions are deprecated
+// and hard-cap "must begin sending a response" at 25s regardless of
+// any maxDuration set in vercel.json — that 25s cap is exactly what
+// caused the earlier character-generation timeout bug on this project.
+// Node.js runtime + Fluid compute actually honors maxDuration.
 // ════════════════════════════════════════════════════════════════
-export const config = { runtime: 'edge' };
-
 async function getAccessToken(sa) {
   const now = Math.floor(Date.now() / 1000);
   const b64 = o => btoa(JSON.stringify(o)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
@@ -175,10 +178,11 @@ ${cleanPrompt}` });
 
 // ─────────────────────────────────────────────
 const CORS = { 'Access-Control-Allow-Origin':'*', 'Content-Type':'application/json' };
-export default async function handler(req) {
-  if (req.method === 'OPTIONS') return new Response('', { headers: CORS });
+module.exports = async function handler(req, res) {
+  Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
+  if (req.method === 'OPTIONS') return res.status(200).end();
   try {
-    const body = await req.json();
+    const body = req.body || {};
     const { prompt, model: forceModel, isEcchi } = body;
 
     let characterRefs = body.characterRefs;
@@ -197,7 +201,7 @@ export default async function handler(req) {
         .filter(r => r.img.length > 100);
       if (!characterRefs.length) characterRefs = null;
     }
-    if (!prompt) return new Response(JSON.stringify({ error:'prompt required' }), { status:400, headers:CORS });
+    if (!prompt) return res.status(400).json({ error:'prompt required' });
 
     const projectId = process.env.GCP_PROJECT_ID || JSON.parse(process.env.GCP_SERVICE_ACCOUNT).project_id;
     const sa = JSON.parse(process.env.GCP_SERVICE_ACCOUNT);
@@ -206,8 +210,8 @@ export default async function handler(req) {
     const aspectRatio = body.aspectRatio || '9:16';
     const model = forceModel || 'gemini-2.5-flash-image';
     const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true, aspectRatio);
-    return new Response(JSON.stringify(result), { headers: CORS });
+    return res.status(200).json(result);
   } catch(e) {
-    return new Response(JSON.stringify({ error: e.message }), { status:500, headers:CORS });
+    return res.status(500).json({ error: e.message });
   }
-}
+};
