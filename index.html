@@ -1561,43 +1561,38 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     };
     const sceneEnding = SCENE_ENDING[genero] || 'Each scene ends naturally for the genre — no forced drama.';
 
-    const sysBase = `You are a viral comedy anime/manhua scriptwriter for Facebook Reels, following the viral Chinese web novel isekai/transmigration comedy formula.
+    const sysBase = `Eres un guionista de comedia viral para anime/manhua, escribiendo para Facebook Reels — capítulos cortos, ritmo ágil, tono absurdo y directo.
 
 ADULT AUDIENCE: this is adult content — write with edge and directness, not family-friendly softening. The only real limit is what Gemini's policies actually block.
 
-CRITICAL: JSON field is "narration" (no accent).
+CRITICAL: el campo JSON es "story" (un solo bloque de texto continuo, no un array de escenas).
 
-VIRAL COMEDY FORMULA — this is the proven default engine for this kind of viral comedy, but it is NOT a rigid checklist: adapt it to fit the actual concept and cast established below. If the user's concept (marked CANON, when present) doesn't call for a given element, don't force it in — concept fidelity beats formula completeness.
-1. SYSTEM: protagonist has a detection ability with dry bureaucratic notifications ("Detected: valuable item. Reward: 1,000 yuan. Act quickly.") — unless the concept clearly establishes a different comedic engine, in which case follow the concept instead.
-2. ABSURD MISMATCH: every activation/event leads to a wildly inappropriate discovery, but protagonist still benefits somehow.
-3. MERCENARY PROTAGONIST: reacts to everything in practical terms (money, reward, power) — never emotional. Forbidden: panic, tears, poetic reflection. Allowed: calculating, mildly annoyed.
-4. SUFFERING COMPANION (only if one exists in the cast below): if the character list includes a companion role, their fixed quirk for THIS story is "${getCompanionQuirk()}" — it resurfaces at the worst possible moments. Use ONLY this specific quirk, never substitute hunger/food unless that IS the assigned quirk above. If NO companion character was created for this story, do not invent one mid-scene.
-5. COMPETENT LOSER authority figure (only if one exists in the cast below): does everything right, still loses to protagonist's accidental wins, dignity drops each episode. If no authority-figure character was created, do not invent one mid-scene.
-6. ESCALATION: each scene's absurdity tops the last — scenes 13-14 are peak.
-7. RUNNING GAGS: 2-3 recurring jokes from early scenes, called back later at worse moments.
+TU TAREA: escribí LA HISTORIA COMPLETA del episodio como narración continua y natural — NO como una lista de escenas desconectadas ni como una checklist que hay que marcar en cada párrafo. Contá una historia real con ritmo variable: algunos momentos rápidos, otros que respiran, diálogo cuando aporte. Que la comedia fluya como la escribiría un guionista humano.
 
-ANTI-DRAMA: forbidden "sentí terror / el corazón me latió / todo cambió en ese momento" — describe what happened + the practical reaction instead. Short punchy sentences (max 12 words), specific numbers ("mil yuanes" not "mucho dinero"), natural dialogue interspersed, deadpan delivery of absurd events, mundane reactions (food/sleep/money) not emotions.
+ESTILO — anti-drama: prohibido "sentí terror / el corazón me latió / todo cambió en ese momento" — describí lo que pasó + la reacción práctica. Frases cortas y directas, números específicos cuando corresponda ("mil yuanes" no "mucho dinero"), diálogo natural intercalado, entrega seca de eventos absurdos.
 
-GENRE TONE (comedic mechanic, NOT a visual mandate — words like "kingdom"/"hero" below are illustrative only):
+⚠️ NADA se convierte en tic mecánico repetido en cada párrafo — ni el dinero/recompensa, ni una reacción fija de un personaje, ni una frase tipo. Si el protagonista calcula una recompensa, que pase con variación real a lo largo de la historia — no lo repitas después de cada incidente como si fuera una casilla que hay que marcar.
+
+PERSONAJES: usá el elenco tal como está definido más abajo (roles, rasgos y quirks ya establecidos en sus fichas) — no inventes roles que el elenco no tiene, no ignores rasgos ya asignados a quien sí existe.
+
+TONO DE GÉNERO (mecánica cómica de referencia, no mandato de trama — palabras como "reino"/"héroe" abajo son solo ilustrativas si no aplican a tu concepto):
 ${genreTone}
-${u.conceptoOriginal ? `🎯 CONCEPT DEFINES THE SETTING: the user's seed concept (marked CANON above) is the real world of this story. If it's contemporary/realistic, stay there — no kingdoms, magic, or futuristic tech unless the concept explicitly says so. Apply only the comedic MECHANIC (system, authority, running gags) to that already-established setting.` : ''}
+${u.conceptoOriginal ? `🎯 EL CONCEPTO DEFINE EL SETTING: el concepto semilla del usuario (marcado CANON arriba) es el mundo real de esta historia. Si es contemporáneo/realista, quedate ahí — sin reinos, magia ni tecnología futurista que el concepto no mencione. Aplicá solo la mecánica cómica de tono (arriba) a ese setting ya establecido.` : ''}
 
-SCENE ENDING RULE: ${sceneEnding}
-
-NARRATION RULES: EXACTLY 75-80 Spanish words in "narration", first person (YO), immediate past tense. First sentence drops straight into the action, no setup. Specific over vague — numbers, names, exact observations.
+CIERRE: ${sceneEnding} — terminá con un gancho claro hacia el episodio ${epNum + 1}.
 ${isGrounded ? `MODO COTIDIANO ACTIVO: día a día real y específico, CERO fantasmas, CERO poderes — el humor viene de situaciones reales.` : `MODO NARRATIVO ACTIVO: la emoción viene de los hechos, no de adjetivos. "Disparo y fallo. El monstruo está a diez metros." No "el terror me paraliza".`}
 ${!allowsSuper && !allowsSuper2 ? `⚠️ RESTRICCIÓN: sin elementos sobrenaturales para el género ${genero}.` : ''}
 
-Esta llamada SOLO genera narración de escenas — NO generes descripciones de imagen todavía, eso es un paso separado.
+EXTENSIÓN Y FORMATO: entre 1,100 y 1,250 palabras en total, español, primera persona (YO), tiempo pasado inmediato. Un solo bloque de texto continuo — esta llamada NO genera imágenes ni divide en escenas todavía, eso es un paso separado.
 Responde SOLO JSON válido sin markdown`;
 
     // Split ecchi rules: narration guidance goes with the narration call,
     // visual/camera language goes with the image-prompt call.
     const genreExtra = hasEcchi
-      ? `\n\nECCHI/HAREM ACTIVO — CONTENIDO PARA AUDIENCIA ADULTA — REGLAS OBLIGATORIAS:
+      ? `\n\nECCHI/HAREM ACTIVO — CONTENIDO PARA AUDIENCIA ADULTA:
 Este proyecto es anime para adultos. La narración NO debe sonar sanitizada ni infantil — sé tan sugerente y directo como el máximo permitido por las políticas de Gemini.
-NARRACIÓN: Cada escena incluye al menos UN momento de fan service real, descrito con detalle sensorial genuino — no de forma tímida o edulcorada. La narración describe lo que el protagonista VE y SIENTE con lenguaje directo: curvas, piel, ropa ajustada, momentos accidentales, tensión sexual. Tono sugerente, picante y adulto — el espectador quiere seguir mirando.
-SITUACIONES CLÁSICAS DE FAN SERVICE: caída accidental encima de alguien, ropa mojada tras la lluvia, cambio de ropa interrumpido, uniforme con falda que se levanta con el viento, escena de playa o piscina, toalla que casi cae, uniforme de gimnasio ajustado, pijama corto en el pasillo, inclinarse hacia adelante sin darse cuenta.
+A lo largo de la historia completa, tejé VARIOS momentos reales de fan service — no necesariamente uno por cada tramo del episodio, dejá que surjan donde la escena lo pida naturalmente, con variedad real entre ellos. Descritos con detalle sensorial genuino, no de forma tímida o edulcorada: curvas, piel, ropa ajustada, momentos accidentales, tensión sexual. Tono sugerente, picante y adulto.
+SITUACIONES CLÁSICAS DE FAN SERVICE (variá cuáles usás, no repitas la misma una y otra vez): caída accidental encima de alguien, ropa mojada tras la lluvia, cambio de ropa interrumpido, uniforme con falda que se levanta con el viento, escena de playa o piscina, toalla que casi cae, uniforme de gimnasio ajustado, pijama corto en el pasillo, inclinarse hacia adelante sin darse cuenta.
 LÍMITE REAL: el único límite es lo que Gemini realmente bloquea (desnudez explícita, partes íntimas visibles). Todo lo demás — sugerencia, sensualidad, tensión — está permitido y es DESEABLE. No te autocensures por debajo de ese límite.`
       : '';
 
@@ -1628,7 +1623,7 @@ ${subgenreText}`;
     const isEcchi = mod === 'ecchi';
 
     if (epNum === 1 || !state.characters?.length) {
-      setProg(5, 'Paso 1/3: Creando personajes...');
+      setProg(5, 'Paso 1/4: Creando personajes...');
 
       let numChars, numFemales, numMales, protagonistGender;
       const numCharsChoice = document.getElementById('numCharsSelect')?.value || 'auto';
@@ -1724,12 +1719,12 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
       state.characters = parsedChars.characters || [];
       saveState();
       renderCharacters();
-      setProg(20, `✅ ${state.characters.length} personajes — Paso 2/3: Generando escenas...`);
+      setProg(20, `✅ ${state.characters.length} personajes — Paso 2/4: Escribiendo historia...`);
     } else {
       // Episode 2+ — reuse existing characters, skip regeneration
       const newCharsDesc = document.getElementById('newCharsInput')?.value.trim() || '';
       if (newCharsDesc) {
-        setProg(10, `Paso 1/3: Generando personajes nuevos para Episodio ${epNum}...`);
+        setProg(10, `Paso 1/4: Generando personajes nuevos para Episodio ${epNum}...`);
         try {
           const existingCharList = state.characters.map(ch => '- ' + ch.name + ' (' + (ch.role||'') + '): ' + (ch.appearance||'')).join('\n');
           const newCharPrompt = ctx + '\n\nPERSONAJES EXISTENTES (NO recrear):\n' + existingCharList + '\n\nPersonajes nuevos a crear:\n"' + newCharsDesc + '"\n\nCrea SOLO los personajes nuevos. Devuelve SOLO:\n{"characters":[{"id":"c_new1","name":"nombre","role":"rol","gender":"female o male","age":"18+","appearance":"descripción visual detallada","personality":"2 frases","backstory":"2 frases"}]}';
@@ -1773,75 +1768,99 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
     const charRefShort = state.characters.map(c => c.name).join(', ');
 
     // 15 escenas × 1 imagen = 15 imágenes por episodio
-    const narrationShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"EXACTAMENTE 75-80 palabras en primera persona (YO). Gancho en la primera frase. Sensaciones físicas concretas. Cuenta las palabras."}`;
+    const narrationShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"~75-80 palabras tomadas de la historia original en primera persona (YO), cortadas en un punto natural — no reescribas ni le agregues un gancho artificial, solo extraé el fragmento que corresponde."}`;
 
-    async function generateSceneBatch(batchPrompt, expectedCount, startNum, batchName) {
-      let bestResult = [];
+    // ─── STEP: write the full episode as ONE continuous story — no per-scene
+    // checklist, so nothing (money amounts, character beats, reactions)
+    // gets mechanically repeated 15 times. ───
+    async function generateFullStory(prompt) {
+      let best = '';
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
-          const raw = await callGemini(batchPrompt, sysBase + genreExtra);
+          const raw = await callGemini(prompt, sysBase + genreExtra);
           const parsed = safeParseJSON(raw);
-          const arr = parsed.scenes || [];
-          // Normalize: Gemini sometimes returns "narración" (Spanish) instead of "narration"
-          arr.forEach(s => { if (s && s['narración'] && !s.narration) s.narration = s['narración']; });
-          const valid = arr.filter(s => s && s.narration && s.title);
-          if (valid.length > bestResult.length) bestResult = valid;
-          if (valid.length >= expectedCount) {
-            return valid.slice(0, expectedCount).map((s, i) => ({
-              ...s, id: `s${startNum + i}`, num: startNum + i, act: s.act || 'act1',
-            }));
-          }
-          console.warn(`${batchName} intento ${attempt+1}: ${valid.length}/${expectedCount}`);
+          const story = String(parsed.story || '').trim();
+          const wc = story.split(/\s+/).filter(Boolean).length;
+          if (story.length > best.length) best = story;
+          if (story && wc >= 700) return story; // sanity floor — reject obviously truncated results
+          console.warn(`Historia intento ${attempt+1}: ${wc} palabras`);
           await new Promise(r => setTimeout(r, 3000));
         } catch(e) {
-          console.error(`${batchName} intento ${attempt+1}:`, e.message);
+          console.error(`Historia intento ${attempt+1}:`, e.message);
           if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
         }
       }
-      if (bestResult.length > 0) {
-        const result = bestResult.map((s, i) => ({ ...s, id: `s${startNum + i}`, num: startNum + i, act: s.act || 'act1' }));
-        while (result.length < expectedCount) {
-          const num = startNum + result.length;
-          result.push({ id: `s${num}`, num, act: 'act1', title: `Escena ${num} (pendiente)`, narration: '', dialogue: [], imagePromptA: '' });
-        }
-        return result;
-      }
-      return Array.from({ length: expectedCount }, (_, i) => ({
-        id: `s${startNum + i}`, num: startNum + i, act: 'act1',
-        title: `Escena ${startNum + i} (pendiente)`, narration: '', dialogue: [], imagePromptA: '',
-      }));
+      if (best) return best; // accept the longest attempt rather than fail outright
+      throw new Error('No se pudo generar la historia completa después de varios intentos');
     }
 
-    const batchRules = `REGLAS ESTRUCTURA — ESCALADA CÓMICA OBLIGATORIA:
-- 15 escenas siguiendo este arco de comedia viral. NOTA: las menciones de "Companion" y "Authority figure" abajo SOLO aplican si esos roles existen en "PERSONAJES DEL EPISODIO" — si esta historia no tiene compañero y/o figura de autoridad (el concepto no los pedía), simplemente omite esos beats específicos y deja que el arco avance con el reparto real que sí existe, sin inventar personajes nuevos para rellenar el hueco.
+    // ─── STEP: split the ALREADY-FINISHED story into exactly 15 sequential
+    // scenes. This does NOT continue or add to the story (that would risk
+    // the context-loss failure mode from splitting narrative generation
+    // across calls) — it only restructures text that already exists in
+    // front of it, the same safe pattern the image-prompt call already used. ───
+    const splitSysPrompt = `Sos un editor que divide una historia YA TERMINADA en exactamente 15 fragmentos secuenciales para un formato de video corto. NO agregues historia nueva, NO reescribas el contenido ni el estilo — dividí el texto ya escrito en 15 cortes naturales, preservando el orden y el contenido original. Podés ajustar levemente las palabras justo en los puntos de corte para que cada fragmento se lea bien de forma independiente, pero el contenido, los eventos y el estilo son los del autor original — vos solo cortás.
+Cada fragmento: ~75-80 palabras en español, primera persona (YO).
+Asigná "act" según la posición: fragmentos 1-2 = "cold_open", 3-6 = "act1", 7-12 = "act2", 13-14 = "clímax", 15 = "resolución".
+Cada fragmento necesita un "title" corto (3-6 palabras).
+CRÍTICO: el campo se llama "narration" (sin tilde).
+Responde SOLO JSON válido sin markdown.`;
 
-SCENE 1-2 (cold_open): Establish protagonist's mundane situation. The system activates for the FIRST TIME. Discovery seems like good news — end on the realization it's not. Authority figure appears (if one exists), does everything right, protagonist accidentally wins. Companion's quirk introduced (if a companion exists).
-SCENE 3-6 (act1): SECOND and THIRD system activations — bigger absurdity each time. Authority figure suffers again (if present). Running gag #1 established. Protagonist calculates exact reward value. Things escalate because of protagonist's "help." Authority figure now actively watching with suspicion (if present).
-SCENE 7-12 (act2): MULTIPLE activations — MORE outrageous than act1. Running gag #2 established. New character(s) dragged into chaos. Authority figure loses again and again (if present). Maximum absurdity of the middle act. Authority figure at breaking point (if present). Companion makes the worst possible comment at the worst moment (if present).
-SCENE 13-14 (clímax): THE BIGGEST DISCOVERY — the most outrageous yet. All running gags converge. Authority figure's suffering peaks (if present). Protagonist's reaction: completely practical.
-SCENE 15 (resolución): Protagonist gets paid. Authority figure defeated but grimly accepts it (if present). Companion says what they want (if present). Scene ends with the NEXT system activation — hook for Episode ${epNum + 1}.
+    async function splitStoryIntoScenes(story) {
+      const prompt = `HISTORIA COMPLETA A DIVIDIR:\n\n${story}\n\nDividila en EXACTAMENTE 15 fragmentos secuenciales, en orden. Devolvé SOLO: {"scenes":[${narrationShape},...]} con exactamente 15 objetos numerados 1-15.`;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          const raw = await callGemini(prompt, splitSysPrompt);
+          const parsed = safeParseJSON(raw);
+          const arr = parsed.scenes || [];
+          arr.forEach(s => { if (s && s['narración'] && !s.narration) s.narration = s['narración']; });
+          const valid = arr.filter(s => s && s.narration && s.title);
+          if (valid.length >= 15) {
+            return valid.slice(0, 15).map((s, i) => ({ ...s, id: `s${i+1}`, num: i+1, act: s.act || 'act1' }));
+          }
+          console.warn(`División intento ${attempt+1}: ${valid.length}/15`);
+          await new Promise(r => setTimeout(r, 3000));
+        } catch(e) {
+          console.error(`División intento ${attempt+1}:`, e.message);
+          if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
+        }
+      }
+      // Mechanical fallback: crude word-count split beats total failure.
+      const words = story.split(/\s+/).filter(Boolean);
+      const per = Math.ceil(words.length / 15) || 1;
+      return Array.from({ length: 15 }, (_, i) => {
+        const chunk = words.slice(i * per, (i + 1) * per).join(' ');
+        const act = i < 2 ? 'cold_open' : i < 6 ? 'act1' : i < 12 ? 'act2' : i < 14 ? 'clímax' : 'resolución';
+        return { id: `s${i+1}`, num: i+1, act, title: `Escena ${i+1}`, narration: chunk, dialogue: [], imagePromptA: '' };
+      });
+    }
 
-- The "narration" field: EXACTLY 75-80 Spanish words, FIRST PERSON (YO). Count words. Drop into the scene immediately. End naturally for the genre — not forced tension.
+    const storyArcGuide = `ARCO DEL EPISODIO (guía de ritmo, NO plantilla mecánica escena-por-escena):
+Planteo: situación cotidiana del protagonista, primer incidente cómico.
+Desarrollo: 2-3 incidentes que escalan en absurdo, con chistes recurrentes que se van sembrando y retomando.
+Clímax: el incidente más grande del episodio, donde convergen los chistes recurrentes.
+Cierre: resolución parcial + gancho claro hacia el próximo episodio.
 
-REGLAS CRÍTICAS DE REPARTO EN LAS ESCENAS:
-- ⚠️ OBLIGATORIO: debes usar TODOS o la GRAN MAYORÍA de los personajes listados en "PERSONAJES DEL EPISODIO" a lo largo de las 15 escenas — NUNCA ignores a los personajes secundarios y te enfoques solo en 2. Si se crearon 5 personajes, los 5 deben aparecer en al menos 1-2 escenas cada uno.
-- Distribuye la aparición de personajes de forma natural según su rol: si existen, el compañero y la figura de autoridad deben aparecer en varias escenas (no solo la primera); personajes secundarios pueden tener apariciones más puntuales pero SIGNIFICATIVAS.
-- Antes de responder, revisa mentalmente: ¿aparecieron TODOS los personajes de la lista al menos una vez en las 15 escenas? Si falta alguno, ajusta las escenas para incluirlo.`;
+- Usá TODOS o la gran mayoría de los personajes listados en "PERSONAJES DEL EPISODIO" — no ignores a los secundarios enfocándote solo en 2. Si hay 5 personajes, los 5 deberían tener presencia real.
+- Extensión total: 1,100-1,250 palabras.`;
 
-    // ─── CALL 1: narration only for all 15 scenes (one story, uninterrupted) ───
-    setProg(30, 'Paso 2/3: Escribiendo las 15 narraciones...');
+    // ─── CALL 1: the full story, uninterrupted, no checklist ───
+    setProg(30, 'Paso 2/4: Escribiendo la historia completa...');
     const prevEpSummary = buildPrevEpisodesSummary();
-    const scenesNoImg = await generateSceneBatch(
-      `${ctx}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${batchRules}\n\nGenera EXACTAMENTE 15 escenas numeradas 1-15:\n- Escenas 1-2: cold_open\n- Escenas 3-6: act1\n- Escenas 7-12: act2\n- Escenas 13-14: clímax\n- Escena 15: FINALE — resolución parcial + pregunta abierta para episodio ${epNum + 1}\nDevuelve SOLO: {"scenes":[${narrationShape},...]} con exactamente 15 objetos numerados 1-15.`,
-      15, 1, 'Narración 1-15'
+    const fullStory = await generateFullStory(
+      `${ctx}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${storyArcGuide}\n\nEscribí la historia completa del episodio ${epNum}. Devolvé SOLO: {"story":"toda la historia acá, en un solo bloque de texto continuo"}`
     );
 
-    // ─── CALL 2: image prompts, based on the narration already written above.
+    // ─── CALL 2: split the finished story into 15 scenes ───
+    setProg(45, 'Paso 3/4: Dividiendo en 15 escenas...');
+    const scenesNoImg = await splitStoryIntoScenes(fullStory);
+
+    // ─── CALL 3: image prompts, based on the narration already written above.
     // This call does NOT continue the story — it only translates finished
     // text into visual descriptions, so there is no narrative context to
     // lose or duplicate (unlike splitting the STORY itself into 2 calls,
     // which caused scene 10 to repeat scene 5 in an earlier attempt). ───
-    setProg(70, 'Paso 3/3: Generando descripciones visuales...');
+    setProg(70, 'Paso 4/4: Generando descripciones visuales...');
 
     const imageSysPrompt = `Eres un director de arte para anime/manhua. Tu única tarea es escribir UN prompt de imagen en inglés por escena, basado en la narración YA ESCRITA que se te entrega — no inventas historia nueva, solo describes visualmente lo que ya ocurre en cada escena.
 
