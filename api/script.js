@@ -24,6 +24,8 @@
 // in the response — text extraction below filters those out so we
 // never accidentally return the thinking summary instead of the JSON.
 // ════════════════════════════════════════════════════════════════
+const crypto = require('crypto');
+
 const CORS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
@@ -35,7 +37,7 @@ const MODEL = 'gemini-3.1-pro-preview';
 
 async function getAccessToken(sa) {
   const now = Math.floor(Date.now() / 1000);
-  const b64 = o => btoa(JSON.stringify(o)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
   const header  = { alg:'RS256', typ:'JWT' };
   const payload = {
     iss: sa.client_email, sub: sa.client_email, aud: sa.token_uri,
@@ -43,20 +45,16 @@ async function getAccessToken(sa) {
     scope: 'https://www.googleapis.com/auth/cloud-platform',
   };
   const signingInput = `${b64(header)}.${b64(payload)}`;
-  const pem = sa.private_key
-    .replace('-----BEGIN PRIVATE KEY-----','')
-    .replace('-----END PRIVATE KEY-----','')
-    .replace(/\n/g,'');
-  const keyDer = Uint8Array.from(atob(pem), c => c.charCodeAt(0));
-  const key = await crypto.subtle.importKey(
-    'pkcs8', keyDer,
-    { name:'RSASSA-PKCS1-v1_5', hash:'SHA-256' },
-    false, ['sign']
-  );
-  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(signingInput));
-  const b64sig = btoa(String.fromCharCode(...new Uint8Array(sig)))
+  // Sign with Node's native crypto (same robust approach as video-start.js):
+  // the PEM private key is passed straight to createSign, which parses the PEM
+  // (headers + newlines) internally. This avoids atob(), whose strict base64
+  // decoding on Vercel's runtime threw "The string did not match the expected
+  // pattern" whenever the key had any stray whitespace or newline formatting.
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(signingInput);
+  const sig = signer.sign(sa.private_key, 'base64')
     .replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
-  const jwt = `${signingInput}.${b64sig}`;
+  const jwt = `${signingInput}.${sig}`;
   const r = await fetch(sa.token_uri, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
