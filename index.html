@@ -1797,6 +1797,7 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
     // gets mechanically repeated 15 times. ───
     async function generateFullStory(prompt) {
       let best = '';
+      let lastErr = '';
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callGemini(prompt, sysBase + genreExtra);
@@ -1804,16 +1805,18 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
           const story = String(parsed.story || '').trim();
           const wc = story.split(/\s+/).filter(Boolean).length;
           if (story.length > best.length) best = story;
-          if (story && wc >= 700) return story; // sanity floor — reject obviously truncated results
-          console.warn(`Historia intento ${attempt+1}: ${wc} palabras`);
+          if (story && wc >= 500) return story; // sanity floor — reject obviously truncated results
+          lastErr = story ? `historia demasiado corta (${wc} palabras)` : 'respuesta vacía o sin campo "story"';
+          console.warn(`Historia intento ${attempt+1}: ${lastErr}`);
           await new Promise(r => setTimeout(r, 3000));
         } catch(e) {
+          lastErr = e.message;
           console.error(`Historia intento ${attempt+1}:`, e.message);
           if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
         }
       }
       if (best) return best; // accept the longest attempt rather than fail outright
-      throw new Error('No se pudo generar la historia completa después de varios intentos');
+      throw new Error(`No se pudo generar la historia completa. Último error: ${lastErr}`);
     }
 
     // ─── STEP: split the ALREADY-FINISHED story into exactly 15 sequential
