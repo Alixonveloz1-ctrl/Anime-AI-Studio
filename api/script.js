@@ -114,10 +114,17 @@ module.exports = async function handler(req, res) {
       ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
       generationConfig: {
         temperature: 0.8,
-        // Higher than before: Gemini 3.1 Pro's thinking tokens count against
-        // this budget too, on top of the actual JSON answer.
         maxOutputTokens: 32768,
         responseMimeType: 'application/json',
+        // Gemini 3.1 Pro defaults to thinkingLevel HIGH ("Deep Think Mini"),
+        // the slowest setting. On the long story call that pushed total latency
+        // past Vercel's 60s function limit, so Vercel returned a 504 error page
+        // (non-JSON) and the browser's response parse failed with an opaque
+        // error. LOW still reasons, is plenty for creative writing, and keeps
+        // generation well under the time limit. (3.x uses thinkingLevel, NOT
+        // thinkingBudget — setting both would 400. Raise to MEDIUM for more
+        // depth only if it still completes in time.)
+        thinkingConfig: { thinkingLevel: 'LOW' },
       },
       // Adult-content app: set every CONFIGURABLE safety filter to OFF (the most
       // permissive value) so suggestive/explicit-adult text is never blocked on
