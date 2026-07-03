@@ -1038,11 +1038,33 @@ async function callGemini(prompt, system) {
 }
 
 function safeParseJSON(raw) {
-  let s = raw.replace(/```json\n?|\n?```/g, '').trim();
+  let s = String(raw).replace(/```json\n?|\n?```/g, '').trim();
   const start = s.indexOf('{');
   const end = s.lastIndexOf('}');
   if (start >= 0 && end > start) s = s.substring(start, end + 1);
-  return JSON.parse(s);
+  try {
+    return JSON.parse(s);
+  } catch (e) {
+    // Common Gemini failure with long text (e.g. the continuous story in "story"):
+    // raw, unescaped control characters inside a string value break JSON.parse.
+    // Walk the string; while inside a JSON string literal, escape any literal
+    // newline / carriage-return / tab so parsing can succeed, then retry once.
+    let out = '';
+    let inStr = false, esc = false;
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (esc) { out += ch; esc = false; continue; }
+      if (ch === '\\') { out += ch; esc = true; continue; }
+      if (ch === '"') { inStr = !inStr; out += ch; continue; }
+      if (inStr) {
+        if (ch === '\n') { out += '\\n'; continue; }
+        if (ch === '\r') { out += '\\r'; continue; }
+        if (ch === '\t') { out += '\\t'; continue; }
+      }
+      out += ch;
+    }
+    return JSON.parse(out);
+  }
 }
 
 // ════════════════════════════════════════════════════════════════
