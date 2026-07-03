@@ -1,9 +1,14 @@
 // ════════════════════════════════════════════════════════════════
 // SCRIPT GENERATION PROXY — Gemini 3.1 Pro (Vertex AI), the most
-// capable text model available, with a 2.5 Flash fallback on
-// capacity/availability errors. This is the SINGLE point that
+// capable text model available. This is the SINGLE point that
 // generates ALL text in the app: universe, characters, scene
 // narration, image prompts, repairs, translation.
+//
+// NO model fallback: per project requirement, the ONLY text generator
+// is the maximum-quality model. If 3.1 Pro fails (capacity/quota), the
+// call returns a clear error instead of silently downgrading to a
+// weaker model. Transient blips are already absorbed by the client,
+// which retries each text call up to 4 times.
 //
 // Node.js runtime (NOT Edge): Vercel Edge Functions are deprecated
 // and hard-cap "must begin sending a response" at 25s regardless of
@@ -11,11 +16,10 @@
 // caused the earlier character-generation timeout bug on this project.
 // Node.js runtime + Fluid compute actually honors maxDuration.
 //
-// Gemini 2.5+ preview models (including 3.1 Pro) are ONLY available
-// at the "global" endpoint, not a regional one like us-central1 — the
-// fallback model (2.5 Flash, stable) uses the regional endpoint.
+// Gemini 3.x preview models are ONLY available at the "global"
+// endpoint, not a regional one like us-central1.
 //
-// Gemini 3 Pro / 3.1 Pro always "think" before answering (cannot be
+// Gemini 3.1 Pro always "thinks" before answering (cannot be
 // disabled) and may return a "thought" part ahead of the real answer
 // in the response — text extraction below filters those out so we
 // never accidentally return the thinking summary instead of the JSON.
@@ -27,8 +31,7 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-const MODEL_PRIMARY  = 'gemini-3.1-pro-preview';
-const MODEL_FALLBACK = 'gemini-2.5-flash';
+const MODEL = 'gemini-3.1-pro-preview';
 
 async function getAccessToken(sa) {
   const now = Math.floor(Date.now() / 1000);
@@ -118,35 +121,46 @@ module.exports = async function handler(req, res) {
         maxOutputTokens: 32768,
         responseMimeType: 'application/json',
       },
+      // Adult-content app: set every CONFIGURABLE safety filter to OFF (the most
+      // permissive value) so suggestive/explicit-adult text is never blocked on
+      // probability. NOTE: this only covers the four adjustable categories below.
+      // Gemini's core, NON-configurable protections (most importantly child
+      // safety) can never be turned off by any threshold — if generation is
+      // blocked with these already OFF, the cause is either one of those core
+      // protections (e.g. content that reads as sexualizing minors) or a
+      // non-safety issue (MAX_TOKENS, parse), which the error detail will show.
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'OFF' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'OFF' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'OFF' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'OFF' },
+      ],
     };
 
-    let { ok, status, data: d } = await callModel(MODEL_PRIMARY, 'global', projectId, token, body);
-
-    const msg1 = (d.error?.message || '').toLowerCase();
-    const shouldFallback = !ok && (
-      status === 429 || status === 503 || status === 404 ||
-      msg1.includes('quota') || msg1.includes('exhausted') || msg1.includes('resource') ||
-      msg1.includes('overload') || msg1.includes('unavailable') ||
-      msg1.includes('not found') || msg1.includes('not support')
-    );
-    let modelUsed = MODEL_PRIMARY;
-    if (shouldFallback) {
-      modelUsed = MODEL_FALLBACK;
-      ({ ok, status, data: d } = await callModel(MODEL_FALLBACK, 'us-central1', projectId, token, body));
-    }
+    let { ok, status, data: d } = await callModel(MODEL, 'global', projectId, token, body);
 
     if (!ok) {
       const msg = d.error?.message || JSON.stringify(d).slice(0, 200);
-      return res.status(status).json({ error: `Gemini (${modelUsed}): ${msg}` });
+      return res.status(status).json({ error: `Gemini (${MODEL}): ${msg}` });
     }
 
     const text = extractText(d);
     if (!text) {
       const reason = d.candidates?.[0]?.finishReason || 'UNKNOWN';
-      return res.status(500).json({ error: `Gemini sin respuesta [${reason}] (${modelUsed})` });
+      const promptBlock = d.promptFeedback?.blockReason;
+      // Surface the blocked safety category when present, so the client error
+      // is actionable instead of just "no response".
+      const blockedCat = (d.candidates?.[0]?.safetyRatings || [])
+        .filter(r => r.blocked)
+        .map(r => r.category?.replace('HARM_CATEGORY_', ''))
+        .join(', ');
+      const detail = promptBlock
+        ? `prompt bloqueado: ${promptBlock}`
+        : `finishReason: ${reason}${blockedCat ? ` (${blockedCat})` : ''}`;
+      return res.status(500).json({ error: `Gemini sin respuesta [${detail}] (${MODEL})` });
     }
 
-    return res.status(200).json({ text, model: modelUsed });
+    return res.status(200).json({ text, model: MODEL });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
