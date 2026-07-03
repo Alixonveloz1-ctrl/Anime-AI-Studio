@@ -973,10 +973,12 @@ MODO SLICE OF LIFE — REGLAS DE CONTENIDO (OBLIGATORIAS):
   if (hasEcchi || hasHarem) {
     text += `
 
-REGLAS VISUALES OBLIGATORIAS (por Ecchi/Harem activo):
+ECCHI/HAREM ACTIVO — REGLA GENERAL (contenido adulto):
+- Este es contenido ecchi PARA ADULTOS y se COMBINA con el género principal seleccionado — no lo reemplaza: la trama y el tono siguen siendo los del género, con fan service integrado.
+- TODOS los personajes son adultos (20+), en contextos adultos — jamás colegiales ni uniformes escolares.
 - Personajes femeninos SIEMPRE con ropa corta, sugerente o reveladora
 - Situaciones comprometedoras naturales en la trama
-- imagePromptA/B deben reflejar el fan service visualmente`;
+- imagePromptA debe reflejar el fan service visualmente`;
   }
 
   return text;
@@ -1380,26 +1382,21 @@ const GENRE_PROMPTS = {
 };
 
 
-const MOD_PROMPTS = {
-  none: '',
-  harem: `MODIFICADOR: Harem.
-- Protagonista MASCULINO rodeado de 3 o más personajes femeninos con interés amoroso en él
-- Cada chica tiene una personalidad distinta (tsundere, kuudere, genki, dandere, onee-san)
-- Personajes femeninos atractivos, sin daño visible
-- Tensión romántica con múltiples candidatas`,
-  harem_inverso: `MODIFICADOR: Harem Inverso.
-- Protagonista FEMENINA rodeada de 3 o más personajes masculinos con interés amoroso en ella
-- Cada chico tiene personalidad y arquetipo distinto
-- Tensión romántica con múltiples candidatos`,
-  ecchi: `MODIFICADOR: Ecchi / Fan Service. ACTIVO.
-- Situaciones SUGERENTES y fan service VISIBLES en las escenas
-- Personajes femeninos con apariencia ATRACTIVA y SENSUAL (curvas marcadas, busto generoso, piernas largas)
-- Ropa que enfatiza la figura: faldas cortas, ajustadas, escotes pronunciados, medias, lencería, trajes de baño según la escena
-- Ángulos de cámara que insinúan (low angle, primeros planos, ropa mojada, viento levantando faldas, malentendidos comprometedores como caídas accidentales)
-- Expresiones de rubor (blush), miradas tímidas, momentos íntimos
-- Tono pícaro y humorístico, NO oscuro ni violento
-- ECCHI = erotismo LEVE pero VISIBLE — la frontera es desnudez parcial sin partes íntimas explícitas`,
-};
+// NOTE: a MOD_PROMPTS constant (harem/ecchi modifier texts) used to live here.
+// It was DEAD CODE — defined but never referenced by any prompt path. The real,
+// active ecchi/harem guidance lives in: getSubgenreText() (universe + episode
+// context), genreExtra/genreExtraImage (narration + image prompts), the
+// isEcchi character-appearance rules, and the server-side ecchiRules in
+// api/image.js. Removed to avoid the illusion that editing it changed anything.
+
+// Genres whose ESTABLISHED identity in this tool is the viral system-comedy
+// formula (bureaucratic detection system, mercenary protagonist, suffering
+// authority figure). All OTHER genres are played straight — faithful to their
+// real tone — unless the user explicitly checks the 'comedia' subgenre.
+const COMEDY_GENRES = ['isekai', 'videojuego', 'donghua', 'romcom'];
+function isComedyMode(genero, subgenres) {
+  return COMEDY_GENRES.includes(genero) || (subgenres || []).includes('comedia');
+}
 
 // ════════════════════════════════════════════════════════════════
 // UNIVERSE GENERATION
@@ -1421,14 +1418,18 @@ document.getElementById('btnGenerarUniverso').addEventListener('click', async ()
   btn.innerHTML = '<div class="spinner"></div> Generando...';
 
   try {
+    const comedyMode = isComedyMode(genero, subgenres);
     const system = `Eres un guionista de anime/manhua viral para Facebook Reels.
 REGLAS ABSOLUTAS:
 - Nombres reales (japoneses: Hiro, Yuki, Rin, Kaito, Mei / chinos: Lin Yan, Chen Wu, Wang, Liu, Zhang).
 - NUNCA nombres inventados genéricos (nada de Aethernam, Kael, Zythara).
-- Fiel al género: si es isekai/videojuego/donghua, normalmente hay un SISTEMA de detección con notificaciones burocráticas; puede haber una figura de autoridad que sufre las consecuencias si encaja con la historia — no la fuerces si el concepto del usuario sugiere algo distinto.
+${comedyMode
+  ? `- Fiel al género: si es isekai/videojuego/donghua, normalmente hay un SISTEMA de detección con notificaciones burocráticas; puede haber una figura de autoridad que sufre las consecuencias si encaja con la historia — no la fuerces si el concepto del usuario sugiere algo distinto.
 - El "hook" y el "conflicto" DEBEN reflejar la comedia absurda del género, no drama épico.
+- En "hook" describe UNA situación cómica concreta del primer episodio, no una promesa vaga.`
+  : `- FIDELIDAD ESTRICTA AL GÉNERO "${genero}": el universo, el conflicto y el hook deben reflejar el tono REAL de ese género (drama es drama, terror da miedo, misterio intriga) — NO lo conviertas en comedia, NO agregues sistemas de detección cómicos, NO suavices el tono.
+- En "hook" describe UNA situación concreta e impactante del primer episodio, fiel al género, no una promesa vaga.`}
 - NO mezclar géneros no solicitados.
-- En "hook" describe UNA situación cómica concreta del primer episodio, no una promesa vaga.
 ${concepto ? `- ⚠️ CRÍTICO — HAY UN CONCEPTO SEMILLA PROPORCIONADO POR EL USUARIO: ese concepto es CANON OBLIGATORIO, no una sugerencia. DEBES preservar EXACTAMENTE: los nombres de personajes que menciona (no los cambies, no los reemplaces con otros), la premisa central, y cada detalle específico que describe. Tu trabajo es EXPANDIR ese concepto (agregar ambientación, personajes secundarios coherentes, detalles del mundo) — NUNCA inventar una historia distinta ni renombrar lo que ya está definido. Si el concepto dice que un personaje se llama "Sofía", el universo resultante DEBE tener un personaje llamado "Sofía" — no "Yuki", no "Yuri", no ningún otro nombre.` : '- No hay concepto semilla: tienes libertad creativa total para inventar un universo ORIGINAL fiel al género.'}
 - Responde SOLO JSON válido sin markdown`;
 
@@ -1451,19 +1452,19 @@ INSTRUCCIÓN: El universo que generes DEBE ser este concepto, expandido con más
 
 ${concepto ? 'Expande el concepto semilla de arriba en un universo completo' : 'Crea un universo ORIGINAL y único'} que sea ESTRICTAMENTE FIEL al género "${genero}" con los subgéneros seleccionados integrados naturalmente.
 
-IMPORTANTE: Si el género es isekai, videojuego o donghua, el universo TÍPICAMENTE incluye lo siguiente (es el default probado, pero ajústalo si el concepto del usuario sugiere una estructura distinta — la fidelidad al concepto es más importante):
+${comedyMode ? `IMPORTANTE: Si el género es isekai, videojuego o donghua, el universo TÍPICAMENTE incluye lo siguiente (es el default probado, pero ajústalo si el concepto del usuario sugiere una estructura distinta — la fidelidad al concepto es más importante):
 - Protagonista con un sistema/habilidad de detección que activa situaciones absurdas
 - Posiblemente un compañero con UN rasgo cómico definidor fijo (el rasgo específico se asigna en el paso de creación de personajes), solo si encaja con la historia
 - Posiblemente una figura de autoridad competente que será la víctima recurrente de los éxitos accidentales del protagonista, solo si encaja con la historia
-- El "hook" describe la primera situación absurda concreta, NO una promesa épica
+- El "hook" describe la primera situación absurda concreta, NO una promesa épica` : `IMPORTANTE: Este universo NO es una comedia. Respeta la atmósfera, los stakes y las convenciones reales del género "${genero}" — el resultado debe sentirse como un anime serio de ese género, no como una parodia.`}
 
 Devuelve JSON:
 {
   "title": "Título con subtítulo español",
-  "tagline": "Frase gancho cómica y directa (máx 12 palabras)",
-  "concepto": "${concepto ? 'El concepto semilla EXPANDIDO con más detalle — mismos nombres, misma premisa, más contexto (3-4 frases)' : 'Mundo y premisa en 2-3 frases, incluyendo qué hace el sistema/habilidad del protagonista'}",
-  "conflicto": "El choque cómico central: qué busca el protagonista vs qué pasa realmente cada vez que usa su habilidad",
-  "hook": "La situación absurda ESPECÍFICA del episodio 1 (concreta, no vaga)",
+  "tagline": "${comedyMode ? 'Frase gancho cómica y directa (máx 12 palabras)' : 'Frase gancho directa y potente, fiel al tono del género (máx 12 palabras)'}",
+  "concepto": "${concepto ? 'El concepto semilla EXPANDIDO con más detalle — mismos nombres, misma premisa, más contexto (3-4 frases)' : (comedyMode ? 'Mundo y premisa en 2-3 frases, incluyendo qué hace el sistema/habilidad del protagonista' : 'Mundo y premisa en 2-3 frases, fieles al género seleccionado')}",
+  "conflicto": "${comedyMode ? 'El choque cómico central: qué busca el protagonista vs qué pasa realmente cada vez que usa su habilidad' : 'El conflicto central del género: qué quiere/necesita el protagonista y qué fuerza concreta se lo impide'}",
+  "hook": "${comedyMode ? 'La situación absurda ESPECÍFICA del episodio 1 (concreta, no vaga)' : 'La situación ESPECÍFICA e impactante del episodio 1, fiel al género (concreta, no vaga)'}",
   "setting": "Lugar y época",
   "demo": "${demo}",
   "genero": "${genero}",
@@ -1552,6 +1553,9 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
 
     // Estilo de narración según el tono del subgénero
     const isGrounded  = hasSliceOfLife && !allowsSuper && !allowsSuper2;
+    // Comedy formula ONLY for the tool's established comedy genres or when
+    // the 'comedia' subgenre is checked — all other genres play it straight.
+    const comedyMode = isComedyMode(genero, subgenres);
     const GENRE_TONE = {
       accion:       'ACTION + COMEDY: The protagonist has a Combat Analyzer that identifies "critical weak points" — which always turn out to be ally equipment, the commander\'s trophy, or the wrong target entirely. The military/sect authority does everything right and still suffers. Protagonist reaction: how much is the compensation? Running gag: the authority\'s damage report grows more creative with each "pilot error" entry.',
       fantasia:     'FANTASY + COMEDY: The protagonist has a Treasure Detection system that finds magical artifacts — which are always cursed, belong to the wrong person, or wildly inappropriate for the situation. The guild master/elder investigates and suffers. Protagonist: "How much reward for turning it in?" Running gag: the system\'s reward estimates are always accurate but never account for the chaos caused.',
@@ -1571,7 +1575,26 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
       sobrenatural: 'SUPERNATURAL + COMEDY: A Spirit Sense detects "powerful presences" — always spirits that are not dangerous, deeply inconvenienced by protagonist, or doing legitimate supernatural business. The exorcist/spirit agency official does everything professionally and still ends up owing protagonist money. Companion provides running commentary (only one who can see clearly). Running gag: the official spirit incident log now has a "protagonist category" with its own classification system.',
       supervivencia:'SURVIVAL + DARK COMEDY: A Resource Detection system identifies "survival value" — things technically edible but socially catastrophic, shelter belonging to something dangerous, water in restricted zones. The rescue/military authority follows protocol and still ends up worse than the survivor. Companion keeps a precise log of all resources consumed. Running gag: the official search-and-rescue report explains why the rescue team needed rescuing.',
     }
-    const genreTone = GENRE_TONE[genero] || 'Casual first person. Specific details. Let situations create impact, not emotional adjectives.';
+    // Faithful (non-comedy) genre tones — used when comedyMode is OFF so each
+    // genre delivers its REAL atmosphere instead of the system-comedy formula.
+    const GENRE_TONE_FIEL = {
+      accion:       'ACTION: physical conflict drives every scene — fights, chases, confrontations with real stakes. Choreograph combat with concrete detail (distances, impacts, positioning). Momentum and adrenaline; victories cost something.',
+      fantasia:     'FANTASY: a magic/power system with clear internal rules. Wonder and danger coexist. Show the logic and cost of magic through concrete use, not exposition dumps. Discoveries feel earned.',
+      mecha:        'MECHA: giant-robot combat with tactical weight — machines have limits, pilots feel every hit, military pressure shapes decisions. Battles are the spine of the episode, with concrete mechanical detail.',
+      drama:        'DRAMA: emotional weight carried by consequences, silences and decisions that cost something. Restraint over melodrama — show the emotion through actions and specific details, never declare it with empty adjectives. No comedy relief that undercuts the moment.',
+      slice_of_life:'SLICE OF LIFE: beauty in small everyday moments — meals, work, conversations, weather, routines. No villains, no catastrophes. Warm, specific, unhurried; small realizations carry the weight.',
+      terror:       'HORROR: sustained dread. Wrong details, escalating unease, the threat mostly unseen until it is not. Fear built from concrete sensory detail and what is NOT shown. No jokes that break the tension.',
+      psicologico:  'PSYCHOLOGICAL: internal states drive the plot — doubt, obsession, distorted perception. Unreliable narration is allowed. External events matter for what they do to the mind; reality can crack at the edges.',
+      misterio:     'MYSTERY: an enigma drives the plot — clues planted fairly, real suspects, gradual revelations. The protagonist actively investigates; every scene adds or reframes information. The reader should be able to theorize.',
+      deportes:     'SPORTS: discipline, training, teamwork, rivalry. Matches as climaxes with concrete play-by-play detail. Victory earned through visible effort and setbacks; rivals are people, not obstacles.',
+      sci_fi:       'SCI-FI: futuristic technology with (pseudo)scientific rules, never magic. Explore the human consequences of the tech. Precision, awe, and unease in equal measure.',
+      aventura:     'ADVENTURE: constant journey toward a distant goal — exploration, discoveries, real dangers on the road. Sense of scale and wonder; the protagonist grows through the trials of travel.',
+      sobrenatural: 'SUPERNATURAL: hidden forces beneath everyday life — spirits, curses, powers with mysterious rules the protagonist must decode. Unsettling atmosphere where the mundane and the occult press against each other.',
+      supervivencia:'SURVIVAL: scarce resources, desperate decisions, moral dilemmas under extreme pressure. Death is a constant, real threat — tension never fully drops. Concrete logistics (food, water, shelter, injuries) matter.',
+    };
+    const genreTone = comedyMode
+      ? (GENRE_TONE[genero] || 'Casual first person. Specific details. Let situations create impact, not emotional adjectives.')
+      : (GENRE_TONE_FIEL[genero] || 'Faithful to the selected genre: first person, specific concrete details, let events — not empty adjectives — create the impact.');
 
     const SCENE_ENDING = {
       accion:       'Each scene ends with an exciting moment, a power move, or a clash that makes you want to see the next second.',
@@ -1594,21 +1617,25 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     };
     const sceneEnding = SCENE_ENDING[genero] || 'Each scene ends naturally for the genre — no forced drama.';
 
-    const sysBase = `Eres un guionista de comedia viral para anime/manhua, escribiendo para Facebook Reels — capítulos cortos, ritmo ágil, tono absurdo y directo.
+    const sysBase = `${comedyMode
+      ? 'Eres un guionista de comedia viral para anime/manhua, escribiendo para Facebook Reels — capítulos cortos, ritmo ágil, tono absurdo y directo.'
+      : `Eres un guionista de anime/manhua viral para Facebook Reels — capítulos cortos, ritmo ágil, ESTRICTAMENTE FIEL al tono del género "${genero}". NO es comedia: no agregues chistes, sistemas cómicos ni tono paródico que el género no pide.`}
 
 ADULT AUDIENCE: this is adult content — write with edge and directness, not family-friendly softening. The only real limit is what Gemini's policies actually block.
 
 CRITICAL: el campo JSON es "story" (un solo bloque de texto continuo, no un array de escenas).
 
-TU TAREA: escribí LA HISTORIA COMPLETA del episodio como narración continua y natural — NO como una lista de escenas desconectadas ni como una checklist que hay que marcar en cada párrafo. Contá una historia real con ritmo variable: algunos momentos rápidos, otros que respiran, diálogo cuando aporte. Que la comedia fluya como la escribiría un guionista humano.
+TU TAREA: escribí LA HISTORIA COMPLETA del episodio como narración continua y natural — NO como una lista de escenas desconectadas ni como una checklist que hay que marcar en cada párrafo. Contá una historia real con ritmo variable: algunos momentos rápidos, otros que respiran, diálogo cuando aporte. ${comedyMode ? 'Que la comedia fluya como la escribiría un guionista humano.' : 'Que la historia fluya como la escribiría un guionista humano del género.'}
 
-ESTILO — anti-drama: prohibido "sentí terror / el corazón me latió / todo cambió en ese momento" — describí lo que pasó + la reacción práctica. Frases cortas y directas, números específicos cuando corresponda ("mil yuanes" no "mucho dinero"), diálogo natural intercalado, entrega seca de eventos absurdos.
+${comedyMode
+  ? 'ESTILO — anti-drama: prohibido "sentí terror / el corazón me latió / todo cambió en ese momento" — describí lo que pasó + la reacción práctica. Frases cortas y directas, números específicos cuando corresponda ("mil yuanes" no "mucho dinero"), diálogo natural intercalado, entrega seca de eventos absurdos.'
+  : 'ESTILO — mostrar, no declarar: evitá adjetivos emocionales vacíos ("sentí un terror indescriptible", "todo cambió en ese momento") — construí la emoción del género con hechos concretos, acciones, detalles sensoriales específicos y diálogo natural. Frases directas, números y datos específicos cuando corresponda. La intensidad viene de lo que PASA, no de etiquetas emocionales.'}
 
-⚠️ NADA se convierte en tic mecánico repetido en cada párrafo — ni el dinero/recompensa, ni una reacción fija de un personaje, ni una frase tipo. Si el protagonista calcula una recompensa, que pase con variación real a lo largo de la historia — no lo repitas después de cada incidente como si fuera una casilla que hay que marcar.
+⚠️ NADA se convierte en tic mecánico repetido en cada párrafo — ni ${comedyMode ? 'el dinero/recompensa, ni ' : ''}una reacción fija de un personaje, ni una frase tipo. ${comedyMode ? 'Si el protagonista calcula una recompensa, que pase con variación real a lo largo de la historia — no lo repitas después de cada incidente como si fuera una casilla que hay que marcar.' : 'Cualquier recurso narrativo debe variar de forma real a lo largo de la historia — nada de repetir la misma fórmula en cada tramo.'}
 
 PERSONAJES: usá el elenco tal como está definido más abajo (roles, rasgos y quirks ya establecidos en sus fichas) — no inventes roles que el elenco no tiene, no ignores rasgos ya asignados a quien sí existe.
 
-TONO DE GÉNERO (mecánica cómica de referencia, no mandato de trama — palabras como "reino"/"héroe" abajo son solo ilustrativas si no aplican a tu concepto):
+TONO DE GÉNERO (${comedyMode ? 'mecánica cómica de referencia, no mandato de trama — palabras como "reino"/"héroe" abajo son solo ilustrativas si no aplican a tu concepto' : 'atmósfera y convenciones del género — mandato de tono, adaptado al concepto y setting de esta historia'}):
 ${genreTone}
 ${u.conceptoOriginal ? `🎯 EL CONCEPTO DEFINE EL SETTING: el concepto semilla del usuario (marcado CANON arriba) es el mundo real de esta historia. Si es contemporáneo/realista, quedate ahí — sin reinos, magia ni tecnología futurista que el concepto no mencione. Aplicá solo la mecánica cómica de tono (arriba) a ese setting ya establecido.` : ''}
 
@@ -1623,7 +1650,7 @@ Responde SOLO JSON válido sin markdown`;
     // visual/camera language goes with the image-prompt call.
     const genreExtra = hasEcchi
       ? `\n\nECCHI/HAREM ACTIVO — CONTENIDO PARA AUDIENCIA ADULTA:
-Este proyecto es anime para adultos. TODOS los personajes son adultos (20 años o más), en contextos adultos: universidad, trabajo, vida adulta independiente. JAMÁS estudiantes de secundaria/colegio, JAMÁS uniformes escolares ni ambientes de instituto/aula — nada que encuadre a los personajes como menores de edad. La narración NO debe sonar sanitizada ni infantil — sé tan sugerente y directo como el máximo permitido por las políticas de Gemini.
+Este proyecto es anime para adultos. El fan service SE COMBINA con el género principal "${genero}" — no lo reemplaza: la trama, el tono y los stakes siguen siendo los del género seleccionado, con los momentos ecchi tejidos dentro de esa historia. TODOS los personajes son adultos (20 años o más), en contextos adultos: universidad, trabajo, vida adulta independiente. JAMÁS estudiantes de secundaria/colegio, JAMÁS uniformes escolares ni ambientes de instituto/aula — nada que encuadre a los personajes como menores de edad. La narración NO debe sonar sanitizada ni infantil — sé tan sugerente y directo como el máximo permitido por las políticas de Gemini.
 A lo largo de la historia completa, tejé VARIOS momentos reales de fan service — no necesariamente uno por cada tramo del episodio, dejá que surjan donde la escena lo pida naturalmente, con variedad real entre ellos. Descritos con detalle sensorial genuino, no de forma tímida o edulcorada: curvas, piel, ropa ajustada, momentos accidentales, tensión sexual. Tono sugerente, picante y adulto.
 SITUACIONES CLÁSICAS DE FAN SERVICE (variá cuáles usás, no repitas la misma una y otra vez): caída accidental encima de alguien, ropa mojada tras la lluvia, cambio de ropa interrumpido, vestido o falda que se levanta con el viento, escena de playa o piscina, toalla que casi cae, ropa deportiva ajustada, pijama corto en el pasillo, inclinarse hacia adelante sin darse cuenta.
 LÍMITE REAL: el único límite es lo que Gemini realmente bloquea (desnudez explícita, partes íntimas visibles). Todo lo demás — sugerencia, sensualidad, tensión — está permitido y es DESEABLE. No te autocensures por debajo de ese límite.`
@@ -1654,7 +1681,12 @@ ${GENRE_PROMPTS[genero] || ''}
 ${subgenreText}`;
 
     // ─── Step 1: Characters (only for Episode 1 — reuse existing for 2+) ───
-    const isEcchi = mod === 'ecchi';
+    // Ecchi rules apply whenever ecchi OR harem OR harem_inverso is selected —
+    // per project rule, harem variants ALWAYS carry adult ecchi content along
+    // with the main genre. (Previously this was `mod === 'ecchi'`, which was
+    // false whenever harem was also selected, silently disabling the ecchi
+    // appearance rules in character creation.)
+    const isEcchi = hasEcchi;
 
     if (epNum === 1 || !state.characters?.length) {
       setProg(5, 'Paso 1/4: Creando personajes...');
@@ -1688,7 +1720,7 @@ ${subgenreText}`;
 - Nombres coherentes con la demografía y época del setting (japoneses, chinos, occidentales, según corresponda) — SOLO para personajes NUEVOS que no estén ya nombrados en el concepto semilla
 - Variedad visual: distintos colores de cabello, ojos, estilos de ropa
 - Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${mod === 'ecchi' ? '\n- Personajes femeninos con arquetipos marcados (tsundere, kuudere, genki, dandere, onee-san, etc)' : ''}${mod === 'harem_inverso' ? '\n- Personajes masculinos con arquetipos marcados (cool, principesco, deportista, intelectual, salvaje, etc)' : ''}
-- Evalúa si esta historia necesita un COMPAÑERO (con rasgo cómico fijo "${getCompanionQuirk()}", no otro) y/o una FIGURA DE AUTORIDAD que sufre las consecuencias de los éxitos accidentales del protagonista. Estos son roles PROBADOS para el humor viral y son un buen default para isekai/videojuego/donghua/sistema — pero NO son obligatorios: si el concepto proporcionado por el usuario no sugiere estos roles, o si no encajan naturalmente con la historia (ej: dramas serios, slice of life íntimo, conceptos con reparto reducido específico), NO los agregues forzosamente. Prioriza fidelidad al concepto del usuario sobre completar la fórmula.
+${comedyMode ? `- Evalúa si esta historia necesita un COMPAÑERO (con rasgo cómico fijo "${getCompanionQuirk()}", no otro) y/o una FIGURA DE AUTORIDAD que sufre las consecuencias de los éxitos accidentales del protagonista. Estos son roles PROBADOS para el humor viral y son un buen default para isekai/videojuego/donghua/sistema — pero NO son obligatorios: si el concepto proporcionado por el usuario no sugiere estos roles, o si no encajan naturalmente con la historia (ej: dramas serios, slice of life íntimo, conceptos con reparto reducido específico), NO los agregues forzosamente. Prioriza fidelidad al concepto del usuario sobre completar la fórmula.` : `- Roles y relaciones fieles al género "${genero}" y al concepto — sin roles cómicos de fórmula (compañero de chiste, autoridad que sufre gags).`}
 
 ⚠️ PERSONAJE NO-HUMANO — LEE EL CONCEPTO CON MUCHO CUIDADO:
 Si el CONCEPTO SEMILLA ORIGINAL menciona EXPLÍCITAMENTE que un personaje específico (normalmente el protagonista) transmigró, se reencarnó, o habita el cuerpo de un animal, criatura, objeto u otra entidad NO humana — SOLO ESE personaje específico debe crearse como no-humano, respetando el esquema JSON completo (name, role, gender, age, appearance, personality, backstory). NO lo omitas y NO lo conviertas en humano.
@@ -1717,6 +1749,7 @@ REGLAS DE APARIENCIA PARA PERSONAJES HUMANOS (estilo anime — OBLIGATORIO):
 ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA (solo personajes humanos):
 - Personajes ADULTOS con rostro y cuerpo claramente adultos, en contextos adultos (universidad, trabajo, vida adulta). Cada personaje puede tener su propia edad adulta según su rol en la historia (de veintitantos en adelante), variada entre personajes. NUNCA colegiales/estudiantes de secundaria, NUNCA adolescentes, NUNCA uniformes escolares, faldas plisadas de colegio ni ambientes de instituto/aula.
 - Personajes femeninos adultos con figuras atractivas y sensuales estilo ecchi anime: "graceful hourglass silhouette", "long slender legs", "delicate collarbone", "slim waist", "voluptuous figure", "curvy silhouette"
+- Personajes masculinos adultos atractivos estilo anime (especialmente en harem inverso): "tall athletic build", "broad shoulders", "toned physique", "sharp jawline", ropa que marca la figura (camisa entallada, traje ajustado)
 - Ropa fan service típica del género: vestido corto entallado, traje de baño, pijama corto, lencería anime (encajes, lazos), ropa deportiva ajustada, ropa de oficina entallada
 - Vocabulario que funciona con Gemini: "form-fitting dress", "fitted sports outfit", "swimsuit", "lace-trim sleepwear", "attractive silhouette", "sensual pose"
 - NO usar en appearance: "naked", "nude", "explicit", "nipples", "genitals" — sin desnudez explícita, todo lo demás (sensual, sugerente, provocativo) está permitido
@@ -1727,13 +1760,18 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA (solo personajes 
       // Lean, dedicated system prompt for character creation (avoids sending the
       // full ~7000-char scene-writing sysBase, which was pushing Edge Function
       // latency past Vercel's response-start limit and causing timeouts).
-      const charSysPrompt = `Eres un diseñador de personajes para anime/manhua cómico viral para audiencia adulta.
+      const charSysPrompt = `${comedyMode
+  ? `Eres un diseñador de personajes para anime/manhua cómico viral para audiencia adulta.
 FÓRMULA DE COMEDIA — arquetipos de referencia (esto es MECÁNICA cómica, no estética visual obligatoria):
 ${genreTone}
-Los personajes deben tener un protagonista mercenario/práctico (nunca dramático). Un COMPAÑERO y una figura de autoridad que sufre las consecuencias son roles PROBADOS para el humor viral y buen default — pero inclúyelos SOLO si encajan con el concepto/género de esta historia; si el concepto no los sugiere, no los fuerces.
+Los personajes deben tener un protagonista mercenario/práctico (nunca dramático). Un COMPAÑERO y una figura de autoridad que sufre las consecuencias son roles PROBADOS para el humor viral y buen default — pero inclúyelos SOLO si encajan con el concepto/género de esta historia; si el concepto no los sugiere, no los fuerces.`
+  : `Eres un diseñador de personajes para anime/manhua viral para audiencia adulta.
+TONO DEL GÉNERO (los personajes deben servir a esta atmósfera):
+${genreTone}
+Los personajes deben ser fieles al género "${genero}" y al concepto de la historia — con motivaciones, roles y conflictos propios de ese género. NO agregues roles cómicos (compañero de chiste, autoridad que sufre gags) ni conviertas al protagonista en un personaje de parodia: el reparto es serio dentro de las reglas de su género.`}
 ${u.conceptoOriginal ? `🎯 EL SETTING LO DEFINE EL CONCEPTO SEMILLA: el mundo, época y nivel tecnológico de los personajes deben coincidir con lo que describe el concepto semilla del usuario (canon), no con la estética típica del género. Si el concepto es contemporáneo/realista, los personajes son gente normal de hoy — sin reinos, magia, ni tecnología futurista que el concepto no mencione.\n` : ''}IMPORTANTE: si el concepto de la historia indica EXPLÍCITAMENTE que un personaje concreto (normalmente el protagonista) es un animal, criatura u objeto habitado por una consciencia humana, DEBES crear ese personaje igualmente y con el mismo detalle que los demás — nunca lo omitas ni lo humanices por defecto. Pero SOLO ese personaje específico: no inventes otros personajes no-humanos que el concepto no menciona. Si el concepto no dice nada sobre naturaleza no-humana, TODOS los personajes son humanos normales.
 ⚠️ FIDELIDAD DE NOMBRES: si el usuario proporcionó un concepto semilla con nombres de personajes específicos, ESOS SON LOS NOMBRES CORRECTOS Y OBLIGATORIOS — no los cambies, no los "mejores", no inventes alternativas. Úsalos exactamente como fueron escritos.
-🔒 SI incluyes un COMPAÑERO en el reparto — IGNORA CUALQUIER OTRO EJEMPLO MENCIONADO ARRIBA sobre su rasgo: su rasgo cómico fijo debe ser EXACTAMENTE este, ni hambre ni ningún otro salvo que coincida: "${getCompanionQuirk()}". Este rasgo va reflejado claramente en su campo "personality". NO uses hambre/comida como rasgo salvo que sea textualmente el asignado arriba. Si decides que esta historia NO necesita un compañero, simplemente no crees ese rol — no pasa nada.
+${comedyMode ? `🔒 SI incluyes un COMPAÑERO en el reparto — IGNORA CUALQUIER OTRO EJEMPLO MENCIONADO ARRIBA sobre su rasgo: su rasgo cómico fijo debe ser EXACTAMENTE este, ni hambre ni ningún otro salvo que coincida: "${getCompanionQuirk()}". Este rasgo va reflejado claramente en su campo "personality". NO uses hambre/comida como rasgo salvo que sea textualmente el asignado arriba. Si decides que esta historia NO necesita un compañero, simplemente no crees ese rol — no pasa nada.` : ''}
 Nombres reales y coherentes con el setting (japoneses, chinos u occidentales según corresponda) SOLO para personajes que el usuario no haya nombrado ya. Responde SOLO JSON válido sin markdown.`;
 
       const charPrompt = `${ctx}\n\n${charRules}\n\nCrea ${numChars} personajes únicos que pertenezcan al género "${genero}" y encajen con el concepto exacto de la historia (incluyendo protagonistas no-humanos si el concepto lo indica)${isEcchi ? '. Tono ecchi para los personajes humanos femeninos' : ''}. Devuelve SOLO:
@@ -1881,10 +1919,15 @@ Responde SOLO JSON válido sin markdown.`;
     }
 
     const storyArcGuide = `ARCO DEL EPISODIO (guía de ritmo, NO plantilla mecánica escena-por-escena):
-Planteo: situación cotidiana del protagonista, primer incidente cómico.
+${comedyMode
+  ? `Planteo: situación cotidiana del protagonista, primer incidente cómico.
 Desarrollo: 2-3 incidentes que escalan en absurdo, con chistes recurrentes que se van sembrando y retomando.
 Clímax: el incidente más grande del episodio, donde convergen los chistes recurrentes.
-Cierre: resolución parcial + gancho claro hacia el próximo episodio.
+Cierre: resolución parcial + gancho claro hacia el próximo episodio.`
+  : `Planteo: situación inicial del protagonista, primer evento que rompe la normalidad (fiel al género).
+Desarrollo: 2-3 eventos que escalan la tensión propia del género, sembrando elementos que se retoman después.
+Clímax: el evento más intenso del episodio, donde convergen los hilos sembrados.
+Cierre: resolución parcial + gancho claro hacia el próximo episodio.`}
 
 - Usá TODOS o la gran mayoría de los personajes listados en "PERSONAJES DEL EPISODIO" — no ignores a los secundarios enfocándote solo en 2. Si hay 5 personajes, los 5 deberían tener presencia real.
 - Extensión total: 1,100-1,250 palabras.`;
@@ -2727,12 +2770,20 @@ document.getElementById('btnRepairScenes').addEventListener('click', async () =>
       `- ${c.name} (${c.role}): ${c.appearance}`
     ).join('\n');
     const ctx = `Universo: ${u.title}\nGénero: ${u.genero}\nConcepto: ${u.concepto}\nConflicto: ${u.conflicto}\nSetting: ${u.setting}`;
+    // Repairs must follow the SAME mode as the original generation: comedy
+    // formula only for comedy genres/subgenre, and ecchi rules whenever
+    // ecchi/harem is active — otherwise repaired scenes broke tone/content.
+    const repairSubgenres = u.subgenres || [];
+    const repairComedy = isComedyMode(u.genero, repairSubgenres);
+    const repairEcchi = repairSubgenres.some(s => ['ecchi','harem','harem_inverso'].includes(s));
 
     // ─── Step A: narration for scenes that don't have any ───
     if (needsNarrationIdx.length) {
       btn.innerHTML = `<div class="spinner"></div> Reparando narración (${needsNarrationIdx.length})...`;
 
-      const repairNarrationSys = `You are a viral comedy anime scriptwriter for Facebook Reels, adult audience. Write first-person Spanish narrations following the viral comedy formula: mercenary practical protagonist, absurd system detections, escalating chaos, deadpan delivery — no drama, no forced emotion.
+      const repairNarrationSys = `${repairComedy
+        ? 'You are a viral comedy anime scriptwriter for Facebook Reels, adult audience. Write first-person Spanish narrations following the viral comedy formula: mercenary practical protagonist, absurd system detections, escalating chaos, deadpan delivery — no drama, no forced emotion.'
+        : `You are a viral anime scriptwriter for Facebook Reels, adult audience. Write first-person Spanish narrations STRICTLY FAITHFUL to the "${u.genero}" genre's real tone — no comedy, no parody, no comedic detection systems. Show, don't tell: build the genre's emotion from concrete events, actions and sensory detail, never empty emotional adjectives.`}${repairEcchi ? '\nECCHI/HAREM ACTIVE (adult content): all characters are adults (20+) in adult settings — never school uniforms or classrooms. Weave suggestive fan-service moments naturally where scenes allow, with genuine sensory detail; the only limit is what Gemini actually blocks.' : ''}
 RULES:
 - JSON field MUST be "narration" (no accent). EXACTLY 75-80 Spanish words. Count them.
 - Drop into the scene immediately. Specific over vague. End naturally for the genre.
@@ -2793,7 +2844,8 @@ RULES:
       btn.innerHTML = `<div class="spinner"></div> Generando ${needsImageOnlyIdx.length} descripciones visuales...`;
 
       const imageSys = `Eres un director de arte para anime/manhua. Escribe UN prompt de imagen en inglés por escena, basado en la narración ya escrita — no inventas historia nueva.
-REGLAS: SIEMPRE en inglés. Empieza con "${ANIME_STYLE_LEAD_IN} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello. Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.
+REGLAS: SIEMPRE en inglés. Empieza con "${ANIME_STYLE_LEAD_IN} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello. Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.${repairEcchi ? `
+ECCHI ACTIVO — LENGUAJE VISUAL: TODOS los personajes son ADULTOS (20+), en contextos adultos — jamás uniformes escolares ni aulas. Usa lenguaje de cámara ecchi cuando la escena lo permita: "low angle shot revealing her thighs", "form-fitting dress emphasizing her shape", "wet shirt clinging to her figure", "hourglass silhouette", "long slender legs", "curvy figure" — sensual y sugerente, sin desnudez explícita.` : ''}
 Responde SOLO JSON válido sin markdown`;
 
       const scenesToDescribe = needsImageOnlyIdx.map(idx => state.scenes[idx]);
