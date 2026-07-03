@@ -1016,8 +1016,9 @@ document.getElementById('btnProjects').addEventListener('click', openProjectsMod
 async function callGemini(prompt, system) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 90000); // 90 sec max
+  let res;
   try {
-    const res = await fetch('/api/script', {
+    res = await fetch('/api/script', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1026,15 +1027,25 @@ async function callGemini(prompt, system) {
       }),
       signal: controller.signal,
     });
-    const data = await res.json();
-    if (!res.ok || data.error) throw new Error(data.error || `Script API ${res.status}`);
-    return data.text;
   } catch(e) {
-    if (e.name === 'AbortError') throw new Error('Tiempo de espera agotado (90 seg). El servidor tardó demasiado — intenta de nuevo.');
-    throw e;
-  } finally {
     clearTimeout(timeout);
+    if (e.name === 'AbortError') throw new Error('Tiempo de espera agotado (90 seg). El servidor tardó demasiado — intenta de nuevo.');
+    throw new Error('Fallo de red al contactar /api/script: ' + (e.message || e.name));
   }
+  clearTimeout(timeout);
+  // Read the body as TEXT first. If /api/script returns something that isn't
+  // JSON (a Vercel function-timeout page, a crash, a truncated body, an empty
+  // response), this surfaces the HTTP status and the actual body instead of an
+  // opaque "res.json() failed" exception — so the real cause is visible.
+  const rawText = await res.text();
+  let data;
+  try {
+    data = JSON.parse(rawText);
+  } catch {
+    throw new Error(`Respuesta no-JSON de /api/script [HTTP ${res.status}]: ${rawText ? rawText.slice(0, 300) : '(cuerpo vacío)'}`);
+  }
+  if (!res.ok || data.error) throw new Error(data.error || `Script API ${res.status}`);
+  return data.text;
 }
 
 function safeParseJSON(raw) {
@@ -1801,7 +1812,14 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callGemini(prompt, sysBase + genreExtra);
-          const parsed = safeParseJSON(raw);
+          let parsed;
+          try {
+            parsed = safeParseJSON(raw);
+          } catch (pe) {
+            // The API answered but the body didn't parse as JSON — show why and
+            // a snippet of what came back, so truncation/format issues are clear.
+            throw new Error(`respuesta recibida pero el JSON no parseó (${pe.message}) | inicio: ${String(raw).slice(0, 180)}`);
+          }
           const story = String(parsed.story || '').trim();
           const wc = story.split(/\s+/).filter(Boolean).length;
           if (story.length > best.length) best = story;
