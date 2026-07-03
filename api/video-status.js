@@ -6,6 +6,8 @@
 // Edge Functions are deprecated on Vercel and hard-cap response-start
 // at 25s regardless of maxDuration.
 // ════════════════════════════════════════════════════════════════
+const crypto = require('crypto');
+
 const MODEL_ID = 'veo-3.1-lite-generate-001';
 const LOCATION  = 'us-central1';
 const CORS = {
@@ -17,15 +19,16 @@ const CORS = {
 
 async function getAccessToken(sa) {
   const now = Math.floor(Date.now() / 1000);
-  const b64 = o => btoa(JSON.stringify(o)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
   const header  = { alg:'RS256', typ:'JWT' };
   const payload = { iss:sa.client_email, sub:sa.client_email, aud:sa.token_uri, iat:now, exp:now+3600, scope:'https://www.googleapis.com/auth/cloud-platform' };
   const signingInput = `${b64(header)}.${b64(payload)}`;
-  const pem = sa.private_key.replace('-----BEGIN PRIVATE KEY-----','').replace('-----END PRIVATE KEY-----','').replace(/\n/g,'');
-  const keyDer = Uint8Array.from(atob(pem), c => c.charCodeAt(0));
-  const key = await crypto.subtle.importKey('pkcs8', keyDer, { name:'RSASSA-PKCS1-v1_5', hash:'SHA-256' }, false, ['sign']);
-  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(signingInput));
-  const b64sig = btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+  // Native crypto signing (robust, same as video-start.js) — passes the PEM
+  // straight to createSign, avoiding the fragile atob() key decode that threw
+  // "The string did not match the expected pattern" on Vercel's runtime.
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(signingInput);
+  const b64sig = signer.sign(sa.private_key, 'base64').replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
   const jwt = `${signingInput}.${b64sig}`;
   const r = await fetch(sa.token_uri, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:`grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}` });
   const d = await r.json();
@@ -63,19 +66,16 @@ async function generateSignedUrl(sa, bucket, objectPath, expiresSeconds = 604800
     'UNSIGNED-PAYLOAD',
   ].join('\n');
 
-  // Hash canonical request
-  const crHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalRequest));
-  const crHex = Array.from(new Uint8Array(crHash)).map(b => b.toString(16).padStart(2,'0')).join('');
+  // Hash canonical request (Node native — crypto.subtle is no longer imported)
+  const crHex = crypto.createHash('sha256').update(canonicalRequest).digest('hex');
 
   // String to sign
   const stringToSign = ['GOOG4-RSA-SHA256', datetime, credentialScope, crHex].join('\n');
 
-  // Sign with SA private key
-  const pem = sa.private_key.replace('-----BEGIN PRIVATE KEY-----','').replace('-----END PRIVATE KEY-----','').replace(/\n/g,'');
-  const keyDer = Uint8Array.from(atob(pem), c => c.charCodeAt(0));
-  const signKey = await crypto.subtle.importKey('pkcs8', keyDer, { name:'RSASSA-PKCS1-v1_5', hash:'SHA-256' }, false, ['sign']);
-  const sigBuf = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', signKey, new TextEncoder().encode(stringToSign));
-  const sigHex = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2,'0')).join('');
+  // Sign with SA private key (Node native — same robust method, hex output)
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(stringToSign);
+  const sigHex = signer.sign(sa.private_key, 'hex');
 
   return `https://storage.googleapis.com/${bucket}/${objectPath}?${queryParams}&X-Goog-Signature=${sigHex}`;
 }
