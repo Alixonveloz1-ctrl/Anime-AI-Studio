@@ -107,8 +107,9 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
     }
     const namesList = characterRefs.map(r => r.name).join(', ');
     const ecchiRules = isEcchi ? `
-- This is an ecchi/fan-service anime scene. Draw it with appropriate suggestive visual elements: flattering angles, form-fitting clothing, blushing expressions, suggestive poses.
-- Female characters should have attractive, feminine proportions with emphasis on their appeal.` : '';
+- This is an ecchi/fan-service anime scene. ALL characters are ADULTS (in their 20s) with clearly adult faces and bodies, in adult settings (university, workplace, adult life). NEVER draw school uniforms, classrooms, pleated school skirts, or anything that implies schoolchildren or minors.
+- Draw it with appropriate suggestive visual elements: flattering angles, form-fitting clothing, blushing expressions, suggestive poses.
+- Female characters should be attractive adult women with feminine proportions.` : '';
     parts.push({ text: `Character references provided: ${namesList}.
 
 MANDATORY RULES:
