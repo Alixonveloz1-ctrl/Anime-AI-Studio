@@ -6,6 +6,8 @@
 // caused the earlier character-generation timeout bug on this project.
 // Node.js runtime + Fluid compute actually honors maxDuration.
 // ════════════════════════════════════════════════════════════════
+const crypto = require('crypto');
+
 const CORS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
@@ -15,7 +17,7 @@ const CORS = {
 
 async function getAccessToken(sa) {
   const now = Math.floor(Date.now() / 1000);
-  const b64 = o => btoa(JSON.stringify(o)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
   const header  = { alg:'RS256', typ:'JWT' };
   const payload = {
     iss: sa.client_email, sub: sa.client_email, aud: sa.token_uri,
@@ -23,11 +25,12 @@ async function getAccessToken(sa) {
     scope: 'https://www.googleapis.com/auth/cloud-platform',
   };
   const signingInput = `${b64(header)}.${b64(payload)}`;
-  const pem = sa.private_key.replace('-----BEGIN PRIVATE KEY-----','').replace('-----END PRIVATE KEY-----','').replace(/\n/g,'');
-  const keyDer = Uint8Array.from(atob(pem), c => c.charCodeAt(0));
-  const key = await crypto.subtle.importKey('pkcs8', keyDer, { name:'RSASSA-PKCS1-v1_5', hash:'SHA-256' }, false, ['sign']);
-  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(signingInput));
-  const b64sig = btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+  // Native crypto signing (robust, same as video-start.js) — passes the PEM
+  // straight to createSign, avoiding the fragile atob() key decode that threw
+  // "The string did not match the expected pattern" on Vercel's runtime.
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(signingInput);
+  const b64sig = signer.sign(sa.private_key, 'base64').replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
   const jwt = `${signingInput}.${b64sig}`;
   const r = await fetch(sa.token_uri, {
     method: 'POST',
@@ -40,7 +43,9 @@ async function getAccessToken(sa) {
 }
 
 function pcmToWav(pcmB64) {
-  const pcm = Uint8Array.from(atob(pcmB64), c => c.charCodeAt(0));
+  // Buffer-based decode/encode (robust) — avoids atob/btoa, whose strict
+  // base64 handling can throw "The string did not match the expected pattern".
+  const pcm = Buffer.from(pcmB64, 'base64');
   const sampleRate = 24000, channels = 1, bits = 16;
   const byteRate = sampleRate * channels * bits / 8;
   const blockAlign = channels * bits / 8;
@@ -54,8 +59,7 @@ function pcmToWav(pcmB64) {
   dv.setUint32(28,byteRate,true); dv.setUint16(32,blockAlign,true);
   dv.setUint16(34,bits,true); w(36,'data'); dv.setUint32(40,dataSize,true);
   const wav = new Uint8Array(buf); wav.set(pcm,44);
-  let s = ''; for (let i = 0; i < wav.length; i++) s += String.fromCharCode(wav[i]);
-  return btoa(s);
+  return Buffer.from(wav).toString('base64');
 }
 
 function b64ToBase64(buf) {
