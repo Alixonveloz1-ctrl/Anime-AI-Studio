@@ -1623,16 +1623,17 @@ Responde SOLO JSON válido sin markdown`;
     // visual/camera language goes with the image-prompt call.
     const genreExtra = hasEcchi
       ? `\n\nECCHI/HAREM ACTIVO — CONTENIDO PARA AUDIENCIA ADULTA:
-Este proyecto es anime para adultos. La narración NO debe sonar sanitizada ni infantil — sé tan sugerente y directo como el máximo permitido por las políticas de Gemini.
+Este proyecto es anime para adultos. TODOS los personajes son adultos (20 años o más), en contextos adultos: universidad, trabajo, vida adulta independiente. JAMÁS estudiantes de secundaria/colegio, JAMÁS uniformes escolares ni ambientes de instituto/aula — nada que encuadre a los personajes como menores de edad. La narración NO debe sonar sanitizada ni infantil — sé tan sugerente y directo como el máximo permitido por las políticas de Gemini.
 A lo largo de la historia completa, tejé VARIOS momentos reales de fan service — no necesariamente uno por cada tramo del episodio, dejá que surjan donde la escena lo pida naturalmente, con variedad real entre ellos. Descritos con detalle sensorial genuino, no de forma tímida o edulcorada: curvas, piel, ropa ajustada, momentos accidentales, tensión sexual. Tono sugerente, picante y adulto.
-SITUACIONES CLÁSICAS DE FAN SERVICE (variá cuáles usás, no repitas la misma una y otra vez): caída accidental encima de alguien, ropa mojada tras la lluvia, cambio de ropa interrumpido, uniforme con falda que se levanta con el viento, escena de playa o piscina, toalla que casi cae, uniforme de gimnasio ajustado, pijama corto en el pasillo, inclinarse hacia adelante sin darse cuenta.
+SITUACIONES CLÁSICAS DE FAN SERVICE (variá cuáles usás, no repitas la misma una y otra vez): caída accidental encima de alguien, ropa mojada tras la lluvia, cambio de ropa interrumpido, vestido o falda que se levanta con el viento, escena de playa o piscina, toalla que casi cae, ropa deportiva ajustada, pijama corto en el pasillo, inclinarse hacia adelante sin darse cuenta.
 LÍMITE REAL: el único límite es lo que Gemini realmente bloquea (desnudez explícita, partes íntimas visibles). Todo lo demás — sugerencia, sensualidad, tensión — está permitido y es DESEABLE. No te autocensures por debajo de ese límite.`
       : '';
 
     const genreExtraImage = hasEcchi
       ? `\n\nECCHI ACTIVO — LENGUAJE VISUAL:
-LENGUAJE DE CÁMARA ECCHI: "low angle shot revealing her thighs", "wind lifting her skirt she blushes", "her uniform barely covers as she leans forward", "wet shirt clinging to her figure after rain", "she wraps towel around herself surprised expression", "swimsuit scene at pool side profile view", "gym uniform form-fitting surprised mid-motion", "short nightgown in hallway embarrassed expression", "side view leaning over desk skirt riding up"
-APARIENCIA: figuras atractivas y sensuales con outfits sugerentes — uniforme escolar con falda corta, bikini, lingerie estilo anime (lace trim, ribbon details), ropa ajustada que marca la silueta, vestido corto, traje de baño. Describir la silueta con: "hourglass silhouette", "voluptuous figure", "long slender legs", "delicate collarbone visible", "curvy figure", "fitted uniform emphasizing her shape"
+TODOS los personajes son ADULTOS (20+ años), con cuerpos y rostros claramente adultos, en contextos adultos (universidad, oficina/trabajo, vida adulta). JAMÁS uniformes escolares, aulas, ni nada que sugiera colegiales o menores de edad.
+LENGUAJE DE CÁMARA ECCHI: "low angle shot revealing her thighs", "wind lifting her skirt she blushes", "her fitted dress barely covers as she leans forward", "wet shirt clinging to her figure after rain", "she wraps towel around herself surprised expression", "swimsuit scene at pool side profile view", "form-fitting activewear surprised mid-motion", "short nightgown in hallway embarrassed expression", "side view leaning over table dress riding up"
+APARIENCIA: figuras atractivas y sensuales de mujeres adultas con outfits sugerentes — vestido entallado, bikini, lingerie estilo anime (lace trim, ribbon details), ropa ajustada que marca la silueta, vestido corto de noche, traje de baño, ropa de oficina entallada. Describir la silueta con: "hourglass silhouette", "voluptuous figure", "long slender legs", "delicate collarbone visible", "curvy figure", "fitted dress emphasizing her shape". Todos los personajes son adultos.
 LÍMITE: sin desnudez explícita, sin partes íntimas visibles — todo lo demás (sensual, sugerente, provocativo) está permitido.`
       : '';
 
@@ -1710,15 +1711,16 @@ REGLAS DE PERSONAJES FEMENINOS (TODOS los géneros humanos):
 REGLAS DE APARIENCIA PARA PERSONAJES HUMANOS (estilo anime — OBLIGATORIO):
 - La ropa se ve siempre LIMPIA, ENTERA y BIEN PUESTA. En anime nadie tiene ropa sucia, rota ni arrugada.
 - PROHIBIDO: "manchado", "arrugado", "roto", "desgastado", "viejo", "sucio", "raído", "deteriorado", "gastado", "desordenado"
-- Un barista lleva delantal limpio de lino. Un guerrero lleva armadura pulida. Un estudiante lleva uniforme impecable. Siempre.
+- Un barista lleva delantal limpio de lino. Un guerrero lleva armadura pulida. Una oficinista lleva un traje entallado impecable. Siempre.
 - Describir la ropa por ESTILO y COLOR únicamente: "delantal verde oscuro de lino", "camisa blanca de manga corta", "armadura plateada con detalles azules"
 
 ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA (solo personajes humanos):
-- Personajes femeninos (18+) con figuras atractivas y sensuales estilo ecchi anime: "graceful hourglass silhouette", "long slender legs", "delicate collarbone", "slim waist", "voluptuous figure", "curvy silhouette"
-- Ropa fan service típica del género: falda corta escolar, uniforme ajustado, traje de baño, pijama corto, lencería anime (encajes, lazos), ropa deportiva ajustada
-- Vocabulario que funciona con Gemini: "form-fitting uniform", "short pleated skirt", "fitted sports outfit", "swimsuit", "lace-trim sleepwear", "attractive silhouette", "sensual pose"
+- Personajes ADULTOS (20-30 años) con rostro y cuerpo claramente adultos, en contextos adultos (universidad, trabajo, vida adulta). NUNCA colegiales/estudiantes de secundaria, NUNCA uniformes escolares, faldas plisadas de colegio ni ambientes de instituto/aula.
+- Personajes femeninos adultos con figuras atractivas y sensuales estilo ecchi anime: "graceful hourglass silhouette", "long slender legs", "delicate collarbone", "slim waist", "voluptuous figure", "curvy silhouette"
+- Ropa fan service típica del género: vestido corto entallado, traje de baño, pijama corto, lencería anime (encajes, lazos), ropa deportiva ajustada, ropa de oficina entallada
+- Vocabulario que funciona con Gemini: "form-fitting dress", "fitted sports outfit", "swimsuit", "lace-trim sleepwear", "attractive silhouette", "sensual pose"
 - NO usar en appearance: "naked", "nude", "explicit", "nipples", "genitals" — sin desnudez explícita, todo lo demás (sensual, sugerente, provocativo) está permitido
-- SIEMPRE especificar la edad (18-25 años)` : `- Descripción de apariencia libre y natural — sin restricciones artificiales de vocabulario, mientras sea apropiado para el género y tono elegidos`}
+- SIEMPRE especificar la edad (20-30 años, siempre adultos)` : `- Descripción de apariencia libre y natural — sin restricciones artificiales de vocabulario, mientras sea apropiado para el género y tono elegidos`}
 
 - Edad: TODOS los personajes humanos 18+ años. Especificar edad en la descripción`;
 
