@@ -2133,7 +2133,7 @@ REGLAS DE CADA PROMPT:
 - NUNCA decir solo "the protagonist" o "a man" — SIEMPRE el nombre real
 - Si 2+ personajes en la escena: "Scene with Kenji and Ayame:" y describir apariencia de cada uno
 - Máximo 3 personajes por imagen
-- CRÍTICO: el personaje NUNCA mira a la cámara. Describe la acción que está haciendo según la narración. Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"
+- ESCALA Y PROPORCIÓN: proporción humana correcta del personaje respecto a muebles y espacio — un adulto de pie tendría espacio libre sobre la cabeza (el techo NO justo encima). Mantené el tamaño real del escenario; no comprimas el espacio ni encajones al personaje.\n- CRÍTICO: el personaje NUNCA mira a la cámara. Describe la acción que está haciendo según la narración. Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"
 - PROHIBIDO en los prompts: naked, nude, explicit, sexual, genitals, nipples
 - NO texto, NO letras, NO marcas de agua${genreExtraImage}
 Responde SOLO JSON válido sin markdown`;
@@ -2312,7 +2312,7 @@ window.generateCharImage = async function(charId) {
 // RENDER: SCENARIOS (universe locations + hora/clima)
 // ════════════════════════════════════════════════════════════════
 function scenarioDefaultPrompt(e) {
-  return `Anime background art, establishing wide shot of "${e.name}". ${e.desc || ''} Empty environment with NO characters, NO people, NO animals in frame. NO text, NO letters, NO watermarks. ${ANIME_VISUAL_STYLE_CORE}`.replace(/\s+/g, ' ').trim();
+  return `Anime background art, establishing wide shot of "${e.name}". ${e.desc || ''} Realistic architectural scale and proportions — natural ceiling height, the space sized so a standing adult has clear headroom; furniture and objects at true human scale. Show the place as a real, lived-in, complete space, never a cramped empty box. Empty environment with NO characters, NO people, NO animals in frame. NO text, NO letters, NO watermarks. ${ANIME_VISUAL_STYLE_CORE}`.replace(/\s+/g, ' ').trim();
 }
 
 async function renderScenarios() {
@@ -2416,7 +2416,7 @@ async function extractScenariosFromStory(storyText) {
     : '(ninguno todavía — este es el primer episodio)';
 
   const sys = `Eres un director de arte de anime. Devuelves SOLO JSON válido sin markdown.`;
-  const prompt = `HISTORIA DEL EPISODIO (YA ESCRITA — no la modifiques, solo identificá sus lugares):\n\n${storyText}\n\nESCENARIOS YA EXISTENTES DEL UNIVERSO (de episodios anteriores):\n${existingText}\n\nTAREA: identificá los LUGARES donde ocurre la acción de ESTA historia.\n- Si un lugar de la historia ES uno de los escenarios ya existentes, NO lo incluyas en tu respuesta (ya lo tenemos).\n- Devolvé SOLO los lugares NUEVOS de esta historia que no están en la lista existente — únicamente lugares donde realmente ocurren escenas (no lugares apenas mencionados al pasar).\n- Si todos los lugares de la historia ya existen, devolvé lista vacía.\n- "name" corto en español. "desc" en INGLÉS: descripción visual detallada del lugar tal como la historia lo presenta (architecture/terrain, colors, key props, atmosphere), 40-60 words, SIN personajes.\nDevuelve SOLO: {"nuevos":[{"name":"...","desc":"..."}]}`;
+  const prompt = `HISTORIA DEL EPISODIO (YA ESCRITA — no la modifiques, solo identificá sus lugares):\n\n${storyText}\n\nESCENARIOS YA EXISTENTES DEL UNIVERSO (de episodios anteriores):\n${existingText}\n\nTAREA: listá TODOS los lugares DISTINTOS donde ocurre al menos una escena de ESTA historia. Sé EXHAUSTIVO: recorré la historia de principio a fin y no te saltes ningún lugar donde pase algo.\n\nREGLA DE FIDELIDAD (crítica):\n- Un lugar entra en la lista SÓLO si al menos una escena de la historia ocurre físicamente ahí.\n- NUNCA inventes lugares que la historia no usa como escena. Si nadie entra a una cocina, NO agregues cocina; si nadie sube a una azotea, NO agregues azotea. Solo lo que aparece de verdad como escena.\n- NO incluyas lugares apenas mencionados de pasada (si se habla de un sitio pero no ocurre ninguna escena ahí, NO va).\n- Dos áreas son lugares DISTINTOS solo si la historia tiene escenas separadas en cada una (ej.: una escena en el salón y otra escena distinta en el dormitorio = DOS lugares). Si todas las escenas de un sitio pasan en el mismo espacio, es UN solo lugar; no lo subdividas artificialmente.\n\nDEDUPLICACIÓN:\n- Si un lugar YA es uno de los escenarios existentes de arriba, NO lo incluyas (ya lo tenemos).\n- Devolvé sólo los lugares NUEVOS que faltan. Si todos ya existen, devolvé lista vacía.\n\nCÓMO DESCRIBIR cada lugar:\n- "name": corto y específico en español (ej.: "Salón del apartamento", "Pasillo del Bloque 4", "Calle bajo la lluvia").\n- "desc" en INGLÉS, 60-90 words, SIN personajes: descripción visual rica y FIEL de cómo la historia presenta ese lugar. Incluí arquitectura/terreno, materiales y estado (worn, decayed, etc.), colores, iluminación, y los muebles y objetos propios de ESE espacio según la historia. Mostralo real y habitado, nunca un cuarto vacío ni genérico: si es una vivienda donde los personajes viven, que se vea vivida, con su mobiliario y enseres cotidianos. Escala realista y humana: natural ceiling height, the space proportioned so a standing adult has clear headroom, furniture at true human scale.\nDevuelve SOLO: {"nuevos":[{"name":"...","desc":"..."}]}`;
 
   // Retry with backoff: this call runs 3rd-4th in a burst of Gemini calls,
   // which is exactly where a 429 rate-limit is most likely. A single silent
@@ -2452,7 +2452,7 @@ async function extractScenariosFromStory(storyText) {
       if (existingNames.has(String(e.name).toLowerCase().trim())) continue; // never duplicate/overwrite
       maxN += 1;
       toAdd.push({ id: `loc${maxN}`, name: String(e.name).trim(), desc: String(e.desc).trim() });
-      if (existing.length + toAdd.length >= 10) break; // sane cap
+      if (existing.length + toAdd.length >= 20) break; // sane cap
     }
     if (toAdd.length) {
       u.escenarios = [...existing, ...toAdd];
