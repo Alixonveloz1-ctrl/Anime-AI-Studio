@@ -413,6 +413,41 @@
       <h2>👥 Personajes</h2>
       <div id="charactersList"></div>
     </div>
+    <div class="card" style="margin-top:14px">
+      <h2>🏞️ Escenarios</h2>
+      <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;line-height:1.5">Los escenarios se extraen automáticamente de la historia de cada episodio (historia primero, siempre). Genera la imagen de referencia de cada uno — esa referencia mantiene el lugar FIJO en todas las imágenes de escena. En episodios siguientes, los lugares que reaparecen conservan su misma referencia.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <label>🕐 Hora del día</label>
+          <select id="horaSelect">
+            <option value="auto">🤖 Auto (según la historia)</option>
+            <option value="amanecer">🌅 Amanecer</option>
+            <option value="manana">☀️ Mañana</option>
+            <option value="mediodia">🌞 Mediodía</option>
+            <option value="tarde">🌤️ Tarde</option>
+            <option value="hora_dorada">✨ Hora dorada</option>
+            <option value="atardecer">🌇 Atardecer</option>
+            <option value="anochecer">🌆 Anochecer</option>
+            <option value="noche">🌙 Noche</option>
+            <option value="medianoche">🌌 Medianoche</option>
+          </select>
+        </div>
+        <div>
+          <label>🌦️ Clima</label>
+          <select id="climaSelect">
+            <option value="auto">🤖 Auto (según la historia)</option>
+            <option value="despejado">☀️ Despejado</option>
+            <option value="nublado">☁️ Nublado</option>
+            <option value="lluvia">🌧️ Lluvia</option>
+            <option value="tormenta">⛈️ Tormenta</option>
+            <option value="nieve">❄️ Nieve</option>
+            <option value="niebla">🌫️ Niebla</option>
+            <option value="viento">🍃 Viento</option>
+          </select>
+        </div>
+      </div>
+      <div id="scenariosList"></div>
+    </div>
   </div>
 
   <!-- ───────── EPISODE PANEL ───────── -->
@@ -593,6 +628,11 @@ const sceneImgKey  = id => `si_${state.projectId}_${id}`;
 // Episode suffix: episode 1 uses legacy keys (no prefix) for backwards compat
 const epSfx = () => (state.currentEpisode || 1) > 1 ? `_ep${state.currentEpisode}` : '';
 const sceneImgKeyA = id => `sia_${state.projectId}${epSfx()}_${id}`;
+const sceneImgKeyB = id => `sib_${state.projectId}${epSfx()}_${id}`;
+const sceneImgKeyC = id => `sic_${state.projectId}${epSfx()}_${id}`;
+const sceneImgKeyBy = (id, slot) => slot === 'B' ? sceneImgKeyB(id) : slot === 'C' ? sceneImgKeyC(id) : sceneImgKeyA(id);
+// Scenario reference images are UNIVERSE-level (shared across episodes)
+const scenImgKey   = id => `sceni_${state.projectId}_${id}`;
 const sceneAudKey  = id => `sa_${state.projectId}${epSfx()}_${id}`;
 const sceneVidKeyA = id => `sva_${state.projectId}${epSfx()}_${id}`;
 
@@ -1109,7 +1149,7 @@ async function compressBase64Image(base64, maxDim = 768, quality = 0.85) {
   });
 }
 
-async function generateImage(prompt, characterRefs = null, forceModel = null) {
+async function generateImage(prompt, characterRefs = null, forceModel = null, opts = {}) {
   const modelSel = document.getElementById('imageModelSelect');
   const model = forceModel || (modelSel ? modelSel.value : 'auto');
   const isEcchi = (state.universe?.subgenres || []).some(s => ['ecchi','harem','harem_inverso'].includes(s));
@@ -1119,7 +1159,7 @@ async function generateImage(prompt, characterRefs = null, forceModel = null) {
   const cleanPrompt = (String(prompt || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim()) + noLookSuffix;
+    .trim()) + (opts.envText || '') + noLookSuffix;
 
   let cleanRefs = null;
   if (characterRefs && Array.isArray(characterRefs) && characterRefs.length > 0) {
@@ -1140,11 +1180,25 @@ async function generateImage(prompt, characterRefs = null, forceModel = null) {
     if (processed.length) cleanRefs = processed;
   }
 
+  // Optional scenario/location reference image
+  let scenarioRef = null;
+  if (opts.scenarioRef && opts.scenarioRef.img) {
+    const rawImg = String(opts.scenarioRef.img).replace(/^data:image\/[a-z]+;base64,/i, '').replace(/\s/g, '');
+    if (rawImg.length > 100) {
+      scenarioRef = {
+        name: String(opts.scenarioRef.name || 'location'),
+        img: opts.scenarioRef.preCompressed ? rawImg : await compressBase64Image(rawImg, 768, 0.85),
+        mimeType: 'image/jpeg',
+      };
+    }
+  }
+
   const aspectRatio = document.getElementById('aspectRatio')?.value || '9:16';
 
   const bodyObj = {
     prompt: cleanPrompt,
     characterRefs: cleanRefs,
+    scenarioRef,
     model: model === 'auto' ? null : model,
     isEcchi,
     aspectRatio,
@@ -1398,6 +1452,39 @@ function isComedyMode(genero, subgenres) {
   return COMEDY_GENRES.includes(genero) || (subgenres || []).includes('comedia');
 }
 
+// ─── TIME OF DAY & WEATHER — English fragments appended at image time ───
+// Kept OUT of the stored imagePrompts so changing the selector re-styles
+// future generations without regenerating all the prompts.
+const HOUR_PROMPTS = {
+  amanecer:    'dawn lighting — pale pink and lavender sky turning soft gold at the horizon, first light, delicate mist, long soft purple shadows, gentle lens flare',
+  manana:      'clear warm morning light, golden rays, long gentle shadows, fresh crisp atmosphere',
+  mediodia:    'bright midday light, high sun, short shadows, vivid saturated colors, full clear daylight',
+  tarde:       'soft afternoon light, warm diffused sun, relaxed atmosphere, gentle long shadows beginning to stretch',
+  hora_dorada: 'dramatic golden hour — deep orange near the horizon fading through amber and dusty rose, everything bathed in warm golden light, long cinematic shadows, soft lens flare, floating light particles',
+  atardecer:   'spectacular layered sunset sky — crimson and burnt orange low, fading into dusty rose and violet, silhouettes against the glow, dramatic lens flare',
+  anochecer:   'deep blue-violet twilight with the last warm orange glow clinging to the horizon, first stars appearing, warm artificial lights glowing against the cool blue dusk',
+  noche:       'night scene — moonlight casting silver light, star-filled sky, cool blue-silver palette with warm light sources for contrast',
+  medianoche:  'deep midnight — indigo sky, only moonlight, stars, intimate stillness and silence, minimal warm light accents',
+};
+const WEATHER_PROMPTS = {
+  despejado: 'clear sky, perfect visibility, crisp and clean atmosphere',
+  nublado:   'soft overcast light, muted colors, no harsh shadows, moody diffuse atmosphere',
+  lluvia:    'rain falling in silver curtains, wet reflective surfaces, puddles mirroring the light, glistening atmosphere',
+  tormenta:  'storm — dark heavy clouds, dramatic lightning illumination, wind-whipped rain, intense atmosphere',
+  nieve:     'snow falling silently, white-covered surfaces, soft blurred edges, cold exterior contrasting warm light sources',
+  niebla:    'atmospheric fog, dreamlike soft edges, mysterious depth, light bleeding through the mist',
+  viento:    'strong wind moving through the scene — hair and clothes flowing, leaves and particles dancing in the air, dynamic movement',
+};
+// Returns the English suffix for current hora/clima selection ('' when auto)
+function getEnvSuffix() {
+  const hora  = state.universe?.hora  || 'auto';
+  const clima = state.universe?.clima || 'auto';
+  const parts = [];
+  if (HOUR_PROMPTS[hora])     parts.push(HOUR_PROMPTS[hora]);
+  if (WEATHER_PROMPTS[clima]) parts.push(WEATHER_PROMPTS[clima]);
+  return parts.length ? ' MANDATORY lighting/weather: ' + parts.join('. ') + '.' : '';
+}
+
 // ════════════════════════════════════════════════════════════════
 // UNIVERSE GENERATION
 // ════════════════════════════════════════════════════════════════
@@ -1486,6 +1573,11 @@ Devuelve JSON:
     }
     state.universe = parsedUniverse;
     state.universe.conceptoOriginal = concepto || '';
+    // Scenarios start EMPTY — they are extracted from each episode's story
+    // after it is written (story first, locations derived from it).
+    state.universe.escenarios = [];
+    state.universe.hora  = state.universe.hora  || 'auto';
+    state.universe.clima = state.universe.clima || 'auto';
     state.characters = [];
     state.scenes = [];
     saveState();
@@ -1502,7 +1594,7 @@ Devuelve JSON:
 
 function renderUniverse() {
   const el = document.getElementById('universoDisplay');
-  if (!state.universe) { el.innerHTML = ''; document.getElementById('cardGenerarEpisodio').style.display = 'none'; return; }
+  if (!state.universe) { el.innerHTML = ''; document.getElementById('cardGenerarEpisodio').style.display = 'none'; renderScenarios(); return; }
   const u = state.universe;
   el.innerHTML = `
     <div class="universe-display">
@@ -1512,9 +1604,11 @@ function renderUniverse() {
       <div class="field"><div class="field-label">Conflicto</div>${u.conflicto || ''}</div>
       <div class="field"><div class="field-label">Setting</div>${u.setting || ''}</div>
       <div class="field"><div class="field-label">Hook</div>${u.hook || ''}</div>
+      ${Array.isArray(u.escenarios) && u.escenarios.length ? `<div class="field"><div class="field-label">Escenarios</div>${u.escenarios.map(e => e.name).join(' · ')}</div>` : ''}
     </div>
   `;
   document.getElementById('cardGenerarEpisodio').style.display = 'block';
+  renderScenarios();
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1689,7 +1783,7 @@ ${subgenreText}`;
     const isEcchi = hasEcchi;
 
     if (epNum === 1 || !state.characters?.length) {
-      setProg(5, 'Paso 1/4: Creando personajes...');
+      setProg(5, 'Paso 1/5: Creando personajes...');
 
       let numChars, numFemales, numMales, protagonistGender;
       const numCharsChoice = document.getElementById('numCharsSelect')?.value || 'auto';
@@ -1792,12 +1886,12 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
       state.characters = parsedChars.characters || [];
       saveState();
       renderCharacters();
-      setProg(20, `✅ ${state.characters.length} personajes — Paso 2/4: Escribiendo historia...`);
+      setProg(20, `✅ ${state.characters.length} personajes — Paso 2/5: Escribiendo historia...`);
     } else {
       // Episode 2+ — reuse existing characters, skip regeneration
       const newCharsDesc = document.getElementById('newCharsInput')?.value.trim() || '';
       if (newCharsDesc) {
-        setProg(10, `Paso 1/4: Generando personajes nuevos para Episodio ${epNum}...`);
+        setProg(10, `Paso 1/5: Generando personajes nuevos para Episodio ${epNum}...`);
         try {
           const existingCharList = state.characters.map(ch => '- ' + ch.name + ' (' + (ch.role||'') + '): ' + (ch.appearance||'')).join('\n');
           const newCharPrompt = ctx + '\n\nPERSONAJES EXISTENTES (NO recrear):\n' + existingCharList + '\n\nPersonajes nuevos a crear:\n"' + newCharsDesc + '"\n\nCrea SOLO los personajes nuevos. Devuelve SOLO:\n{"characters":[{"id":"c_new1","name":"nombre","role":"rol","gender":"female o male","age":"18+","appearance":"descripción visual detallada","personality":"2 frases","backstory":"2 frases"}]}';
@@ -1884,10 +1978,39 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
     // front of it, the same safe pattern the image-prompt call already used. ───
     const splitSysPrompt = `Sos un editor que divide una historia YA TERMINADA en exactamente 15 fragmentos secuenciales para un formato de video corto. NO agregues historia nueva, NO reescribas el contenido ni el estilo — dividí el texto ya escrito en 15 cortes naturales, preservando el orden y el contenido original. Podés ajustar levemente las palabras justo en los puntos de corte para que cada fragmento se lea bien de forma independiente, pero el contenido, los eventos y el estilo son los del autor original — vos solo cortás.
 Cada fragmento: ~75-80 palabras en español, primera persona (YO).
+⚠️ REGLA DE CORTE ABSOLUTA: cada fragmento DEBE empezar al inicio de una oración y DEBE terminar con puntuación final (. ! ? …). JAMÁS cortes a mitad de una oración — cada fragmento se convierte en un audio expresivo INDEPENDIENTE, y si una oración queda partida entre dos fragmentos la voz cambia de tono a mitad de la frase y se rompe la continuidad auditiva. Preferí un fragmento de 70 o de 88 palabras antes que cortar una oración por la mitad. Antes de devolver, verificá que los 15 fragmentos terminen en . ! ? o …
 Asigná "act" según la posición: fragmentos 1-2 = "cold_open", 3-6 = "act1", 7-12 = "act2", 13-14 = "clímax", 15 = "resolución".
 Cada fragmento necesita un "title" corto (3-6 palabras).
 CRÍTICO: el campo se llama "narration" (sin tilde).
 Responde SOLO JSON válido sin markdown.`;
+
+    // ─── Deterministic sentence-boundary repair (JS, not LLM) ───
+    // Even with the split rule, the model occasionally cuts mid-sentence.
+    // This pass moves any trailing partial sentence of chunk N to the start
+    // of chunk N+1, guaranteeing every scene's narration is complete
+    // sentences — so each scene's expressive TTS audio starts and ends at
+    // natural boundaries and the voice tone stays continuous.
+    function lastSentenceEnd(t) {
+      const re = /[.!?…]["'»”)]*/g;
+      let last = -1, m;
+      while ((m = re.exec(t)) !== null) last = m.index + m[0].length;
+      return last;
+    }
+    function alignScenesToSentenceBoundaries(scenes) {
+      for (let i = 0; i < scenes.length - 1; i++) {
+        const txt = String(scenes[i].narration || '').trim();
+        if (!txt) continue;
+        const cut = lastSentenceEnd(txt);
+        if (cut === -1 || cut >= txt.length) { scenes[i].narration = txt; continue; }
+        const head = txt.slice(0, cut).trim();
+        const tail = txt.slice(cut).trim();
+        // Safety: never leave a scene nearly empty — if no full sentence fits, keep as-is
+        if (head.length < 15) { scenes[i].narration = txt; continue; }
+        scenes[i].narration = head;
+        scenes[i + 1].narration = (tail + ' ' + String(scenes[i + 1].narration || '').trim()).trim();
+      }
+      return scenes;
+    }
 
     async function splitStoryIntoScenes(story) {
       const prompt = `HISTORIA COMPLETA A DIVIDIR:\n\n${story}\n\nDividila en EXACTAMENTE 15 fragmentos secuenciales, en orden. Devolvé SOLO: {"scenes":[${narrationShape},...]} con exactamente 15 objetos numerados 1-15.`;
@@ -1899,7 +2022,8 @@ Responde SOLO JSON válido sin markdown.`;
           arr.forEach(s => { if (s && s['narración'] && !s.narration) s.narration = s['narración']; });
           const valid = arr.filter(s => s && s.narration && s.title);
           if (valid.length >= 15) {
-            return valid.slice(0, 15).map((s, i) => ({ ...s, id: `s${i+1}`, num: i+1, act: s.act || 'act1' }));
+            const scenes = valid.slice(0, 15).map((s, i) => ({ ...s, id: `s${i+1}`, num: i+1, act: s.act || 'act1' }));
+            return alignScenesToSentenceBoundaries(scenes);
           }
           console.warn(`División intento ${attempt+1}: ${valid.length}/15`);
           await new Promise(r => setTimeout(r, 3000));
@@ -1908,13 +2032,23 @@ Responde SOLO JSON válido sin markdown.`;
           if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
         }
       }
-      // Mechanical fallback: crude word-count split beats total failure.
-      const words = story.split(/\s+/).filter(Boolean);
-      const per = Math.ceil(words.length / 15) || 1;
+      // Mechanical fallback: sentence-aware split — never cuts mid-sentence.
+      const sentences = story.match(/[^.!?…]+[.!?…]+["'»”)]*\s*/g) || [story];
+      const totalWords = story.split(/\s+/).filter(Boolean).length;
+      const perScene = Math.ceil(totalWords / 15) || 1;
+      const chunks = []; let cur = '', curWords = 0;
+      for (const sent of sentences) {
+        const w = sent.split(/\s+/).filter(Boolean).length;
+        if (curWords + w > perScene && cur && chunks.length < 14) {
+          chunks.push(cur.trim()); cur = ''; curWords = 0;
+        }
+        cur += sent; curWords += w;
+      }
+      if (cur.trim()) chunks.push(cur.trim());
+      while (chunks.length < 15) chunks.push('');
       return Array.from({ length: 15 }, (_, i) => {
-        const chunk = words.slice(i * per, (i + 1) * per).join(' ');
         const act = i < 2 ? 'cold_open' : i < 6 ? 'act1' : i < 12 ? 'act2' : i < 14 ? 'clímax' : 'resolución';
-        return { id: `s${i+1}`, num: i+1, act, title: `Escena ${i+1}`, narration: chunk, dialogue: [], imagePromptA: '' };
+        return { id: `s${i+1}`, num: i+1, act, title: `Escena ${i+1}`, narration: chunks[i] || '', dialogue: [], imagePromptA: '' };
       });
     }
 
@@ -1933,69 +2067,126 @@ Cierre: resolución parcial + gancho claro hacia el próximo episodio.`}
 - Extensión total: 1,100-1,250 palabras.`;
 
     // ─── CALL 1: the full story, uninterrupted, no checklist ───
-    setProg(30, 'Paso 2/4: Escribiendo la historia completa...');
+    setProg(30, 'Paso 2/5: Escribiendo la historia completa...');
     const prevEpSummary = buildPrevEpisodesSummary();
     const fullStory = await generateFullStory(
       `${ctx}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${storyArcGuide}\n\nEscribí la historia completa del episodio ${epNum}. Devolvé SOLO: {"story":"toda la historia acá, en un solo bloque de texto continuo"}`
     );
 
     // ─── CALL 2: split the finished story into 15 scenes ───
-    setProg(45, 'Paso 3/4: Dividiendo en 15 escenas...');
+    setProg(45, 'Paso 3/5: Dividiendo en 15 escenas...');
     const scenesNoImg = await splitStoryIntoScenes(fullStory);
+
+    // ─── CALL 2.5: extract THIS story's locations → universe scenarios ───
+    // Story first, always: locations are derived FROM the finished story.
+    // Existing scenarios (previous episodes) are preserved untouched so
+    // their reference images keep the same place fixed; only new places
+    // from this story are appended.
+    setProg(60, 'Paso 4/5: Extrayendo escenarios de la historia...');
+    await extractScenariosFromStory(fullStory);
 
     // ─── CALL 3: image prompts, based on the narration already written above.
     // This call does NOT continue the story — it only translates finished
     // text into visual descriptions, so there is no narrative context to
     // lose or duplicate (unlike splitting the STORY itself into 2 calls,
     // which caused scene 10 to repeat scene 5 in an earlier attempt). ───
-    setProg(70, 'Paso 4/4: Generando descripciones visuales...');
+    setProg(70, 'Paso 5/5: Generando descripciones visuales...');
 
-    const imageSysPrompt = `Eres un director de arte para anime/manhua. Tu única tarea es escribir UN prompt de imagen en inglés por escena, basado en la narración YA ESCRITA que se te entrega — no inventas historia nueva, solo describes visualmente lo que ya ocurre en cada escena.
+    const imageSysPrompt = `Eres un director de arte para anime/manhua. Tu única tarea: para cada escena, escribir TRES prompts de imagen en inglés basados en la narración YA ESCRITA — no inventas historia nueva, solo describes visualmente lo que ya ocurre.
 
-REGLAS DE imagePromptA:
+LOS 3 PROMPTS DE CADA ESCENA SON UNA SECUENCIA CONTINUA (como 3 fotogramas clave consecutivos de la misma escena de anime):
+- Prompt 1 = el momento INICIAL del fragmento narrado
+- Prompt 2 = el momento MEDIO (la acción desarrollándose)
+- Prompt 3 = el momento FINAL (consecuencia/reacción con la que cierra el fragmento)
+- ⚠️ COBERTURA TOTAL DEL TEXTO: entre los 3 prompts deben ilustrar TODO lo que la narración de la escena cuenta, en orden — ningún evento o acción del fragmento queda sin imagen. Si el texto narra tres cosas, cada prompt toma una; si narra más, distribuilas cronológicamente entre los 3.
+- CONTINUIDAD OBLIGATORIA entre los 3: MISMO lugar (mismo escenario asignado), MISMA ropa y peinado de cada personaje, MISMA iluminación y clima — lo único que cambia es la acción que avanza y el ÁNGULO de cámara (variá el ángulo entre los 3: wide establishing → medium shot → close-up, o similar). Son 3 instantes consecutivos de la MISMA toma de la historia, no 3 versiones del mismo instante.
+- CONTINUIDAD ENTRE ESCENAS: el prompt 1 de cada escena CONTINÚA desde donde quedó el prompt 3 de la escena anterior — las 45 imágenes del episodio son UNA secuencia visual continua de la misma historia, no ilustraciones sueltas. Si la escena anterior terminó en un lugar y esta empieza en otro, el prompt 1 muestra la llegada/transición natural.
+
+CAMPO "escenario": asigná a cada escena el id EXACTO del escenario del universo donde ocurre (de la lista provista). Si el fragmento ocurre en un lugar que NO está en la lista, dejá "escenario" como "" (vacío) y describí ese lugar nuevo con detalle DENTRO de los 3 prompts — NUNCA asignes un escenario incorrecto solo por llenar el campo, porque su imagen de referencia anclaría un fondo equivocado.
+
+REGLAS DE CADA PROMPT:
 - SIEMPRE en INGLÉS
 - SIEMPRE empezar con: "${ANIME_STYLE_LEAD_IN}"
 - Luego "Scene with [nombre exacto]:" seguido de la descripción visual
-- Personajes HUMANOS: SIEMPRE incluir ropa específica según su ficha + color y estilo de cabello
+- Personajes HUMANOS: SIEMPRE incluir ropa específica según su ficha + color y estilo de cabello (idénticos en los 3 prompts de la escena)
 - Personajes NO-HUMANOS (animal/criatura/objeto poseído): describir su apariencia física real (especie, pelaje/textura, color, tamaño) — JAMÁS inventarle ropa humana salvo que su ficha la mencione explícitamente
 - NUNCA decir solo "the protagonist" o "a man" — SIEMPRE el nombre real
 - Si 2+ personajes en la escena: "Scene with Kenji and Ayame:" y describir apariencia de cada uno
 - Máximo 3 personajes por imagen
 - CRÍTICO: el personaje NUNCA mira a la cámara. Describe la acción que está haciendo según la narración. Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"
-- PROHIBIDO en imagePrompt: naked, nude, explicit, sexual, genitals, nipples
+- PROHIBIDO en los prompts: naked, nude, explicit, sexual, genitals, nipples
 - NO texto, NO letras, NO marcas de agua${genreExtraImage}
 Responde SOLO JSON válido sin markdown`;
 
-    async function generateImagePromptsBatch(scenesForPrompt) {
+    // Universe scenario list for prompt assignment
+    const scenarioListText = (u.escenarios || []).length
+      ? 'ESCENARIOS DEL UNIVERSO (asigná uno por escena usando su id exacto):\n' +
+        u.escenarios.map(e => `${e.id} = "${e.name}": ${e.desc}`).join('\n')
+      : 'ESCENARIOS DEL UNIVERSO: (ninguno definido — dejá "escenario" como "")';
+
+    async function generateImagePromptsBatch(scenesForPrompt, prevContext = '') {
       const scenesText = scenesForPrompt.map(s =>
         `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`
       ).join('\n\n');
-      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\nESCENAS YA ESCRITAS — genera UN imagePromptA por escena que capture visualmente el momento más importante de cada una:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"imagePromptA":"Scene with..."},...]} con exactamente ${scenesForPrompt.length} objetos, uno por cada número de escena de arriba.`;
+      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTINUIDAD — ASÍ TERMINÓ LA ESCENA ANTERIOR A ESTE BLOQUE (el prompt 1 de la primera escena de abajo continúa desde aquí):\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena, genera el campo "escenario" + TRES prompts secuenciales con continuidad:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","prompts":["Scene with...","Scene with...","Scene with..."]},...]} con exactamente ${scenesForPrompt.length} objetos, uno por cada número de escena de arriba, cada uno con exactamente 3 prompts.`;
 
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callGemini(prompt, imageSysPrompt);
           const parsed = safeParseJSON(raw);
           const arr = parsed.imagePrompts || [];
-          const map = new Map(arr.filter(p => p && p.num && p.imagePromptA).map(p => [p.num, p.imagePromptA]));
+          const map = new Map(arr
+            .filter(p => p && p.num && Array.isArray(p.prompts) && p.prompts.filter(Boolean).length >= 1)
+            .map(p => [p.num, p]));
           if (map.size >= scenesForPrompt.length) {
-            return scenesForPrompt.map(s => ({ ...s, imagePromptA: map.get(s.num) || '' }));
+            return scenesForPrompt.map(s => {
+              const p = map.get(s.num);
+              const [a, b, c] = p ? p.prompts : [];
+              return { ...s, escenario: p?.escenario || '', imagePromptA: a || '', imagePromptB: b || '', imagePromptC: c || '' };
+            });
           }
           console.warn(`Image prompts intento ${attempt+1}: ${map.size}/${scenesForPrompt.length}`);
-          if (attempt === 3) return scenesForPrompt.map(s => ({ ...s, imagePromptA: map.get(s.num) || '' }));
+          if (attempt === 3) {
+            return scenesForPrompt.map(s => {
+              const p = map.get(s.num);
+              const [a, b, c] = p ? p.prompts : [];
+              return { ...s, escenario: p?.escenario || '', imagePromptA: a || '', imagePromptB: b || '', imagePromptC: c || '' };
+            });
+          }
           await new Promise(r => setTimeout(r, 3000));
         } catch(e) {
           console.error(`Image prompts intento ${attempt+1}:`, e.message);
           if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
-          else return scenesForPrompt.map(s => ({ ...s, imagePromptA: '' }));
+          else return scenesForPrompt.map(s => ({ ...s, escenario: '', imagePromptA: '', imagePromptB: '', imagePromptC: '' }));
         }
       }
-      return scenesForPrompt.map(s => ({ ...s, imagePromptA: '' }));
+      return scenesForPrompt.map(s => ({ ...s, escenario: '', imagePromptA: '', imagePromptB: '', imagePromptC: '' }));
     }
 
-    const scenes = (scenesNoImg.some(s => s.narration))
-      ? await generateImagePromptsBatch(scenesNoImg)
-      : scenesNoImg.map(s => ({ ...s, imagePromptA: '' }));
+    // 3 prompts per scene = 45 total. Generated in chunks of 5 scenes
+    // (15 prompts per call) to keep each JSON response small enough to
+    // avoid output truncation. This chunks the PROMPT-TRANSLATION step,
+    // not the narrative — each scene's narration is already final, so
+    // there is no narrative context to lose across chunks.
+    let scenes;
+    if (scenesNoImg.some(s => s.narration)) {
+      scenes = [];
+      let prevContext = '';
+      for (let i = 0; i < scenesNoImg.length; i += 5) {
+        const chunk = scenesNoImg.slice(i, i + 5);
+        setProg(70 + Math.round((i / scenesNoImg.length) * 25), `Paso 5/5: Descripciones visuales ${Math.min(i + 5, scenesNoImg.length)}/15...`);
+        const done = await generateImagePromptsBatch(chunk, prevContext);
+        scenes.push(...done);
+        // Chain continuity into the next chunk: last scene's narration,
+        // assigned scenario and closing prompt
+        const last = done[done.length - 1];
+        if (last) {
+          prevContext = `Escena ${last.num} (escenario: ${last.escenario || 'nuevo lugar descrito en el prompt'}): ${last.narration}\nÚltimo prompt de esa escena: ${last.imagePromptC || last.imagePromptA || '(sin prompt)'}`;
+        }
+      }
+    } else {
+      scenes = scenesNoImg.map(s => ({ ...s, escenario: '', imagePromptA: '', imagePromptB: '', imagePromptC: '' }));
+    }
 
     state.scenes = scenes;
     state.episodes[epNum] = scenes;
@@ -2008,7 +2199,7 @@ Responde SOLO JSON válido sin markdown`;
       setProg(100, `⚠️ ${scenes.length - pendingCount}/15 escenas — ${pendingCount} pendientes`);
       showToast(`${pendingCount} escenas pendientes. Usa "Reparar escenas vacías".`, 'error');
     } else {
-      setProg(100, `✅ Episodio ${epNum} completo — 15 escenas × 1 imagen = 15 imágenes`);
+      setProg(100, `✅ Episodio ${epNum} completo — 15 escenas × 3 imágenes = 45 imágenes`);
       showToast(`Episodio ${epNum}: ${state.characters.length} personajes y 15 escenas listas`, 'success');
     }
     setTimeout(() => { progress.style.display = 'none'; setProg(0, ''); }, 3000);
@@ -2097,6 +2288,163 @@ window.generateCharImage = async function(charId) {
 };
 
 // ════════════════════════════════════════════════════════════════
+// RENDER: SCENARIOS (universe locations + hora/clima)
+// ════════════════════════════════════════════════════════════════
+function scenarioDefaultPrompt(e) {
+  return `Anime background art, establishing wide shot of "${e.name}". ${e.desc || ''} Empty environment with NO characters, NO people, NO animals in frame. NO text, NO letters, NO watermarks. ${ANIME_VISUAL_STYLE_CORE}`.replace(/\s+/g, ' ').trim();
+}
+
+async function renderScenarios() {
+  const c = document.getElementById('scenariosList');
+  if (!c) return;
+  // Sync hora/clima selectors with saved state
+  const horaSel = document.getElementById('horaSelect');
+  const climaSel = document.getElementById('climaSelect');
+  if (horaSel && state.universe)  horaSel.value  = state.universe.hora  || 'auto';
+  if (climaSel && state.universe) climaSel.value = state.universe.clima || 'auto';
+
+  if (!state.universe) {
+    c.innerHTML = `<div class="empty"><div class="emoji">🏞️</div><p>Crea un universo para ver sus escenarios</p></div>`;
+    return;
+  }
+  const escenarios = state.universe.escenarios;
+  if (!Array.isArray(escenarios) || !escenarios.length) {
+    // Scenarios are derived from each episode's story. If an episode already
+    // exists (generated before this system), allow manual extraction.
+    const hasStory = (state.scenes || []).some(s => s.narration);
+    c.innerHTML = `
+      <div class="empty" style="padding:14px">
+        <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px">${hasStory
+          ? 'Este episodio fue generado antes del sistema de escenarios.'
+          : 'Genera un episodio — sus escenarios se extraerán automáticamente de la historia.'}</p>
+        ${hasStory ? `<button class="btn" onclick="generateUniverseScenarios()">🏞️ Extraer escenarios de la historia actual</button>` : ''}
+      </div>`;
+    return;
+  }
+  const items = await Promise.all(escenarios.map(async e => {
+    const imgB64 = await dbGet(scenImgKey(e.id));
+    return { e, imgB64 };
+  }));
+  c.innerHTML = items.map(({ e, imgB64 }) => `
+    <div class="char-card">
+      <div class="char-header">
+        <div class="char-img">
+          ${imgB64 ? `<img src="data:image/png;base64,${imgB64}">` : '🏞️'}
+        </div>
+        <div class="char-info">
+          <h4>${e.name}</h4>
+          <div class="char-detail">${e.desc || ''}</div>
+        </div>
+      </div>
+      <div style="margin-top:8px">
+        <label style="font-size:11px;color:var(--text-dim);margin-bottom:4px;display:block">✏️ Prompt de referencia (editable)</label>
+        <textarea id="scenPrompt_${e.id}" style="width:100%;height:80px;font-size:11px;resize:vertical;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:var(--text);padding:6px;line-height:1.4">${scenarioDefaultPrompt(e).replace(/`/g,"'")}</textarea>
+      </div>
+      <button class="btn-sec" style="margin-top:6px" onclick="generateScenarioImage('${e.id}')">🎨 ${imgB64 ? 'Regenerar' : 'Generar'} Referencia</button>
+    </div>`).join('');
+}
+
+window.generateScenarioImage = async function(scenId) {
+  const e = (state.universe?.escenarios || []).find(x => x.id === scenId);
+  if (!e) return;
+  showToast(`Generando referencia de "${e.name}"...`, 'success');
+  try {
+    const textarea = document.getElementById('scenPrompt_' + scenId);
+    const prompt = textarea?.value.trim() || scenarioDefaultPrompt(e);
+    let imgB64 = null, lastErr = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        imgB64 = await generateImage(prompt, null);
+        break;
+      } catch(err) {
+        lastErr = err;
+        const isRL = err.message.includes('429') || err.message.toLowerCase().includes('exhausted');
+        if (isRL) {
+          const w = [30,60,90,120,180][attempt];
+          showToast(`⏳ Rate limit ${w}s (${attempt+1}/5)...`, 'error');
+          await new Promise(r => setTimeout(r, w * 1000));
+        } else throw err;
+      }
+    }
+    if (!imgB64) throw lastErr || new Error('No se pudo generar');
+    await dbSet(scenImgKey(e.id), imgB64);
+    renderScenarios();
+    showToast(`Referencia "${e.name}" lista`, 'success');
+  } catch(err) {
+    openErrorModal('Error referencia escenario', err.message);
+  }
+};
+
+// ─── SCENARIOS ARE EXTRACTED FROM THE STORY (story first, always) ───
+// After each episode's story is written, this extracts the locations the
+// story ACTUALLY uses. Existing scenarios from previous episodes are
+// preserved UNTOUCHED (same id, same name, same desc) so their reference
+// images keep anchoring the exact same place — only genuinely NEW
+// locations from this story are appended.
+async function extractScenariosFromStory(storyText) {
+  const u = state.universe;
+  if (!u || !storyText || storyText.trim().length < 50) return;
+  const existing = Array.isArray(u.escenarios) ? u.escenarios : [];
+  const existingText = existing.length
+    ? existing.map(e => `${e.id} = "${e.name}"`).join('\n')
+    : '(ninguno todavía — este es el primer episodio)';
+
+  const sys = `Eres un director de arte de anime. Devuelves SOLO JSON válido sin markdown.`;
+  const prompt = `HISTORIA DEL EPISODIO (YA ESCRITA — no la modifiques, solo identificá sus lugares):\n\n${storyText}\n\nESCENARIOS YA EXISTENTES DEL UNIVERSO (de episodios anteriores):\n${existingText}\n\nTAREA: identificá los LUGARES donde ocurre la acción de ESTA historia.\n- Si un lugar de la historia ES uno de los escenarios ya existentes, NO lo incluyas en tu respuesta (ya lo tenemos).\n- Devolvé SOLO los lugares NUEVOS de esta historia que no están en la lista existente — únicamente lugares donde realmente ocurren escenas (no lugares apenas mencionados al pasar).\n- Si todos los lugares de la historia ya existen, devolvé lista vacía.\n- "name" corto en español. "desc" en INGLÉS: descripción visual detallada del lugar tal como la historia lo presenta (architecture/terrain, colors, key props, atmosphere), 40-60 words, SIN personajes.\nDevuelve SOLO: {"nuevos":[{"name":"...","desc":"..."}]}`;
+
+  try {
+    const raw = await callGemini(prompt, sys);
+    const parsed = safeParseJSON(raw);
+    const nuevos = (parsed.nuevos || []).filter(e => e && e.name && e.desc);
+    if (!nuevos.length && existing.length) return; // nothing new, keep as-is
+    // Sequential ids continuing after the highest existing locN
+    let maxN = 0;
+    existing.forEach(e => { const m = /^loc(\d+)$/.exec(e.id || ''); if (m) maxN = Math.max(maxN, parseInt(m[1], 10)); });
+    const existingNames = new Set(existing.map(e => (e.name || '').toLowerCase().trim()));
+    const toAdd = [];
+    for (const e of nuevos) {
+      if (existingNames.has(String(e.name).toLowerCase().trim())) continue; // never duplicate/overwrite
+      maxN += 1;
+      toAdd.push({ id: `loc${maxN}`, name: String(e.name).trim(), desc: String(e.desc).trim() });
+      if (existing.length + toAdd.length >= 10) break; // sane cap
+    }
+    if (toAdd.length) {
+      u.escenarios = [...existing, ...toAdd];
+      saveState();
+      renderScenarios();
+      console.log(`Escenarios: +${toAdd.length} nuevos de esta historia (${toAdd.map(e => e.name).join(', ')})`);
+    }
+  } catch(err) {
+    // Non-fatal: scenes can still be generated without scenario anchors
+    console.warn('Extracción de escenarios falló (no bloqueante):', err.message);
+  }
+}
+
+// Manual extraction — for episodes generated before this system existed.
+// Uses the current episode's scene narrations as the story source.
+window.generateUniverseScenarios = async function() {
+  const u = state.universe;
+  if (!u) return;
+  const story = (state.scenes || []).map(s => s.narration || '').filter(Boolean).join(' ');
+  if (story.trim().length < 50) {
+    showToast('Genera un episodio primero — los escenarios se extraen de su historia', 'error');
+    return;
+  }
+  showToast('Extrayendo escenarios de la historia...', 'success');
+  await extractScenariosFromStory(story);
+  if ((u.escenarios || []).length) showToast(`${u.escenarios.length} escenarios en el universo`, 'success');
+  else showToast('No se detectaron escenarios nuevos', 'error');
+};
+
+// Persist hora/clima selections in the universe
+document.getElementById('horaSelect')?.addEventListener('change', function() {
+  if (state.universe) { state.universe.hora = this.value; saveState(); }
+});
+document.getElementById('climaSelect')?.addEventListener('change', function() {
+  if (state.universe) { state.universe.clima = this.value; saveState(); }
+});
+
+// ════════════════════════════════════════════════════════════════
 // RENDER: SCENES
 // ════════════════════════════════════════════════════════════════
 async function renderScenes() {
@@ -2121,34 +2469,46 @@ async function renderScenes() {
   }
 
   const items = await Promise.all(state.scenes.map(async s => {
-    const img     = await dbGet(sceneImgKeyA(s.id));
+    const imgA    = await dbGet(sceneImgKeyA(s.id));
+    const imgB    = await dbGet(sceneImgKeyB(s.id));
+    const imgC    = await dbGet(sceneImgKeyC(s.id));
     const audData = await dbGet(sceneAudKey(s.id));
     const vidUrl  = await dbGet(sceneVidKeyA(s.id));
-    return { s, img, audData, vidUrl };
+    return { s, imgA, imgB, imgC, audData, vidUrl };
   }));
 
   const selRatio = document.getElementById('aspectRatio')?.value || '9:16';
   const cssRatio = selRatio === '16:9' ? '16/9' : '9/16';
+  const u = state.universe || {};
 
-  c.innerHTML = items.map(({ s, img, audData, vidUrl }) => {
+  c.innerHTML = items.map(({ s, imgA, imgB, imgC, audData, vidUrl }) => {
     const pad = String(s.num).padStart(2,'0');
+    const escName = (u.escenarios || []).find(e => e.id === s.escenario)?.name || '';
+    const slotCell = (slot, img) => `
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <div class="scene-img" style="aspect-ratio:${cssRatio};overflow:hidden">
+          ${img
+            ? `<img src="data:image/png;base64,${img}" style="width:100%;height:100%;object-fit:contain;display:block;background:#000">`
+            : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim)">Sin imagen ${slot}</div>`}
+        </div>
+        <button class="btn-sec" style="font-size:10px;padding:3px 4px" onclick="generateSceneImageAB('${s.id}','${slot}')">${img ? '🔄' : '🖼️'} ${slot === 'A' ? '1' : slot === 'B' ? '2' : '3'}</button>
+      </div>`;
     return `
     <div class="scene-card">
       <div class="scene-header">
         <div class="scene-num">Escena ${s.num}</div>
         <div style="display:flex;align-items:center;gap:6px">
+          ${escName ? `<div class="scene-act" style="background:rgba(0,229,255,0.12)">🏞️ ${escName}</div>` : ''}
           <div class="scene-act">${s.act}</div>
           <button class="btn-sec" style="font-size:10px;padding:3px 8px;border-color:rgba(224,64,251,0.3);color:var(--accent)" onclick="editScenePrompts('${s.id}')">✏️ Prompt</button>
         </div>
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:4px">
-        <div class="scene-img" style="aspect-ratio:${cssRatio};overflow:hidden">
-          ${img
-            ? `<img src="data:image/png;base64,${img}" style="width:100%;height:100%;object-fit:contain;display:block;background:#000">`
-            : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-dim)">Sin imagen</div>`}
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">
+          ${slotCell('A', imgA)}${slotCell('B', imgB)}${slotCell('C', imgC)}
         </div>
         <div style="display:flex;gap:4px;justify-content:center">
-          <button class="btn-sec" style="font-size:11px;padding:4px 8px;flex:1" onclick="generateSceneImageAB('${s.id}','A')">🖼️ ${img ? 'Regenerar' : '+ Imagen'}</button>
+          <button class="btn-sec" style="font-size:11px;padding:4px 8px;flex:1" onclick="generateSceneImage('${s.id}')">🖼️ ${(imgA||imgB||imgC) ? 'Regenerar 3' : 'Generar 3'}</button>
           <button id="btnVid_${s.id}_A" class="btn-sec" style="font-size:11px;padding:4px 8px;flex:1;border-color:rgba(0,229,255,0.3);color:var(--accent2)"
             onclick="generateSceneVideo('${s.id}','A')">🎬 ${vidUrl ? 'Regenerar' : 'Video'}</button>
         </div>
@@ -2183,25 +2543,31 @@ window.editScenePrompts = function(sceneId) {
     .replace(/>/g, '&gt;');
 
   const rawA = esc(s.imagePromptA || s.imagePromptEN || s.narration || '');
+  const rawB = esc(s.imagePromptB || '');
+  const rawC = esc(s.imagePromptC || '');
 
   openModal(`
     <div class="modal-handle"></div>
-    <h3>✏️ Editar Prompt — Escena ${s.num}</h3>
+    <h3>✏️ Editar Prompts — Escena ${s.num}</h3>
     <p style="font-size:12px;color:var(--text-dim);margin:0 0 12px;line-height:1.5">
-      Edita y traduce el prompt. Luego guarda y regenera la imagen.
+      3 imágenes secuenciales de la escena (inicio → desarrollo → cierre). Edita, guarda y regenera.
     </p>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-      <label style="margin:0">Prompt de imagen</label>
+      <label style="margin:0">Imagen 1 — momento inicial</label>
       <button id="btnTranslate" class="btn-sec" style="font-size:11px;padding:3px 10px;width:auto;border-color:rgba(0,229,255,0.4);color:var(--accent2)" onclick="translatePrompts('${sceneId}')">🌐 Traducir al español</button>
     </div>
-    <textarea id="editPromptA" style="height:110px;font-size:13px">${rawA}</textarea>
+    <textarea id="editPromptA" style="height:85px;font-size:13px">${rawA}</textarea>
+    <label style="margin-top:8px">Imagen 2 — desarrollo</label>
+    <textarea id="editPromptB" style="height:85px;font-size:13px">${rawB}</textarea>
+    <label style="margin-top:8px">Imagen 3 — cierre</label>
+    <textarea id="editPromptC" style="height:85px;font-size:13px">${rawC}</textarea>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
       <button class="btn-sec" onclick="closeModal()">Cancelar</button>
 
       <button class="btn" onclick="saveScenePrompts('${sceneId}')">💾 Guardar</button>
     </div>
     <div style="margin-top:8px">
-      <button class="btn-sec" style="font-size:12px;width:100%" onclick="saveAndRegenAB('${sceneId}','A')">🖼️ Guardar y regenerar imagen</button>
+      <button class="btn-sec" style="font-size:12px;width:100%" onclick="saveAndRegenAll('${sceneId}')">🖼️ Guardar y regenerar las 3 imágenes</button>
     </div>
   `);
 };
@@ -2244,10 +2610,14 @@ window.saveScenePrompts = function(sceneId) {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
   const newA = document.getElementById('editPromptA')?.value.trim();
+  const newB = document.getElementById('editPromptB')?.value.trim();
+  const newC = document.getElementById('editPromptC')?.value.trim();
   if (newA) s.imagePromptA = newA;
+  if (newB !== undefined) s.imagePromptB = newB;
+  if (newC !== undefined) s.imagePromptC = newC;
   saveState();
   closeModal();
-  showToast('Prompt guardado', 'success');
+  showToast('Prompts guardados', 'success');
 };
 
 window.saveAndRegenAB = async function(sceneId, ab) {
@@ -2255,18 +2625,41 @@ window.saveAndRegenAB = async function(sceneId, ab) {
   await generateSceneImageAB(sceneId, ab);
 };
 
-window.generateSceneImageAB = async function(sceneId, ab) {
+window.saveAndRegenAll = async function(sceneId) {
+  window.saveScenePrompts(sceneId);
+  await generateSceneImage(sceneId);
+};
+
+// Build environment context for a scene: hour/weather text suffix +
+// the scenario reference image (if the user generated it) so the image
+// model anchors the background to the exact same location every time.
+async function buildSceneEnvContext(s) {
+  const u = state.universe || {};
+  let envText = getEnvSuffix();
+  let scenarioRef = null;
+  const esc = (u.escenarios || []).find(e => e.id === s.escenario);
+  if (esc) {
+    envText = ` LOCATION (keep consistent): ${esc.desc || esc.name}.` + envText;
+    const img = await dbGet(scenImgKey(esc.id));
+    if (img) scenarioRef = { name: esc.name, img };
+  }
+  return { envText, scenarioRef };
+}
+
+window.generateSceneImageAB = async function(sceneId, slot) {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
-  const prompt = s.imagePromptA || s.imagePromptEN || s.narration;
-  showToast(`Generando imagen escena ${s.num}...`, 'success');
+  const prompt = s['imagePrompt' + slot] || s.imagePromptA || s.imagePromptEN || s.narration;
+  if (!prompt) { showToast(`Escena ${s.num}: sin prompt ${slot}`, 'error'); return; }
+  showToast(`Generando imagen ${slot} escena ${s.num}...`, 'success');
   try {
     // Only pass refs for characters mentioned in THIS prompt
     const refs = await getRefsForPrompt(prompt);
+    const env = await buildSceneEnvContext(s);
     let imgB64 = null, lastErr = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
-        imgB64 = await generateImage(prompt, refs);
+        imgB64 = await generateImage(prompt, refs, null, env);
         break;
       } catch(e) {
         lastErr = e;
@@ -2279,18 +2672,21 @@ window.generateSceneImageAB = async function(sceneId, ab) {
       }
     }
     if (!imgB64) throw lastErr;
-    await dbSet(sceneImgKeyA(s.id), imgB64);
+    await dbSet(sceneImgKeyBy(s.id, slot), imgB64);
     renderScenes();
-    showToast(`Imagen escena ${s.num} lista`, 'success');
+    showToast(`Imagen ${slot} escena ${s.num} lista`, 'success');
   } catch(e) {
-    openErrorModal(`Error imagen escena ${s.num}`, e.message);
+    openErrorModal(`Error imagen ${slot} escena ${s.num}`, e.message);
   }
 };
 
-// Legacy single image (kept for repair button compatibility)
+// Generate the full 3-image sequence of one scene
 window.generateSceneImage = async function(sceneId) {
-  await generateSceneImageAB(sceneId, 'A');
-  await generateSceneImageAB(sceneId, 'B');
+  const s = state.scenes.find(x => x.id === sceneId);
+  if (!s) return;
+  for (const slot of ['A','B','C']) {
+    if (s['imagePrompt' + slot] || slot === 'A') await generateSceneImageAB(sceneId, slot);
+  }
 };
 
 // Return ALL character reference images (so Nano Banana keeps consistency for whoever appears)
@@ -2550,12 +2946,33 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
     return [...matched.values()];
   }
 
-  // Build list of all images needed: one per scene
+  // Pre-compress scenario reference images once (universe locations)
+  const scenRefCache = {}; // escenario id -> { name, img (compressed), preCompressed }
+  for (const e of (state.universe?.escenarios || [])) {
+    const raw = await dbGet(scenImgKey(e.id));
+    if (!raw) continue;
+    const compressed = await compressBase64Image(String(raw).replace(/^data:image\/[a-z]+;base64,/i, ''), 768, 0.85);
+    scenRefCache[e.id] = { name: e.name, img: compressed, preCompressed: true };
+  }
+  const envSuffixNow = getEnvSuffix();
+  function envForScene(s) {
+    const u = state.universe || {};
+    const esc = (u.escenarios || []).find(e => e.id === s.escenario);
+    let envText = envSuffixNow;
+    if (esc) envText = ` LOCATION (keep consistent): ${esc.desc || esc.name}.` + envText;
+    return { envText, scenarioRef: (esc && scenRefCache[esc.id]) || null };
+  }
+
+  // Build list of all images needed: up to 3 per scene (A/B/C)
   const queue = [];
   for (const s of state.scenes) {
     if (!s.imagePromptA && !s.narration) continue;
-    const existingA = await dbGet(sceneImgKeyA(s.id));
-    if (!existingA) queue.push({ s, ab: 'A', prompt: s.imagePromptA || s.imagePromptEN || s.narration });
+    for (const slot of ['A','B','C']) {
+      const prompt = s['imagePrompt' + slot] || (slot === 'A' ? (s.imagePromptEN || s.narration) : '');
+      if (!prompt) continue;
+      const existing = await dbGet(sceneImgKeyBy(s.id, slot));
+      if (!existing) queue.push({ s, ab: slot, prompt });
+    }
   }
 
   const total = queue.length;
@@ -2565,13 +2982,13 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   for (let i = 0; i < queue.length; i++) {
     const { s, ab, prompt } = queue[i];
     bb.style.width = Math.round((i / total) * 100) + '%';
-    bt.textContent = `Imagen ${i + 1}/${total} — Escena ${s.num}...`;
+    bt.textContent = `Imagen ${i + 1}/${total} — Escena ${s.num} (${ab === 'A' ? '1' : ab === 'B' ? '2' : '3'}/3)...`;
 
     let success = false, attempt = 0;
     while (!success && attempt < 8) {
       try {
-        const imgB64 = await generateImageRaw(prompt, getRefsFromCache(prompt));
-        await dbSet(sceneImgKeyA(s.id), imgB64);
+        const imgB64 = await generateImageRaw(prompt, getRefsFromCache(prompt), envForScene(s));
+        await dbSet(sceneImgKeyBy(s.id, ab), imgB64);
         success = true; completed++;
         renderScenes(); // update UI immediately so user sees each image appear
       } catch(e) {
@@ -2582,14 +2999,14 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
           bt.textContent = `⏳ Rate limit — esperando ${w}s (intento ${attempt}/8)...`;
           await new Promise(r => setTimeout(r, w * 1000));
         } else if (e.message.toLowerCase().includes('block') || e.message.toLowerCase().includes('safety')) {
-          bt.textContent = `⚠️ Escena ${s.num} bloqueada, continuando...`;
+          bt.textContent = `⚠️ Escena ${s.num} (${ab}) bloqueada, continuando...`;
           await new Promise(r => setTimeout(r, 2000)); break;
         } else {
           await new Promise(r => setTimeout(r, 5000));
         }
       }
     }
-    if (!success) { failed++; failedIds.push(`${s.num}`); }
+    if (!success) { failed++; failedIds.push(`${s.num}${ab}`); }
   }
 
   bb.style.width = '100%';
@@ -2604,7 +3021,7 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
 });
 
 // Generate image with cached refs (skip re-compression inside generateImage)
-async function generateImageRaw(prompt, preCompressedRefs) {
+async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
   const modelSel = document.getElementById('imageModelSelect');
   const model = modelSel ? modelSel.value : 'auto';
   const aspectRatio = document.getElementById('aspectRatio')?.value || '9:16';
@@ -2617,15 +3034,19 @@ async function generateImageRaw(prompt, preCompressedRefs) {
   const cleanPrompt = String(prompt || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim() + ' ' + ANIME_VISUAL_STYLE_CORE + ' FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side.';
+    .trim() + (env.envText || '') + ' ' + ANIME_VISUAL_STYLE_CORE + ' FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side.';
 
   const isEcchi = (state.universe?.subgenres || []).some(s => ['ecchi','harem','harem_inverso'].includes(s));
+  const scenarioRef = (env.scenarioRef && env.scenarioRef.img)
+    ? { name: env.scenarioRef.name || 'location', img: env.scenarioRef.img, mimeType: 'image/jpeg' }
+    : null;
 
   // Attempt 1: with character refs
   if (preCompressedRefs && preCompressedRefs.length) {
     const bodyObj = {
       prompt: cleanPrompt,
       characterRefs: preCompressedRefs,
+      scenarioRef,
       model: model === 'auto' ? null : model,
       isEcchi,
       aspectRatio,
@@ -2655,6 +3076,7 @@ async function generateImageRaw(prompt, preCompressedRefs) {
     body: JSON.stringify({
       prompt: cleanPrompt,
       characterRefs: null,
+      scenarioRef,
       model: model === 'auto' ? null : model,
       isEcchi,
       aspectRatio,
@@ -2843,14 +3265,18 @@ RULES:
     if (needsImageOnlyIdx.length) {
       btn.innerHTML = `<div class="spinner"></div> Generando ${needsImageOnlyIdx.length} descripciones visuales...`;
 
-      const imageSys = `Eres un director de arte para anime/manhua. Escribe UN prompt de imagen en inglés por escena, basado en la narración ya escrita — no inventas historia nueva.
-REGLAS: SIEMPRE en inglés. Empieza con "${ANIME_STYLE_LEAD_IN} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello. Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.${repairEcchi ? `
+      const imageSys = `Eres un director de arte para anime/manhua. Para cada escena escribe TRES prompts de imagen en inglés (secuencia continua: momento inicial → desarrollo → cierre del fragmento), basados en la narración ya escrita — no inventas historia nueva. Entre los 3 prompts deben cubrir TODO lo que el texto de la escena narra, en orden cronológico. Los 3 prompts de una escena: MISMO lugar, MISMA ropa/peinado de cada personaje, solo cambia la acción que avanza y el ángulo de cámara. También asigna el campo "escenario" con el id exacto del escenario del universo donde ocurre la escena — si el lugar no está en la lista, deja "escenario" como "" y describe ese lugar dentro de los prompts (nunca asignes un escenario incorrecto).
+REGLAS: SIEMPRE en inglés. Cada prompt empieza con "${ANIME_STYLE_LEAD_IN} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello. Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.${repairEcchi ? `
 ECCHI ACTIVO — LENGUAJE VISUAL: TODOS los personajes son ADULTOS (18 en adelante, cada uno con su edad adulta según su rol), en contextos adultos acordes al género — jamás uniformes escolares ni aulas, nada que sugiera menores. Usa lenguaje de cámara ecchi cuando la escena lo permita: "low angle shot revealing her thighs", "form-fitting dress emphasizing her shape", "wet shirt clinging to her figure", "hourglass silhouette", "long slender legs", "curvy figure" — sensual y sugerente, sin desnudez explícita.` : ''}
 Responde SOLO JSON válido sin markdown`;
 
+      const repairScenarioList = (u.escenarios || []).length
+        ? 'ESCENARIOS DEL UNIVERSO (asigná uno por escena usando su id exacto):\n' + u.escenarios.map(e => `${e.id} = "${e.name}": ${e.desc}`).join('\n')
+        : 'ESCENARIOS DEL UNIVERSO: (ninguno definido — dejá "escenario" como "")';
+
       const scenesToDescribe = needsImageOnlyIdx.map(idx => state.scenes[idx]);
       const scenesText = scenesToDescribe.map(s => `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`).join('\n\n');
-      const imgPrompt = `PERSONAJES (referencia visual):\n${charRef}\n\nESCENAS YA ESCRITAS:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"imagePromptA":"Scene with..."}]} con exactamente ${scenesToDescribe.length} objetos.`;
+      const imgPrompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${repairScenarioList}\n\nESCENAS YA ESCRITAS:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","prompts":["Scene with...","Scene with...","Scene with..."]}]} con exactamente ${scenesToDescribe.length} objetos, cada uno con exactamente 3 prompts.`;
 
       let imgMap = new Map();
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -2858,7 +3284,7 @@ Responde SOLO JSON válido sin markdown`;
           const raw = await callGemini(imgPrompt, imageSys);
           const parsed = safeParseJSON(raw);
           const arr = parsed.imagePrompts || [];
-          arr.forEach(p => { if (p && p.num && p.imagePromptA) imgMap.set(p.num, p.imagePromptA); });
+          arr.forEach(p => { if (p && p.num && Array.isArray(p.prompts) && p.prompts[0]) imgMap.set(p.num, p); });
           if (imgMap.size >= scenesToDescribe.length) break;
           console.warn(`Reparación imágenes intento ${attempt+1}: ${imgMap.size}/${scenesToDescribe.length}`);
           if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
@@ -2870,7 +3296,13 @@ Responde SOLO JSON válido sin markdown`;
 
       needsImageOnlyIdx.forEach(idx => {
         const s = state.scenes[idx];
-        if (imgMap.has(s.num)) s.imagePromptA = imgMap.get(s.num);
+        const p = imgMap.get(s.num);
+        if (p) {
+          s.escenario = p.escenario || s.escenario || '';
+          s.imagePromptA = p.prompts[0] || '';
+          s.imagePromptB = p.prompts[1] || '';
+          s.imagePromptC = p.prompts[2] || '';
+        }
       });
       saveState();
       renderScenes();
