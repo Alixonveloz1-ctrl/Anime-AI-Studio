@@ -100,6 +100,9 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
   const parts = [];
   const aspectStyle = aspectRatio === '16:9' ? '16:9 horizontal widescreen' : '9:16 vertical';
 
+  // Global art-style contract — FIRST part so it frames everything that follows
+  parts.push({ text: `ART STYLE (non-negotiable, applies to the ENTIRE image and every character in it): high-budget cinematic 2D anime film, reference-tier MAPPA / Ufotable / top-tier cinematic donghua. Fine variable-weight linework, soft gradient cel-shading, large detailed anime eyes with specular highlights, richly detailed environment, filmic lighting. STRICTLY FORBIDDEN: western cartoon, webtoon-flat style, chibi, thick uniform outlines, flat 2-tone shading, 3D render, CGI, Disney/Pixar look, semi-realistic painted faces.` });
+
   // Location/scenario reference goes FIRST — it anchors the background;
   // character refs follow so they stay closest to the scene prompt.
   if (scenarioRef && scenarioRef.img) {
@@ -110,7 +113,7 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
   if (characterRefs && characterRefs.length > 0) {
     for (const ref of characterRefs) {
       parts.push({ inlineData: { mimeType: ref.mimeType || 'image/png', data: ref.img } });
-      parts.push({ text: `↑ CHARACTER REFERENCE: This is ${ref.name}. This reference defines IDENTITY ONLY — copy the face shape, hair color and style, eye color, and outfit EXACTLY. Do NOT copy this reference's pose, framing, size or white background. REDRAW ${ref.name} from scratch at the body pose, viewing angle and SCALE that the scene requires — correctly proportioned against the furniture and environment, feet grounded, sharing the scene's perspective, lighting and shadows. Do NOT mix up characters.` });
+      parts.push({ text: `↑ CHARACTER REFERENCE: This is ${ref.name}. Match this character's IDENTITY exactly — same face shape, same hair color and style, same eye color, same outfit design — AND render ${ref.name} in the SAME 2D anime art style as this reference: same linework quality, same cel-shading, same anime eye rendering. The ONLY things you must NOT copy are the pose, framing, size and white background: redraw ${ref.name} at the body pose, camera angle and SCALE that THIS scene requires — correctly proportioned against the furniture and environment, feet grounded, sharing the scene's perspective, lighting and shadows. Do NOT mix up characters.` });
     }
     const namesList = characterRefs.map(r => r.name).join(', ');
     const ecchiRules = isEcchi ? `
@@ -126,13 +129,13 @@ MANDATORY RULES:
 4. Match EACH character to THEIR reference image. Do not swap faces or designs.
 5. Female characters: long hair (shoulder-length or longer), soft anime features, clean skin.
 6. Faces must be clear, well-defined, anatomically correct — no blur, no distortion.
-7. Style: ${aspectStyle} cinematic anime key visual — fine detailed linework, soft gradient shading, richly detailed background, filmic lighting. NOT flat, NOT simplified.
+7. Style: ${aspectStyle} high-budget cinematic 2D anime film (MAPPA / Ufotable / top-tier donghua tier) — fine variable-weight linework, soft gradient cel-shading, richly detailed background, filmic lighting. STRICTLY FORBIDDEN: western cartoon, webtoon-flat, chibi, thick uniform outlines, flat 2-tone shading, 3D render, CGI, Disney/Pixar, semi-realistic painted faces.
 8. Characters INTEGRATED into the environment at true real-world scale — feet grounded with contact shadows, natural headroom below the ceiling, matching the room's perspective and light. Never oversized, never floating, never pasted over the background.${ecchiRules}
 
 Scene to illustrate:
 ${cleanPrompt}` });
   } else {
-    parts.push({ text: `${aspectStyle} cinematic anime key visual illustration. NO text, NO watermarks, NO letters anywhere. Clean detailed faces, fine linework, soft gradient shading, richly detailed background. ${cleanPrompt}` });
+    parts.push({ text: `${aspectStyle} high-budget cinematic 2D anime film illustration (MAPPA / Ufotable / top-tier donghua tier) — fine variable-weight linework, soft gradient cel-shading, richly detailed background. STRICTLY FORBIDDEN: western cartoon, webtoon-flat, chibi, thick uniform outlines, 3D render, CGI, Disney/Pixar, semi-realistic painted faces. NO text, NO watermarks, NO letters anywhere. ALL characters named in the scene are visible, at true human scale relative to the environment, feet grounded, integrated into the scene's perspective and lighting. ${cleanPrompt}` });
   }
 
   // ─── Resolve model → correct endpoint ───────────────────────────
