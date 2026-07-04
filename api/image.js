@@ -91,7 +91,7 @@ async function callGeminiAtUrl(url, parts, projectId, token, aspectRatio) {
   return { ok: r.ok, shouldRotate, isSafetyBlock, status: r.status, data: d };
 }
 
-async function callGemini(model, prompt, characterRefs, projectId, token, isEcchi = false, aspectRatio = '9:16') {
+async function callGemini(model, prompt, characterRefs, projectId, token, isEcchi = false, aspectRatio = '9:16', scenarioRef = null) {
   let cleanPrompt = prompt;
   for (const [pattern, replacement] of BLOCKED_WORDS) {
     cleanPrompt = cleanPrompt.replace(pattern, replacement);
@@ -99,6 +99,13 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
 
   const parts = [];
   const aspectStyle = aspectRatio === '16:9' ? '16:9 horizontal widescreen' : '9:16 vertical';
+
+  // Location/scenario reference goes FIRST — it anchors the background;
+  // character refs follow so they stay closest to the scene prompt.
+  if (scenarioRef && scenarioRef.img) {
+    parts.push({ inlineData: { mimeType: scenarioRef.mimeType || 'image/png', data: scenarioRef.img } });
+    parts.push({ text: `↑ LOCATION REFERENCE: This is the setting "${scenarioRef.name || 'location'}". Draw the scene IN this exact location — keep its architecture/terrain, layout, colors, key props and atmosphere consistent with this reference. Characters and camera angle may differ, but it must clearly be the same place.` });
+  }
 
   if (characterRefs && characterRefs.length > 0) {
     for (const ref of characterRefs) {
@@ -207,13 +214,26 @@ module.exports = async function handler(req, res) {
     }
     if (!prompt) return res.status(400).json({ error:'prompt required' });
 
+    // Optional location/scenario reference image
+    let scenarioRef = null;
+    if (body.scenarioRef && body.scenarioRef.img && typeof body.scenarioRef.img === 'string') {
+      const img = body.scenarioRef.img.replace(/^data:image\/[a-z]+;base64,/i, '').replace(/\s/g, '');
+      if (img.length > 100) {
+        scenarioRef = {
+          name: String(body.scenarioRef.name || 'location').trim(),
+          mimeType: body.scenarioRef.mimeType || 'image/png',
+          img,
+        };
+      }
+    }
+
     const projectId = process.env.GCP_PROJECT_ID || JSON.parse(process.env.GCP_SERVICE_ACCOUNT).project_id;
     const sa = JSON.parse(process.env.GCP_SERVICE_ACCOUNT);
     const token = await getAccessToken(sa);
 
     const aspectRatio = body.aspectRatio || '9:16';
     const model = forceModel || 'gemini-2.5-flash-image';
-    const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true, aspectRatio);
+    const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true, aspectRatio, scenarioRef);
     return res.status(200).json(result);
   } catch(e) {
     return res.status(500).json({ error: e.message });
