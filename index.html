@@ -267,6 +267,26 @@
   .scene-narration { font-size:13px; line-height:1.7; margin-bottom:10px; color:rgba(240,238,255,0.85); }
   .scene-actions { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
 
+  /* ── Fullscreen image viewer (lightbox) ── */
+  .img-zoom-badge { position:absolute; top:3px; right:3px; background:rgba(0,0,0,0.55);
+    border-radius:5px; font-size:10px; line-height:1; padding:3px 4px; pointer-events:none; }
+  .img-fs-overlay { position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.94);
+    display:flex; flex-direction:column; animation:fsFade 0.15s ease;
+    padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom); }
+  @keyframes fsFade { from{opacity:0} to{opacity:1} }
+  .img-fs-bar { display:flex; align-items:center; justify-content:space-between;
+    padding:10px 14px; flex:0 0 auto; }
+  .img-fs-label { font-size:13px; color:rgba(255,255,255,0.85); font-weight:700; }
+  .img-fs-close { background:rgba(255,255,255,0.14); border:none; color:#fff;
+    width:36px; height:36px; border-radius:50%; font-size:16px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .img-fs-body { flex:1 1 auto; display:flex; align-items:center; justify-content:center;
+    padding:8px 8px 18px; overflow:auto; min-height:0; }
+  .img-fs-body img { max-width:100%; max-height:100%; object-fit:contain; display:block; border-radius:6px; cursor:zoom-in; }
+  .img-fs-body img.fs-zoomed { max-width:none; max-height:none; width:auto; height:auto; border-radius:0; cursor:zoom-out; }
+  .img-fs-hint { text-align:center; font-size:11px; color:rgba(255,255,255,0.5);
+    padding:0 14px 12px; flex:0 0 auto; }
+
   /* ── Empty state ── */
   .empty { text-align:center; padding:50px 20px; color:var(--text-dim); }
   .empty .emoji { font-size:52px; margin-bottom:12px; filter:drop-shadow(0 0 12px rgba(224,64,251,0.4)); }
@@ -2235,8 +2255,8 @@ async function renderCharacters() {
     return `
     <div class="char-card">
       <div class="char-header">
-        <div class="char-img">
-          ${imgB64 ? `<img src="data:image/png;base64,${imgB64}">` : (ch.role || '').includes('femenino') || ch.appearance?.toLowerCase().includes('mujer') ? '👩' : '👤'}
+        <div class="char-img"${imgB64 ? ` style="position:relative;cursor:zoom-in" onclick="openCharImage('${ch.id}')"` : ''}>
+          ${imgB64 ? `<img src="data:image/png;base64,${imgB64}"><div class="img-zoom-badge">🔍</div>` : (ch.role || '').includes('femenino') || ch.appearance?.toLowerCase().includes('mujer') ? '👩' : '👤'}
         </div>
         <div class="char-info">
           <h4>${ch.name}</h4>
@@ -2330,8 +2350,8 @@ async function renderScenarios() {
   c.innerHTML = items.map(({ e, imgB64 }) => `
     <div class="char-card">
       <div class="char-header">
-        <div class="char-img">
-          ${imgB64 ? `<img src="data:image/png;base64,${imgB64}">` : '🏞️'}
+        <div class="char-img"${imgB64 ? ` style="position:relative;cursor:zoom-in" onclick="openScenarioImage('${e.id}')"` : ''}>
+          ${imgB64 ? `<img src="data:image/png;base64,${imgB64}"><div class="img-zoom-badge">🔍</div>` : '🏞️'}
         </div>
         <div class="char-info">
           <h4>${e.name}</h4>
@@ -2588,15 +2608,18 @@ async function renderScenes() {
   c.innerHTML = items.map(({ s, imgA, imgB, imgC, audData, vidUrl }) => {
     const pad = String(s.num).padStart(2,'0');
     const escName = (u.escenarios || []).find(e => e.id === s.escenario)?.name || '';
-    const slotCell = (slot, img) => `
-      <div style="display:flex;flex-direction:column;gap:3px">
-        <div class="scene-img" style="aspect-ratio:${cssRatio};overflow:hidden">
+    const slotCell = (slot, img) => {
+      const numLbl = slot === 'A' ? '1' : slot === 'B' ? '2' : '3';
+      return `
+      <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+        <div class="scene-img" style="aspect-ratio:${cssRatio};overflow:hidden;min-height:0;margin-bottom:0;position:relative;${img ? 'cursor:zoom-in' : ''}"${img ? ` onclick="openImageFullscreen('${s.id}','${slot}')"` : ''}>
           ${img
-            ? `<img src="data:image/png;base64,${img}" style="width:100%;height:100%;object-fit:contain;display:block;background:#000">`
+            ? `<img src="data:image/png;base64,${img}" style="width:100%;height:100%;object-fit:contain;display:block;background:#000"><div class="img-zoom-badge">🔍</div>`
             : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim)">Sin imagen ${slot}</div>`}
         </div>
-        <button class="btn-sec" style="font-size:10px;padding:3px 4px" onclick="generateSceneImageAB('${s.id}','${slot}')">${img ? '🔄' : '🖼️'} ${slot === 'A' ? '1' : slot === 'B' ? '2' : '3'}</button>
+        <button class="btn-sec" style="font-size:10px;padding:3px 4px;min-width:0" onclick="generateSceneImageAB('${s.id}','${slot}')">${img ? '🔄' : '🖼️'} ${numLbl}</button>
       </div>`;
+    };
     return `
     <div class="scene-card">
       <div class="scene-header">
@@ -2608,7 +2631,7 @@ async function renderScenes() {
         </div>
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:4px">
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;width:100%">
           ${slotCell('A', imgA)}${slotCell('B', imgB)}${slotCell('C', imgC)}
         </div>
         <div style="display:flex;gap:4px;justify-content:center">
@@ -2636,6 +2659,55 @@ async function renderScenes() {
     </div>
   `;}).join('');
 }
+
+// Core fullscreen image viewer — reused by scenes, characters and scenarios.
+function showFullscreenImage(imgB64, label) {
+  if (!imgB64) { showToast('Esa imagen aún no se ha generado', 'error'); return; }
+  const overlay = document.createElement('div');
+  overlay.className = 'img-fs-overlay';
+  overlay.innerHTML = `
+    <div class="img-fs-bar">
+      <span class="img-fs-label">${label || ''}</span>
+      <button class="img-fs-close" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="img-fs-body"><img src="data:image/png;base64,${imgB64}" alt=""></div>
+    <div class="img-fs-hint">Tocá la imagen para acercar · tocá fuera o ✕ para cerrar</div>`;
+  document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+  const close = () => { overlay.remove(); document.body.style.overflow = ''; };
+  overlay.addEventListener('click', (e) => { if (e.target.tagName !== 'IMG') close(); });
+  // Tap the image to toggle real-size zoom (the container scrolls). This gives
+  // zoom without enabling page-wide pinch (viewport is user-scalable=no by design).
+  const imgEl = overlay.querySelector('.img-fs-body img');
+  if (imgEl) imgEl.addEventListener('click', (e) => { e.stopPropagation(); imgEl.classList.toggle('fs-zoomed'); });
+}
+
+// Open a stored image (by its IndexedDB key) in the fullscreen viewer.
+window.openImageByKey = async function(dbKey, label) {
+  let img = null;
+  try { img = await dbGet(dbKey); } catch { img = null; }
+  showFullscreenImage(img, label);
+};
+
+// Scene images (sceneId + slot) — entry point for the scene grid onclicks.
+window.openImageFullscreen = async function(sceneId, slot) {
+  const s = state.scenes.find(x => x.id === sceneId);
+  const numLbl = slot === 'A' ? '1' : slot === 'B' ? '2' : '3';
+  const label = s ? `Escena ${s.num} · Imagen ${numLbl}` : `Imagen ${numLbl}`;
+  await openImageByKey(sceneImgKeyBy(sceneId, slot), label);
+};
+
+// Character reference image.
+window.openCharImage = async function(charId) {
+  const ch = state.characters.find(c => c.id === charId);
+  await openImageByKey(charImgKey(charId), ch ? `Personaje · ${ch.name}` : 'Personaje');
+};
+
+// Scenario reference image.
+window.openScenarioImage = async function(scenId) {
+  const e = (state.universe?.escenarios || []).find(x => x.id === scenId);
+  await openImageByKey(scenImgKey(scenId), e ? `Escenario · ${e.name}` : 'Escenario');
+};
 
 window.editScenePrompts = function(sceneId) {
   const s = state.scenes.find(x => x.id === sceneId);
