@@ -2192,6 +2192,7 @@ Responde SOLO JSON válido sin markdown`;
     state.episodes[epNum] = scenes;
     saveState();
     renderScenes();
+    renderScenarios();
     updateEpisodeNav();
 
     const pendingCount = scenes.filter(s => !s.narration || !s.imagePromptA).length;
@@ -2311,11 +2312,12 @@ async function renderScenarios() {
   if (!Array.isArray(escenarios) || !escenarios.length) {
     // Scenarios are derived from each episode's story. If an episode already
     // exists (generated before this system), allow manual extraction.
-    const hasStory = (state.scenes || []).some(s => s.narration);
+    const curEpScenes = (state.episodes && state.episodes[state.currentEpisode]) || [];
+    const hasStory = (state.scenes || []).some(s => s.narration) || curEpScenes.some(s => s.narration);
     c.innerHTML = `
       <div class="empty" style="padding:14px">
         <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px">${hasStory
-          ? 'Este episodio fue generado antes del sistema de escenarios.'
+          ? 'La extracción automática no completó (posible rate limit). Extraé los escenarios de la historia acá:'
           : 'Genera un episodio — sus escenarios se extraerán automáticamente de la historia.'}</p>
         ${hasStory ? `<button class="btn" onclick="generateUniverseScenarios()">🏞️ Extraer escenarios de la historia actual</button>` : ''}
       </div>`;
@@ -2341,7 +2343,11 @@ async function renderScenarios() {
         <textarea id="scenPrompt_${e.id}" style="width:100%;height:80px;font-size:11px;resize:vertical;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:var(--text);padding:6px;line-height:1.4">${scenarioDefaultPrompt(e).replace(/`/g,"'")}</textarea>
       </div>
       <button class="btn-sec" style="margin-top:6px" onclick="generateScenarioImage('${e.id}')">🎨 ${imgB64 ? 'Regenerar' : 'Generar'} Referencia</button>
-    </div>`).join('');
+    </div>`).join('') + `
+    <div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:8px">
+      <p style="font-size:11px;color:var(--text-dim);margin:0 0 8px;line-height:1.4">¿Las imágenes de escena salen con fondos distintos? Vinculá cada escena a su lugar para que compartan la misma referencia. (Las imágenes ya generadas hay que regenerarlas después para que tomen el fondo.)</p>
+      <button class="btn-sec" onclick="relinkScenesToScenarios()">🔗 Vincular escenas de este episodio a estos escenarios</button>
+    </div>`;
 }
 
 window.generateScenarioImage = async function(scenId) {
@@ -2383,7 +2389,7 @@ window.generateScenarioImage = async function(scenId) {
 // locations from this story are appended.
 async function extractScenariosFromStory(storyText) {
   const u = state.universe;
-  if (!u || !storyText || storyText.trim().length < 50) return;
+  if (!u || !storyText || storyText.trim().length < 50) return false;
   const existing = Array.isArray(u.escenarios) ? u.escenarios : [];
   const existingText = existing.length
     ? existing.map(e => `${e.id} = "${e.name}"`).join('\n')
@@ -2392,11 +2398,31 @@ async function extractScenariosFromStory(storyText) {
   const sys = `Eres un director de arte de anime. Devuelves SOLO JSON válido sin markdown.`;
   const prompt = `HISTORIA DEL EPISODIO (YA ESCRITA — no la modifiques, solo identificá sus lugares):\n\n${storyText}\n\nESCENARIOS YA EXISTENTES DEL UNIVERSO (de episodios anteriores):\n${existingText}\n\nTAREA: identificá los LUGARES donde ocurre la acción de ESTA historia.\n- Si un lugar de la historia ES uno de los escenarios ya existentes, NO lo incluyas en tu respuesta (ya lo tenemos).\n- Devolvé SOLO los lugares NUEVOS de esta historia que no están en la lista existente — únicamente lugares donde realmente ocurren escenas (no lugares apenas mencionados al pasar).\n- Si todos los lugares de la historia ya existen, devolvé lista vacía.\n- "name" corto en español. "desc" en INGLÉS: descripción visual detallada del lugar tal como la historia lo presenta (architecture/terrain, colors, key props, atmosphere), 40-60 words, SIN personajes.\nDevuelve SOLO: {"nuevos":[{"name":"...","desc":"..."}]}`;
 
+  // Retry with backoff: this call runs 3rd-4th in a burst of Gemini calls,
+  // which is exactly where a 429 rate-limit is most likely. A single silent
+  // failure here used to leave the whole scenario system dead (empty list →
+  // scenes get no location anchor → every image invents its own background).
+  let raw = null, lastErr = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try { raw = await callGemini(prompt, sys); break; }
+    catch(err) {
+      lastErr = err;
+      const isRL = /429|exhaust|quota|rate/i.test(err.message || '');
+      if (attempt < 3) {
+        const w = isRL ? [20, 45, 75][attempt] : 4;
+        console.warn(`Extracción de escenarios intento ${attempt+1} falló (${err.message}); reintento en ${w}s`);
+        await new Promise(r => setTimeout(r, w * 1000));
+      }
+    }
+  }
+  if (raw == null) {
+    console.warn('Extracción de escenarios falló tras 4 intentos:', lastErr?.message);
+    return false;
+  }
   try {
-    const raw = await callGemini(prompt, sys);
     const parsed = safeParseJSON(raw);
     const nuevos = (parsed.nuevos || []).filter(e => e && e.name && e.desc);
-    if (!nuevos.length && existing.length) return; // nothing new, keep as-is
+    if (!nuevos.length && existing.length) return true; // nothing new, keep as-is
     // Sequential ids continuing after the highest existing locN
     let maxN = 0;
     existing.forEach(e => { const m = /^loc(\d+)$/.exec(e.id || ''); if (m) maxN = Math.max(maxN, parseInt(m[1], 10)); });
@@ -2414,10 +2440,58 @@ async function extractScenariosFromStory(storyText) {
       renderScenarios();
       console.log(`Escenarios: +${toAdd.length} nuevos de esta historia (${toAdd.map(e => e.name).join(', ')})`);
     }
+    return true;
   } catch(err) {
-    // Non-fatal: scenes can still be generated without scenario anchors
-    console.warn('Extracción de escenarios falló (no bloqueante):', err.message);
+    console.warn('Extracción de escenarios: parseo falló (no bloqueante):', err.message);
+    return false;
   }
+}
+
+// ─── RE-LINK: assign each already-written scene to one of the universe's
+// scenarios by matching its narration. This is the piece that makes
+// "same place → same background" actually work: buildSceneEnvContext reads
+// s.escenario to pull the location's reference image. Runs after scenarios
+// are (re)extracted, so scenes generated before the scenarios existed still
+// get anchored — WITHOUT regenerating any prompt or image. ───
+async function assignScenariosToScenes() {
+  const u = state.universe;
+  const scenes = state.scenes || [];
+  const escenarios = (u && Array.isArray(u.escenarios)) ? u.escenarios : [];
+  if (!escenarios.length || !scenes.length) return false;
+  const listText = escenarios.map(e => `${e.id} = "${e.name}": ${e.desc}`).join('\n');
+  const scenesText = scenes.filter(s => s.narration)
+    .map(s => `Escena ${s.num}: ${s.narration}`).join('\n\n');
+  if (!scenesText) return false;
+  const sys = `Eres un director de arte de anime. Devuelves SOLO JSON válido sin markdown.`;
+  const prompt = `LUGARES DISPONIBLES DEL UNIVERSO (usá su id exacto):\n${listText}\n\nESCENAS DEL EPISODIO (ya escritas):\n\n${scenesText}\n\nTAREA: para cada escena, indicá en cuál de los lugares de arriba ocurre. Usá el id EXACTO del lugar. Si una escena ocurre en un lugar que NO está en la lista, poné "" (vacío) — nunca fuerces un id incorrecto, porque anclaría un fondo equivocado.\nDevuelve SOLO: {"asignaciones":[{"num":1,"escenario":"loc1"},...]} con un objeto por cada escena de arriba.`;
+  let raw = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try { raw = await callGemini(prompt, sys); break; }
+    catch(err) {
+      const isRL = /429|exhaust|quota|rate/i.test(err.message || '');
+      if (attempt < 3) await new Promise(r => setTimeout(r, (isRL ? [20,45,75][attempt] : 4) * 1000));
+    }
+  }
+  if (raw == null) return false;
+  try {
+    const parsed = safeParseJSON(raw);
+    const validIds = new Set(escenarios.map(e => e.id));
+    const map = new Map((parsed.asignaciones || [])
+      .filter(a => a && a.num != null)
+      .map(a => [a.num, validIds.has(a.escenario) ? a.escenario : '']));
+    let changed = 0;
+    scenes.forEach(s => {
+      if (map.has(s.num)) {
+        const val = map.get(s.num);
+        if (val && s.escenario !== val) { s.escenario = val; changed++; }
+      }
+    });
+    if (changed) {
+      state.episodes[state.currentEpisode] = scenes;
+      saveState();
+    }
+    return true;
+  } catch { return false; }
 }
 
 // Manual extraction — for episodes generated before this system existed.
@@ -2430,10 +2504,40 @@ window.generateUniverseScenarios = async function() {
     showToast('Genera un episodio primero — los escenarios se extraen de su historia', 'error');
     return;
   }
-  showToast('Extrayendo escenarios de la historia...', 'success');
-  await extractScenariosFromStory(story);
-  if ((u.escenarios || []).length) showToast(`${u.escenarios.length} escenarios en el universo`, 'success');
-  else showToast('No se detectaron escenarios nuevos', 'error');
+  showToast('Paso 1/2: extrayendo lugares de la historia...', 'success');
+  const ok = await extractScenariosFromStory(story);
+  if (!ok && !(u.escenarios || []).length) {
+    showToast('No se pudo extraer (posible rate limit). Esperá unos segundos y reintentá.', 'error');
+    renderScenarios();
+    return;
+  }
+  if ((u.escenarios || []).length) {
+    showToast('Paso 2/2: vinculando cada escena a su lugar...', 'success');
+    await assignScenariosToScenes();
+    renderScenarios();
+    renderScenes();
+    const linked = (state.scenes || []).filter(s => s.escenario).length;
+    showToast(`${u.escenarios.length} escenarios · ${linked}/${(state.scenes||[]).length} escenas vinculadas`, 'success');
+  } else {
+    renderScenarios();
+    showToast('No se detectaron escenarios nuevos', 'error');
+  }
+};
+
+// Re-link only (scenarios already exist) — for when images were generated
+// before their location references existed. Does not re-extract or touch prompts.
+window.relinkScenesToScenarios = async function() {
+  if (!((state.universe?.escenarios || []).length)) { showToast('No hay escenarios definidos todavía', 'error'); return; }
+  if (!((state.scenes || []).some(s => s.narration))) { showToast('Este episodio no tiene escenas', 'error'); return; }
+  showToast('Vinculando cada escena a su lugar...', 'success');
+  const ok = await assignScenariosToScenes();
+  renderScenes();
+  if (ok) {
+    const linked = (state.scenes || []).filter(s => s.escenario).length;
+    showToast(`${linked}/${(state.scenes||[]).length} escenas vinculadas a su escenario`, 'success');
+  } else {
+    showToast('No se pudo vincular (posible rate limit). Reintentá.', 'error');
+  }
 };
 
 // Persist hora/clima selections in the universe
