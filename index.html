@@ -435,7 +435,7 @@
     </div>
     <div class="card" style="margin-top:14px">
       <h2>🏞️ Escenarios</h2>
-      <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;line-height:1.5">Los escenarios se extraen automáticamente de la historia de cada episodio (historia primero, siempre). Genera la imagen de referencia de cada uno — esa referencia mantiene el lugar FIJO en todas las imágenes de escena. En episodios siguientes, los lugares que reaparecen conservan su misma referencia.</p>
+      <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;line-height:1.5">Los escenarios se extraen automáticamente de la historia de cada episodio (historia primero, siempre). Cada lugar se ancla por su DESCRIPCIÓN: esa descripción se inyecta en todas las imágenes de sus escenas, así el sitio es reconociblemente el mismo pero la cámara queda libre para mostrar distintos ángulos y perspectivas, con el personaje integrado en el espacio. En episodios siguientes, los lugares que reaparecen conservan su misma descripción.</p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
         <div>
           <label>🕐 Hora del día</label>
@@ -652,7 +652,6 @@ const sceneImgKeyB = id => `sib_${state.projectId}${epSfx()}_${id}`;
 const sceneImgKeyC = id => `sic_${state.projectId}${epSfx()}_${id}`;
 const sceneImgKeyBy = (id, slot) => slot === 'B' ? sceneImgKeyB(id) : slot === 'C' ? sceneImgKeyC(id) : sceneImgKeyA(id);
 // Scenario reference images are UNIVERSE-level (shared across episodes)
-const scenImgKey   = id => `sceni_${state.projectId}_${id}`;
 const sceneAudKey  = id => `sa_${state.projectId}${epSfx()}_${id}`;
 const sceneVidKeyA = id => `sva_${state.projectId}${epSfx()}_${id}`;
 
@@ -1200,25 +1199,11 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
     if (processed.length) cleanRefs = processed;
   }
 
-  // Optional scenario/location reference image
-  let scenarioRef = null;
-  if (opts.scenarioRef && opts.scenarioRef.img) {
-    const rawImg = String(opts.scenarioRef.img).replace(/^data:image\/[a-z]+;base64,/i, '').replace(/\s/g, '');
-    if (rawImg.length > 100) {
-      scenarioRef = {
-        name: String(opts.scenarioRef.name || 'location'),
-        img: opts.scenarioRef.preCompressed ? rawImg : await compressBase64Image(rawImg, 768, 0.85),
-        mimeType: 'image/jpeg',
-      };
-    }
-  }
-
   const aspectRatio = document.getElementById('aspectRatio')?.value || '9:16';
 
   const bodyObj = {
     prompt: cleanPrompt,
     characterRefs: cleanRefs,
-    scenarioRef,
     model: model === 'auto' ? null : model,
     isEcchi,
     aspectRatio,
@@ -2121,8 +2106,10 @@ LOS 3 PROMPTS DE CADA ESCENA SON UNA SECUENCIA CONTINUA (como 3 fotogramas clave
 - ⚠️ COBERTURA TOTAL DEL TEXTO: entre los 3 prompts deben ilustrar TODO lo que la narración de la escena cuenta, en orden — ningún evento o acción del fragmento queda sin imagen. Si el texto narra tres cosas, cada prompt toma una; si narra más, distribuilas cronológicamente entre los 3.
 - CONTINUIDAD OBLIGATORIA entre los 3: MISMO lugar (mismo escenario asignado), MISMA ropa y peinado de cada personaje, MISMA iluminación y clima — lo único que cambia es la acción que avanza y el ÁNGULO de cámara (variá el ángulo entre los 3: wide establishing → medium shot → close-up, o similar). Son 3 instantes consecutivos de la MISMA toma de la historia, no 3 versiones del mismo instante.
 - CONTINUIDAD ENTRE ESCENAS: el prompt 1 de cada escena CONTINÚA desde donde quedó el prompt 3 de la escena anterior — las 45 imágenes del episodio son UNA secuencia visual continua de la misma historia, no ilustraciones sueltas. Si la escena anterior terminó en un lugar y esta empieza en otro, el prompt 1 muestra la llegada/transición natural.
+- INTEGRACIÓN FÍSICA: el personaje está DENTRO del espacio — interactuando con muebles y objetos, con sombras e iluminación coherentes con el lugar. NUNCA debe verse como un personaje pegado sobre un fondo.
+- CÁMARA LIBRE EN EL LUGAR: a lo largo del episodio mostrá el MISMO lugar desde posiciones y ángulos DIFERENTES (desde la puerta, desde la ventana, ángulo bajo, over-shoulder, rincones distintos) — no repitas siempre el mismo encuadre del escenario.
 
-CAMPO "escenario": asigná a cada escena el id EXACTO del escenario del universo donde ocurre (de la lista provista). Si el fragmento ocurre en un lugar que NO está en la lista, dejá "escenario" como "" (vacío) y describí ese lugar nuevo con detalle DENTRO de los 3 prompts — NUNCA asignes un escenario incorrecto solo por llenar el campo, porque su imagen de referencia anclaría un fondo equivocado.
+CAMPO "escenario": asigná a cada escena el id EXACTO del escenario del universo donde ocurre (de la lista provista). Si el fragmento ocurre en un lugar que NO está en la lista, dejá "escenario" como "" (vacío) y describí ese lugar nuevo con detalle DENTRO de los 3 prompts — NUNCA asignes un escenario incorrecto solo por llenar el campo, porque su descripción anclaría un fondo equivocado.
 
 REGLAS DE CADA PROMPT:
 - SIEMPRE en INGLÉS
@@ -2311,10 +2298,6 @@ window.generateCharImage = async function(charId) {
 // ════════════════════════════════════════════════════════════════
 // RENDER: SCENARIOS (universe locations + hora/clima)
 // ════════════════════════════════════════════════════════════════
-function scenarioDefaultPrompt(e) {
-  return `Anime background art, establishing wide shot of "${e.name}". ${e.desc || ''} Realistic architectural scale and proportions — natural ceiling height, the space sized so a standing adult has clear headroom; furniture and objects at true human scale. Show the place as a real, lived-in, complete space, never a cramped empty box. Empty environment with NO characters, NO people, NO animals in frame. NO text, NO letters, NO watermarks. ${ANIME_VISUAL_STYLE_CORE}`.replace(/\s+/g, ' ').trim();
-}
-
 async function renderScenarios() {
   const c = document.getElementById('scenariosList');
   if (!c) return;
@@ -2343,62 +2326,35 @@ async function renderScenarios() {
       </div>`;
     return;
   }
-  const items = await Promise.all(escenarios.map(async e => {
-    const imgB64 = await dbGet(scenImgKey(e.id));
-    return { e, imgB64 };
-  }));
-  c.innerHTML = items.map(({ e, imgB64 }) => `
+  c.innerHTML = escenarios.map(e => `
     <div class="char-card">
       <div class="char-header">
-        <div class="char-img"${imgB64 ? ` style="position:relative;cursor:zoom-in" onclick="openScenarioImage('${e.id}')"` : ''}>
-          ${imgB64 ? `<img src="data:image/png;base64,${imgB64}"><div class="img-zoom-badge">🔍</div>` : '🏞️'}
-        </div>
+        <div class="char-img">🏞️</div>
         <div class="char-info">
           <h4>${e.name}</h4>
-          <div class="char-detail">${e.desc || ''}</div>
         </div>
       </div>
       <div style="margin-top:8px">
-        <label style="font-size:11px;color:var(--text-dim);margin-bottom:4px;display:block">✏️ Prompt de referencia (editable)</label>
-        <textarea id="scenPrompt_${e.id}" style="width:100%;height:80px;font-size:11px;resize:vertical;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:var(--text);padding:6px;line-height:1.4">${scenarioDefaultPrompt(e).replace(/`/g,"'")}</textarea>
+        <label style="font-size:11px;color:var(--text-dim);margin-bottom:4px;display:block">✏️ Descripción del lugar (ancla sus escenas — editable)</label>
+        <textarea id="scenDesc_${e.id}" style="width:100%;height:100px;font-size:11px;resize:vertical;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:var(--text);padding:6px;line-height:1.4">${String(e.desc || '').replace(/`/g,"'")}</textarea>
       </div>
-      <button class="btn-sec" style="margin-top:6px" onclick="generateScenarioImage('${e.id}')">🎨 ${imgB64 ? 'Regenerar' : 'Generar'} Referencia</button>
+      <button class="btn-sec" style="margin-top:6px" onclick="saveScenarioDesc('${e.id}')">💾 Guardar descripción</button>
     </div>`).join('') + `
     <div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:8px">
-      <p style="font-size:11px;color:var(--text-dim);margin:0 0 8px;line-height:1.4">¿Las imágenes de escena salen con fondos distintos? Vinculá cada escena a su lugar para que compartan la misma referencia. (Las imágenes ya generadas hay que regenerarlas después para que tomen el fondo.)</p>
+      <p style="font-size:11px;color:var(--text-dim);margin:0 0 8px;line-height:1.4">¿Fondos inconsistentes entre escenas del mismo lugar? Vinculá cada escena a su escenario — así todas reciben la misma descripción del sitio. Después regenerá las imágenes de esas escenas.</p>
       <button class="btn-sec" onclick="relinkScenesToScenarios()">🔗 Vincular escenas de este episodio a estos escenarios</button>
     </div>`;
 }
 
-window.generateScenarioImage = async function(scenId) {
+window.saveScenarioDesc = function(scenId) {
   const e = (state.universe?.escenarios || []).find(x => x.id === scenId);
-  if (!e) return;
-  showToast(`Generando referencia de "${e.name}"...`, 'success');
-  try {
-    const textarea = document.getElementById('scenPrompt_' + scenId);
-    const prompt = textarea?.value.trim() || scenarioDefaultPrompt(e);
-    let imgB64 = null, lastErr = null;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      try {
-        imgB64 = await generateImage(prompt, null);
-        break;
-      } catch(err) {
-        lastErr = err;
-        const isRL = err.message.includes('429') || err.message.toLowerCase().includes('exhausted');
-        if (isRL) {
-          const w = [30,60,90,120,180][attempt];
-          showToast(`⏳ Rate limit ${w}s (${attempt+1}/5)...`, 'error');
-          await new Promise(r => setTimeout(r, w * 1000));
-        } else throw err;
-      }
-    }
-    if (!imgB64) throw lastErr || new Error('No se pudo generar');
-    await dbSet(scenImgKey(e.id), imgB64);
-    renderScenarios();
-    showToast(`Referencia "${e.name}" lista`, 'success');
-  } catch(err) {
-    openErrorModal('Error referencia escenario', err.message);
-  }
+  const ta = document.getElementById('scenDesc_' + scenId);
+  if (!e || !ta) return;
+  const v = ta.value.trim();
+  if (!v) { showToast('La descripción no puede quedar vacía', 'error'); return; }
+  e.desc = v;
+  saveState();
+  showToast(`Descripción de "${e.name}" guardada — regenerá las imágenes de sus escenas para aplicarla`, 'success');
 };
 
 // ─── SCENARIOS ARE EXTRACTED FROM THE STORY (story first, always) ───
@@ -2470,7 +2426,7 @@ async function extractScenariosFromStory(storyText) {
 // ─── RE-LINK: assign each already-written scene to one of the universe's
 // scenarios by matching its narration. This is the piece that makes
 // "same place → same background" actually work: buildSceneEnvContext reads
-// s.escenario to pull the location's reference image. Runs after scenarios
+// s.escenario to inject the location's anchoring DESCRIPTION. Runs after scenarios
 // are (re)extracted, so scenes generated before the scenarios existed still
 // get anchored — WITHOUT regenerating any prompt or image. ───
 async function assignScenariosToScenes() {
@@ -2703,11 +2659,6 @@ window.openCharImage = async function(charId) {
   await openImageByKey(charImgKey(charId), ch ? `Personaje · ${ch.name}` : 'Personaje');
 };
 
-// Scenario reference image.
-window.openScenarioImage = async function(scenId) {
-  const e = (state.universe?.escenarios || []).find(x => x.id === scenId);
-  await openImageByKey(scenImgKey(scenId), e ? `Escenario · ${e.name}` : 'Escenario');
-};
 
 window.editScenePrompts = function(sceneId) {
   const s = state.scenes.find(x => x.id === sceneId);
@@ -2809,17 +2760,14 @@ window.saveAndRegenAll = async function(sceneId) {
 // Build environment context for a scene: hour/weather text suffix +
 // the scenario reference image (if the user generated it) so the image
 // model anchors the background to the exact same location every time.
-async function buildSceneEnvContext(s) {
+function buildSceneEnvContext(s) {
   const u = state.universe || {};
   let envText = getEnvSuffix();
-  let scenarioRef = null;
   const esc = (u.escenarios || []).find(e => e.id === s.escenario);
   if (esc) {
-    envText = ` LOCATION (keep consistent): ${esc.desc || esc.name}.` + envText;
-    const img = await dbGet(scenImgKey(esc.id));
-    if (img) scenarioRef = { name: esc.name, img };
+    envText = ` LOCATION — same place throughout the episode, anchored by this description: ${esc.desc || esc.name}. Render this location from whatever camera angle and viewpoint THIS shot needs (do NOT repeat the same framing every time); the character is physically INSIDE this space, integrated with its furniture, lighting and shadows.` + envText;
   }
-  return { envText, scenarioRef };
+  return { envText };
 }
 
 window.generateSceneImageAB = async function(sceneId, slot) {
@@ -2831,7 +2779,7 @@ window.generateSceneImageAB = async function(sceneId, slot) {
   try {
     // Only pass refs for characters mentioned in THIS prompt
     const refs = await getRefsForPrompt(prompt);
-    const env = await buildSceneEnvContext(s);
+    const env = buildSceneEnvContext(s);
     let imgB64 = null, lastErr = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
@@ -3122,21 +3070,13 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
     return [...matched.values()];
   }
 
-  // Pre-compress scenario reference images once (universe locations)
-  const scenRefCache = {}; // escenario id -> { name, img (compressed), preCompressed }
-  for (const e of (state.universe?.escenarios || [])) {
-    const raw = await dbGet(scenImgKey(e.id));
-    if (!raw) continue;
-    const compressed = await compressBase64Image(String(raw).replace(/^data:image\/[a-z]+;base64,/i, ''), 768, 0.85);
-    scenRefCache[e.id] = { name: e.name, img: compressed, preCompressed: true };
-  }
   const envSuffixNow = getEnvSuffix();
   function envForScene(s) {
     const u = state.universe || {};
     const esc = (u.escenarios || []).find(e => e.id === s.escenario);
     let envText = envSuffixNow;
-    if (esc) envText = ` LOCATION (keep consistent): ${esc.desc || esc.name}.` + envText;
-    return { envText, scenarioRef: (esc && scenRefCache[esc.id]) || null };
+    if (esc) envText = ` LOCATION — same place throughout the episode, anchored by this description: ${esc.desc || esc.name}. Render this location from whatever camera angle and viewpoint THIS shot needs (do NOT repeat the same framing every time); the character is physically INSIDE this space, integrated with its furniture, lighting and shadows.` + envText;
+    return { envText };
   }
 
   // Build list of all images needed: up to 3 per scene (A/B/C)
@@ -3213,16 +3153,12 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
     .trim() + (env.envText || '') + ' ' + ANIME_VISUAL_STYLE_CORE + ' FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side.';
 
   const isEcchi = (state.universe?.subgenres || []).some(s => ['ecchi','harem','harem_inverso'].includes(s));
-  const scenarioRef = (env.scenarioRef && env.scenarioRef.img)
-    ? { name: env.scenarioRef.name || 'location', img: env.scenarioRef.img, mimeType: 'image/jpeg' }
-    : null;
 
   // Attempt 1: with character refs
   if (preCompressedRefs && preCompressedRefs.length) {
     const bodyObj = {
       prompt: cleanPrompt,
       characterRefs: preCompressedRefs,
-      scenarioRef,
       model: model === 'auto' ? null : model,
       isEcchi,
       aspectRatio,
@@ -3252,7 +3188,6 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
     body: JSON.stringify({
       prompt: cleanPrompt,
       characterRefs: null,
-      scenarioRef,
       model: model === 'auto' ? null : model,
       isEcchi,
       aspectRatio,
