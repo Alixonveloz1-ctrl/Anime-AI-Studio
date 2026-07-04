@@ -110,7 +110,7 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
   if (characterRefs && characterRefs.length > 0) {
     for (const ref of characterRefs) {
       parts.push({ inlineData: { mimeType: ref.mimeType || 'image/png', data: ref.img } });
-      parts.push({ text: `↑ CHARACTER REFERENCE: This is ${ref.name}. Draw ${ref.name} with EXACTLY this appearance — same face shape, same hair color and style, same eye color, same outfit. Do NOT mix up characters.` });
+      parts.push({ text: `↑ CHARACTER REFERENCE: This is ${ref.name}. This reference defines IDENTITY ONLY — copy the face shape, hair color and style, eye color, and outfit EXACTLY. Do NOT copy this reference's pose, framing, size or white background. REDRAW ${ref.name} from scratch at the body pose, viewing angle and SCALE that the scene requires — correctly proportioned against the furniture and environment, feet grounded, sharing the scene's perspective, lighting and shadows. Do NOT mix up characters.` });
     }
     const namesList = characterRefs.map(r => r.name).join(', ');
     const ecchiRules = isEcchi ? `
@@ -121,12 +121,13 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
 
 MANDATORY RULES:
 1. NO text, NO letters, NO watermarks, NO captions, NO subtitles anywhere in the image.
-2. ONLY draw characters explicitly mentioned in the scene. Do not add extra people.
+2. Draw EVERY character named in the scene — if two or three are named, ALL of them must appear in the image. Do not add extra people beyond those mentioned.
 3. Each character appears EXACTLY ONCE — never duplicate.
 4. Match EACH character to THEIR reference image. Do not swap faces or designs.
 5. Female characters: long hair (shoulder-length or longer), soft anime features, clean skin.
 6. Faces must be clear, well-defined, anatomically correct — no blur, no distortion.
-7. Style: ${aspectStyle} cinematic anime key visual — fine detailed linework, soft gradient shading, richly detailed background, filmic lighting. NOT flat, NOT simplified.${ecchiRules}
+7. Style: ${aspectStyle} cinematic anime key visual — fine detailed linework, soft gradient shading, richly detailed background, filmic lighting. NOT flat, NOT simplified.
+8. Characters INTEGRATED into the environment at true real-world scale — feet grounded with contact shadows, natural headroom below the ceiling, matching the room's perspective and light. Never oversized, never floating, never pasted over the background.${ecchiRules}
 
 Scene to illustrate:
 ${cleanPrompt}` });
