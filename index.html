@@ -1379,14 +1379,12 @@ const GENRE_PROMPTS = {
 - Mundo con MAGIA, criaturas sobrenaturales o sistemas de poder fantásticos
 - Reglas internas claras del sistema mágico
 - NO es el mundo real moderno — es un universo de fantasía propio`,
-  isekai: `GÉNERO: Isekai COMEDIA. Elementos característicos del género (ajusta según el concepto del usuario):
-- El protagonista transmigra a un nuevo mundo o cuerpo. Puede ser mundo fantástico, Japón moderno, China antigua, o cualquier setting donde sea un "recién llegado".
-- La comedia nace del CHOQUE entre la mentalidad de su vida anterior y las reglas absurdas de su nueva vida: malentendidos, planes prácticos que salen al revés, éxitos accidentales.
-- El protagonista reacciona de forma práctica/mercenaria: calcula costos y beneficios, nunca se pone dramático.
-- Suele haber un COMPAÑERO con UN rasgo definidor fijo (asignado por separado) que aparece en los peores momentos — salvo que el concepto del usuario indique lo contrario.
-- Suele haber una FIGURA DE AUTORIDAD competente que hace todo bien pero siempre pierde contra los éxitos accidentales del protagonista — salvo que el concepto del usuario indique lo contrario.
-- SIN SISTEMA por defecto: este género NO incluye sistemas, ventanas de estado, stats, niveles, misiones ni notificaciones — esos elementos pertenecen EXCLUSIVAMENTE al subgénero "Sistema/Awakening" y solo existen si ese subgénero fue seleccionado.
-- El tono es COMEDIA ABSURDA de situaciones y personajes.`,
+  isekai: `GÉNERO: Isekai — transmigración a otro mundo o cuerpo. El TONO (drama, comedia, oscuro...) lo deciden los SUBGÉNEROS seleccionados; estos son los elementos del género:
+- El protagonista despierta en un nuevo mundo o cuerpo — mundo fantástico, época antigua, Japón o China rural, o cualquier setting donde sea un "recién llegado" con la mentalidad de su vida anterior.
+- Su ventaja es el CONOCIMIENTO de su vida pasada (oficios, ciencia básica, criterio moderno) aplicado con ingenio y costo real — no poderes gratuitos.
+- El CHOQUE entre su mentalidad anterior y las reglas del nuevo mundo genera las situaciones centrales: en tono dramático, tensión y consecuencias reales; en tono cómico, malentendidos y planes que salen al revés.
+- Debe lidiar con la vida que el cuerpo ya tenía: familia, deudas, enemigos y reputación heredada.
+- SIN SISTEMA por defecto: este género NO incluye sistemas, ventanas de estado, stats, niveles, misiones ni notificaciones — esos elementos pertenecen EXCLUSIVAMENTE al subgénero "Sistema/Awakening" y solo existen si ese subgénero fue seleccionado.`,
   mecha: `GÉNERO: Mecha.
 - Protagonista pilota un robot gigante de combate
 - Escenas de batalla entre mechas, política militar, tecnología avanzada
@@ -1436,20 +1434,14 @@ const GENRE_PROMPTS = {
 - El protagonista lucha por sobrevivir en un entorno hostil (apocalipsis, isla, juego mortal, etc.)
 - Recursos escasos, decisiones desesperadas, dilemas morales bajo presión extrema
 - La muerte es una amenaza real y constante — la tensión nunca baja`,
-  videojuego: `GÉNERO: Videojuego/Sistema — COMEDIA.
-- El protagonista tiene un SISTEMA con notificaciones formales y burocráticas: "Habilidad desbloqueada. Objetivo detectado. Valor estimado: X puntos."
-- El sistema SIEMPRE identifica objetivos o loot que resultan absurdamente inapropiados: el "objetivo débil" es el comandante aliado, el "ítem raro" es la comida de alguien, etc.
-- Protagonista: práctico, mercenario, siempre calculando compensación. NUNCA dramático.
-- Suele haber un compañero fijo con UN rasgo cómico (asignado por separado) — salvo que el concepto del usuario indique lo contrario.
-- Suele haber una figura de autoridad (GM del juego, líder del gremio) que hace todo correcto y siempre sufre las consecuencias de las acciones accidentales del protagonista — salvo que el concepto del usuario indique lo contrario.
-- Humor absurdo: la gracia viene de la brecha entre lo que el sistema promete y lo que en realidad entrega.`,
-  donghua: `GÉNERO: Donghua / Cultivación — COMEDIA.
-- Mundo de cultivación (qi, núcleo dorado, rangos de poder) ambientado en China antigua, moderna o fantástica.
-- El protagonista tiene un sistema o sentido de cultivación que detecta "concentraciones de energía espiritual" — que siempre resultan ser el almuerzo de alguien, un tesoro de secta prohibido, o equipo militar.
-- Protagonista: práctico, mercenario, siempre calculando cuántas piedras espirituales vale la recompensa. NUNCA dramático.
-- Suele haber un compañero fijo con UN rasgo cómico (asignado por separado) — salvo que el concepto del usuario indique lo contrario.
-- Suele haber un anciano/patriarca de secta competente que hace todo bien y aun así pierde prestigio por culpa del protagonista — salvo que el concepto del usuario indique lo contrario.
-- Humor absurdo: la gracia viene de la brecha entre lo que el sistema de cultivación promete y lo que realmente ocurre.`,
+  videojuego: `GÉNERO: Videojuego/Sistema. El TONO (drama, comedia, oscuro...) lo deciden los SUBGÉNEROS seleccionados; estos son los elementos del género:
+- El protagonista tiene un SISTEMA con notificaciones concretas ("Habilidad desbloqueada. Objetivo detectado. Nivel 2.") — el sistema ES el núcleo del género y siempre está presente.
+- El sistema tiene reglas claras, costos y misiones con recompensas específicas; el poder se gana con esfuerzo concreto.
+- En tono serio: cada notificación tiene peso y riesgo reales. En tono cómico: el sistema identifica objetivos absurdamente inapropiados y la gracia está en la brecha entre lo que promete y lo que entrega.`,
+  donghua: `GÉNERO: Donghua / Cultivación. El TONO (drama, comedia, oscuro...) lo deciden los SUBGÉNEROS seleccionados; estos son los elementos del género:
+- Mundo de cultivación (qi, núcleo dorado, rangos de poder, sectas) en China antigua, moderna o fantástica — el sistema de cultivación ES el núcleo del género y siempre está presente.
+- Progresión visible con reglas duras: entrenamiento, avances de rango, torneos, sectas rivales, humillación y revancha.
+- En tono serio: peso épico, consecuencias mortales, progreso ganado paso a paso. En tono cómico: el sentido de cultivación detecta "energías espirituales" que resultan ser cosas absurdas.`,
 };
 
 
@@ -1464,9 +1456,11 @@ const GENRE_PROMPTS = {
 // formula (bureaucratic detection system, mercenary protagonist, suffering
 // authority figure). All OTHER genres are played straight — faithful to their
 // real tone — unless the user explicitly checks the 'comedia' subgenre.
-const COMEDY_GENRES = ['isekai', 'videojuego', 'donghua', 'romcom'];
+// Comedia SOLO por selección explícita: el subgénero "comedia", o el género
+// RomCom (cuyo propio nombre es Comedia Romántica). Isekai, videojuego y
+// donghua ya NO fuerzan comedia — su tono lo deciden los subgéneros elegidos.
 function isComedyMode(genero, subgenres) {
-  return COMEDY_GENRES.includes(genero) || (subgenres || []).includes('comedia');
+  return genero === 'romcom' || (subgenres || []).includes('comedia');
 }
 
 // ─── TIME OF DAY & WEATHER — English fragments appended at image time ───
@@ -1691,6 +1685,9 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     const GENRE_TONE_FIEL = {
       accion:       'ACTION: physical conflict drives every scene — fights, chases, confrontations with real stakes. Choreograph combat with concrete detail (distances, impacts, positioning). Momentum and adrenaline; victories cost something.',
       fantasia:     'FANTASY: a magic/power system with clear internal rules. Wonder and danger coexist. Show the logic and cost of magic through concrete use, not exposition dumps. Discoveries feel earned.',
+      isekai:       'ISEKAI (serious): a modern mind in another world or body. The weight is REAL — survival, social rules that punish mistakes, inherited debts and enemies. Past-life knowledge is used with cleverness and concrete cost; progress and trust are earned step by step. Culture clash creates tension and consequence, never gags.',
+      videojuego:   'GAME/SYSTEM (serious): the system (stats, levels, quests) is a real tool with real stakes — every notification matters, rewards cost something, power grows through concrete effort and risk. Tension from consequence, not parody.',
+      donghua:      'CULTIVATION (serious): qi, realms and sects with hard rules and mortal stakes. Humiliation, hidden training, breakthroughs and silent revenge carried with epic weight — concrete power details, earned progress, real consequences.',
       mecha:        'MECHA: giant-robot combat with tactical weight — machines have limits, pilots feel every hit, military pressure shapes decisions. Battles are the spine of the episode, with concrete mechanical detail.',
       drama:        'DRAMA: emotional weight carried by consequences, silences and decisions that cost something. Restraint over melodrama — show the emotion through actions and specific details, never declare it with empty adjectives. No comedy relief that undercuts the moment.',
       slice_of_life:'SLICE OF LIFE: beauty in small everyday moments — meals, work, conversations, weather, routines. No villains, no catastrophes. Warm, specific, unhurried; small realizations carry the weight.',
