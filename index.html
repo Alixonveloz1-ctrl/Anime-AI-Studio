@@ -1368,6 +1368,8 @@ const DEMO_PROMPTS = {
 - Tono épico con momentos de orgullo, humillación y venganza silenciosa`,
 };
 
+const SUBGENRE_FIDELITY_CONTRACT = `⚠️ CONTRATO DE FIDELIDAD A LA SELECCIÓN: el género principal y los subgéneros SELECCIONADOS son la ÚNICA fuente de tropos y mecánicas de la historia. Los elementos característicos de subgéneros NO seleccionados NO EXISTEN en esta historia. En concreto: si "Sistema/Awakening" NO está seleccionado, NO existe ningún sistema, ventana de estado, stats, niveles, misiones, notificaciones ni recompensas (únicas excepciones: los géneros videojuego y donghua, cuyo núcleo ES el sistema). Lo mismo con los demás: sin harén si no está seleccionado harem, sin eje escolar si no está escolar, sin apocalipsis si no está apocalipsis. El tono narrativo escrito por el usuario SIEMPRE tiene prioridad sobre cualquier plantilla de género.`;
+
 const GENRE_PROMPTS = {
   accion: `GÉNERO: Acción.
 - El MOTOR de la historia es el conflicto físico: peleas, persecuciones, enfrentamientos
@@ -1379,12 +1381,12 @@ const GENRE_PROMPTS = {
 - NO es el mundo real moderno — es un universo de fantasía propio`,
   isekai: `GÉNERO: Isekai COMEDIA. Elementos característicos del género (ajusta según el concepto del usuario):
 - El protagonista transmigra a un nuevo mundo o cuerpo. Puede ser mundo fantástico, Japón moderno, China antigua, o cualquier setting donde sea un "recién llegado".
-- OBLIGATORIO: El protagonista recibe un SISTEMA o habilidad especial con notificaciones en lenguaje burocrático seco: "Detección activada. Objetivo identificado. Recompensa estimada: X."
-- El sistema siempre identifica "oportunidades valiosas" que resultan ser absurdamente inapropiadas para la situación.
-- El protagonista reacciona de forma práctica/mercenaria: siempre calcula la recompensa, nunca se pone dramático.
-- Suele haber un COMPAÑERO con UN rasgo definidor fijo (asignado por separado) que menciona en los peores momentos — salvo que el concepto del usuario indique lo contrario.
+- La comedia nace del CHOQUE entre la mentalidad de su vida anterior y las reglas absurdas de su nueva vida: malentendidos, planes prácticos que salen al revés, éxitos accidentales.
+- El protagonista reacciona de forma práctica/mercenaria: calcula costos y beneficios, nunca se pone dramático.
+- Suele haber un COMPAÑERO con UN rasgo definidor fijo (asignado por separado) que aparece en los peores momentos — salvo que el concepto del usuario indique lo contrario.
 - Suele haber una FIGURA DE AUTORIDAD competente que hace todo bien pero siempre pierde contra los éxitos accidentales del protagonista — salvo que el concepto del usuario indique lo contrario.
-- El tono es COMEDIA ABSURDA: la gracia viene de la diferencia entre lo que el sistema promete y lo que realmente ocurre.`,
+- SIN SISTEMA por defecto: este género NO incluye sistemas, ventanas de estado, stats, niveles, misiones ni notificaciones — esos elementos pertenecen EXCLUSIVAMENTE al subgénero "Sistema/Awakening" y solo existen si ese subgénero fue seleccionado.
+- El tono es COMEDIA ABSURDA de situaciones y personajes.`,
   mecha: `GÉNERO: Mecha.
 - Protagonista pilota un robot gigante de combate
 - Escenas de batalla entre mechas, política militar, tecnología avanzada
@@ -1526,12 +1528,13 @@ REGLAS ABSOLUTAS:
 - Nombres reales (japoneses: Hiro, Yuki, Rin, Kaito, Mei / chinos: Lin Yan, Chen Wu, Wang, Liu, Zhang).
 - NUNCA nombres inventados genéricos (nada de Aethernam, Kael, Zythara).
 ${comedyMode
-  ? `- Fiel al género: si es isekai/videojuego/donghua, normalmente hay un SISTEMA de detección con notificaciones burocráticas; puede haber una figura de autoridad que sufre las consecuencias si encaja con la historia — no la fuerces si el concepto del usuario sugiere algo distinto.
+  ? `- Fiel al género y a los subgéneros SELECCIONADOS: la comedia nace de las situaciones y personajes propios del género elegido y de la premisa; puede haber una figura de autoridad que sufre las consecuencias si encaja con la historia — no la fuerces si el concepto del usuario sugiere algo distinto.
 - El "hook" y el "conflicto" DEBEN reflejar la comedia absurda del género, no drama épico.
 - En "hook" describe UNA situación cómica concreta del primer episodio, no una promesa vaga.`
   : `- FIDELIDAD ESTRICTA AL GÉNERO "${genero}": el universo, el conflicto y el hook deben reflejar el tono REAL de ese género (drama es drama, terror da miedo, misterio intriga) — NO lo conviertas en comedia, NO agregues sistemas de detección cómicos, NO suavices el tono.
 - En "hook" describe UNA situación concreta e impactante del primer episodio, fiel al género, no una promesa vaga.`}
 - NO mezclar géneros no solicitados.
+${SUBGENRE_FIDELITY_CONTRACT}
 ${concepto ? `- ⚠️ CRÍTICO — HAY UN CONCEPTO SEMILLA PROPORCIONADO POR EL USUARIO: ese concepto es CANON OBLIGATORIO, no una sugerencia. DEBES preservar EXACTAMENTE: los nombres de personajes que menciona (no los cambies, no los reemplaces con otros), la premisa central, y cada detalle específico que describe. Tu trabajo es EXPANDIR ese concepto (agregar ambientación, personajes secundarios coherentes, detalles del mundo) — NUNCA inventar una historia distinta ni renombrar lo que ya está definido. Si el concepto dice que un personaje se llama "Sofía", el universo resultante DEBE tener un personaje llamado "Sofía" — no "Yuki", no "Yuri", no ningún otro nombre.` : '- No hay concepto semilla: tienes libertad creativa total para inventar un universo ORIGINAL fiel al género.'}
 - Responde SOLO JSON válido sin markdown`;
 
@@ -1554,8 +1557,7 @@ INSTRUCCIÓN: El universo que generes DEBE ser este concepto, expandido con más
 
 ${concepto ? 'Expande el concepto semilla de arriba en un universo completo' : 'Crea un universo ORIGINAL y único'} que sea ESTRICTAMENTE FIEL al género "${genero}" con los subgéneros seleccionados integrados naturalmente.
 
-${comedyMode ? `IMPORTANTE: Si el género es isekai, videojuego o donghua, el universo TÍPICAMENTE incluye lo siguiente (es el default probado, pero ajústalo si el concepto del usuario sugiere una estructura distinta — la fidelidad al concepto es más importante):
-- Protagonista con un sistema/habilidad de detección que activa situaciones absurdas
+${comedyMode ? `IMPORTANTE (modo comedia): construí la comedia SOLO con los elementos del género principal y de los subgéneros SELECCIONADOS — situaciones absurdas concretas nacidas de la premisa, no drama épico:
 - Posiblemente un compañero con UN rasgo cómico definidor fijo (el rasgo específico se asigna en el paso de creación de personajes), solo si encaja con la historia
 - Posiblemente una figura de autoridad competente que será la víctima recurrente de los éxitos accidentales del protagonista, solo si encaja con la historia
 - El "hook" describe la primera situación absurda concreta, NO una promesa épica` : `IMPORTANTE: Este universo NO es una comedia. Respeta la atmósfera, los stakes y las convenciones reales del género "${genero}" — el resultado debe sentirse como un anime serio de ese género, no como una parodia.`}
@@ -1564,8 +1566,8 @@ Devuelve JSON:
 {
   "title": "Título con subtítulo español",
   "tagline": "${comedyMode ? 'Frase gancho cómica y directa (máx 12 palabras)' : 'Frase gancho directa y potente, fiel al tono del género (máx 12 palabras)'}",
-  "concepto": "${concepto ? 'El concepto semilla EXPANDIDO con más detalle — mismos nombres, misma premisa, más contexto (3-4 frases)' : (comedyMode ? 'Mundo y premisa en 2-3 frases, incluyendo qué hace el sistema/habilidad del protagonista' : 'Mundo y premisa en 2-3 frases, fieles al género seleccionado')}",
-  "conflicto": "${comedyMode ? 'El choque cómico central: qué busca el protagonista vs qué pasa realmente cada vez que usa su habilidad' : 'El conflicto central del género: qué quiere/necesita el protagonista y qué fuerza concreta se lo impide'}",
+  "concepto": "${concepto ? 'El concepto semilla EXPANDIDO con más detalle — mismos nombres, misma premisa, más contexto (3-4 frases)' : (comedyMode ? 'Mundo y premisa en 2-3 frases, dejando clara la fuente concreta de la comedia' : 'Mundo y premisa en 2-3 frases, fieles al género seleccionado')}",
+  "conflicto": "${comedyMode ? 'El choque cómico central: qué busca el protagonista vs qué le pasa realmente una y otra vez' : 'El conflicto central del género: qué quiere/necesita el protagonista y qué fuerza concreta se lo impide'}",
   "hook": "${comedyMode ? 'La situación absurda ESPECÍFICA del episodio 1 (concreta, no vaga)' : 'La situación ESPECÍFICA e impactante del episodio 1, fiel al género (concreta, no vaga)'}",
   "setting": "Lugar y época",
   "demo": "${demo}",
@@ -1787,7 +1789,9 @@ ${DEMO_PROMPTS[demo] || ''}
 
 ${GENRE_PROMPTS[genero] || ''}
 
-${subgenreText}`;
+${subgenreText}
+
+${SUBGENRE_FIDELITY_CONTRACT}`;
 
     // ─── Step 1: Characters (only for Episode 1 — reuse existing for 2+) ───
     // Ecchi rules apply whenever ecchi OR harem OR harem_inverso is selected —
@@ -3364,7 +3368,7 @@ document.getElementById('btnRepairScenes').addEventListener('click', async () =>
       btn.innerHTML = `<div class="spinner"></div> Reparando narración (${needsNarrationIdx.length})...`;
 
       const repairNarrationSys = `${repairComedy
-        ? 'You are a viral comedy anime scriptwriter for Facebook Reels, adult audience. Write first-person Spanish narrations following the viral comedy formula: mercenary practical protagonist, absurd system detections, escalating chaos, deadpan delivery — no drama, no forced emotion.'
+        ? 'You are a viral comedy anime scriptwriter for Facebook Reels, adult audience. Write first-person Spanish narrations following the viral comedy formula: mercenary practical protagonist, absurd escalating situations born ONLY from the premise of the story and its selected subgenres, deadpan delivery — no drama, no forced emotion. NEVER introduce systems, stat windows, notifications or any trope the universe does not already contain.'
         : `You are a viral anime scriptwriter for Facebook Reels, adult audience. Write first-person Spanish narrations STRICTLY FAITHFUL to the "${u.genero}" genre's real tone — no comedy, no parody, no comedic detection systems. Show, don't tell: build the genre's emotion from concrete events, actions and sensory detail, never empty emotional adjectives.`}${repairEcchi ? '\nECCHI/HAREM ACTIVE (adult content): all characters are adults (18 or older, each with their own adult age fitting their story role) in adult settings appropriate to the genre — never school uniforms or classrooms, nothing that frames characters as minors. Weave suggestive fan-service moments naturally where scenes allow, with genuine sensory detail; the only limit is what Gemini actually blocks.' : ''}
 RULES:
 - JSON field MUST be "narration" (no accent). EXACTLY 75-80 Spanish words. Count them.
