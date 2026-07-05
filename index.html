@@ -1856,11 +1856,13 @@ REGLAS DE PERSONAJES FEMENINOS (TODOS los géneros humanos):
 - Piel limpia, sin cicatrices, sin heridas, sin ojeras pronunciadas
 - Ropa adecuada al rol pero femenina
 
-REGLAS DE APARIENCIA PARA PERSONAJES HUMANOS (estilo anime — OBLIGATORIO):
-- La ropa se ve siempre LIMPIA, ENTERA y BIEN PUESTA. En anime nadie tiene ropa sucia, rota ni arrugada.
-- PROHIBIDO: "manchado", "arrugado", "roto", "desgastado", "viejo", "sucio", "raído", "deteriorado", "gastado", "desordenado"
-- Un barista lleva delantal limpio de lino. Un guerrero lleva armadura pulida. Una oficinista lleva un traje entallado impecable. Siempre.
-- Describir la ropa por ESTILO y COLOR únicamente: "delantal verde oscuro de lino", "camisa blanca de manga corta", "armadura plateada con detalles azules"
+REGLAS DE VESTIMENTA PARA PERSONAJES HUMANOS (OBLIGATORIO):
+- La ropa DEBE ser coherente con la ÉPOCA del setting y con la CONDICIÓN ECONÓMICA de cada personaje según el concepto — cada personaje según SU estatus, no todos iguales. Describir SIEMPRE: prenda + material + color + CONDICIÓN.
+- POBREZA en época ANTIGUA/feudal (o miseria extrema que el concepto declare): telas bastas (cáñamo, algodón crudo, lana burda), colores desteñidos, PARCHES visibles, dobladillos deshilachados — ej.: "yukata de algodón basto color índigo desteñido, con parches cuadrados en el hombro y el costado, dobladillo deshilachado".
+- Historia CONTEMPORÁNEA o personaje común/clase media: ropa moderna normal, limpia y en buen estado aunque sea sencilla y sin marca (jeans, camiseta, sudadera, uniforme de trabajo) — hoy en día la ropa modesta también se ve bien: NADA de parches ni telas burdas en settings actuales salvo que el concepto declare indigencia explícita.
+- Personaje ADINERADO o contexto formal: telas finas (seda, lino fino), colores vivos, prendas impecables — SOLO si el estatus de ese personaje lo justifica.
+- El desgaste, cuando aplica, es DIGNO al estilo anime/donghua: parches limpios, tela desteñida, bordes gastados — la ropa siempre bien puesta y entera en silueta; nada de harapos grotescos ni suciedad exagerada.
+- PROHIBIDO el default de lujo: nunca seda, telas finas ni ropa "impecable" en personajes cuya historia dice que son pobres.
 
 ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA (solo personajes humanos):
 - Personajes ADULTOS con rostro y cuerpo claramente adultos, en contextos adultos acordes al género y setting de la historia. Cada personaje tiene su PROPIA edad adulta asignada según su rol en la historia (18 años en adelante), con variedad real entre personajes — no les pongas a todos la misma edad. NUNCA colegiales/estudiantes de secundaria, NUNCA menores, NUNCA uniformes escolares, faldas plisadas de colegio ni ambientes de instituto/aula.
@@ -1931,7 +1933,7 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
             setProg(15, `Generando imágenes de ${newChars.length} personaje(s) nuevo(s)...`);
             for (const ch of newChars) {
               try {
-                const prompt = `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. NO text, NO letters, NO watermarks. Clean professional anime 2D art style, white background, character turnaround showing front side and back.`;
+                const prompt = `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. Render the clothing's fabric, colors and CONDITION exactly as described — if it says coarse, faded, patched or frayed, show it clearly; do NOT beautify, enrich or upgrade the clothes. NO text, NO letters, NO watermarks. Clean professional anime 2D art style, white background, character turnaround showing front side and back.`;
                 const imgB64 = await generateImage(prompt, null, null, { charSheet: true });
                 await dbSet(charImgKey(ch.id), imgB64);
                 renderCharacters();
@@ -2125,6 +2127,7 @@ LOS 3 PROMPTS DE CADA ESCENA SON 3 MOMENTOS DISTINTOS de la escena (3 fotogramas
 - CONTINUIDAD ENTRE ESCENAS: el prompt 1 de cada escena CONTINÚA desde donde quedó el prompt 3 de la escena anterior — las 45 imágenes del episodio son UNA secuencia visual continua de la misma historia, no ilustraciones sueltas. Si la escena anterior terminó en un lugar y esta empieza en otro, el prompt 1 muestra la llegada/transición natural.
 - INTEGRACIÓN FÍSICA: el personaje está DENTRO del espacio — interactuando con muebles y objetos, con sombras e iluminación coherentes con el lugar. NUNCA debe verse como un personaje pegado sobre un fondo.
 - CÁMARA LIBRE EN EL LUGAR: a lo largo del episodio mostrá el MISMO lugar desde posiciones y ángulos DIFERENTES (desde la puerta, desde la ventana, ángulo bajo, over-shoulder, rincones distintos) — no repitas siempre el mismo encuadre del escenario.
+- VESTIMENTA FIEL AL MUNDO: la ropa de cada personaje conserva el material y la CONDICIÓN de su ficha (basta, desteñida, con parches si es pobre) — nunca la embellezcas ni la conviertas en ropa elegante que la historia no justifica.
 
 CAMPO "escenario": asigná a cada escena el id EXACTO del escenario del universo donde ocurre (de la lista provista). Si el fragmento ocurre en un lugar que NO está en la lista, dejá "escenario" como "" (vacío) y describí ese lugar nuevo con detalle DENTRO de los 3 prompts — NUNCA asignes un escenario incorrecto solo por llenar el campo, porque su descripción anclaría un fondo equivocado.
 
@@ -2258,7 +2261,7 @@ async function renderCharacters() {
     return { ch, imgB64 };
   }));
   c.innerHTML = items.map(({ ch, imgB64 }) => {
-    const defaultPrompt = `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. NO text, NO letters, NO watermarks, NO labels anywhere in the image. Clean professional 2D anime hand-drawn style, white background, character turnaround showing front side and back.`;
+    const defaultPrompt = `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. Render the clothing's fabric, colors and CONDITION exactly as described — if it says coarse, faded, patched or frayed, show it clearly; do NOT beautify, enrich or upgrade the clothes. NO text, NO letters, NO watermarks, NO labels anywhere in the image. Clean professional 2D anime hand-drawn style, white background, character turnaround showing front side and back.`;
     return `
     <div class="char-card">
       <div class="char-header">
@@ -2288,7 +2291,7 @@ window.generateCharImage = async function(charId) {
     // Use editable prompt from textarea if available, else build default
     const textarea = document.getElementById('charPrompt_' + charId);
     const prompt = textarea?.value.trim() ||
-      `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. NO text, NO letters, NO watermarks. Clean professional 2D anime hand-drawn style, white background, character turnaround showing front side and back.`;
+      `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. Render the clothing's fabric, colors and CONDITION exactly as described — if it says coarse, faded, patched or frayed, show it clearly; do NOT beautify, enrich or upgrade the clothes. NO text, NO letters, NO watermarks. Clean professional 2D anime hand-drawn style, white background, character turnaround showing front side and back.`;
 
     // Never pass existing image as reference — it prevents the prompt from taking effect
     let imgB64 = null, lastErr = null;
@@ -3433,7 +3436,7 @@ RULES:
       btn.innerHTML = `<div class="spinner"></div> Generando ${needsImageOnlyIdx.length} descripciones visuales...`;
 
       const imageSys = `Eres un director de arte para anime/manhua. Para cada escena escribe TRES prompts de imagen en inglés (secuencia continua: momento inicial → desarrollo → cierre del fragmento), basados en la narración ya escrita — no inventas historia nueva. Entre los 3 prompts deben cubrir TODO lo que el texto de la escena narra, en orden cronológico. Los 3 prompts de una escena: MISMO lugar, MISMA ropa/peinado de cada personaje, solo cambia la acción que avanza y el ángulo de cámara. También asigna el campo "escenario" con el id exacto del escenario del universo donde ocurre la escena — si el lugar no está en la lista, deja "escenario" como "" y describe ese lugar dentro de los prompts (nunca asignes un escenario incorrecto).
-REGLAS: SIEMPRE en inglés. Cada prompt empieza con "${ANIME_STYLE_LEAD_IN} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello. Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. Si 2+ personajes están presentes en la escena, TODOS aparecen: el prompt 1 los muestra juntos; los prompts 2-3 pueden enfocar a uno pero los demás siguen visibles. Cuando el texto se enfoca en un personaje, el protagonista y los demás ya presentes SIGUEN en el lugar — inclúyelos por nombre salvo que la narración diga que salieron. Entre escenas consecutivas en el mismo escenario los personajes permanecen presentes salvo que la narración los saque. Los 3 prompts de cada escena son 3 MOMENTOS consecutivos que cubren TODO el fragmento en orden — nunca 3 versiones del mismo instante; cada prompt muestra SOLO lo visible en su momento (nada revelado después puede verse antes) y si el texto dice que el personaje entra o se mueve, ese prompt YA lo muestra en la nueva posición. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.${repairEcchi ? `
+REGLAS: SIEMPRE en inglés. Cada prompt empieza con "${ANIME_STYLE_LEAD_IN} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello con material y condición fieles a su ficha y a la economía del mundo (sin embellecer). Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. Si 2+ personajes están presentes en la escena, TODOS aparecen: el prompt 1 los muestra juntos; los prompts 2-3 pueden enfocar a uno pero los demás siguen visibles. Cuando el texto se enfoca en un personaje, el protagonista y los demás ya presentes SIGUEN en el lugar — inclúyelos por nombre salvo que la narración diga que salieron. Entre escenas consecutivas en el mismo escenario los personajes permanecen presentes salvo que la narración los saque. Los 3 prompts de cada escena son 3 MOMENTOS consecutivos que cubren TODO el fragmento en orden — nunca 3 versiones del mismo instante; cada prompt muestra SOLO lo visible en su momento (nada revelado después puede verse antes) y si el texto dice que el personaje entra o se mueve, ese prompt YA lo muestra en la nueva posición. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.${repairEcchi ? `
 ECCHI ACTIVO — LENGUAJE VISUAL: TODOS los personajes son ADULTOS (18 en adelante, cada uno con su edad adulta según su rol), en contextos adultos acordes al género — jamás uniformes escolares ni aulas, nada que sugiera menores. Usa lenguaje de cámara ecchi cuando la escena lo permita: "low angle shot revealing her thighs", "form-fitting dress emphasizing her shape", "wet shirt clinging to her figure", "hourglass silhouette", "long slender legs", "curvy figure" — sensual y sugerente, sin desnudez explícita.` : ''}
 Responde SOLO JSON válido sin markdown`;
 
