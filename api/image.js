@@ -91,7 +91,7 @@ async function callGeminiAtUrl(url, parts, projectId, token, aspectRatio) {
   return { ok: r.ok, shouldRotate, isSafetyBlock, status: r.status, data: d };
 }
 
-async function callGemini(model, prompt, characterRefs, projectId, token, isEcchi = false, aspectRatio = '9:16', scenarioRef = null) {
+async function callGemini(model, prompt, characterRefs, projectId, token, isEcchi = false, aspectRatio = '9:16', continuityRef = null) {
   let cleanPrompt = prompt;
   for (const [pattern, replacement] of BLOCKED_WORDS) {
     cleanPrompt = cleanPrompt.replace(pattern, replacement);
@@ -103,11 +103,12 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
   // Global art-style contract — FIRST part so it frames everything that follows
   parts.push({ text: `ART STYLE (non-negotiable, applies to the ENTIRE image and every character in it): high-budget cinematic 2D anime film, reference-tier MAPPA / Ufotable / top-tier cinematic donghua. Fine variable-weight linework, soft gradient cel-shading, large detailed anime eyes with specular highlights, richly detailed environment, filmic lighting. STRICTLY FORBIDDEN: western cartoon, webtoon-flat style, chibi, thick uniform outlines, flat 2-tone shading, 3D render, CGI, Disney/Pixar look, semi-realistic painted faces.` });
 
-  // Location/scenario reference goes FIRST — it anchors the background;
-  // character refs follow so they stay closest to the scene prompt.
-  if (scenarioRef && scenarioRef.img) {
-    parts.push({ inlineData: { mimeType: scenarioRef.mimeType || 'image/png', data: scenarioRef.img } });
-    parts.push({ text: `↑ LOCATION REFERENCE: This is the setting "${scenarioRef.name || 'location'}". Draw the scene IN this exact location — keep its architecture/terrain, layout, colors, key props and atmosphere consistent with this reference. Characters and camera angle may differ, but it must clearly be the same place.` });
+  // Continuity reference (the previous generated shot) goes FIRST after the
+  // style contract — it anchors location, lighting and wardrobe; character
+  // refs follow so they stay closest to the scene prompt.
+  if (continuityRef && continuityRef.img) {
+    parts.push({ inlineData: { mimeType: continuityRef.mimeType || 'image/jpeg', data: continuityRef.img } });
+    parts.push({ text: `↑ PREVIOUS SHOT (continuity reference): the immediately preceding shot of the SAME location with the SAME characters. Keep EXACTLY consistent with it: the location's architecture, furniture, colors and props, the lighting and time of day, and each character's clothing and hairstyle. BUT this new image is a DIFFERENT moment and a DIFFERENT camera angle — compose the NEW shot exactly as the scene text describes; do NOT copy this reference's framing, camera position or character poses.` });
   }
 
   if (characterRefs && characterRefs.length > 0) {
@@ -218,14 +219,13 @@ module.exports = async function handler(req, res) {
     }
     if (!prompt) return res.status(400).json({ error:'prompt required' });
 
-    // Optional location/scenario reference image
-    let scenarioRef = null;
-    if (body.scenarioRef && body.scenarioRef.img && typeof body.scenarioRef.img === 'string') {
-      const img = body.scenarioRef.img.replace(/^data:image\/[a-z]+;base64,/i, '').replace(/\s/g, '');
+    // Optional continuity reference: the previous generated shot of the chain
+    let continuityRef = null;
+    if (body.continuityRef && body.continuityRef.img && typeof body.continuityRef.img === 'string') {
+      const img = body.continuityRef.img.replace(/^data:image\/[a-z]+;base64,/i, '').replace(/\s/g, '');
       if (img.length > 100) {
-        scenarioRef = {
-          name: String(body.scenarioRef.name || 'location').trim(),
-          mimeType: body.scenarioRef.mimeType || 'image/png',
+        continuityRef = {
+          mimeType: body.continuityRef.mimeType || 'image/jpeg',
           img,
         };
       }
@@ -237,7 +237,7 @@ module.exports = async function handler(req, res) {
 
     const aspectRatio = body.aspectRatio || '9:16';
     const model = forceModel || 'gemini-2.5-flash-image';
-    const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true, aspectRatio, scenarioRef);
+    const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true, aspectRatio, continuityRef);
     return res.status(200).json(result);
   } catch(e) {
     return res.status(500).json({ error: e.message });
