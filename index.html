@@ -1704,8 +1704,8 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
       supervivencia:'SURVIVAL: scarce resources, desperate decisions, moral dilemmas under extreme pressure. Death is a constant, real threat — tension never fully drops. Concrete logistics (food, water, shelter, injuries) matter.',
     };
     const genreTone = comedyMode
-      ? (GENRE_TONE[genero] || 'Casual first person. Specific details. Let situations create impact, not emotional adjectives.')
-      : (GENRE_TONE_FIEL[genero] || 'Faithful to the selected genre: first person, specific concrete details, let events — not empty adjectives — create the impact.');
+      ? (GENRE_TONE[genero] || 'Third person, protagonist always named. Specific details. Let situations create impact, not emotional adjectives.')
+      : (GENRE_TONE_FIEL[genero] || 'Faithful to the selected genre: third person with the protagonist always named, specific concrete details, let events — not empty adjectives — create the impact.');
 
     const SCENE_ENDING = {
       accion:       'Each scene ends with an exciting moment, a power move, or a clash that makes you want to see the next second.',
@@ -1738,9 +1738,15 @@ CRITICAL: el campo JSON es "story" (un solo bloque de texto continuo, no un arra
 
 TU TAREA: escribí LA HISTORIA COMPLETA del episodio como narración continua y natural — NO como una lista de escenas desconectadas ni como una checklist que hay que marcar en cada párrafo. Contá una historia real con ritmo variable: algunos momentos rápidos, otros que respiran, diálogo cuando aporte. ${comedyMode ? 'Que la comedia fluya como la escribiría un guionista humano.' : 'Que la historia fluya como la escribiría un guionista humano del género.'}
 
-${comedyMode
-  ? 'ESTILO — anti-drama: prohibido "sentí terror / el corazón me latió / todo cambió en ese momento" — describí lo que pasó + la reacción práctica. Frases cortas y directas, números específicos cuando corresponda ("mil yuanes" no "mucho dinero"), diálogo natural intercalado, entrega seca de eventos absurdos.'
-  : 'ESTILO — mostrar, no declarar: evitá adjetivos emocionales vacíos ("sentí un terror indescriptible", "todo cambió en ese momento") — construí la emoción del género con hechos concretos, acciones, detalles sensoriales específicos y diálogo natural. Frases directas, números y datos específicos cuando corresponda. La intensidad viene de lo que PASA, no de etiquetas emocionales.'}
+ESTILO NARRATIVO VIRAL (obligatorio para TODOS los géneros — el género decide QUÉ pasa; esto decide CÓMO se cuenta):
+- TERCERA PERSONA omnisciente con el protagonista SIEMPRE NOMBRADO ("Kenji entró...", nunca "yo" ni "me").
+- GANCHO INICIAL: las primeras 3-4 frases de la historia plantean el conflicto o la injusticia con datos concretos que obligan a seguir viendo.
+- DIÁLOGO DIRECTO constante tejido en la narración — los personajes hablan con sus propias voces en líneas cortas ("—¿Crees que puedes entrar aquí?"); apuntá a que cerca de la MITAD del texto sean voces de personajes.
+- Frases CORTAS de hechos concretos. Números específicos siempre que aporten ("tres años", "mil yuanes", "una semana") — nunca vaguedades ("mucho tiempo", "mucho dinero").
+- PROHIBIDO el lirismo y los adjetivos emocionales vacíos ("sintió un terror indescriptible", "todo cambió en ese momento") — la emoción sale de lo que PASA y de lo que DICEN.
+- PREGUNTAS RETÓRICAS dosificadas (máximo 1-2 por tramo) al espectador o entre personajes ("¿Una semana? Le bastaron dos días.").
+- MINI-CLÍMAX CONSTANTES: cada 2-3 escenas un golpe de giro propio del género (venganza: humillación → bofetada de karma; misterio: pista → vuelco; romance: acercamiento → interrupción; terror: falsa calma → golpe; comedia: plan → desastre absurdo). NO un solo clímax al final.
+- Ritmo de avance permanente: cada frase mueve la historia; nada de párrafos contemplativos.
 
 ⚠️ NADA se convierte en tic mecánico repetido en cada párrafo — ni ${comedyMode ? 'el dinero/recompensa, ni ' : ''}una reacción fija de un personaje, ni una frase tipo. ${comedyMode ? 'Si el protagonista calcula una recompensa, que pase con variación real a lo largo de la historia — no lo repitas después de cada incidente como si fuera una casilla que hay que marcar.' : 'Cualquier recurso narrativo debe variar de forma real a lo largo de la historia — nada de repetir la misma fórmula en cada tramo.'}
 
@@ -1750,11 +1756,11 @@ TONO DE GÉNERO (${comedyMode ? 'mecánica cómica de referencia, no mandato de 
 ${genreTone}
 ${u.conceptoOriginal ? `🎯 EL CONCEPTO DEFINE EL SETTING: el concepto semilla del usuario (marcado CANON arriba) es el mundo real de esta historia. Si es contemporáneo/realista, quedate ahí — sin reinos, magia ni tecnología futurista que el concepto no mencione. Aplicá solo la mecánica cómica de tono (arriba) a ese setting ya establecido.` : ''}
 
-CIERRE: ${sceneEnding} — terminá con un gancho claro hacia el episodio ${epNum + 1}.
-${isGrounded ? `MODO COTIDIANO ACTIVO: día a día real y específico, CERO fantasmas, CERO poderes — el humor viene de situaciones reales.` : `MODO NARRATIVO ACTIVO: la emoción viene de los hechos, no de adjetivos. "Disparo y fallo. El monstruo está a diez metros." No "el terror me paraliza".`}
+CIERRE: ${sceneEnding} — terminá con un CLIFFHANGER seco y concreto hacia el episodio ${epNum + 1} — una amenaza visible, una llegada, una frase cortada; no una reflexión.
+${isGrounded ? `MODO COTIDIANO ACTIVO: día a día real y específico, CERO fantasmas, CERO poderes — el humor viene de situaciones reales.` : `MODO NARRATIVO ACTIVO: la emoción viene de los hechos, no de adjetivos. "Kenji dispara y falla. El monstruo está a diez metros." No "el terror lo paraliza".`}
 ${!allowsSuper && !allowsSuper2 ? `⚠️ RESTRICCIÓN: sin elementos sobrenaturales para el género ${genero}.` : ''}
 
-EXTENSIÓN Y FORMATO: entre 1,100 y 1,250 palabras en total, español, primera persona (YO), tiempo pasado inmediato. Un solo bloque de texto continuo — esta llamada NO genera imágenes ni divide en escenas todavía, eso es un paso separado.
+EXTENSIÓN Y FORMATO: entre 1,100 y 1,250 palabras en total, español, TERCERA PERSONA omnisciente (el protagonista SIEMPRE por su nombre — nunca "yo"), tiempo pasado inmediato. Un solo bloque de texto continuo — esta llamada NO genera imágenes ni divide en escenas todavía, eso es un paso separado.
 Responde SOLO JSON válido sin markdown`;
 
     // Split ecchi rules: narration guidance goes with the narration call,
@@ -1954,7 +1960,7 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
     const charRefShort = state.characters.map(c => c.name).join(', ');
 
     // 15 escenas × 1 imagen = 15 imágenes por episodio
-    const narrationShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"~75-80 palabras tomadas de la historia original en primera persona (YO), cortadas en un punto natural — no reescribas ni le agregues un gancho artificial, solo extraé el fragmento que corresponde."}`;
+    const narrationShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"~75-80 palabras tomadas de la historia original en tercera persona (protagonista nombrado), cortadas en un punto natural — no reescribas ni le agregues un gancho artificial, solo extraé el fragmento que corresponde."}`;
 
     // ─── STEP: write the full episode as ONE continuous story — no per-scene
     // checklist, so nothing (money amounts, character beats, reactions)
@@ -1996,7 +2002,7 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
     // across calls) — it only restructures text that already exists in
     // front of it, the same safe pattern the image-prompt call already used. ───
     const splitSysPrompt = `Sos un editor que divide una historia YA TERMINADA en exactamente 15 fragmentos secuenciales para un formato de video corto. NO agregues historia nueva, NO reescribas el contenido ni el estilo — dividí el texto ya escrito en 15 cortes naturales, preservando el orden y el contenido original. Podés ajustar levemente las palabras justo en los puntos de corte para que cada fragmento se lea bien de forma independiente, pero el contenido, los eventos y el estilo son los del autor original — vos solo cortás.
-Cada fragmento: ~75-80 palabras en español, primera persona (YO).
+Cada fragmento: ~75-80 palabras en español, tercera persona (protagonista siempre por su nombre).
 ⚠️ REGLA DE CORTE ABSOLUTA: cada fragmento DEBE empezar al inicio de una oración y DEBE terminar con puntuación final (. ! ? …). JAMÁS cortes a mitad de una oración — cada fragmento se convierte en un audio expresivo INDEPENDIENTE, y si una oración queda partida entre dos fragmentos la voz cambia de tono a mitad de la frase y se rompe la continuidad auditiva. Preferí un fragmento de 70 o de 88 palabras antes que cortar una oración por la mitad. Antes de devolver, verificá que los 15 fragmentos terminen en . ! ? o …
 Asigná "act" según la posición: fragmentos 1-2 = "cold_open", 3-6 = "act1", 7-12 = "act2", 13-14 = "clímax", 15 = "resolución".
 Cada fragmento necesita un "title" corto (3-6 palabras).
@@ -2135,7 +2141,7 @@ REGLAS DE CADA PROMPT:
 - Si 2+ personajes en la escena: "Scene with Kenji and Ayame:" y describir apariencia de cada uno
 - Máximo 3 personajes por imagen
 - TODOS LOS PRESENTES APARECEN: si la narración tiene 2+ personajes presentes en el lugar, el prompt 1 (plano amplio) los muestra a TODOS juntos interactuando; los prompts 2-3 pueden acercarse a uno, pero los demás siguen visibles en el encuadre o en segundo plano. Un personaje presente NUNCA desaparece del lugar entre las 3 imágenes de la misma escena.
-- EL NARRADOR ESTÁ EN ESCENA: la narración es en primera persona — el protagonista narrador está FÍSICAMENTE presente aunque su nombre no aparezca en el texto ("yo", "me", "mi" = el protagonista). Cuando otro personaje actúa o habla, el protagonista SIGUE AHÍ: inclúyelo por su nombre en los prompts junto al otro, salvo que la narración diga explícitamente que salió del lugar.
+- PRESENCIA CONTINUA: cuando un fragmento se enfoca en las acciones o diálogos de UN personaje, el protagonista y cualquier otro personaje ya presentes en el lugar SIGUEN AHÍ — inclúyelos por su nombre en los prompts, salvo que la narración diga explícitamente que salieron.
 - PERMANENCIA ENTRE ESCENAS: si escenas consecutivas ocurren en el MISMO escenario y la narración no dice que alguien se fue, los MISMOS personajes siguen presentes en todas — NUNCA alternes mostrando a uno por escena.
 - ESCALA Y PROPORCIÓN: proporción humana correcta del personaje respecto a muebles y espacio — un adulto de pie tendría espacio libre sobre la cabeza (el techo NO justo encima). Mantené el tamaño real del escenario; no comprimas el espacio ni encajones al personaje.\n- CRÍTICO: el personaje NUNCA mira a la cámara. Describe la acción que está haciendo según la narración. Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"
 - PROHIBIDO en los prompts: naked, nude, explicit, sexual, genitals, nipples
@@ -3368,8 +3374,8 @@ document.getElementById('btnRepairScenes').addEventListener('click', async () =>
       btn.innerHTML = `<div class="spinner"></div> Reparando narración (${needsNarrationIdx.length})...`;
 
       const repairNarrationSys = `${repairComedy
-        ? 'You are a viral comedy anime scriptwriter for Facebook Reels, adult audience. Write first-person Spanish narrations following the viral comedy formula: mercenary practical protagonist, absurd escalating situations born ONLY from the premise of the story and its selected subgenres, deadpan delivery — no drama, no forced emotion. NEVER introduce systems, stat windows, notifications or any trope the universe does not already contain.'
-        : `You are a viral anime scriptwriter for Facebook Reels, adult audience. Write first-person Spanish narrations STRICTLY FAITHFUL to the "${u.genero}" genre's real tone — no comedy, no parody, no comedic detection systems. Show, don't tell: build the genre's emotion from concrete events, actions and sensory detail, never empty emotional adjectives.`}${repairEcchi ? '\nECCHI/HAREM ACTIVE (adult content): all characters are adults (18 or older, each with their own adult age fitting their story role) in adult settings appropriate to the genre — never school uniforms or classrooms, nothing that frames characters as minors. Weave suggestive fan-service moments naturally where scenes allow, with genuine sensory detail; the only limit is what Gemini actually blocks.' : ''}
+        ? 'You are a viral anime scriptwriter for Facebook Reels, adult audience. Write THIRD-PERSON Spanish narrations in the viral dubbed-donghua recap style: protagonist always NAMED (never first person), constant direct dialogue woven into the narration (about half the text is character voices), short concrete sentences with specific numbers, sparing rhetorical questions, comedic escalating situations born ONLY from the premise of the story and its selected subgenres, deadpan delivery — no drama, no forced emotion. NEVER introduce systems, stat windows, notifications or any trope the universe does not already contain.'
+        : `You are a viral anime scriptwriter for Facebook Reels, adult audience. Write THIRD-PERSON Spanish narrations (protagonist always NAMED, never first person; constant direct dialogue woven into the narration; short concrete sentences with specific numbers) STRICTLY FAITHFUL to the "${u.genero}" genre's real tone — no comedy, no parody, no comedic detection systems. Show, don't tell: build the genre's emotion from concrete events, actions and sensory detail, never empty emotional adjectives.`}${repairEcchi ? '\nECCHI/HAREM ACTIVE (adult content): all characters are adults (18 or older, each with their own adult age fitting their story role) in adult settings appropriate to the genre — never school uniforms or classrooms, nothing that frames characters as minors. Weave suggestive fan-service moments naturally where scenes allow, with genuine sensory detail; the only limit is what Gemini actually blocks.' : ''}
 RULES:
 - JSON field MUST be "narration" (no accent). EXACTLY 75-80 Spanish words. Count them.
 - Drop into the scene immediately. Specific over vague. End naturally for the genre.
@@ -3389,8 +3395,8 @@ RULES:
       else act = 'resolution';
 
       const lastGoodRef = lastGood ? `\nEscena anterior (${lastGood.num}): "${lastGood.narration}"` : '';
-      const sceneExample = `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"EXACTAMENTE 75-80 palabras primera persona"}`;
-      const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: 15 escenas.\nCada escena DEBE tener narration (EXACTAMENTE 75-80 palabras, primera persona, estilo natural del género).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
+      const sceneExample = `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"EXACTAMENTE 75-80 palabras en tercera persona (protagonista nombrado)"}`;
+      const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: 15 escenas.\nCada escena DEBE tener narration (EXACTAMENTE 75-80 palabras, tercera persona con el protagonista nombrado, diálogo directo intercalado, estilo natural del género).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
 
       let newNarrations = [];
       for (let attempt = 0; attempt < 3 && newNarrations.length < count; attempt++) {
@@ -3430,7 +3436,7 @@ RULES:
       btn.innerHTML = `<div class="spinner"></div> Generando ${needsImageOnlyIdx.length} descripciones visuales...`;
 
       const imageSys = `Eres un director de arte para anime/manhua. Para cada escena escribe TRES prompts de imagen en inglés (secuencia continua: momento inicial → desarrollo → cierre del fragmento), basados en la narración ya escrita — no inventas historia nueva. Entre los 3 prompts deben cubrir TODO lo que el texto de la escena narra, en orden cronológico. Los 3 prompts de una escena: MISMO lugar, MISMA ropa/peinado de cada personaje, solo cambia la acción que avanza y el ángulo de cámara. También asigna el campo "escenario" con el id exacto del escenario del universo donde ocurre la escena — si el lugar no está en la lista, deja "escenario" como "" y describe ese lugar dentro de los prompts (nunca asignes un escenario incorrecto).
-REGLAS: SIEMPRE en inglés. Cada prompt empieza con "${ANIME_STYLE_LEAD_IN} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello. Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. Si 2+ personajes están presentes en la escena, TODOS aparecen: el prompt 1 los muestra juntos; los prompts 2-3 pueden enfocar a uno pero los demás siguen visibles. El narrador en primera persona (el protagonista) está presente aunque su nombre no aparezca en el texto — inclúyelo por nombre salvo que la narración diga que no está. Entre escenas consecutivas en el mismo escenario los personajes permanecen presentes salvo que la narración los saque. Los 3 prompts de cada escena son 3 MOMENTOS consecutivos que cubren TODO el fragmento en orden — nunca 3 versiones del mismo instante; cada prompt muestra SOLO lo visible en su momento (nada revelado después puede verse antes) y si el texto dice que el personaje entra o se mueve, ese prompt YA lo muestra en la nueva posición. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.${repairEcchi ? `
+REGLAS: SIEMPRE en inglés. Cada prompt empieza con "${ANIME_STYLE_LEAD_IN} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello. Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. Si 2+ personajes están presentes en la escena, TODOS aparecen: el prompt 1 los muestra juntos; los prompts 2-3 pueden enfocar a uno pero los demás siguen visibles. Cuando el texto se enfoca en un personaje, el protagonista y los demás ya presentes SIGUEN en el lugar — inclúyelos por nombre salvo que la narración diga que salieron. Entre escenas consecutivas en el mismo escenario los personajes permanecen presentes salvo que la narración los saque. Los 3 prompts de cada escena son 3 MOMENTOS consecutivos que cubren TODO el fragmento en orden — nunca 3 versiones del mismo instante; cada prompt muestra SOLO lo visible en su momento (nada revelado después puede verse antes) y si el texto dice que el personaje entra o se mueve, ese prompt YA lo muestra en la nueva posición. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.${repairEcchi ? `
 ECCHI ACTIVO — LENGUAJE VISUAL: TODOS los personajes son ADULTOS (18 en adelante, cada uno con su edad adulta según su rol), en contextos adultos acordes al género — jamás uniformes escolares ni aulas, nada que sugiera menores. Usa lenguaje de cámara ecchi cuando la escena lo permita: "low angle shot revealing her thighs", "form-fitting dress emphasizing her shape", "wet shirt clinging to her figure", "hourglass silhouette", "long slender legs", "curvy figure" — sensual y sugerente, sin desnudez explícita.` : ''}
 Responde SOLO JSON válido sin markdown`;
 
