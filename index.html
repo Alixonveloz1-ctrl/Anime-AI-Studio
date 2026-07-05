@@ -1174,7 +1174,9 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
   const isEcchi = (state.universe?.subgenres || []).some(s => ['ecchi','harem','harem_inverso'].includes(s));
 
   const styleSpec = ANIME_VISUAL_STYLE_CORE;
-  const noLookSuffix = ' ' + styleSpec + ' Character actively in the scene, NOT posing, NOT looking at camera. Side angle or 3/4 view. FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side. The artwork must extend completely to all four edges of the image. Characters drawn at true real-world scale inside the environment — feet grounded with contact shadows, natural headroom, matching the perspective and lighting of the scene; never oversized or pasted over the background.';
+  const fullBleed = ' FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side. The artwork must extend completely to all four edges of the image.';
+  const sceneIntegration = ' ALL characters named in this prompt are visible in the frame, actively in the scene, NOT posing, NOT looking at camera. Side angle or 3/4 view. Characters drawn at true real-world scale inside the environment — feet grounded with contact shadows, natural headroom, matching the perspective and lighting of the scene; never oversized or pasted over the background.';
+  const noLookSuffix = opts.charSheet ? (' ' + styleSpec + fullBleed) : (' ' + styleSpec + sceneIntegration + fullBleed);
   const cleanPrompt = (String(prompt || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -1199,11 +1201,19 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
     if (processed.length) cleanRefs = processed;
   }
 
+  // Continuity reference: the previous generated shot in the same-location chain
+  let contRef = null;
+  if (opts.continuityRef && typeof opts.continuityRef === 'string') {
+    const rawC = opts.continuityRef.replace(/^data:image\/[a-z]+;base64,/i, '').replace(/\s/g, '');
+    if (rawC.length > 100) contRef = { img: await compressBase64Image(rawC, 768, 0.85), mimeType: 'image/jpeg' };
+  }
+
   const aspectRatio = document.getElementById('aspectRatio')?.value || '9:16';
 
   const bodyObj = {
     prompt: cleanPrompt,
     characterRefs: cleanRefs,
+    continuityRef: contRef,
     model: model === 'auto' ? null : model,
     isEcchi,
     aspectRatio,
@@ -1915,7 +1925,7 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
             for (const ch of newChars) {
               try {
                 const prompt = `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. NO text, NO letters, NO watermarks. Clean professional anime 2D art style, white background, character turnaround showing front side and back.`;
-                const imgB64 = await generateImage(prompt, null);
+                const imgB64 = await generateImage(prompt, null, null, { charSheet: true });
                 await dbSet(charImgKey(ch.id), imgB64);
                 renderCharacters();
                 showToast(`✅ Imagen generada: ${ch.name}`, 'success');
@@ -2121,6 +2131,8 @@ REGLAS DE CADA PROMPT:
 - Si 2+ personajes en la escena: "Scene with Kenji and Ayame:" y describir apariencia de cada uno
 - Máximo 3 personajes por imagen
 - TODOS LOS PRESENTES APARECEN: si la narración tiene 2+ personajes presentes en el lugar, el prompt 1 (plano amplio) los muestra a TODOS juntos interactuando; los prompts 2-3 pueden acercarse a uno, pero los demás siguen visibles en el encuadre o en segundo plano. Un personaje presente NUNCA desaparece del lugar entre las 3 imágenes de la misma escena.
+- EL NARRADOR ESTÁ EN ESCENA: la narración es en primera persona — el protagonista narrador está FÍSICAMENTE presente aunque su nombre no aparezca en el texto ("yo", "me", "mi" = el protagonista). Cuando otro personaje actúa o habla, el protagonista SIGUE AHÍ: inclúyelo por su nombre en los prompts junto al otro, salvo que la narración diga explícitamente que salió del lugar.
+- PERMANENCIA ENTRE ESCENAS: si escenas consecutivas ocurren en el MISMO escenario y la narración no dice que alguien se fue, los MISMOS personajes siguen presentes en todas — NUNCA alternes mostrando a uno por escena.
 - ESCALA Y PROPORCIÓN: proporción humana correcta del personaje respecto a muebles y espacio — un adulto de pie tendría espacio libre sobre la cabeza (el techo NO justo encima). Mantené el tamaño real del escenario; no comprimas el espacio ni encajones al personaje.\n- CRÍTICO: el personaje NUNCA mira a la cámara. Describe la acción que está haciendo según la narración. Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"
 - PROHIBIDO en los prompts: naked, nude, explicit, sexual, genitals, nipples
 - NO texto, NO letras, NO marcas de agua${genreExtraImage}
@@ -2275,7 +2287,7 @@ window.generateCharImage = async function(charId) {
     let imgB64 = null, lastErr = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
-        imgB64 = await generateImage(prompt, null);
+        imgB64 = await generateImage(prompt, null, null, { charSheet: true });
         break;
       } catch(e) {
         lastErr = e;
@@ -2771,6 +2783,32 @@ function buildSceneEnvContext(s) {
   return { envText };
 }
 
+// Continuity chain: find the previous generated image to use as visual reference.
+// Slot B chains from A; slot C from B (falling back to A). Slot A chains from the
+// nearest PREVIOUS scene that happens in the SAME escenario (its last C/B/A).
+// The chain resets automatically whenever the location changes.
+async function getContinuityRef(s, slot) {
+  try {
+    const tryList = [];
+    if (slot === 'C') tryList.push([s.id, 'B'], [s.id, 'A']);
+    else if (slot === 'B') tryList.push([s.id, 'A']);
+    if (s.escenario) {
+      const idx = state.scenes.findIndex(x => x.id === s.id);
+      for (let i = idx - 1; i >= 0; i--) {
+        const p = state.scenes[i];
+        if (!p || p.escenario !== s.escenario) continue;
+        tryList.push([p.id, 'C'], [p.id, 'B'], [p.id, 'A']);
+        break;
+      }
+    }
+    for (const [id, sl] of tryList) {
+      const img = await dbGet(sceneImgKeyBy(id, sl));
+      if (img && String(img).length > 100) return String(img);
+    }
+  } catch(_) {}
+  return null;
+}
+
 window.generateSceneImageAB = async function(sceneId, slot) {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
@@ -2781,6 +2819,7 @@ window.generateSceneImageAB = async function(sceneId, slot) {
     // Only pass refs for characters mentioned in THIS prompt
     const refs = await getRefsForPrompt(prompt);
     const env = buildSceneEnvContext(s);
+    env.continuityRef = await getContinuityRef(s, slot);
     let imgB64 = null, lastErr = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
@@ -3104,7 +3143,8 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
     let success = false, attempt = 0;
     while (!success && attempt < 8) {
       try {
-        const imgB64 = await generateImageRaw(prompt, getRefsFromCache(prompt), envForScene(s));
+        const contRef = await getContinuityRef(s, ab);
+        const imgB64 = await generateImageRaw(prompt, getRefsFromCache(prompt), { ...envForScene(s), continuityRef: contRef });
         await dbSet(sceneImgKeyBy(s.id, ab), imgB64);
         success = true; completed++;
         renderScenes(); // update UI immediately so user sees each image appear
@@ -3151,15 +3191,23 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
   const cleanPrompt = String(prompt || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim() + (env.envText || '') + ' ' + ANIME_VISUAL_STYLE_CORE + ' FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side. Characters drawn at true real-world scale inside the environment — feet grounded with contact shadows, natural headroom, matching the perspective and lighting of the scene; never oversized or pasted over the background.';
+    .trim() + (env.envText || '') + ' ' + ANIME_VISUAL_STYLE_CORE + ' ALL characters named in this prompt are visible in the frame, actively in the scene, NOT looking at camera. FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side. Characters drawn at true real-world scale inside the environment — feet grounded with contact shadows, natural headroom, matching the perspective and lighting of the scene; never oversized or pasted over the background.';
 
   const isEcchi = (state.universe?.subgenres || []).some(s => ['ecchi','harem','harem_inverso'].includes(s));
 
-  // Attempt 1: with character refs
-  if (preCompressedRefs && preCompressedRefs.length) {
+  // Continuity reference (previous shot of the same-location chain)
+  let contRef = null;
+  if (env.continuityRef && typeof env.continuityRef === 'string') {
+    const rawC = env.continuityRef.replace(/^data:image\/[a-z]+;base64,/i, '').replace(/\s/g, '');
+    if (rawC.length > 100) contRef = { img: await compressBase64Image(rawC, 768, 0.85), mimeType: 'image/jpeg' };
+  }
+
+  // Attempt 1: with reference images (characters and/or continuity)
+  if ((preCompressedRefs && preCompressedRefs.length) || contRef) {
     const bodyObj = {
       prompt: cleanPrompt,
-      characterRefs: preCompressedRefs,
+      characterRefs: (preCompressedRefs && preCompressedRefs.length) ? preCompressedRefs : null,
+      continuityRef: contRef,
       model: model === 'auto' ? null : model,
       isEcchi,
       aspectRatio,
@@ -3378,7 +3426,7 @@ RULES:
       btn.innerHTML = `<div class="spinner"></div> Generando ${needsImageOnlyIdx.length} descripciones visuales...`;
 
       const imageSys = `Eres un director de arte para anime/manhua. Para cada escena escribe TRES prompts de imagen en inglés (secuencia continua: momento inicial → desarrollo → cierre del fragmento), basados en la narración ya escrita — no inventas historia nueva. Entre los 3 prompts deben cubrir TODO lo que el texto de la escena narra, en orden cronológico. Los 3 prompts de una escena: MISMO lugar, MISMA ropa/peinado de cada personaje, solo cambia la acción que avanza y el ángulo de cámara. También asigna el campo "escenario" con el id exacto del escenario del universo donde ocurre la escena — si el lugar no está en la lista, deja "escenario" como "" y describe ese lugar dentro de los prompts (nunca asignes un escenario incorrecto).
-REGLAS: SIEMPRE en inglés. Cada prompt empieza con "${ANIME_STYLE_LEAD_IN} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello. Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. Si 2+ personajes están presentes en la escena, TODOS aparecen: el prompt 1 los muestra juntos; los prompts 2-3 pueden enfocar a uno pero los demás siguen visibles. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.${repairEcchi ? `
+REGLAS: SIEMPRE en inglés. Cada prompt empieza con "${ANIME_STYLE_LEAD_IN} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello. Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. Si 2+ personajes están presentes en la escena, TODOS aparecen: el prompt 1 los muestra juntos; los prompts 2-3 pueden enfocar a uno pero los demás siguen visibles. El narrador en primera persona (el protagonista) está presente aunque su nombre no aparezca en el texto — inclúyelo por nombre salvo que la narración diga que no está. Entre escenas consecutivas en el mismo escenario los personajes permanecen presentes salvo que la narración los saque. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.${repairEcchi ? `
 ECCHI ACTIVO — LENGUAJE VISUAL: TODOS los personajes son ADULTOS (18 en adelante, cada uno con su edad adulta según su rol), en contextos adultos acordes al género — jamás uniformes escolares ni aulas, nada que sugiera menores. Usa lenguaje de cámara ecchi cuando la escena lo permita: "low angle shot revealing her thighs", "form-fitting dress emphasizing her shape", "wet shirt clinging to her figure", "hourglass silhouette", "long slender legs", "curvy figure" — sensual y sugerente, sin desnudez explícita.` : ''}
 Responde SOLO JSON válido sin markdown`;
 
