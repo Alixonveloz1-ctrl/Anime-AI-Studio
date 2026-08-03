@@ -153,6 +153,10 @@
     color:var(--accent); font-weight:700;
     box-shadow:0 0 10px rgba(224,64,251,0.2);
   }
+  .sg-chip.sg-disabled {
+    opacity:0.35; cursor:not-allowed; text-decoration:line-through;
+  }
+  .sg-chip.sg-disabled:hover { background:rgba(255,255,255,0.04); border-color:var(--border); }
 
   /* ── Bottom Nav ── */
   .nav {
@@ -377,6 +381,9 @@
         <label class="sg-chip"><input type="checkbox" value="idols"> 🌟 Idols / Fama</label>
         <label class="sg-chip"><input type="checkbox" value="medicina"> 🏥 Medicina / Ciencia</label>
         <label class="sg-chip"><input type="checkbox" value="sistema_awakening"> ⚡ Sistema / Awakening</label>
+      </div>
+      <div id="demoCompatNote" style="display:none;font-size:11px;color:#ffb74d;background:rgba(255,183,77,0.08);border:1px solid rgba(255,183,77,0.25);border-radius:8px;padding:8px 10px;margin-bottom:4px;line-height:1.5">
+        ⚠️ La demografía <strong>Kodomomuke</strong> es infantil: los subgéneros para adultos (Ecchi, Harem, Harem Inverso, Gore) quedan desactivados. Elegí otra demografía para usarlos.
       </div>
 
       <label>Tono narrativo (opcional)</label>
@@ -757,8 +764,12 @@ function getCompanionQuirk() {
 
 function buildVideoPrompt(s) {
   const base      = (s.imagePromptA || s.narration || '').replace(/"/g,'').slice(0, 200);
-  const genre     = document.getElementById('generoSelect')?.value || 'accion';
-  const demo      = document.getElementById('demoSelect')?.value   || 'shonen';
+  // Read the genre from the SAVED universe, not from the form. The selects are
+  // only the creation form: after a reload or a project switch they still show
+  // their defaults, so this used to reference the wrong studio (accion/shonen)
+  // for every project once the page had been reloaded.
+  const genre     = state.universe?.genero || document.getElementById('generoSelect')?.value || 'accion';
+  const demo      = state.universe?.demo   || document.getElementById('demoSelect')?.value   || 'shonen';
   const studio   = STUDIO_BY_GENRE[genre]  || STUDIO_BY_GENRE['accion'];
   const demoRef  = STUDIO_BY_DEMO[demo]    || '';
   const noCamera = 'CRITICAL: Characters must be ACTING and DOING things in the scene, fully immersed in the story — NEVER posing, NEVER looking at the camera, NEVER facing the viewer. Use side angles, 3/4 views, over-shoulder, or from-behind perspectives. Characters interact with each other or with their environment.';
@@ -954,11 +965,55 @@ document.getElementById('btnApis').addEventListener('click', () => {
 
 // Chip toggle for subgenres — listen on the checkbox change (not label click)
 // to avoid double-toggle caused by label's native click → checkbox → bubbling.
+// Also enforces the two combinations that cannot both be true at once:
+// harem vs harem inverso (opposite casts), and the adult modifiers vs the
+// Kodomomuke (children's) demographic.
+const EXCLUSIVE_SUBGENRE_PAIRS = [['harem', 'harem_inverso']];
+
+function setChipSelected(value, checked) {
+  const cb = document.querySelector(`#subgeneroGrid .sg-chip input[value="${value}"]`);
+  if (!cb) return;
+  cb.checked = checked;
+  cb.closest('.sg-chip').classList.toggle('selected', checked);
+}
+
+// Greys out (and clears) the adult-only chips while Kodomomuke is selected,
+// so the demographic and the subgenres can never ask for opposite things.
+function applyDemoCompatibility() {
+  const demo = document.getElementById('demoSelect')?.value;
+  const blocked = isAllAges(demo);
+  document.querySelectorAll('#subgeneroGrid .sg-chip').forEach(chip => {
+    const cb = chip.querySelector('input[type="checkbox"]');
+    if (!cb || !ADULT_ONLY_SUBGENRES.includes(cb.value)) return;
+    if (blocked && cb.checked) setChipSelected(cb.value, false);
+    cb.disabled = blocked;
+    chip.classList.toggle('sg-disabled', blocked);
+    chip.title = blocked ? 'No disponible con la demografía Kodomomuke (infantil)' : '';
+  });
+  const note = document.getElementById('demoCompatNote');
+  if (note) note.style.display = blocked ? 'block' : 'none';
+}
+
 document.querySelectorAll('.sg-chip input[type="checkbox"]').forEach(cb => {
   cb.addEventListener('change', () => {
     cb.closest('.sg-chip').classList.toggle('selected', cb.checked);
+    if (!cb.checked) return;
+    for (const pair of EXCLUSIVE_SUBGENRE_PAIRS) {
+      if (!pair.includes(cb.value)) continue;
+      pair.filter(v => v !== cb.value).forEach(other => {
+        const otherCb = document.querySelector(`#subgeneroGrid .sg-chip input[value="${other}"]`);
+        if (otherCb?.checked) {
+          setChipSelected(other, false);
+          showToast(`"${SUBGENERO_LABELS[other] || other}" se desactivó: no puede combinarse con "${SUBGENERO_LABELS[cb.value] || cb.value}"`, 'error');
+        }
+      });
+    }
   });
 });
+
+// NOTE: the first call happens in init(), not here — this block runs before
+// ADULT_ONLY_SUBGENRES is initialised further down (temporal dead zone).
+document.getElementById('demoSelect')?.addEventListener('change', applyDemoCompatibility);
 
 // Restore saved ElevenLabs voice ID
 (function restoreVoiceId() {
@@ -972,8 +1027,39 @@ function getSelectedSubgenres() {
     .map(c => c.querySelector('input').value);
 }
 
-function getSubgenreText(subgenres) {
+// ════════════════════════════════════════════════════════════════
+// SHARED GENRE / SUBGENRE SEMANTICS — single source of truth
+// Used by the universe prompt, the episode prompt AND the repair path, so a
+// subgenre can never silently contradict the main genre it was layered on.
+// ════════════════════════════════════════════════════════════════
+const GENRES_WITH_SUPERNATURAL    = ['fantasia','isekai','mecha','sobrenatural','psicologico','terror','videojuego','donghua'];
+const SUBGENRES_WITH_SUPERNATURAL = ['psicologico','reencarnacion','viaje_tiempo','misterio','sistema_awakening','apocalipsis'];
+// Genres whose CORE mechanic IS a power/stat system. Anywhere else a system
+// exists ONLY if the user explicitly checked the "Sistema/Awakening" subgenre.
+const SYSTEM_CORE_GENRES = ['videojuego','donghua'];
+
+function genreAllowsSupernatural(genero, subgenres = []) {
+  return GENRES_WITH_SUPERNATURAL.includes(genero)
+      || (subgenres || []).some(s => SUBGENRES_WITH_SUPERNATURAL.includes(s));
+}
+function hasPowerSystem(genero, subgenres = []) {
+  return SYSTEM_CORE_GENRES.includes(genero) || (subgenres || []).includes('sistema_awakening');
+}
+
+// Kodomomuke (infantil) is incompatible with the adult modifiers. The UI
+// disables those chips, and every prompt path re-filters here so a project
+// saved before that rule existed still generates coherent content.
+const ADULT_ONLY_SUBGENRES = ['ecchi','harem','harem_inverso','gore'];
+function isAllAges(demo) { return demo === 'kodomomuke'; }
+function effectiveSubgenres(subgenres, demo) {
+  const list = Array.isArray(subgenres) ? subgenres : [];
+  return isAllAges(demo) ? list.filter(s => !ADULT_ONLY_SUBGENRES.includes(s)) : list;
+}
+
+function getSubgenreText(subgenres, genero = '') {
   if (!subgenres.length) return '';
+  const allowsSuper = genreAllowsSupernatural(genero, subgenres);
+  const ecchiActive = subgenres.some(s => ['ecchi','harem','harem_inverso'].includes(s));
   const labels = {
     psicologico: 'Psicológico (mente, traumas, distorsión de realidad — SÍ permite elementos mentales/paranoicos)',
     romance: 'Romance (tensión romántica, sentimientos entre personajes reales)',
@@ -990,7 +1076,9 @@ function getSubgenreText(subgenres) {
     musica: 'Música/Arte (actuaciones, práctica, presentaciones reales)',
     deporte: 'Deporte (entrenamiento, competencias, marcadores reales)',
     mafia: 'Mafia/Crimen (delitos reales, jerarquías criminales, consecuencias)',
-    escolar: 'Escolar (clases, exámenes, relaciones entre estudiantes reales)',
+    escolar: ecchiActive
+      ? 'Escolar — ADAPTADO A ADULTOS: campus universitario, academia o instituto superior con estudiantes ADULTOS (18+). Clases, exámenes y vida de campus reales. PROHIBIDO secundaria/colegio, uniformes escolares de instituto y cualquier encuadre de menores (regla obligatoria del contenido ecchi/harem)'
+      : 'Escolar (clases, exámenes, relaciones entre estudiantes reales)',
     militar: 'Militar (táctica, cadena de mando, combate realista)',
     reencarnacion: 'Reencarnación (SÍ permite el elemento sobrenatural de la reencarnación)',
     viaje_tiempo: 'Viaje en el tiempo (SÍ permite el elemento sobrenatural del viaje temporal)',
@@ -1004,8 +1092,13 @@ function getSubgenreText(subgenres) {
   const hasSlice   = subgenres.includes('slice_of_life');
   const hasEcchi   = subgenres.includes('ecchi');
   const hasHarem   = subgenres.includes('harem') || subgenres.includes('harem_inverso');
+  const hasDark    = subgenres.includes('dark');
+  const hasGore    = subgenres.includes('gore');
 
   let text = 'SUBGÉNEROS ACTIVOS:\n' + subgenres.map(s => `- ${labels[s] || s}`).join('\n');
+
+  // A subgenre is a LAYER on top of the main genre — never a replacement.
+  text += `\n\n⚠️ REGLA DE CAPAS: los subgéneros MODIFICAN el género principal "${genero || 'seleccionado'}", NUNCA lo sustituyen ni anulan su núcleo. Si un subgénero parece pedir lo contrario del género principal, gana el GÉNERO PRINCIPAL y el subgénero se aplica dentro de sus reglas.`;
 
   if (hasSistema) {
     text += `
@@ -1015,11 +1108,21 @@ MODO SISTEMA/AWAKENING — REGLAS OBLIGATORIAS:
 - El sistema tiene stats concretos: [Fuerza: 12 → 15], [Nivel: 1], [Misión diaria completada], [Nueva habilidad desbloqueada]
 - La narración puede incluir los mensajes del sistema como texto: "¡DING! Has subido al Nivel 2"
 - Estructura del arco obligatoria: humillación pública → despertar del sistema → entrenamiento oculto → demostración de poder que deja a todos sin palabras
-- Cada episodio debe mostrar progresión visible: algo que antes no podía, ahora puede`;
+- Cada episodio debe mostrar progresión visible: algo que antes no podía, ahora puede
+- El sistema se INTEGRA en el género "${genero}" con su estética y sus reglas (en terror el sistema da miedo, en drama duele, en misterio esconde información) — no convierte la historia en un isekai de sistema genérico.${SYSTEM_CORE_GENRES.includes(genero) ? '\n- El género principal YA tenía un sistema propio: es EL MISMO sistema, no dos sistemas distintos conviviendo.' : ''}`;
   }
 
   if (hasSlice) {
-    text += `
+    text += allowsSuper
+      ? `
+
+MODO SLICE OF LIFE — CAPA SOBRE UN GÉNERO CON ELEMENTOS EXTRAORDINARIOS:
+- El género principal "${genero}" CONSERVA íntegro su núcleo (magia, sistema, espíritus, mechas o lo que le corresponda) — este subgénero NO lo elimina.
+- Lo que cambia es el FOCO: las escenas se centran en la vida cotidiana DENTRO de ese mundo — comer, dormir, trabajar, mantener el equipo, convivir, hacer trámites, descansar entre eventos grandes.
+- Los conflictos son domésticos pero propios del mundo: se acabó el reactivo, hay una gotera en el taller del mecha, el espíritu del vecino hace ruido, la cuota de la secta vence mañana.
+- PROHIBIDO: catástrofes mundiales y batallas épicas como eje del episodio — lo extraordinario está presente y es normal, no es el espectáculo.
+- Ejemplos BUENOS: "Lin Yan gastó tres piedras espirituales en arreglar el techo. Le quedaban cinco."`
+      : `
 
 MODO SLICE OF LIFE — REGLAS DE CONTENIDO (OBLIGATORIAS):
 - Las escenas muestran el DÍA A DÍA concreto: buscar comida, cocinar, descansar, hablar con alguien, reparar algo, llover, aburrirse
@@ -1029,12 +1132,32 @@ MODO SLICE OF LIFE — REGLAS DE CONTENIDO (OBLIGATORIAS):
 - Ejemplos MALOS: "Una voz susurra mi nombre entre las sombras del pasado"`;
   }
 
+  if (hasDark) {
+    text += `
+
+MODO DARK/OSCURO — REGLAS DE CONTENIDO (OBLIGATORIAS):
+- Las consecuencias son PERMANENTES: lo que se pierde no vuelve, las heridas dejan marca, las decisiones cobran precio real.
+- Sin salvadas milagrosas de último segundo, sin finales que borran el daño, sin personajes que "se recuperan como si nada".
+- Moral ambigua: los aliados también hacen cosas cuestionables y el antagonista tiene razones comprensibles.
+- Esto oscurece el TONO del género "${genero}" — NO cambia su trama ni sus reglas.`;
+  }
+
+  if (hasGore) {
+    text += `
+
+MODO GORE/VIOLENTO — REGLAS DE CONTENIDO (OBLIGATORIAS):
+- La violencia se muestra con detalle físico concreto: impactos, heridas, sangre, daño real y sus secuelas.
+- El daño tiene peso: quien resulta herido queda limitado después — no pelea igual en la escena siguiente.
+- Sin regodeo gratuito: cada momento explícito nace de un evento de la trama, no se agrega como decoración.
+- En los prompts de imagen la violencia se sugiere con lenguaje aceptable (heridas, sangre, tensión) — nunca términos que bloquee el generador.`;
+  }
+
   if (hasEcchi || hasHarem) {
     text += `
 
 ECCHI/HAREM ACTIVO — REGLA GENERAL (contenido adulto):
-- Este es contenido ecchi PARA ADULTOS y se COMBINA con el género principal seleccionado — no lo reemplaza: la trama y el tono siguen siendo los del género, con fan service integrado.
-- TODOS los personajes son adultos (18 en adelante), cada uno con su propia edad adulta asignada según su rol en la historia — jamás colegiales ni uniformes escolares en el contenido ecchi.
+- Este es contenido ecchi PARA ADULTOS y se COMBINA con el género principal "${genero}" — no lo reemplaza: la trama, los stakes y el tono siguen siendo los del género, con fan service integrado.
+- TODOS los personajes son adultos (18 en adelante), cada uno con su propia edad adulta asignada según su rol en la historia — jamás colegiales ni uniformes escolares en el contenido ecchi.${subgenres.includes('escolar') ? '\n- El subgénero "Escolar" está activo: el entorno académico es UNIVERSITARIO o de academia de adultos (18+), nunca secundaria. Esta regla anula cualquier lectura de "escolar" como instituto de menores.' : ''}
 - Personajes femeninos SIEMPRE con ropa corta, sugerente o reveladora
 - Situaciones comprometedoras naturales en la trama
 - imagePromptA debe reflejar el fan service visualmente`;
@@ -1241,7 +1364,9 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
       const res2 = await fetch('/api/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: cleanPrompt, characterRefs: null, model: model === 'auto' ? null : model, isEcchi }),
+        // aspectRatio must be resent: the API defaults to 9:16, so dropping it
+        // here silently produced a vertical image inside a 16:9 project.
+        body: JSON.stringify({ prompt: cleanPrompt, characterRefs: null, model: model === 'auto' ? null : model, isEcchi, aspectRatio }),
       });
       const data2 = await res2.json();
       if (!res2.ok || data2.error) throw new Error(data2.error || `Image proxy ${res2.status}`);
@@ -1337,12 +1462,12 @@ async function generateAudio(text, voice, act) {
 // DEMOGRAPHICS, GENRES & MODIFIERS — strict definitions
 // ════════════════════════════════════════════════════════════════
 const DEMO_PROMPTS = {
-  shonen: `DEMOGRAFÍA: Shōnen (chicos adolescentes).
-- Protagonista joven varón (14-18) que crece a través del esfuerzo
+  shonen: `DEMOGRAFÍA: Shōnen (público joven masculino).
+- Protagonista joven varón que crece a través del esfuerzo (18-21 años: espíritu shōnen con personajes adultos, como exige la regla de edad del proyecto)
 - Temas centrales: amistad, superación, victoria, batallas épicas
 - Ritmo dinámico, momentos heroicos, rivales que se vuelven aliados`,
-  shojo: `DEMOGRAFÍA: Shōjo (chicas adolescentes).
-- Protagonista femenina joven (14-18), foco en su mundo emocional
+  shojo: `DEMOGRAFÍA: Shōjo (público joven femenino).
+- Protagonista femenina joven (18-21 años: espíritu shōjo con personajes adultos, como exige la regla de edad del proyecto), foco en su mundo emocional
 - Temas centrales: relaciones interpersonales, romance, desarrollo psicológico
 - Estética suave, mucha introspección, conexiones emocionales profundas`,
   seinen: `DEMOGRAFÍA: Seinen (hombres adultos).
@@ -1357,15 +1482,12 @@ const DEMO_PROMPTS = {
 - Historias sencillas con moraleja clara
 - Sin violencia, sin romance, sin temas complejos
 - Personajes simpáticos, tono cálido y educativo`,
-  donghua: `ESTILO: Donghua — Animación china.
+  donghua: `ESTILO: Donghua — Animación china (esto define ESTÉTICA, NOMBRES y CÓDIGOS CULTURALES; la trama y las mecánicas las decide el GÉNERO principal y los SUBGÉNEROS seleccionados).
 - Protagonistas con nombres chinos, ambientados en China antigua, moderna o fantástica
-- El arquetipo MÁS POPULAR: protagonista que DESPIERTA UN SISTEMA o recibe un "Golden Finger" (金手指) — una ventana de poder que solo él puede ver con stats, niveles, misiones y habilidades desbloqueables
-- El sistema puede aparecer como: ventana flotante con stats (Fuerza, Agilidad, Qi), rango inicial F o basura, misión diaria con recompensa, voz de sistema en su cabeza
-- Otros arquetipos válidos: cultivación clásica (qi, núcleo de oro, niveles Qi Condensation → Foundation → Core), reencarnación con memorias del futuro, heredar un legado antiguo
-- INICIO OBLIGATORIO del arquetipo sistema: el protagonista es humillado/menospreciado → despierta el sistema → empieza a subir en secreto → empieza a superar a quienes lo subestimaron
-- Sectas rivales, familias poderosas, torneos donde el débil sorprende a todos
-- Progresión visible: cada escena puede mostrar un nivel subiendo, una habilidad nueva, un umbral roto
-- Tono épico con momentos de orgullo, humillación y venganza silenciosa`,
+- Códigos culturales del donghua: el "face" (perder/ganar prestigio en público), jerarquías estrictas, familias y clanes poderosos, respeto a los mayores, deudas de honor, torneos y ceremonias donde la reputación está en juego
+- Tono épico con momentos de orgullo, humillación y revancha silenciosa; el débil que sorprende a todos es un arquetipo recurrente
+- ⚠️ SIN SISTEMA por defecto: ventanas de estado, stats, niveles, misiones y "Golden Finger" (金手指) pertenecen al género "Donghua / Cultivación", al género "Videojuego / Sistema" y al subgénero "Sistema/Awakening" — SOLO existen si alguno de esos fue seleccionado. En cualquier otra combinación esta demografía aporta estética y cultura, no mecánicas de poder.
+- ⚠️ SIN CULTIVACIÓN por defecto: qi, núcleo dorado, rangos y sectas pertenecen al género "Donghua / Cultivación". Si el género elegido es otro (drama, misterio, romcom...), esta demografía NO los introduce.`,
 };
 
 const SUBGENRE_FIDELITY_CONTRACT = `⚠️ CONTRATO DE FIDELIDAD A LA SELECCIÓN: el género principal y los subgéneros SELECCIONADOS son la ÚNICA fuente de tropos y mecánicas de la historia. Los elementos característicos de subgéneros NO seleccionados NO EXISTEN en esta historia. En concreto: si "Sistema/Awakening" NO está seleccionado, NO existe ningún sistema, ventana de estado, stats, niveles, misiones, notificaciones ni recompensas (únicas excepciones: los géneros videojuego y donghua, cuyo núcleo ES el sistema). Lo mismo con los demás: sin harén si no está seleccionado harem, sin eje escolar si no está escolar, sin apocalipsis si no está apocalipsis. El tono narrativo escrito por el usuario SIEMPRE tiene prioridad sobre cualquier plantilla de género.`;
@@ -1452,16 +1574,24 @@ const GENRE_PROMPTS = {
 // isEcchi character-appearance rules, and the server-side ecchiRules in
 // api/image.js. Removed to avoid the illusion that editing it changed anything.
 
-// Genres whose ESTABLISHED identity in this tool is the viral system-comedy
-// formula (bureaucratic detection system, mercenary protagonist, suffering
-// authority figure). All OTHER genres are played straight — faithful to their
-// real tone — unless the user explicitly checks the 'comedia' subgenre.
 // Comedia SOLO por selección explícita: el subgénero "comedia", o el género
 // RomCom (cuyo propio nombre es Comedia Romántica). Isekai, videojuego y
 // donghua ya NO fuerzan comedia — su tono lo deciden los subgéneros elegidos.
 function isComedyMode(genero, subgenres) {
   return genero === 'romcom' || (subgenres || []).includes('comedia');
 }
+
+// ════════════════════════════════════════════════════════════════
+// SYSTEM-COMEDY LAYER — the "bureaucratic detection system" formula.
+// It used to be baked into EVERY entry of GENRE_TONE, so checking the
+// "Comedia" chip on Terror/Drama/Misterio silently injected a stat window
+// into a genre that has none — in direct contradiction with
+// SUBGENRE_FIDELITY_CONTRACT, which is sent in the SAME prompt. Now it is
+// a separate layer appended ONLY when the story actually has a system
+// (videojuego, donghua, or the "Sistema/Awakening" subgenre).
+// ════════════════════════════════════════════════════════════════
+const SYSTEM_COMEDY_LAYER = `
+CAPA DE COMEDIA DE SISTEMA (esta historia SÍ tiene un sistema de poder): the system speaks in formal, bureaucratic notifications and congratulates the protagonist for what are obviously disasters. Its detections are technically accurate and contextually catastrophic — the joke is the gap between what the system promises and what it delivers. An authority figure who follows every rule correctly keeps paying the price for the protagonist's accidental wins. Running gag: the official record of the protagonist grows in increasingly resigned language, episode after episode.`;
 
 // ─── TIME OF DAY & WEATHER — English fragments appended at image time ───
 // Kept OUT of the stored imagePrompts so changing the selector re-styles
@@ -1507,16 +1637,19 @@ document.getElementById('btnGenerarUniverso').addEventListener('click', async ()
   const btn = document.getElementById('btnGenerarUniverso');
   const demo = document.getElementById('demoSelect').value;
   const genero = document.getElementById('generoSelect').value;
-  const subgenres = getSelectedSubgenres();
+  // Kodomomuke never carries the adult-only modifiers (the UI disables those
+  // chips; this filter also covers a chip that was already checked).
+  const subgenres = effectiveSubgenres(getSelectedSubgenres(), demo);
   const tono = document.getElementById('tonoInput').value.trim();
   const concepto = document.getElementById('conceptoInput').value.trim();
-  const subgenreText = getSubgenreText(subgenres);
+  const subgenreText = getSubgenreText(subgenres, genero);
 
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner"></div> Generando...';
 
   try {
     const comedyMode = isComedyMode(genero, subgenres);
+    const allAgesUni = isAllAges(demo);
     const system = `Eres un guionista de anime/manhua viral para Facebook Reels.
 REGLAS ABSOLUTAS:
 - Nombres reales (japoneses: Hiro, Yuki, Rin, Kaito, Mei / chinos: Lin Yan, Chen Wu, Wang, Liu, Zhang).
@@ -1550,6 +1683,8 @@ INSTRUCCIÓN: El universo que generes DEBE ser este concepto, expandido con más
 ` : ''}
 
 ${concepto ? 'Expande el concepto semilla de arriba en un universo completo' : 'Crea un universo ORIGINAL y único'} que sea ESTRICTAMENTE FIEL al género "${genero}" con los subgéneros seleccionados integrados naturalmente.
+${!genreAllowsSupernatural(genero, subgenres) ? `\n⚠️ RESTRICCIÓN DEL GÉNERO "${genero}": este universo NO tiene magia, poderes, sistemas de estado ni fenómenos sobrenaturales. El conflicto y el hook se sostienen con causas del mundo real. (Esta misma restricción se aplica al escribir los episodios — no generes un universo que después no se pueda contar.)` : ''}
+${allAgesUni ? `\n⚠️ DEMOGRAFÍA KODOMOMUKE: universo apto para público infantil — sin violencia explícita, sin contenido sexual o sugerente, sin temas adultos. El conflicto es comprensible para un niño y deja una moraleja clara.` : ''}
 
 ${comedyMode ? `IMPORTANTE (modo comedia): construí la comedia SOLO con los elementos del género principal y de los subgéneros SELECCIONADOS — situaciones absurdas concretas nacidas de la premisa, no drama épico:
 - Posiblemente un compañero con UN rasgo cómico definidor fijo (el rasgo específico se asigna en el paso de creación de personajes), solo si encaja con la historia
@@ -1583,6 +1718,13 @@ Devuelve JSON:
       }
     }
     state.universe = parsedUniverse;
+    // The classification is the USER's choice, not the model's. Overwrite it
+    // unconditionally so a hallucinated/omitted field can never re-classify the
+    // project and silently change the genre of every later episode.
+    state.universe.demo      = demo;
+    state.universe.genero    = genero;
+    state.universe.subgenres = subgenres;
+    state.universe.tono      = tono || '';
     state.universe.conceptoOriginal = concepto || '';
     // Scenarios start EMPTY — they are extracted from each episode's story
     // after it is written (story first, locations derived from it).
@@ -1603,14 +1745,65 @@ Devuelve JSON:
   }
 });
 
+// Puts the creation form back in sync with the universe actually loaded, so
+// what the user sees selected is what the project was generated with (and what
+// every later step — video prompts, repairs, new episodes — will use).
+function syncFormToUniverse() {
+  const u = state.universe;
+  if (!u) return;
+  const demoEl = document.getElementById('demoSelect');
+  const genEl  = document.getElementById('generoSelect');
+  if (demoEl && u.demo   && [...demoEl.options].some(o => o.value === u.demo))   demoEl.value = u.demo;
+  if (genEl  && u.genero && [...genEl.options ].some(o => o.value === u.genero)) genEl.value  = u.genero;
+  const selected = new Set(Array.isArray(u.subgenres) ? u.subgenres : []);
+  document.querySelectorAll('#subgeneroGrid .sg-chip').forEach(chip => {
+    const cb = chip.querySelector('input[type="checkbox"]');
+    if (!cb) return;
+    cb.checked = selected.has(cb.value);
+    chip.classList.toggle('selected', cb.checked);
+  });
+  const tonoEl = document.getElementById('tonoInput');
+  if (tonoEl && typeof u.tono === 'string') tonoEl.value = u.tono;
+  applyDemoCompatibility();
+}
+
+const GENERO_LABELS = {
+  accion:'Acción', fantasia:'Fantasía', isekai:'Isekai', mecha:'Mecha', romcom:'Comedia Romántica',
+  drama:'Drama', slice_of_life:'Slice of Life', terror:'Terror', psicologico:'Psicológico',
+  misterio:'Misterio', deportes:'Deportes', sci_fi:'Ciencia Ficción', aventura:'Aventura',
+  sobrenatural:'Sobrenatural', supervivencia:'Supervivencia', videojuego:'Videojuego / Sistema',
+  donghua:'Donghua / Cultivación',
+};
+const DEMO_LABELS = {
+  shonen:'Shōnen', shojo:'Shōjo', seinen:'Seinen', josei:'Josei',
+  kodomomuke:'Kodomomuke', donghua:'Donghua',
+};
+const SUBGENERO_LABELS = {
+  psicologico:'Psicológico', romance:'Romance', ecchi:'Ecchi', harem:'Harem',
+  harem_inverso:'Harem Inverso', comedia:'Comedia', dark:'Dark', gore:'Gore',
+  misterio:'Misterio', revenge:'Revenge', overpowered:'Overpowered', slice_of_life:'Slice of Life',
+  musica:'Música / Arte', deporte:'Deporte', mafia:'Mafia / Crimen', escolar:'Escolar',
+  militar:'Militar', reencarnacion:'Reencarnación', viaje_tiempo:'Viaje en el Tiempo',
+  apocalipsis:'Apocalipsis', idols:'Idols / Fama', medicina:'Medicina / Ciencia',
+  sistema_awakening:'Sistema / Awakening',
+};
+
 function renderUniverse() {
   const el = document.getElementById('universoDisplay');
   if (!state.universe) { el.innerHTML = ''; document.getElementById('cardGenerarEpisodio').style.display = 'none'; renderScenarios(); return; }
   const u = state.universe;
+  syncFormToUniverse();
+  const subs = effectiveSubgenres(u.subgenres || [], u.demo);
+  const clasificacion = [
+    DEMO_LABELS[u.demo] || u.demo,
+    GENERO_LABELS[u.genero] || u.genero,
+  ].filter(Boolean).join(' · ');
   el.innerHTML = `
     <div class="universe-display">
       <h4>${u.title || 'Universo'}</h4>
       <div class="tag">${u.tagline || ''}</div>
+      ${clasificacion ? `<div class="field"><div class="field-label">Clasificación</div>${clasificacion}</div>` : ''}
+      ${subs.length ? `<div class="field"><div class="field-label">Subgéneros</div>${subs.map(s => SUBGENERO_LABELS[s] || s).join(' · ')}</div>` : ''}
       <div class="field"><div class="field-label">Concepto</div>${u.concepto || ''}</div>
       <div class="field"><div class="field-label">Conflicto</div>${u.conflicto || ''}</div>
       <div class="field"><div class="field-label">Setting</div>${u.setting || ''}</div>
@@ -1641,44 +1834,49 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     const u = state.universe;
     const demo = u.demo || 'shonen';
     const genero = u.genero;
-    const subgenres = u.subgenres || [];
+    // Kodomomuke drops the adult-only modifiers, even on projects saved before
+    // that rule existed — otherwise the demographic and the subgenres fight.
+    const subgenres = effectiveSubgenres(u.subgenres || [], demo);
+    const allAges = isAllAges(demo);
     const mod = subgenres.includes('harem') ? 'harem'
               : subgenres.includes('harem_inverso') ? 'harem_inverso'
               : subgenres.includes('ecchi') ? 'ecchi' : 'none';
     const hasSliceOfLife = subgenres.includes('slice_of_life');
-    const hasPsicologico = subgenres.includes('psicologico');
-    const hasDark = subgenres.includes('dark');
-    const hasGore = subgenres.includes('gore');
     const hasEcchi = subgenres.includes('ecchi') || subgenres.includes('harem') || subgenres.includes('harem_inverso');
-    const subgenreText = getSubgenreText(subgenres);
+    const subgenreText = getSubgenreText(subgenres, genero);
 
-    // Generos que SIMAN permiten elementos sobrenaturales/fantasía
-    const allowsSuper = ['fantasia','isekai','mecha','sobrenatural','psicologico','terror','videojuego','donghua'].includes(genero);
-    const allowsSuper2 = subgenres.some(s => ['psicologico','reencarnacion','viaje_tiempo','misterio'].includes(s));
+    // Genres/subgenres that legitimately allow supernatural or fantastic
+    // elements — shared with the universe step so both agree.
+    const allowsSuper  = GENRES_WITH_SUPERNATURAL.includes(genero);
+    const allowsSuper2 = subgenres.some(s => SUBGENRES_WITH_SUPERNATURAL.includes(s));
 
     // Estilo de narración según el tono del subgénero
     const isGrounded  = hasSliceOfLife && !allowsSuper && !allowsSuper2;
     // Comedy formula ONLY for the tool's established comedy genres or when
     // the 'comedia' subgenre is checked — all other genres play it straight.
     const comedyMode = isComedyMode(genero, subgenres);
+    // Comedy tones — the humour is built from EACH GENRE'S OWN material.
+    // No stat window, no detection system, no notifications here: that formula
+    // is now SYSTEM_COMEDY_LAYER and is appended only when the story really
+    // has a system (videojuego / donghua / "Sistema/Awakening" subgenre).
     const GENRE_TONE = {
-      accion:       'ACTION + COMEDY: The protagonist has a Combat Analyzer that identifies "critical weak points" — which always turn out to be ally equipment, the commander\'s trophy, or the wrong target entirely. The military/sect authority does everything right and still suffers. Protagonist reaction: how much is the compensation? Running gag: the authority\'s damage report grows more creative with each "pilot error" entry.',
-      fantasia:     'FANTASY + COMEDY: The protagonist has a Treasure Detection system that finds magical artifacts — which are always cursed, belong to the wrong person, or wildly inappropriate for the situation. The guild master/elder investigates and suffers. Protagonist: "How much reward for turning it in?" Running gag: the system\'s reward estimates are always accurate but never account for the chaos caused.',
-      isekai:       'ISEKAI COMEDY — THE PUREST FORM: Overpowered detection/stat system with notifications in formal bureaucratic language. Every activation leads to an absurd discovery. The kingdom\'s strongest hero/inspector keeps losing to protagonist\'s accidental wins. Companion has their own fixed quirk (assigned separately). Protagonist evaluates everything in gold coins. Running gag: system congratulates protagonist for "achievements" that are clearly disasters.',
-      donghua:      'DONGHUA CULTIVATION COMEDY: The cultivation system detects "spirit energy concentrations" — which always turn out to be someone\'s lunch, a forbidden clan treasure, or military equipment. The sect elder/patriarch does everything correctly and still loses face because of protagonist. Companion has their own fixed quirk (assigned separately). Protagonist: "How many spirit stones is the reward?" Running gag: the sect elder\'s reputation deteriorates episode by episode.',
-      videojuego:   'GAME + COMEDY: A Loot Detection system highlights "rare drops" — which are always broken quest items, someone else\'s inventory, or plot-critical objects removed at the worst moment. The GM character does everything right and still loses. Companion complains about lag. Protagonist calculates gold value of everything. Running gag: the rarity ratings are technically accurate but contextually catastrophic.',
-      mecha:        'MECHA + COMEDY: The AI copilot detects "optimal targets" — which keep being allied equipment, civilian infrastructure the commander just fixed, or military budget items. Commander follows every manual rule and still suffers. Copilot has a cheerful bureaucratic voice for disasters. Protagonist calculates repair budget. Running gag: official damage reports grow increasingly creative.',
-      romcom:       'ROMCOM + COMEDY: The protagonist has a Social Skill system with "Affection Detection" that keeps flagging the wrong person (rival\'s childhood friend, the teacher, the protagonist\'s sibling\'s crush). The strict student council president ends up involved in every incident. Companion ships every wrong pairing out loud. Protagonist: "If I complete the flag, is there a stat bonus?" Running gag: system\'s "romance success" notification plays at the most inappropriate moments.',
-      drama:        'DRAMA + DEADPAN COMEDY: The protagonist has an Observation system that detects "hidden truths" — family secrets, financial scandals, someone\'s illegal side business. The respected family elder\'s image keeps getting accidentally shattered. Protagonist reports devastating findings with neutral weather-forecast delivery. Companion has to smooth everything over. Running gag: protagonist\'s matter-of-fact delivery of catastrophic information leaves everyone speechless.',
-      slice_of_life:'SLICE OF LIFE + COMEDY: A Value Detection system for everyday objects keeps identifying incredible hidden value in mundane items that always belong to someone important or create an incident when retrieved. The neighborhood association president keeps getting involved and suffering. Companion provides mundane running commentary. Protagonist knows the exact monetary value of everything. Running gag: the superintendent\'s monthly report now has a dedicated "protagonist incidents" section.',
-      terror:       'HORROR + COMEDY: An Anomaly Detection system finds genuine supernatural threats — but protagonist only cares about the bounty. The professional paranormal investigator does everything correctly and still relies on protagonist. Companion is genuinely terrified; protagonist ignores it to calculate reward. Running gag: each official report lists protagonist\'s methods as "unorthodox but effective" in increasingly resigned language.',
-      psicologico:  'PSYCHOLOGICAL + DEADPAN: A Pattern Recognition system detects behavioral anomalies that always identify real problems — but the timing makes everyone around look insane instead of the target. The professional investigator does everything right and can\'t explain how protagonist\'s blundering gets results. Companion questions their own sanity. Running gag: psychological evaluations of protagonist keep coming back "inconclusive."',
-      misterio:     'MYSTERY + COMEDY: An Evidence Detection system highlights key clues — always in the most awkward location, implicating the most unlikely suspect, or pointing at the detective trying to solve the case. The professional detective does everything right and gets scooped every time. Companion takes notes with increasingly panicked handwriting. Protagonist calculates reward for each clue. Running gag: the detective\'s dignity rate is 0% despite a 100% case closure rate.',
-      deportes:     'SPORTS + COMEDY: An Athletic Analysis system detects "victory conditions" — which always involve accidental rule exploitation, equipment malfunction, or events the coach specifically planned to avoid. Coach follows the training manual perfectly and still wins because of protagonist\'s chaos. Companion (team manager) has to explain everything to sponsors. Running gag: official match reports must be rewritten three times because no one believes the first two versions.',
-      sci_fi:       'SCI-FI + COMEDY: A Scanner detects "anomalous technology signatures" — always classified military prototypes, science fair projects that actually work, or alien artifacts that look like scrap. The sector inspector follows every protocol and still can\'t file a report that makes sense. Companion maintains a running list for the insurance claim. Protagonist calculates scrap value of alien technology. Running gag: the scanner has 100% detection rate and 0% situational awareness.',
-      aventura:     'ADVENTURE + COMEDY: A Treasure Compass always points to "great value" — someone\'s lost lunch, an ancient map to a location that is now a parking lot, a legendary artifact being used as a doorstop. The adventurers\' guild master ends up issuing apology letters because of protagonist. Companion draws maps of everywhere they\'ve been asked not to return. Running gag: the guild blacklist grows by one location per episode.',
-      sobrenatural: 'SUPERNATURAL + COMEDY: A Spirit Sense detects "powerful presences" — always spirits that are not dangerous, deeply inconvenienced by protagonist, or doing legitimate supernatural business. The exorcist/spirit agency official does everything professionally and still ends up owing protagonist money. Companion provides running commentary (only one who can see clearly). Running gag: the official spirit incident log now has a "protagonist category" with its own classification system.',
-      supervivencia:'SURVIVAL + DARK COMEDY: A Resource Detection system identifies "survival value" — things technically edible but socially catastrophic, shelter belonging to something dangerous, water in restricted zones. The rescue/military authority follows protocol and still ends up worse than the survivor. Companion keeps a precise log of all resources consumed. Running gag: the official search-and-rescue report explains why the rescue team needed rescuing.',
+      accion:       'ACTION + COMEDY: the fights, chases and stakes are REAL — the comedy is in how they are won. The protagonist improvises with whatever is at hand, wins by accident, and the collateral damage is the running joke. Whoever is in charge does everything by the manual and still ends up writing the damage report. Deadpan reactions to escalating chaos; concrete choreography, ridiculous outcomes.',
+      fantasia:     'FANTASY + COMEDY: the magic system works EXACTLY as written — and that is the problem. Spells, pacts and prophecies are taken literally, guild paperwork outlives the monsters, cursed items come with terms and conditions. The world stays internally consistent; the laughs come from characters misusing rules that are perfectly clear.',
+      isekai:       'ISEKAI + COMEDY: a modern mind stuck in another world or body, played for laughs. The engine is CULTURE CLASH — modern common sense colliding with local rules, clever plans that backfire, and a reputation inherited from the body\'s previous life that keeps ambushing the protagonist. The new world reacts seriously to absurd modern solutions.',
+      donghua:      'DONGHUA + COMEDY: sects, seniority, clans and "face" played for comedy — grandiose posturing punctured by petty reality, an elder losing face over something trivial, ceremonies derailed by the protagonist advancing by accident while everyone reads deep meaning into it. The world\'s hierarchy stays hard; the dignity does not.',
+      videojuego:   'GAME + COMEDY: the game world and its rules are real and consistent — quests with catastrophic fine print, "rare" loot that is useless, NPCs who take their scripts far too seriously, a GM who does everything right and still loses. The comedy is the gap between what the rules promise and what they deliver.',
+      mecha:        'MECHA + COMEDY: giant robots and military protocol undermined by budgets, maintenance crews and pilots with terrible priorities. The battles are real; the aftermath is paperwork. The commander follows every regulation and still ends up explaining the wreckage. Running gag: the official damage reports get more creative each time.',
+      romcom:       'ROMCOM: the relationship IS the engine — attraction, misunderstandings, terrible timing, people talking past each other. The comedy comes from the characters\' feelings and their bad decisions, never from a gimmick: confessions interrupted, signals misread, a rival who turns out to be kinder than expected. Warmth underneath every joke, tension that keeps building.',
+      drama:        'DRAMA + DEADPAN COMEDY: the emotional stakes stay REAL and the consequences still land — the humour is in how people cope. Awkward honesty at the worst moment, family truths blurted out over dinner, grief handled with terrible timing. The protagonist delivers devastating information with a weather-forecast tone. Comedy relieves the tension; it never cancels it.',
+      slice_of_life:'SLICE OF LIFE + COMEDY: everyday life and small disasters escalating out of proportion — a leaking pipe, a neighbour dispute, an errand that becomes an ordeal. Tiny stakes treated with total seriousness by everyone involved. The neighbourhood authority keeps getting dragged in. Warm, specific, mundane.',
+      terror:       'HORROR + COMEDY: the threat is GENUINELY dangerous and the dread is real — the characters are the joke. Wrong priorities, arguing in the middle of the haunting, the one competent person nobody listens to, practical concerns raised at the worst possible time. Never defuse the danger to land a gag.',
+      psicologico:  'PSYCHOLOGICAL + DEADPAN: obsession, paranoia and over-analysis played completely straight until the punchline lands. The protagonist\'s reasoning is impeccable and the conclusion is catastrophically wrong; everyone around them ends up looking unstable by comparison. Dry delivery, no winking at the audience.',
+      misterio:     'MYSTERY + COMEDY: a real case with fair clues, solved sideways. The professional does everything correctly and gets scooped by someone asking the wrong questions. Suspects lie badly, alibis are humiliating, and the solution is technically satisfying and socially catastrophic. Running gag: the detective\'s dignity drops as the case closure rate stays at 100%.',
+      deportes:     'SPORTS + COMEDY: training, rivalry and matches are real — the comedy is in obsessive routines, rule-lawyering, superstitions and a coach whose plans survive nothing. Victory arrives through chaos the team could never repeat. Running gag: the official match report has to be rewritten because nobody believes the first version.',
+      sci_fi:       'SCI-FI + COMEDY: the technology works exactly as specified — and the specification IS the joke. Bureaucratic AIs, terms of service, safety protocols, first contact ruined by procedure. Keep the science internally consistent; the failures are entirely human.',
+      aventura:     'ADVENTURE + COMEDY: a real journey with real dangers, undone by logistics — wrong maps, ruined supplies, guides with their own agenda, a legendary site that is now a tourist trap. Wonder and absurdity travel together. Running gag: the list of places they have been asked never to return to grows every episode.',
+      sobrenatural: 'SUPERNATURAL + COMEDY: spirits and curses with their own rules, routines and grievances — most of them deeply inconvenienced by the living. The occult is treated as ordinary administrative business; the humans are the ones behaving strangely. The exorcist does everything professionally and still ends up owing the protagonist a favour.',
+      supervivencia:'SURVIVAL + DARK COMEDY: scarcity, risk and terrible decisions played with gallows humour. Resources counted obsessively, morale managed badly, and a rescue authority that ends up needing rescuing. The danger stays real — the comedy never makes the threat harmless.',
     }
     // Faithful (non-comedy) genre tones — used when comedyMode is OFF so each
     // genre delivers its REAL atmosphere instead of the system-comedy formula.
@@ -1689,6 +1887,7 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
       videojuego:   'GAME/SYSTEM (serious): the system (stats, levels, quests) is a real tool with real stakes — every notification matters, rewards cost something, power grows through concrete effort and risk. Tension from consequence, not parody.',
       donghua:      'CULTIVATION (serious): qi, realms and sects with hard rules and mortal stakes. Humiliation, hidden training, breakthroughs and silent revenge carried with epic weight — concrete power details, earned progress, real consequences.',
       mecha:        'MECHA: giant-robot combat with tactical weight — machines have limits, pilots feel every hit, military pressure shapes decisions. Battles are the spine of the episode, with concrete mechanical detail.',
+      romcom:       'ROMANTIC COMEDY: the relationship drives every scene — attraction, misunderstandings, terrible timing. Light overall tone, never tragic; tension builds through near-misses, interrupted confessions and signals misread. Warmth and humour born from the characters themselves, never from a gimmick.',
       drama:        'DRAMA: emotional weight carried by consequences, silences and decisions that cost something. Restraint over melodrama — show the emotion through actions and specific details, never declare it with empty adjectives. No comedy relief that undercuts the moment.',
       slice_of_life:'SLICE OF LIFE: beauty in small everyday moments — meals, work, conversations, weather, routines. No villains, no catastrophes. Warm, specific, unhurried; small realizations carry the weight.',
       terror:       'HORROR: sustained dread. Wrong details, escalating unease, the threat mostly unseen until it is not. Fear built from concrete sensory detail and what is NOT shown. No jokes that break the tension.',
@@ -1700,14 +1899,18 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
       sobrenatural: 'SUPERNATURAL: hidden forces beneath everyday life — spirits, curses, powers with mysterious rules the protagonist must decode. Unsettling atmosphere where the mundane and the occult press against each other.',
       supervivencia:'SURVIVAL: scarce resources, desperate decisions, moral dilemmas under extreme pressure. Death is a constant, real threat — tension never fully drops. Concrete logistics (food, water, shelter, injuries) matter.',
     };
+    // The system-comedy formula is a LAYER, not the baseline: it is appended
+    // only when this story genuinely has a power/stat system.
+    const storyHasSystem = hasPowerSystem(genero, subgenres);
     const genreTone = comedyMode
       ? (GENRE_TONE[genero] || 'Third person, protagonist always named. Specific details. Let situations create impact, not emotional adjectives.')
+        + (storyHasSystem ? SYSTEM_COMEDY_LAYER : '')
       : (GENRE_TONE_FIEL[genero] || 'Faithful to the selected genre: third person with the protagonist always named, specific concrete details, let events — not empty adjectives — create the impact.');
 
     const SCENE_ENDING = {
       accion:       'Each scene ends with an exciting moment, a power move, or a clash that makes you want to see the next second.',
       fantasia:     'Each scene ends with wonder, a magical discovery, or a new challenge appearing.',
-      isekai:       'Each scene ends with a new skill unlock, a stat reveal, or the protagonist taking the next step up.',
+      isekai:       'Each scene ends with a hard-won step forward in the new world — a door that opens, a local rule learned the hard way, or a consequence of the protagonist thinking like an outsider.',
       donghua:      'Each scene ends with a cultivation breakthrough, a rank reveal, or a cold calculated move forward.',
       videojuego:   'Each scene ends with a level up, a boss appearing, or a skill unlocking.',
       mecha:        'Each scene ends with a tactical decision, an incoming threat, or a machine ready to launch.',
@@ -1718,18 +1921,24 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
       psicologico:  'Each scene ends with doubt, a reality crack, or a question the protagonist cannot answer.',
       misterio:     'Each scene ends with a new clue, a contradiction, or a door that just opened.',
       deportes:     'Each scene ends with competitive fire, a personal record broken, or a rival getting closer.',
-      sci_fi:       'Each scene ends with a discovery, a system alert, or technology doing something unexpected.',
+      sci_fi:       'Each scene ends with a discovery, an instrument reading nobody expected, or technology doing something unexpected.',
       aventura:     'Each scene ends with a new horizon, a challenge accepted, or something unknown just ahead.',
       sobrenatural: 'Each scene ends with a power flaring, a demon appearing, or a secret revealed.',
       supervivencia:'Each scene ends with a resource found, a threat passing, or the next danger already visible.',
     };
-    const sceneEnding = SCENE_ENDING[genero] || 'Each scene ends naturally for the genre — no forced drama.';
+    // "Sistema/Awakening" on a genre that has no system of its own overrides
+    // the ending so the progression the subgenre promises is actually visible.
+    const sceneEnding = (subgenres.includes('sistema_awakening') && !SYSTEM_CORE_GENRES.includes(genero))
+      ? 'Each scene ends with visible progression from the system — a stat rising, a skill unlocking, a threshold crossed, or a notification landing at the worst possible moment.'
+      : (SCENE_ENDING[genero] || 'Each scene ends naturally for the genre — no forced drama.');
 
     const sysBase = `${comedyMode
       ? 'Eres un guionista de comedia viral para anime/manhua, escribiendo para Facebook Reels — capítulos cortos, ritmo ágil, tono absurdo y directo.'
       : `Eres un guionista de anime/manhua viral para Facebook Reels — capítulos cortos, ritmo ágil, ESTRICTAMENTE FIEL al tono del género "${genero}". NO es comedia: no agregues chistes, sistemas cómicos ni tono paródico que el género no pide.`}
 
-ADULT AUDIENCE: this is adult content — write with edge and directness, not family-friendly softening. The only real limit is what Gemini's policies actually block.
+${allAges
+  ? 'ALL-AGES AUDIENCE (demografía Kodomomuke): historia para público infantil — sin violencia explícita, sin contenido sexual ni sugerente, sin lenguaje adulto. Conflictos comprensibles, tono cálido y una moraleja clara. El ritmo y el gancho siguen siendo los mismos; lo que cambia es el contenido.'
+  : "ADULT AUDIENCE: this is adult content — write with edge and directness, not family-friendly softening. The only real limit is what Gemini's policies actually block."}
 
 CRITICAL: el campo JSON es "story" (un solo bloque de texto continuo, no un array de escenas).
 
@@ -1756,8 +1965,8 @@ ${genreTone}
 ${u.conceptoOriginal ? `🎯 EL CONCEPTO DEFINE EL SETTING: el concepto semilla del usuario (marcado CANON arriba) es el mundo real de esta historia. Si es contemporáneo/realista, quedate ahí — sin reinos, magia ni tecnología futurista que el concepto no mencione. Aplicá solo la mecánica cómica de tono (arriba) a ese setting ya establecido.` : ''}
 
 CIERRE: ${sceneEnding} — terminá con un CLIFFHANGER seco y concreto hacia el episodio ${epNum + 1} — una amenaza visible, una llegada, una frase cortada; no una reflexión.
-${isGrounded ? `MODO COTIDIANO ACTIVO: día a día real y específico, CERO fantasmas, CERO poderes — el humor viene de situaciones reales.` : `MODO NARRATIVO ACTIVO: la emoción viene de los hechos, no de adjetivos. "Kenji dispara y falla. El monstruo está a diez metros." No "el terror lo paraliza".`}
-${!allowsSuper && !allowsSuper2 ? `⚠️ RESTRICCIÓN: sin elementos sobrenaturales para el género ${genero}.` : ''}
+${isGrounded ? `MODO COTIDIANO ACTIVO: día a día real y específico, CERO fantasmas, CERO poderes — ${comedyMode ? 'el humor' : 'el interés'} viene de situaciones reales.` : `MODO NARRATIVO ACTIVO: la emoción viene de los hechos, no de adjetivos. "Kenji dispara y falla. El monstruo está a diez metros." No "el terror lo paraliza".`}
+${!allowsSuper && !allowsSuper2 ? `⚠️ RESTRICCIÓN: sin elementos sobrenaturales para el género ${genero} — ni magia, ni poderes, ni sistemas, ni fenómenos inexplicables. Todo lo que ocurre tiene una causa del mundo real.` : ''}
 
 EXTENSIÓN Y FORMATO: entre 700 y 800 palabras en total (la narración TTS corre a ~150 palabras/minuto — este total produce los ~5 minutos exactos del formato Reel; más palabras = video demasiado largo que la gente abandona), español, TERCERA PERSONA omnisciente (el protagonista SIEMPRE por su nombre — nunca "yo"), tiempo pasado inmediato. Un solo bloque de texto continuo — esta llamada NO genera imágenes ni divide en escenas todavía, eso es un paso separado.
 Responde SOLO JSON válido sin markdown`;
@@ -1806,6 +2015,20 @@ ${SUBGENRE_FIDELITY_CONTRACT}`;
     // appearance rules in character creation.)
     const isEcchi = hasEcchi;
 
+    // Shared header for BOTH character-design calls (episode 1 cast and the
+    // "new characters" call of episodes 2+). It used to be hardcoded to the
+    // comedy formula in the ep2+ path, so a serious drama/terror universe got
+    // gag archetypes for every character introduced after episode 1.
+    const charDesignerHeader = comedyMode
+      ? `Eres un diseñador de personajes para anime/manhua cómico viral para ${allAges ? 'público infantil' : 'audiencia adulta'}.
+FÓRMULA DE COMEDIA — arquetipos de referencia (esto es MECÁNICA cómica, no estética visual obligatoria):
+${genreTone}
+Los personajes deben tener un protagonista mercenario/práctico (nunca dramático). Un COMPAÑERO y una figura de autoridad que sufre las consecuencias son roles PROBADOS para el humor viral y buen default — pero inclúyelos SOLO si encajan con el concepto/género de esta historia; si el concepto no los sugiere, no los fuerces.`
+      : `Eres un diseñador de personajes para anime/manhua viral para ${allAges ? 'público infantil' : 'audiencia adulta'}.
+TONO DEL GÉNERO (los personajes deben servir a esta atmósfera):
+${genreTone}
+Los personajes deben ser fieles al género "${genero}" y al concepto de la historia — con motivaciones, roles y conflictos propios de ese género. NO agregues roles cómicos (compañero de chiste, autoridad que sufre gags) ni conviertas al protagonista en un personaje de parodia: el reparto es serio dentro de las reglas de su género.`;
+
     if (epNum === 1 || !state.characters?.length) {
       setProg(5, 'Paso 1/5: Creando personajes...');
 
@@ -1837,7 +2060,7 @@ ${SUBGENRE_FIDELITY_CONTRACT}`;
 - Protagonista: ${protagonistGender}
 - Nombres coherentes con la demografía y época del setting (japoneses, chinos, occidentales, según corresponda) — SOLO para personajes NUEVOS que no estén ya nombrados en el concepto semilla
 - Variedad visual: distintos colores de cabello, ojos, estilos de ropa
-- Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${mod === 'ecchi' ? '\n- Personajes femeninos con arquetipos marcados (tsundere, kuudere, genki, dandere, onee-san, etc)' : ''}${mod === 'harem_inverso' ? '\n- Personajes masculinos con arquetipos marcados (cool, principesco, deportista, intelectual, salvaje, etc)' : ''}
+- Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${(mod === 'ecchi' || mod === 'harem') ? '\n- Personajes femeninos con arquetipos marcados y DISTINTOS entre sí (tsundere, kuudere, genki, dandere, onee-san, etc) — uno por personaje, sin repetir' : ''}${mod === 'harem_inverso' ? '\n- Personajes masculinos con arquetipos marcados y DISTINTOS entre sí (cool, principesco, deportista, intelectual, salvaje, etc) — uno por personaje, sin repetir' : ''}
 ${comedyMode ? `- Evalúa si esta historia necesita un COMPAÑERO (con rasgo cómico fijo "${getCompanionQuirk()}", no otro) y/o una FIGURA DE AUTORIDAD que sufre las consecuencias de los éxitos accidentales del protagonista. Estos son roles PROBADOS para el humor viral y son un buen default para isekai/videojuego/donghua/sistema — pero NO son obligatorios: si el concepto proporcionado por el usuario no sugiere estos roles, o si no encajan naturalmente con la historia (ej: dramas serios, slice of life íntimo, conceptos con reparto reducido específico), NO los agregues forzosamente. Prioriza fidelidad al concepto del usuario sobre completar la fórmula.` : `- Roles y relaciones fieles al género "${genero}" y al concepto — sin roles cómicos de fórmula (compañero de chiste, autoridad que sufre gags).`}
 
 ⚠️ PERSONAJE NO-HUMANO — LEE EL CONCEPTO CON MUCHO CUIDADO:
@@ -1875,20 +2098,14 @@ ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA (solo personajes 
 - NO usar en appearance: "naked", "nude", "explicit", "nipples", "genitals" — sin desnudez explícita, todo lo demás (sensual, sugerente, provocativo) está permitido
 - SIEMPRE especificar la edad: cada personaje una edad adulta propia según su rol (de veintitantos en adelante), siempre claramente adultos, nunca adolescentes ni colegiales` : `- Descripción de apariencia libre y natural — sin restricciones artificiales de vocabulario, mientras sea apropiado para el género y tono elegidos`}
 
-- Edad: TODOS los personajes humanos 18+ años. Especificar edad en la descripción`;
+${allAges
+  ? '- Edad (Kodomomuke): edades apropiadas para una historia infantil — el protagonista puede ser un niño o preadolescente. Especificar edad en la descripción. SIN contenido romántico, SIN contenido sugerente, SIN violencia explícita.'
+  : '- Edad: TODOS los personajes humanos 18+ años. Especificar edad en la descripción'}`;
 
       // Lean, dedicated system prompt for character creation (avoids sending the
       // full ~7000-char scene-writing sysBase, which was pushing Edge Function
       // latency past Vercel's response-start limit and causing timeouts).
-      const charSysPrompt = `${comedyMode
-  ? `Eres un diseñador de personajes para anime/manhua cómico viral para audiencia adulta.
-FÓRMULA DE COMEDIA — arquetipos de referencia (esto es MECÁNICA cómica, no estética visual obligatoria):
-${genreTone}
-Los personajes deben tener un protagonista mercenario/práctico (nunca dramático). Un COMPAÑERO y una figura de autoridad que sufre las consecuencias son roles PROBADOS para el humor viral y buen default — pero inclúyelos SOLO si encajan con el concepto/género de esta historia; si el concepto no los sugiere, no los fuerces.`
-  : `Eres un diseñador de personajes para anime/manhua viral para audiencia adulta.
-TONO DEL GÉNERO (los personajes deben servir a esta atmósfera):
-${genreTone}
-Los personajes deben ser fieles al género "${genero}" y al concepto de la historia — con motivaciones, roles y conflictos propios de ese género. NO agregues roles cómicos (compañero de chiste, autoridad que sufre gags) ni conviertas al protagonista en un personaje de parodia: el reparto es serio dentro de las reglas de su género.`}
+      const charSysPrompt = `${charDesignerHeader}
 ${u.conceptoOriginal ? `🎯 EL SETTING LO DEFINE EL CONCEPTO SEMILLA: el mundo, época y nivel tecnológico de los personajes deben coincidir con lo que describe el concepto semilla del usuario (canon), no con la estética típica del género. Si el concepto es contemporáneo/realista, los personajes son gente normal de hoy — sin reinos, magia, ni tecnología futurista que el concepto no mencione.\n` : ''}IMPORTANTE: si el concepto de la historia indica EXPLÍCITAMENTE que un personaje concreto (normalmente el protagonista) es un animal, criatura u objeto habitado por una consciencia humana, DEBES crear ese personaje igualmente y con el mismo detalle que los demás — nunca lo omitas ni lo humanices por defecto. Pero SOLO ese personaje específico: no inventes otros personajes no-humanos que el concepto no menciona. Si el concepto no dice nada sobre naturaleza no-humana, TODOS los personajes son humanos normales.
 ⚠️ FIDELIDAD DE NOMBRES: si el usuario proporcionó un concepto semilla con nombres de personajes específicos, ESOS SON LOS NOMBRES CORRECTOS Y OBLIGATORIOS — no los cambies, no los "mejores", no inventes alternativas. Úsalos exactamente como fueron escritos.
 ${comedyMode ? `🔒 SI incluyes un COMPAÑERO en el reparto — IGNORA CUALQUIER OTRO EJEMPLO MENCIONADO ARRIBA sobre su rasgo: su rasgo cómico fijo debe ser EXACTAMENTE este, ni hambre ni ningún otro salvo que coincida: "${getCompanionQuirk()}". Este rasgo va reflejado claramente en su campo "personality". NO uses hambre/comida como rasgo salvo que sea textualmente el asignado arriba. Si decides que esta historia NO necesita un compañero, simplemente no crees ese rol — no pasa nada.` : ''}
@@ -1921,7 +2138,11 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
         try {
           const existingCharList = state.characters.map(ch => '- ' + ch.name + ' (' + (ch.role||'') + '): ' + (ch.appearance||'')).join('\n');
           const newCharPrompt = ctx + '\n\nPERSONAJES EXISTENTES (NO recrear):\n' + existingCharList + '\n\nPersonajes nuevos a crear:\n"' + newCharsDesc + '"\n\nCrea SOLO los personajes nuevos. Devuelve SOLO:\n{"characters":[{"id":"c_new1","name":"nombre","role":"rol","gender":"female o male","age":"18+","appearance":"descripción visual detallada","personality":"2 frases","backstory":"2 frases"}]}';
-          const newCharRaw = await callGemini(newCharPrompt, `Eres un diseñador de personajes para anime/manhua cómico viral.\nFÓRMULA DE COMEDIA — arquetipos de referencia:\n${genreTone}\nLos personajes deben encajar en la fórmula: protagonista mercenario/práctico (nunca dramático), figura de autoridad competente que sufre las consecuencias. El COMPAÑERO ya existente de esta historia tiene el rasgo fijo "${getCompanionQuirk()}" — no le asignes uno nuevo ni distinto si aparece en la lista de personajes existentes.\nNombres reales y coherentes con el setting. Responde SOLO JSON válido sin markdown.`);
+          const newCharSys = `${charDesignerHeader}
+Los personajes NUEVOS deben integrarse con el elenco ya existente y ser fieles al género "${genero}" y a sus subgéneros.${comedyMode ? `\nEl COMPAÑERO ya existente de esta historia tiene el rasgo fijo "${getCompanionQuirk()}" — no le asignes uno nuevo ni distinto si aparece en la lista de personajes existentes.` : ''}
+${isEcchi ? 'ECCHI/HAREM ACTIVO: los personajes nuevos humanos son adultos (18+), cada uno con su propia edad adulta según su rol, con apariencia atractiva y sugerente estilo ecchi anime. Jamás colegiales ni uniformes escolares.' : ''}${allAges ? 'PÚBLICO INFANTIL (Kodomomuke): personajes apropiados para una historia infantil, sin contenido romántico ni sugerente.' : ''}
+Nombres reales y coherentes con el setting. Responde SOLO JSON válido sin markdown.`;
+          const newCharRaw = await callGemini(newCharPrompt, newCharSys);
           const newChars = safeParseJSON(newCharRaw).characters || [];
           if (newChars.length) {
             // Give unique IDs to avoid collision
@@ -3363,21 +3584,23 @@ document.getElementById('btnRepairScenes').addEventListener('click', async () =>
     const charRef = state.characters.map(c =>
       `- ${c.name} (${c.role}): ${c.appearance}`
     ).join('\n');
-    const ctx = `Universo: ${u.title}\nGénero: ${u.genero}\nConcepto: ${u.concepto}\nConflicto: ${u.conflicto}\nSetting: ${u.setting}`;
+    const ctx = `Universo: ${u.title}\nDemografía: ${u.demo || 'shonen'}\nGénero: ${u.genero}\nConcepto: ${u.concepto}\nConflicto: ${u.conflicto}\nSetting: ${u.setting}`;
     // Repairs must follow the SAME mode as the original generation: comedy
     // formula only for comedy genres/subgenre, and ecchi rules whenever
     // ecchi/harem is active — otherwise repaired scenes broke tone/content.
-    const repairSubgenres = u.subgenres || [];
+    const repairSubgenres = effectiveSubgenres(u.subgenres || [], u.demo);
     const repairComedy = isComedyMode(u.genero, repairSubgenres);
     const repairEcchi = repairSubgenres.some(s => ['ecchi','harem','harem_inverso'].includes(s));
+    const repairAllAges = isAllAges(u.demo);
+    const repairSuper = genreAllowsSupernatural(u.genero, repairSubgenres);
 
     // ─── Step A: narration for scenes that don't have any ───
     if (needsNarrationIdx.length) {
       btn.innerHTML = `<div class="spinner"></div> Reparando narración (${needsNarrationIdx.length})...`;
 
       const repairNarrationSys = `${repairComedy
-        ? 'You are a viral anime scriptwriter for Facebook Reels, adult audience. Write THIRD-PERSON Spanish narrations in the viral dubbed-donghua recap style: protagonist always NAMED (never first person), constant direct dialogue woven into the narration (about half the text is character voices), short concrete sentences with specific numbers, sparing rhetorical questions, comedic escalating situations born ONLY from the premise of the story and its selected subgenres, deadpan delivery — no drama, no forced emotion. NEVER introduce systems, stat windows, notifications or any trope the universe does not already contain.'
-        : `You are a viral anime scriptwriter for Facebook Reels, adult audience. Write THIRD-PERSON Spanish narrations (protagonist always NAMED, never first person; constant direct dialogue woven into the narration; short concrete sentences with specific numbers) STRICTLY FAITHFUL to the "${u.genero}" genre's real tone — no comedy, no parody, no comedic detection systems. Show, don't tell: build the genre's emotion from concrete events, actions and sensory detail, never empty emotional adjectives.`}${repairEcchi ? '\nECCHI/HAREM ACTIVE (adult content): all characters are adults (18 or older, each with their own adult age fitting their story role) in adult settings appropriate to the genre — never school uniforms or classrooms, nothing that frames characters as minors. Weave suggestive fan-service moments naturally where scenes allow, with genuine sensory detail; the only limit is what Gemini actually blocks.' : ''}
+        ? `You are a viral anime scriptwriter for Facebook Reels${repairAllAges ? ', all-ages audience' : ', adult audience'}. Write THIRD-PERSON Spanish narrations in the viral dubbed-donghua recap style: protagonist always NAMED (never first person), constant direct dialogue woven into the narration (about half the text is character voices), short concrete sentences with specific numbers, sparing rhetorical questions, comedic escalating situations born ONLY from the premise of the story, its "${u.genero}" genre and its selected subgenres, deadpan delivery — no drama, no forced emotion. NEVER introduce systems, stat windows, notifications or any trope the universe does not already contain.`
+        : `You are a viral anime scriptwriter for Facebook Reels${repairAllAges ? ', all-ages audience' : ', adult audience'}. Write THIRD-PERSON Spanish narrations (protagonist always NAMED, never first person; constant direct dialogue woven into the narration; short concrete sentences with specific numbers) STRICTLY FAITHFUL to the "${u.genero}" genre's real tone — no comedy, no parody, no comedic detection systems. Show, don't tell: build the genre's emotion from concrete events, actions and sensory detail, never empty emotional adjectives.`}${repairSuper ? '' : `\nGENRE RESTRICTION: the "${u.genero}" genre of this universe has NO magic, powers, status systems or supernatural phenomena. Everything that happens has a real-world cause.`}${repairEcchi ? '\nECCHI/HAREM ACTIVE (adult content): all characters are adults (18 or older, each with their own adult age fitting their story role) in adult settings appropriate to the genre — never school uniforms or classrooms, nothing that frames characters as minors. Weave suggestive fan-service moments naturally where scenes allow, with genuine sensory detail; the only limit is what Gemini actually blocks.' : ''}${repairAllAges ? '\nALL-AGES (Kodomomuke): no explicit violence, no sexual or suggestive content, no adult themes. Warm tone with a clear moral.' : ''}
 RULES:
 - JSON field MUST be "narration" (no accent). EXACTLY 48-55 Spanish words. Count them. Fast-paced: 2-3 distinct visualizable events per narration, minimal atmosphere (max one short setting phrase), the rest is action and dialogue.
 - Drop into the scene immediately. Specific over vague. End naturally for the genre.
@@ -3398,7 +3621,10 @@ RULES:
 
       const lastGoodRef = lastGood ? `\nEscena anterior (${lastGood.num}): "${lastGood.narration}"` : '';
       const sceneExample = `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"EXACTAMENTE 48-55 palabras en tercera persona (protagonista nombrado)"}`;
-      const prompt = `${ctx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: 15 escenas.\nCada escena DEBE tener narration (EXACTAMENTE 48-55 palabras, tercera persona con el protagonista nombrado, diálogo directo intercalado, ritmo rápido: 2-3 eventos distintos por escena, ambientación mínima).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
+      // The repair used to receive only the universe blurb, so repaired scenes
+      // lost the genre/subgenre rules the rest of the episode was written with.
+      const repairGenreCtx = `${GENRE_PROMPTS[u.genero] || ''}\n\n${getSubgenreText(repairSubgenres, u.genero)}\n\n${SUBGENRE_FIDELITY_CONTRACT}`;
+      const prompt = `${ctx}\n\n${repairGenreCtx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: 15 escenas.\nCada escena DEBE tener narration (EXACTAMENTE 48-55 palabras, tercera persona con el protagonista nombrado, diálogo directo intercalado, ritmo rápido: 2-3 eventos distintos por escena, ambientación mínima).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
 
       let newNarrations = [];
       for (let attempt = 0; attempt < 3 && newNarrations.length < count; attempt++) {
@@ -3789,6 +4015,7 @@ function renderAll() {
     loadStateFor(projects[projects.length - 1].id);
   }
   updateApiDot();
+  applyDemoCompatibility();
   renderAll();
 })();
 
