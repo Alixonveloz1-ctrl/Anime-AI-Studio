@@ -4503,7 +4503,14 @@ function buildMontarScript(scenes, opts) {
           `-an -c:v libx264 -preset veryfast -pix_fmt yuv420p seg_${sufijo}.mp4`);
       } else if (pl && pl.image) {
         // zoompan jitters at 1x, so it works on an upscaled copy.
-        p(`F=$(awk "BEGIN{printf \\"%d\\", ${T}*24}")`,
+        //
+        // `d` is how many frames one zoom cycle lasts, and zoompan RESTARTS at
+        // zoom 1 when it runs out. `%d` truncates, so `d` used to come out one
+        // frame short of what `-t` actually emits and the segment's LAST frame
+        // was the first frame of a new cycle — the image snapped back to 1×
+        // right on the cut. Two spare frames put the restart safely past the
+        // end: -t emits round(T*24) ≤ floor(T*24)+1 frames, always < d.
+        p(`F=$(awk "BEGIN{printf \\"%d\\", ${T}*24+2}")`,
           `ffmpeg -y -loop 1 -i ${pl.image} -t "${T}" ` +
           `-vf "scale=$((W*2)):$((H*2)):force_original_aspect_ratio=increase,crop=$((W*2)):$((H*2)),` +
           `zoompan=z='min(zoom+0.0006,1.12)':d=$F:s=${'${W}'}x${'${H}'}:fps=$FPS,format=yuv420p" ` +
@@ -4525,7 +4532,13 @@ function buildMontarScript(scenes, opts) {
       ': > mus.txt',
       'for m in mus_*.wav; do echo "file \'$PWD/$m\'" >> mus.txt; done',
       'ffmpeg -y -f concat -safe 0 -i mus.txt -c copy musica.wav',
-      'FADE=$(awk "BEGIN{printf \\"%.2f\\", ($TOTAL-3)>0 ? $TOTAL-3 : 0}")',
+      // The comparison goes in an `if`, never inside the printf. awk reads a
+      // `>` in a print/printf argument list as OUTPUT REDIRECTION, so the old
+      // `printf "%.2f", ($TOTAL-3)>0 ? ...` wrote the number to a file called
+      // "0" and left stdout empty. FADE came out blank, ffmpeg got
+      // `afade=t=out:st=:d=3`, and every episode WITH MUSIC died on it — with
+      // nothing but "exit code 1" to show for it.
+      'FADE=$(awk "BEGIN{f=$TOTAL-3; if(f<0)f=0; printf \\"%.2f\\", f}")',
       'ffmpeg -y -i narracion.wav -stream_loop -1 -i musica.wav ' +
       '-filter_complex "[1:a]volume=0.18,afade=t=in:st=0:d=2,afade=t=out:st=$FADE:d=3[m];' +
       '[0:a][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]" ' +
