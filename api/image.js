@@ -7,30 +7,7 @@
 // caused the earlier character-generation timeout bug on this project.
 // Node.js runtime + Fluid compute actually honors maxDuration.
 // ════════════════════════════════════════════════════════════════
-const crypto = require('crypto');
-
-async function getAccessToken(sa) {
-  const now = Math.floor(Date.now() / 1000);
-  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
-  const header  = { alg:'RS256', typ:'JWT' };
-  const payload = { iss:sa.client_email, sub:sa.client_email, aud:sa.token_uri, iat:now, exp:now+3600, scope:'https://www.googleapis.com/auth/cloud-platform' };
-  const signingInput = `${b64(header)}.${b64(payload)}`;
-  // Native crypto signing (robust, same as video-start.js) — passes the PEM
-  // straight to createSign, avoiding the fragile atob() key decode that threw
-  // "The string did not match the expected pattern" on Vercel's runtime.
-  const signer = crypto.createSign('RSA-SHA256');
-  signer.update(signingInput);
-  const b64sig = signer.sign(sa.private_key, 'base64').replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
-  const jwt = `${signingInput}.${b64sig}`;
-  const r = await fetch(sa.token_uri, {
-    method:'POST',
-    headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body:`grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
-  });
-  const d = await r.json();
-  if (!d.access_token) throw new Error('OAuth: '+JSON.stringify(d));
-  return d.access_token;
-}
+const { cfg, auth, imageModelLocation, vertexUrl, begin, fail } = require('./_lib/gcp');
 
 // ─── Words that trigger Gemini safety filters ───
 const BLOCKED_WORDS = [
@@ -50,22 +27,6 @@ const BLOCKED_WORDS = [
   [/\bcuerpo.*?pecho\b/gi, 'close together'],
   [/\bpecho.*?contra\b/gi, 'leaning close'],
 ];
-
-// ─── Model → endpoint mapping (from working project docs) ───────
-const IMAGE_MODELS = {
-  'gemini-2.5-flash-image':         { location: 'us-central1' },
-  'gemini-3.1-flash-image-preview': { location: 'global'      },
-  'gemini-3-pro-image-preview':     { location: 'global'      },
-};
-// Fallback regions only for us-central1 model (global models use single endpoint)
-const US_REGIONS = ['us-central1', 'europe-west4', 'us-east4'];
-
-function getUrl(projectId, modelId, location) {
-  if (location === 'global') {
-    return `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models/${modelId}:generateContent`;
-  }
-  return `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:generateContent`;
-}
 
 async function callGeminiAtUrl(url, parts, projectId, token, aspectRatio) {
   const safeRatio = ['9:16','16:9'].includes(aspectRatio) ? aspectRatio : '9:16';
@@ -139,13 +100,12 @@ ${cleanPrompt}` });
     parts.push({ text: `${aspectStyle} high-budget cinematic 2D anime film illustration (MAPPA / Ufotable / top-tier donghua tier) — fine variable-weight linework, soft gradient cel-shading, richly detailed background. STRICTLY FORBIDDEN: western cartoon, webtoon-flat, chibi, thick uniform outlines, 3D render, CGI, Disney/Pixar, semi-realistic painted faces. NO text, NO watermarks, NO letters anywhere. ALL characters named in the scene are visible, at true human scale relative to the environment, feet grounded, integrated into the scene's perspective and lighting. ${cleanPrompt}` });
   }
 
-  // ─── Resolve model → correct endpoint ───────────────────────────
-  const modelInfo = IMAGE_MODELS[model] || IMAGE_MODELS['gemini-2.5-flash-image'];
-  const location  = modelInfo.location;
+  // ─── Resolve model → correct endpoint (IMAGE_MODEL_LOCATIONS-aware) ───
+  const location = imageModelLocation(model);
 
   if (location === 'global') {
     // Global models: single endpoint, no rotation
-    const url = getUrl(projectId, model, 'global');
+    const url = vertexUrl(projectId, 'global', model, 'generateContent');
     const { ok, shouldRotate, isSafetyBlock, data } = await callGeminiAtUrl(url, parts, projectId, token, aspectRatio);
     if (isSafetyBlock) {
       const finishReason = data.candidates?.[0]?.finishReason || 'SAFETY';
@@ -158,12 +118,13 @@ ${cleanPrompt}` });
     return { error: `bloqueado [${fr}]` };
   }
 
-  // us-central1 model: rotate through regions for capacity
-  const start = Math.floor(Math.random() * US_REGIONS.length);
-  const regions = [...US_REGIONS.slice(start), ...US_REGIONS.slice(0, start)];
+  // Regional model: rotate through the configured regions for capacity
+  const REGIONS = cfg.imageRegions.length ? cfg.imageRegions : [location];
+  const start = Math.floor(Math.random() * REGIONS.length);
+  const regions = [...REGIONS.slice(start), ...REGIONS.slice(0, start)];
   let lastError = '';
   for (const region of regions) {
-    const url = getUrl(projectId, model, region);
+    const url = vertexUrl(projectId, region, model, 'generateContent');
 
     const { ok, shouldRotate, isSafetyBlock, data } = await callGeminiAtUrl(url, parts, projectId, token, aspectRatio);
 
@@ -193,10 +154,8 @@ ${cleanPrompt}` });
 }
 
 // ─────────────────────────────────────────────
-const CORS = { 'Access-Control-Allow-Origin':'*', 'Content-Type':'application/json' };
 module.exports = async function handler(req, res) {
-  Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (begin(req, res)) return;
   try {
     const body = req.body || {};
     const { prompt, model: forceModel, isEcchi } = body;
@@ -231,23 +190,17 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // The service account JSON is the SINGLE source of the GCP project: its
-    // own project_id is used, exactly like every other endpoint. A separate
-    // GCP_PROJECT_ID override used to take precedence here only, so switching
-    // accounts by replacing the service account left images pointing at the
-    // old project while script/audio/video moved to the new one.
-    const saRaw = (process.env.GCP_SERVICE_ACCOUNT || '').trim();
-    if (!saRaw) return res.status(500).json({ error: 'GCP_SERVICE_ACCOUNT no configurado en Vercel' });
-    const sa = JSON.parse(saRaw);
-    const projectId = sa.project_id;
-    if (!projectId) return res.status(500).json({ error: 'GCP_SERVICE_ACCOUNT sin project_id — pega el JSON completo de la service account' });
-    const token = await getAccessToken(sa);
+    // The service account JSON is the SINGLE source of the GCP project, exactly
+    // like every other endpoint. A GCP_PROJECT_ID override used to take
+    // precedence here only, so switching accounts by replacing the service
+    // account left images on the old project while everything else moved.
+    const { projectId, token } = await auth();
 
     const aspectRatio = body.aspectRatio || '9:16';
-    const model = forceModel || 'gemini-2.5-flash-image';
+    const model = forceModel || cfg.imageModel;
     const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true, aspectRatio, continuityRef);
     return res.status(200).json(result);
   } catch(e) {
-    return res.status(500).json({ error: e.message });
+    return fail(res, e);
   }
 };

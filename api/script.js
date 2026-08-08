@@ -1,14 +1,18 @@
 // ════════════════════════════════════════════════════════════════
-// SCRIPT GENERATION PROXY — Gemini 3.1 Pro (Vertex AI), the most
-// capable text model available. This is the SINGLE point that
-// generates ALL text in the app: universe, characters, scene
-// narration, image prompts, repairs, translation.
+// SCRIPT GENERATION PROXY — the single point that generates ALL text
+// in the app: universe, characters, story, image prompts, direction
+// and repairs.
 //
-// NO model fallback: per project requirement, the ONLY text generator
-// is the maximum-quality model. If 3.1 Pro fails (capacity/quota), the
-// call returns a clear error instead of silently downgrading to a
-// weaker model. Transient blips are already absorbed by the client,
-// which retries each text call up to 4 times.
+// The model is cfg.scriptModel, overridable with the SCRIPT_MODEL env
+// var (and SCRIPT_LOCATION for its endpoint). It defaults to the most
+// capable model available; if a Google Cloud project has no allowlist
+// for it, point SCRIPT_MODEL at one it does have instead of editing
+// this file.
+//
+// NO automatic model fallback: per project requirement the call
+// returns a clear error rather than silently downgrading quality.
+// Transient blips are absorbed by the client, which retries each text
+// call up to 4 times.
 //
 // Node.js runtime (NOT Edge): Vercel Edge Functions are deprecated
 // and hard-cap "must begin sending a response" at 25s regardless of
@@ -24,56 +28,10 @@
 // in the response — text extraction below filters those out so we
 // never accidentally return the thinking summary instead of the JSON.
 // ════════════════════════════════════════════════════════════════
-const crypto = require('crypto');
-
-const CORS = {
-  'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-
-const MODEL = 'gemini-3.1-pro-preview';
-
-async function getAccessToken(sa) {
-  const now = Math.floor(Date.now() / 1000);
-  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
-  const header  = { alg:'RS256', typ:'JWT' };
-  const payload = {
-    iss: sa.client_email, sub: sa.client_email, aud: sa.token_uri,
-    iat: now, exp: now + 3600,
-    scope: 'https://www.googleapis.com/auth/cloud-platform',
-  };
-  const signingInput = `${b64(header)}.${b64(payload)}`;
-  // Sign with Node's native crypto (same robust approach as video-start.js):
-  // the PEM private key is passed straight to createSign, which parses the PEM
-  // (headers + newlines) internally. This avoids atob(), whose strict base64
-  // decoding on Vercel's runtime threw "The string did not match the expected
-  // pattern" whenever the key had any stray whitespace or newline formatting.
-  const signer = crypto.createSign('RSA-SHA256');
-  signer.update(signingInput);
-  const sig = signer.sign(sa.private_key, 'base64')
-    .replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
-  const jwt = `${signingInput}.${sig}`;
-  const r = await fetch(sa.token_uri, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
-  });
-  const d = await r.json();
-  if (!d.access_token) throw new Error('OAuth error: ' + JSON.stringify(d));
-  return d.access_token;
-}
-
-function buildUrl(projectId, modelId, location) {
-  if (location === 'global') {
-    return `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models/${modelId}:generateContent`;
-  }
-  return `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:generateContent`;
-}
+const { cfg, auth, vertexUrl, begin, fail } = require('./_lib/gcp');
 
 async function callModel(modelId, location, projectId, token, body) {
-  const url = buildUrl(projectId, modelId, location);
+  const url = vertexUrl(projectId, location, modelId, 'generateContent');
   const r = await fetch(url, {
     method: 'POST',
     headers: {
@@ -95,9 +53,7 @@ function extractText(d) {
 }
 
 module.exports = async function handler(req, res) {
-  Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (begin(req, res)) return;
 
   try {
     const { messages, system } = req.body || {};
@@ -105,9 +61,8 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'messages requerido' });
     }
 
-    const sa = JSON.parse((process.env.GCP_SERVICE_ACCOUNT || '').trim());
-    const projectId = sa.project_id;
-    const token = await getAccessToken(sa);
+    const { projectId, token } = await auth();
+    const MODEL = cfg.scriptModel;
 
     const body = {
       contents: messages,
@@ -142,7 +97,7 @@ module.exports = async function handler(req, res) {
       ],
     };
 
-    let { ok, status, data: d } = await callModel(MODEL, 'global', projectId, token, body);
+    let { ok, status, data: d } = await callModel(MODEL, cfg.scriptLocation, projectId, token, body);
 
     if (!ok) {
       const msg = d.error?.message || JSON.stringify(d).slice(0, 200);
@@ -167,6 +122,6 @@ module.exports = async function handler(req, res) {
 
     return res.status(200).json({ text, model: MODEL });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return fail(res, e);
   }
 };

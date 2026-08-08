@@ -7,34 +7,7 @@
 // at 25s regardless of maxDuration.
 // ════════════════════════════════════════════════════════════════
 const crypto = require('crypto');
-
-const MODEL_ID = 'veo-3.1-lite-generate-001';
-const LOCATION  = 'us-central1';
-const CORS = {
-  'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-
-async function getAccessToken(sa) {
-  const now = Math.floor(Date.now() / 1000);
-  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
-  const header  = { alg:'RS256', typ:'JWT' };
-  const payload = { iss:sa.client_email, sub:sa.client_email, aud:sa.token_uri, iat:now, exp:now+3600, scope:'https://www.googleapis.com/auth/cloud-platform' };
-  const signingInput = `${b64(header)}.${b64(payload)}`;
-  // Native crypto signing (robust, same as video-start.js) — passes the PEM
-  // straight to createSign, avoiding the fragile atob() key decode that threw
-  // "The string did not match the expected pattern" on Vercel's runtime.
-  const signer = crypto.createSign('RSA-SHA256');
-  signer.update(signingInput);
-  const b64sig = signer.sign(sa.private_key, 'base64').replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
-  const jwt = `${signingInput}.${b64sig}`;
-  const r = await fetch(sa.token_uri, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:`grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}` });
-  const d = await r.json();
-  if (!d.access_token) throw new Error('Token error: ' + JSON.stringify(d));
-  return d.access_token;
-}
+const { cfg, loadServiceAccount, getAccessToken, vertexUrl, begin, fail } = require('./_lib/gcp');
 
 // ─── GCS V4 Signed URL — 7 days, works without public bucket ───
 async function generateSignedUrl(sa, bucket, objectPath, expiresSeconds = 604800) {
@@ -81,19 +54,22 @@ async function generateSignedUrl(sa, bucket, objectPath, expiresSeconds = 604800
 }
 
 module.exports = async function handler(req, res) {
-  Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error:'Method not allowed' });
+  if (begin(req, res)) return;
 
   try {
-    const { operationName, projectId } = req.body || {};
+    const { operationName, projectId, model } = req.body || {};
     if (!operationName) return res.status(400).json({ error:'operationName requerido' });
 
-    const sa = JSON.parse((process.env.GCP_SERVICE_ACCOUNT || '').trim());
+    const sa = loadServiceAccount();
     const pid = projectId || sa.project_id;
     const token = await getAccessToken(sa);
 
-    const url = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${pid}/locations/${LOCATION}/publishers/google/models/${MODEL_ID}:fetchPredictOperation`;
+    // The operation belongs to the model that started it, so poll THAT model.
+    // This used to be hardcoded to the lite model, which broke polling for
+    // anyone who picked Veo Fast or Quality in the UI. The client echoes the
+    // model back from /api/video-start; fall back to the configured default.
+    const modelId = (model || '').trim() || cfg.veoModel;
+    const url = vertexUrl(pid, cfg.veoLocation, modelId, 'fetchPredictOperation');
 
     const response = await fetch(url, {
       method: 'POST',
@@ -142,6 +118,6 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ done: true, gcsUri, publicUrl: signedUrl });
 
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return fail(res, e);
   }
 };

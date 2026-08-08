@@ -400,7 +400,15 @@
 
     <div class="card" id="cardGenerarEpisodio" style="display:none">
       <h2>🎬 Generar Episodio</h2>
-      <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px">Crea 15 escenas con narración y 45 imágenes (3 por escena). Duración estimada: ~5 minutos.</p>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px" id="epFormatNote"></p>
+
+      <label>Duración del episodio</label>
+      <select id="epLengthSelect">
+        <option value="corto">Corto — 15 escenas · ~5 min · 45 imágenes</option>
+        <option value="medio" selected>Medio — 24 escenas · ~8 min · 72 imágenes</option>
+        <option value="largo">Largo — 36 escenas · ~12 min · 108 imágenes</option>
+        <option value="epico">Épico — 48 escenas · ~16 min · 144 imágenes</option>
+      </select>
       <!-- Episode navigation -->
       <div id="episodeNav" style="display:none;margin-bottom:14px">
         <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">Episodios generados:</div>
@@ -814,7 +822,7 @@ function updateEpisodeNav() {
 
   // Show "Generar siguiente episodio" if current is complete
   const curScenes = state.episodes[cur] || [];
-  const isComplete = curScenes.length >= 15 && curScenes.every(s => s.narration && s.imagePromptA);
+  const isComplete = curScenes.length >= getEpisodeFormat().scenes && curScenes.every(s => s.narration && s.imagePromptA);
   nextBtn.style.display = isComplete ? 'block' : 'none';
   nextBtn.textContent = `➕ Generar Episodio ${cur + 1}`;
 
@@ -1591,6 +1599,44 @@ function isComedyMode(genero, subgenres) {
 const SYSTEM_COMEDY_LAYER = `
 CAPA DE COMEDIA DE SISTEMA (esta historia SÍ tiene un sistema de poder): the system speaks in formal, bureaucratic notifications and congratulates the protagonist for what are obviously disasters. Its detections are technically accurate and contextually catastrophic — the joke is the gap between what the system promises and what it delivers. An authority figure who follows every rule correctly keeps paying the price for the protagonist's accidental wins. Running gag: the official record of the protagonist grows in increasingly resigned language, episode after episode.`;
 
+// ════════════════════════════════════════════════════════════════
+// EPISODE FORMATS — length is data, not a hardcoded 15.
+// words ≈ scenes × 52, because TTS runs at ~150 words/minute and each
+// scene is one ~20s narration beat. `parts` splits the writing across
+// sequential calls: one 2500-word story in a single call runs past
+// Vercel's 60s function limit, so long formats are written act by act,
+// each call receiving everything written so far.
+// ════════════════════════════════════════════════════════════════
+const EPISODE_FORMATS = {
+  corto: { scenes: 15, parts: 1, label: 'Corto',  minutes: 5  },
+  medio: { scenes: 24, parts: 2, label: 'Medio',  minutes: 8  },
+  largo: { scenes: 36, parts: 3, label: 'Largo',  minutes: 12 },
+  epico: { scenes: 48, parts: 4, label: 'Épico',  minutes: 16 },
+};
+const WORDS_PER_SCENE = 52;
+
+function getEpisodeFormat() {
+  // The universe stores the format chosen when it was created, so episodes 2+
+  // and repairs keep the same shape as episode 1 even after a reload.
+  const key = state.universe?.epFormat
+    || document.getElementById('epLengthSelect')?.value
+    || 'medio';
+  return { key, ...(EPISODE_FORMATS[key] || EPISODE_FORMATS.medio) };
+}
+function formatWordTarget(fmt) {
+  const total = fmt.scenes * WORDS_PER_SCENE;
+  return { min: Math.round(total * 0.95), max: Math.round(total * 1.08), total };
+}
+// Act label for a scene index, scaled to any episode length.
+function actForIndex(i, totalScenes) {
+  const p = (i + 1) / totalScenes;
+  if (p <= 0.13) return 'cold_open';
+  if (p <= 0.40) return 'act1';
+  if (p <= 0.80) return 'act2';
+  if (p <= 0.93) return 'clímax';
+  return 'resolución';
+}
+
 // ─── TIME OF DAY & WEATHER — English fragments appended at image time ───
 // Kept OUT of the stored imagePrompts so changing the selector re-styles
 // future generations without regenerating all the prompts.
@@ -1722,6 +1768,7 @@ Devuelve JSON:
     state.universe.demo      = demo;
     state.universe.genero    = genero;
     state.universe.subgenres = subgenres;
+    state.universe.epFormat  = document.getElementById('epLengthSelect')?.value || 'medio';
     state.universe.tono      = tono || '';
     state.universe.conceptoOriginal = concepto || '';
     // Scenarios start EMPTY — they are extracted from each episode's story
@@ -1743,6 +1790,23 @@ Devuelve JSON:
   }
 });
 
+// Keeps the episode-format note in sync with the selector, and persists the
+// choice on the universe so episodes 2+ and repairs keep the same shape.
+function updateEpFormatNote() {
+  const sel  = document.getElementById('epLengthSelect');
+  const note = document.getElementById('epFormatNote');
+  if (!sel || !note) return;
+  const f = EPISODE_FORMATS[sel.value] || EPISODE_FORMATS.medio;
+  const words = f.scenes * WORDS_PER_SCENE;
+  note.textContent = `Crea ${f.scenes} escenas con narración y ${f.scenes * 3} imágenes (3 por escena). `
+    + `~${words} palabras · duración estimada ~${f.minutes} minutos`
+    + (f.parts > 1 ? ` · la historia se escribe en ${f.parts} partes encadenadas.` : '.');
+}
+document.getElementById('epLengthSelect')?.addEventListener('change', function() {
+  if (state.universe) { state.universe.epFormat = this.value; saveState(); }
+  updateEpFormatNote();
+});
+
 // Puts the creation form back in sync with the universe actually loaded, so
 // what the user sees selected is what the project was generated with (and what
 // every later step — video prompts, repairs, new episodes — will use).
@@ -1762,7 +1826,10 @@ function syncFormToUniverse() {
   });
   const tonoEl = document.getElementById('tonoInput');
   if (tonoEl && typeof u.tono === 'string') tonoEl.value = u.tono;
+  const lenEl = document.getElementById('epLengthSelect');
+  if (lenEl && u.epFormat && EPISODE_FORMATS[u.epFormat]) lenEl.value = u.epFormat;
   applyDemoCompatibility();
+  updateEpFormatNote();
 }
 
 const GENERO_LABELS = {
@@ -1842,6 +1909,8 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     const hasSliceOfLife = subgenres.includes('slice_of_life');
     const hasEcchi = subgenres.includes('ecchi') || subgenres.includes('harem') || subgenres.includes('harem_inverso');
     const subgenreText = getSubgenreText(subgenres, genero);
+    const fmt = getEpisodeFormat();
+    const wordTarget = formatWordTarget(fmt);
 
     // Genres/subgenres that legitimately allow supernatural or fantastic
     // elements — shared with the universe step so both agree.
@@ -1966,7 +2035,7 @@ CIERRE: ${sceneEnding} — terminá con un CLIFFHANGER seco y concreto hacia el 
 ${isGrounded ? `MODO COTIDIANO ACTIVO: día a día real y específico, CERO fantasmas, CERO poderes — ${comedyMode ? 'el humor' : 'el interés'} viene de situaciones reales.` : `MODO NARRATIVO ACTIVO: la emoción viene de los hechos, no de adjetivos. "Kenji dispara y falla. El monstruo está a diez metros." No "el terror lo paraliza".`}
 ${!allowsSuper && !allowsSuper2 ? `⚠️ RESTRICCIÓN: sin elementos sobrenaturales para el género ${genero} — ni magia, ni poderes, ni sistemas, ni fenómenos inexplicables. Todo lo que ocurre tiene una causa del mundo real.` : ''}
 
-EXTENSIÓN Y FORMATO: entre 700 y 800 palabras en total (la narración TTS corre a ~150 palabras/minuto — este total produce los ~5 minutos exactos del formato Reel; más palabras = video demasiado largo que la gente abandona), español, TERCERA PERSONA omnisciente (el protagonista SIEMPRE por su nombre — nunca "yo"), tiempo pasado inmediato. Un solo bloque de texto continuo — esta llamada NO genera imágenes ni divide en escenas todavía, eso es un paso separado.
+EXTENSIÓN Y FORMATO: entre ${wordTarget.min} y ${wordTarget.max} palabras en total (la narración TTS corre a ~150 palabras/minuto: este total produce los ~${fmt.minutes} minutos del formato elegido), español, TERCERA PERSONA omnisciente (el protagonista SIEMPRE por su nombre — nunca "yo"), tiempo pasado inmediato. Un solo bloque de texto continuo — esta llamada NO genera imágenes ni divide en escenas todavía, eso es un paso separado.
 Responde SOLO JSON válido sin markdown`;
 
     // Split ecchi rules: narration guidance goes with the narration call,
@@ -2179,13 +2248,21 @@ Nombres reales y coherentes con el setting. Responde SOLO JSON válido sin markd
 
     const charRefShort = state.characters.map(c => c.name).join(', ');
 
-    // 15 escenas × 1 imagen = 15 imágenes por episodio
-    const narrationShape = `{"id":"s1","num":1,"act":"cold_open","title":"título corto","narration":"~48-55 palabras tomadas de la historia original en tercera persona (protagonista nombrado), cortadas en un punto natural — no reescribas ni le agregues un gancho artificial, solo extraé el fragmento que corresponde."}`;
+    // N escenas × 3 imágenes por escena, según el formato elegido
+    const narrationShape = `{"id":"s1","num":1,"title":"título corto","narration":"~48-55 palabras tomadas de la historia original en tercera persona (protagonista nombrado), cortadas en un punto natural — no reescribas ni le agregues un gancho artificial, solo extraé el fragmento que corresponde."}`;
 
-    // ─── STEP: write the full episode as ONE continuous story — no per-scene
-    // checklist, so nothing (money amounts, character beats, reactions)
-    // gets mechanically repeated 15 times. ───
-    async function generateFullStory(prompt) {
+    // ─── STEP: write the episode as continuous prose — no per-scene checklist,
+    // so nothing (money amounts, character beats, reactions) gets mechanically
+    // repeated once per scene.
+    //
+    // One call per PART. A short episode is a single call, as before. Longer
+    // formats are written act by act because a single 2500-word generation runs
+    // past Vercel's 60s function limit. Splitting by ACT is safe in a way that
+    // splitting by SCENE was not: every part receives the complete text written
+    // so far plus what its act must accomplish, so it continues one story
+    // instead of restarting it (the old per-scene split is what made scene 10
+    // repeat scene 5). ───
+    async function generateStoryPart(prompt, minWords) {
       let best = '';
       let lastErr = '';
       for (let attempt = 0; attempt < 4; attempt++) {
@@ -2202,8 +2279,8 @@ Nombres reales y coherentes con el setting. Responde SOLO JSON válido sin markd
           const story = String(parsed.story || '').trim();
           const wc = story.split(/\s+/).filter(Boolean).length;
           if (story.length > best.length) best = story;
-          if (story && wc >= 450) return story; // sanity floor — reject obviously truncated results
-          lastErr = story ? `historia demasiado corta (${wc} palabras)` : 'respuesta vacía o sin campo "story"';
+          if (story && wc >= minWords) return story; // sanity floor — reject obviously truncated results
+          lastErr = story ? `demasiado corto (${wc} palabras, mínimo ${minWords})` : 'respuesta vacía o sin campo "story"';
           console.warn(`Historia intento ${attempt+1}: ${lastErr}`);
           await new Promise(r => setTimeout(r, 3000));
         } catch(e) {
@@ -2213,19 +2290,58 @@ Nombres reales y coherentes con el setting. Responde SOLO JSON válido sin markd
         }
       }
       if (best) return best; // accept the longest attempt rather than fail outright
-      throw new Error(`No se pudo generar la historia completa. Último error: ${lastErr}`);
+      throw new Error(`No se pudo generar la historia. Último error: ${lastErr}`);
     }
 
-    // ─── STEP: split the ALREADY-FINISHED story into exactly 15 sequential
+    // Arc beats per part, so each call knows what its act has to accomplish.
+    const PART_BRIEFS = {
+      1: ['la historia COMPLETA: planteo, desarrollo, clímax y cierre con cliffhanger'],
+      2: ['PRIMERA MITAD: planteo, primer incidente y escalada hasta un punto de giro fuerte (NO cierres la historia)',
+          'SEGUNDA MITAD: consecuencias del giro, escalada final, clímax y cierre con cliffhanger'],
+      3: ['ACTO 1: planteo, presentación del elenco y el primer evento que rompe la normalidad (NO cierres nada)',
+          'ACTO 2: escalada — complicaciones, alianzas y traiciones, un giro que sube las apuestas (NO cierres la historia)',
+          'ACTO 3: convergencia de los hilos sembrados, clímax y cierre con cliffhanger'],
+      4: ['ACTO 1: planteo y primer incidente que rompe la normalidad (NO cierres nada)',
+          'ACTO 2: complicaciones que escalan y un primer giro real (NO cierres nada)',
+          'ACTO 3: las apuestas suben al máximo, todo se complica antes del final (NO cierres la historia)',
+          'ACTO 4: convergencia de los hilos sembrados, clímax y cierre con cliffhanger'],
+    };
+
+    async function generateFullStory(baseCtx) {
+      const briefs = PART_BRIEFS[fmt.parts] || PART_BRIEFS[1];
+      const perPart = Math.round(wordTarget.total / fmt.parts);
+      const partsOut = [];
+
+      for (let i = 0; i < briefs.length; i++) {
+        if (fmt.parts > 1) {
+          setProg(30 + Math.round((i / briefs.length) * 12), `Paso 2/5: Escribiendo parte ${i+1}/${briefs.length}...`);
+        }
+        const soFar = partsOut.join('\n\n');
+        const prompt = `${baseCtx}
+
+${soFar ? `═══ TEXTO YA ESCRITO DE ESTE MISMO EPISODIO (continuá desde aquí, NO lo repitas, NO reinicies la historia) ═══
+${soFar}
+═══ FIN DEL TEXTO YA ESCRITO ═══
+
+` : ''}ESCRIBÍ AHORA ${briefs[i]}.
+Extensión de esta parte: ~${perPart} palabras.${i > 0 ? '\nEmpezá exactamente donde quedó el texto anterior, sin resumirlo y sin repetir eventos ya narrados.' : ''}${i < briefs.length - 1 ? '\nEsta parte NO termina el episodio: dejá la tensión abierta para la parte siguiente.' : ''}
+
+Devolvé SOLO: {"story":"el texto de esta parte, en un solo bloque continuo"}`;
+
+        partsOut.push(await generateStoryPart(prompt, Math.round(perPart * 0.6)));
+      }
+      return partsOut.join('\n\n');
+    }
+
+    // ─── STEP: split the ALREADY-FINISHED story into exactly N sequential
     // scenes. This does NOT continue or add to the story (that would risk
     // the context-loss failure mode from splitting narrative generation
     // across calls) — it only restructures text that already exists in
     // front of it, the same safe pattern the image-prompt call already used. ───
-    const splitSysPrompt = `Sos un editor que divide una historia YA TERMINADA en exactamente 15 fragmentos secuenciales para un formato de video corto. NO agregues historia nueva, NO reescribas el contenido ni el estilo — dividí el texto ya escrito en 15 cortes naturales, preservando el orden y el contenido original. Podés ajustar levemente las palabras justo en los puntos de corte para que cada fragmento se lea bien de forma independiente, pero el contenido, los eventos y el estilo son los del autor original — vos solo cortás.
+    const splitSysPrompt = `Sos un editor que divide una historia YA TERMINADA en exactamente ${fmt.scenes} fragmentos secuenciales para un formato de video. NO agregues historia nueva, NO reescribas el contenido ni el estilo — dividí el texto ya escrito en ${fmt.scenes} cortes naturales, preservando el orden y el contenido original. Podés ajustar levemente las palabras justo en los puntos de corte para que cada fragmento se lea bien de forma independiente, pero el contenido, los eventos y el estilo son los del autor original — vos solo cortás.
 Cada fragmento: ~48-55 palabras en español, tercera persona (protagonista siempre por su nombre).
-⚠️ REGLA DE CORTE ABSOLUTA: cada fragmento DEBE empezar al inicio de una oración y DEBE terminar con puntuación final (. ! ? …). JAMÁS cortes a mitad de una oración — cada fragmento se convierte en un audio expresivo INDEPENDIENTE, y si una oración queda partida entre dos fragmentos la voz cambia de tono a mitad de la frase y se rompe la continuidad auditiva. Preferí un fragmento de 44 o de 60 palabras antes que cortar una oración por la mitad. Antes de devolver, verificá que los 15 fragmentos terminen en . ! ? o …
-Asigná "act" según la posición: fragmentos 1-2 = "cold_open", 3-6 = "act1", 7-12 = "act2", 13-14 = "clímax", 15 = "resolución".
-Cada fragmento necesita un "title" corto (3-6 palabras).
+⚠️ REGLA DE CORTE ABSOLUTA: cada fragmento DEBE empezar al inicio de una oración y DEBE terminar con puntuación final (. ! ? …). JAMÁS cortes a mitad de una oración — cada fragmento se convierte en un audio expresivo INDEPENDIENTE, y si una oración queda partida entre dos fragmentos la voz cambia de tono a mitad de la frase y se rompe la continuidad auditiva. Preferí un fragmento de 44 o de 60 palabras antes que cortar una oración por la mitad. Antes de devolver, verificá que los ${fmt.scenes} fragmentos terminen en . ! ? o …
+Cada fragmento necesita un "title" corto (3-6 palabras). No te preocupes por el campo "act": lo asigna la app según la posición.
 CRÍTICO: el campo se llama "narration" (sin tilde).
 Responde SOLO JSON válido sin markdown.`;
 
@@ -2258,7 +2374,7 @@ Responde SOLO JSON válido sin markdown.`;
     }
 
     async function splitStoryIntoScenes(story) {
-      const prompt = `HISTORIA COMPLETA A DIVIDIR:\n\n${story}\n\nDividila en EXACTAMENTE 15 fragmentos secuenciales, en orden. Devolvé SOLO: {"scenes":[${narrationShape},...]} con exactamente 15 objetos numerados 1-15.`;
+      const prompt = `HISTORIA COMPLETA A DIVIDIR:\n\n${story}\n\nDividila en EXACTAMENTE ${fmt.scenes} fragmentos secuenciales, en orden. Devolvé SOLO: {"scenes":[${narrationShape},...]} con exactamente ${fmt.scenes} objetos numerados 1-${fmt.scenes}.`;
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callGemini(prompt, splitSysPrompt);
@@ -2266,11 +2382,14 @@ Responde SOLO JSON válido sin markdown.`;
           const arr = parsed.scenes || [];
           arr.forEach(s => { if (s && s['narración'] && !s.narration) s.narration = s['narración']; });
           const valid = arr.filter(s => s && s.narration && s.title);
-          if (valid.length >= 15) {
-            const scenes = valid.slice(0, 15).map((s, i) => ({ ...s, id: `s${i+1}`, num: i+1, act: s.act || 'act1' }));
+          if (valid.length >= fmt.scenes) {
+            // The act is POSITIONAL, so it is computed here rather than trusted
+            // from the model: a uniform or shifted "act" in the response used to
+            // survive straight into the episode.
+            const scenes = valid.slice(0, fmt.scenes).map((s, i) => ({ ...s, id: `s${i+1}`, num: i+1, act: actForIndex(i, fmt.scenes) }));
             return alignScenesToSentenceBoundaries(scenes);
           }
-          console.warn(`División intento ${attempt+1}: ${valid.length}/15`);
+          console.warn(`División intento ${attempt+1}: ${valid.length}/${fmt.scenes}`);
           await new Promise(r => setTimeout(r, 3000));
         } catch(e) {
           console.error(`División intento ${attempt+1}:`, e.message);
@@ -2280,21 +2399,21 @@ Responde SOLO JSON válido sin markdown.`;
       // Mechanical fallback: sentence-aware split — never cuts mid-sentence.
       const sentences = story.match(/[^.!?…]+[.!?…]+["'»”)]*\s*/g) || [story];
       const totalWords = story.split(/\s+/).filter(Boolean).length;
-      const perScene = Math.ceil(totalWords / 15) || 1;
+      const perScene = Math.ceil(totalWords / fmt.scenes) || 1;
       const chunks = []; let cur = '', curWords = 0;
       for (const sent of sentences) {
         const w = sent.split(/\s+/).filter(Boolean).length;
-        if (curWords + w > perScene && cur && chunks.length < 14) {
+        if (curWords + w > perScene && cur && chunks.length < fmt.scenes - 1) {
           chunks.push(cur.trim()); cur = ''; curWords = 0;
         }
         cur += sent; curWords += w;
       }
       if (cur.trim()) chunks.push(cur.trim());
-      while (chunks.length < 15) chunks.push('');
-      return Array.from({ length: 15 }, (_, i) => {
-        const act = i < 2 ? 'cold_open' : i < 6 ? 'act1' : i < 12 ? 'act2' : i < 14 ? 'clímax' : 'resolución';
-        return { id: `s${i+1}`, num: i+1, act, title: `Escena ${i+1}`, narration: chunks[i] || '', dialogue: [], imagePromptA: '' };
-      });
+      while (chunks.length < fmt.scenes) chunks.push('');
+      return Array.from({ length: fmt.scenes }, (_, i) => ({
+        id: `s${i+1}`, num: i+1, act: actForIndex(i, fmt.scenes),
+        title: `Escena ${i+1}`, narration: chunks[i] || '', dialogue: [], imagePromptA: '',
+      }));
     }
 
     const storyArcGuide = `ARCO DEL EPISODIO (guía de ritmo, NO plantilla mecánica escena-por-escena):
@@ -2309,17 +2428,17 @@ Clímax: el evento más intenso del episodio, donde convergen los hilos sembrado
 Cierre: resolución parcial + gancho claro hacia el próximo episodio.`}
 
 - Usá TODOS o la gran mayoría de los personajes listados en "PERSONAJES DEL EPISODIO" — no ignores a los secundarios enfocándote solo en 2. Si hay 5 personajes, los 5 deberían tener presencia real.
-- Extensión total: 700-800 palabras.`;
+- Extensión total: ${wordTarget.min}-${wordTarget.max} palabras.`;
 
     // ─── CALL 1: the full story, uninterrupted, no checklist ───
     setProg(30, 'Paso 2/5: Escribiendo la historia completa...');
     const prevEpSummary = buildPrevEpisodesSummary();
     const fullStory = await generateFullStory(
-      `${ctx}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${storyArcGuide}\n\nEscribí la historia completa del episodio ${epNum}. Devolvé SOLO: {"story":"toda la historia acá, en un solo bloque de texto continuo"}`
+      `${ctx}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${storyArcGuide}\n\nEstás escribiendo el episodio ${epNum}.`
     );
 
     // ─── CALL 2: split the finished story into 15 scenes ───
-    setProg(45, 'Paso 3/5: Dividiendo en 15 escenas...');
+    setProg(45, `Paso 3/5: Dividiendo en ${fmt.scenes} escenas...`);
     const scenesNoImg = await splitStoryIntoScenes(fullStory);
 
     // ─── CALL 2.5: extract THIS story's locations → universe scenarios ───
@@ -2448,11 +2567,11 @@ Responde SOLO JSON válido sin markdown`;
 
     const pendingCount = scenes.filter(s => !s.narration || !s.imagePromptA).length;
     if (pendingCount > 0) {
-      setProg(100, `⚠️ ${scenes.length - pendingCount}/15 escenas — ${pendingCount} pendientes`);
+      setProg(100, `⚠️ ${scenes.length - pendingCount}/${fmt.scenes} escenas — ${pendingCount} pendientes`);
       showToast(`${pendingCount} escenas pendientes. Usa "Reparar escenas vacías".`, 'error');
     } else {
-      setProg(100, `✅ Episodio ${epNum} completo — 15 escenas × 3 imágenes = 45 imágenes`);
-      showToast(`Episodio ${epNum}: ${state.characters.length} personajes y 15 escenas listas`, 'success');
+      setProg(100, `✅ Episodio ${epNum} completo — ${fmt.scenes} escenas × 3 imágenes = ${fmt.scenes * 3} imágenes`);
+      showToast(`Episodio ${epNum}: ${state.characters.length} personajes y ${fmt.scenes} escenas listas`, 'success');
     }
     setTimeout(() => { progress.style.display = 'none'; setProg(0, ''); }, 3000);
     updateEpisodeNav();
@@ -3197,7 +3316,7 @@ window.downloadVideo = async function(url, filename) {
 // ─── VIDEO GENERATION (Veo 3.1 via Vertex AI) ───────────────────
 
 // Poll /api/video-status until done or timeout
-async function pollVideoStatus(operationName, projectId, onProgress) {
+async function pollVideoStatus(operationName, projectId, onProgress, model) {
   const MAX = 60, INTERVAL = 10000;
   for (let i = 0; i < MAX; i++) {
     await new Promise(r => setTimeout(r, INTERVAL));
@@ -3206,7 +3325,7 @@ async function pollVideoStatus(operationName, projectId, onProgress) {
       const res = await fetch('/api/video-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operationName, projectId }),
+        body: JSON.stringify({ operationName, projectId, model }),
       });
       const data = await res.json();
       if (data.error && data.done) throw new Error(data.error);
@@ -3242,7 +3361,7 @@ window.generateSceneVideo = async function(sceneId, ab) {
         imageA: imgData || null,
         aspectRatio,
         generateAudio: false,
-        veoModel: document.getElementById('veoModelSelect')?.value || 'veo-3.1-lite-generate-001',
+        veoModel: document.getElementById('veoModelSelect')?.value || undefined,
       }),
     });
     const startData = await res.json();
@@ -3251,10 +3370,13 @@ window.generateSceneVideo = async function(sceneId, ab) {
     setBtn('⏳ Procesando...', true);
     setStatus('Veo... (2-5 min)');
 
+    // Pass the model back: the Veo operation belongs to the model that started
+    // it, so polling any other model's path fails.
     const publicUrl = await pollVideoStatus(
       startData.operationName,
       startData.projectId,
-      (attempt, max) => setStatus(`${attempt * 10}s / ~${max * 10}s`)
+      (attempt, max) => setStatus(`${attempt * 10}s / ~${max * 10}s`),
+      startData.model
     );
 
     await dbSet(sceneVidKeyA(sceneId), publicUrl);
@@ -3610,19 +3732,15 @@ RULES:
       const endNum = needsNarrationIdx[needsNarrationIdx.length - 1] + 1;
       const count = needsNarrationIdx.length;
 
-      let act = 'act2';
-      if (startNum <= 2) act = 'cold_open';
-      else if (startNum <= 6) act = 'act1';
-      else if (startNum <= 12) act = 'act2';
-      else if (startNum <= 14) act = 'climax';
-      else act = 'resolution';
+      const repairTotal = state.scenes.length || getEpisodeFormat().scenes;
+      const act = actForIndex(startNum - 1, repairTotal);
 
       const lastGoodRef = lastGood ? `\nEscena anterior (${lastGood.num}): "${lastGood.narration}"` : '';
       const sceneExample = `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"EXACTAMENTE 48-55 palabras en tercera persona (protagonista nombrado)"}`;
       // The repair used to receive only the universe blurb, so repaired scenes
       // lost the genre/subgenre rules the rest of the episode was written with.
       const repairGenreCtx = `${GENRE_PROMPTS[u.genero] || ''}\n\n${getSubgenreText(repairSubgenres, u.genero)}\n\n${SUBGENRE_FIDELITY_CONTRACT}`;
-      const prompt = `${ctx}\n\n${repairGenreCtx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: 15 escenas.\nCada escena DEBE tener narration (EXACTAMENTE 48-55 palabras, tercera persona con el protagonista nombrado, diálogo directo intercalado, ritmo rápido: 2-3 eventos distintos por escena, ambientación mínima).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
+      const prompt = `${ctx}\n\n${repairGenreCtx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: ${repairTotal} escenas.\nCada escena DEBE tener narration (EXACTAMENTE 48-55 palabras, tercera persona con el protagonista nombrado, diálogo directo intercalado, ritmo rápido: 2-3 eventos distintos por escena, ambientación mínima).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
 
       let newNarrations = [];
       for (let attempt = 0; attempt < 3 && newNarrations.length < count; attempt++) {
@@ -4014,6 +4132,7 @@ function renderAll() {
   }
   updateApiDot();
   applyDemoCompatibility();
+  updateEpFormatNote();
   renderAll();
 })();
 

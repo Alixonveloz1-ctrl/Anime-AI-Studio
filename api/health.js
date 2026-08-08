@@ -7,14 +7,7 @@
 // returns the private key, and it never returns the raw service
 // account JSON — only the identifying fields.
 // ════════════════════════════════════════════════════════════════
-const crypto = require('crypto');
-
-const CORS = {
-  'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
+const { cfg, imageModelLocation, loadServiceAccount, getAccessToken, begin } = require('./_lib/gcp');
 
 // bot-anime@my-project.iam.gserviceaccount.com → bot-a…me@my-project.iam.gserviceaccount.com
 function maskEmail(email) {
@@ -26,68 +19,47 @@ function maskEmail(email) {
   return local.slice(0, 5) + '…' + local.slice(-2) + domain;
 }
 
-async function getAccessToken(sa) {
-  const now = Math.floor(Date.now() / 1000);
-  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
-  const payload = {
-    iss: sa.client_email, sub: sa.client_email, aud: sa.token_uri,
-    iat: now, exp: now + 3600,
-    scope: 'https://www.googleapis.com/auth/cloud-platform',
-  };
-  const signingInput = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64(payload)}`;
-  const signer = crypto.createSign('RSA-SHA256');
-  signer.update(signingInput);
-  const sig = signer.sign(sa.private_key, 'base64')
-    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-
-  const r = await fetch(sa.token_uri, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${signingInput}.${sig}`,
-  });
-  const d = await r.json();
-  if (!d.access_token) throw new Error(d.error_description || d.error || 'sin access_token');
-  return d.access_token;
-}
-
 module.exports = async function handler(req, res) {
-  Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (begin(req, res, ['GET', 'POST'])) return;
 
   const out = {
     serviceAccount: { configured: false },
     bucket:         { configured: false },
+    // Every model and region in use, and the env var that overrides each —
+    // so a project without allowlist for one of them can be pointed at
+    // another without touching code.
+    config: {
+      scriptModel:  { value: cfg.scriptModel,  env: 'SCRIPT_MODEL',  location: cfg.scriptLocation },
+      imageModel:   { value: cfg.imageModel,   env: 'IMAGE_MODEL',   location: imageModelLocation(cfg.imageModel), regions: cfg.imageRegions },
+      ttsModel:     { value: cfg.ttsModel,     env: 'TTS_MODEL',     location: cfg.ttsLocation, fallback: cfg.ttsFallback },
+      veoModel:     { value: cfg.veoModel,     env: 'VEO_MODEL',     location: cfg.veoLocation },
+      musicModel:   { value: cfg.musicModel,   env: 'MUSIC_MODEL',   location: cfg.musicLocation },
+      sttModel:     { value: cfg.sttModel,     env: 'STT_MODEL',     language: cfg.sttLanguage },
+    },
     checks:         {},
   };
 
   // ─── GCP_SERVICE_ACCOUNT ───
-  const saRaw = (process.env.GCP_SERVICE_ACCOUNT || '').trim();
-  if (!saRaw) {
-    out.serviceAccount.error = 'GCP_SERVICE_ACCOUNT no configurado en Vercel';
-    return res.status(200).json(out);
-  }
-
   let sa;
   try {
-    sa = JSON.parse(saRaw);
+    sa = loadServiceAccount();
   } catch (e) {
-    out.serviceAccount.error = 'GCP_SERVICE_ACCOUNT no es JSON válido — pega el archivo completo de la service account, sin comillas extra';
+    out.serviceAccount.error = e.message;
     return res.status(200).json(out);
   }
 
   out.serviceAccount = {
-    configured:   true,
-    projectId:    sa.project_id || null,
-    clientEmail:  maskEmail(sa.client_email),
-    hasPrivateKey: typeof sa.private_key === 'string' && sa.private_key.includes('PRIVATE KEY'),
+    configured:    true,
+    projectId:     sa.project_id,
+    clientEmail:   maskEmail(sa.client_email),
+    hasPrivateKey: String(sa.private_key).includes('PRIVATE KEY'),
   };
-  if (!sa.project_id)     out.serviceAccount.error = 'el JSON no tiene project_id';
-  if (!out.serviceAccount.hasPrivateKey) out.serviceAccount.error = 'el JSON no tiene private_key válida';
+  if (!out.serviceAccount.hasPrivateKey) out.serviceAccount.error = 'el JSON no tiene una private_key válida';
 
   // ─── GCS_OUTPUT_BUCKET ───
-  const bucket = (process.env.GCS_OUTPUT_BUCKET || '').trim().replace(/\/+$/, '');
-  out.bucket = bucket
-    ? { configured: true, name: bucket.replace(/^gs:\/\//, ''), warning: bucket.startsWith('gs://') ? 'quita el prefijo gs:// — se espera solo el nombre del bucket' : undefined }
+  const bucketRaw = (process.env.GCS_OUTPUT_BUCKET || '').trim();
+  out.bucket = cfg.bucket
+    ? { configured: true, name: cfg.bucket, warning: bucketRaw.startsWith('gs://') ? 'quita el prefijo gs:// — se espera solo el nombre del bucket' : undefined }
     : { configured: false, error: 'GCS_OUTPUT_BUCKET no configurado — la generación de video fallará' };
 
   // ─── Live checks: credentials, Vertex AI, bucket access ───
@@ -105,7 +77,7 @@ module.exports = async function handler(req, res) {
   // Vertex AI reachable + enabled for this project
   try {
     const r = await fetch(
-      `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models`,
+      `https://${cfg.location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${cfg.location}/publishers/google/models`,
       { headers: { Authorization: `Bearer ${token}`, 'X-Goog-User-Project': projectId } },
     );
     if (r.ok) out.checks.vertexAI = { ok: true };
