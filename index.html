@@ -491,9 +491,9 @@
       <h2>🎬 Episodio</h2>
       <label>Modelo de imagen</label>
       <select id="imageModelSelect">
-        <option value="gemini-3-pro-image">👑 Nano Banana Pro — máxima calidad</option>
         <option value="gemini-3.1-flash-image">🌟 Nano Banana 2 — nuevo y rápido</option>
         <option value="gemini-2.5-flash-image">⚡ Nano Banana — estable y rápido</option>
+        <option value="gemini-3-pro-image">👑 Nano Banana Pro — caro, solo emergencias</option>
       </select>
 
       <label>Modelo de video (Veo)</label>
@@ -680,6 +680,50 @@ const sceneImgKeyBy = (id, slot) => slot === 'B' ? sceneImgKeyB(id) : slot === '
 // Scenario reference images are UNIVERSE-level (shared across episodes)
 const sceneAudKey  = id => `sa_${state.projectId}${epSfx()}_${id}`;
 const sceneVidKeyA = id => `sva_${state.projectId}${epSfx()}_${id}`;
+// One clip per shot. Slot A keeps the legacy key so videos made before this
+// existed are still found.
+const sceneVidKeyBy = (id, slot) => slot === 'A' ? sceneVidKeyA(id)
+  : `sv${slot.toLowerCase()}_${state.projectId}${epSfx()}_${id}`;
+
+// The shots a scene actually has. The director decides the count, so this reads
+// it from the prompts it wrote; a slot with an image already generated stays in
+// the list so nothing vanishes from an episode made before that was a decision.
+async function sceneSlots(s) {
+  const out = [];
+  for (const sl of ['A', 'B', 'C']) {
+    if (s['imagePrompt' + sl] || await dbGet(sceneImgKeyBy(s.id, sl))) out.push(sl);
+  }
+  return out.length ? out : ['A'];
+}
+
+// How many seconds of narration a scene has. This is what decides the length of
+// its clips: asking Veo for eight seconds to cover three is what makes a
+// character keep moving after the moment is over.
+const audioSecCache = new Map();
+async function sceneAudioSeconds(s) {
+  if (audioSecCache.has(s.id)) return audioSecCache.get(s.id);
+  let secs = 0;
+  try {
+    const stored = await dbGet(sceneAudKey(s.id));
+    if (stored) {
+      const sep = stored.indexOf('|');
+      const b64 = sep > 0 ? stored.slice(sep + 1) : stored;
+      const bin = atob(b64);
+      const buf = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      secs = (await ctx.decodeAudioData(buf.buffer)).duration;
+      ctx.close();
+    }
+  } catch (e) {
+    console.warn('Duración de audio no medida:', e.message);
+  }
+  // No audio yet: estimate from the narration. ~13 characters per second is
+  // close for Spanish narration at the pace these voices read.
+  if (!secs) secs = Math.max(3, (s.narration || '').length / 13);
+  audioSecCache.set(s.id, secs);
+  return secs;
+}
 
 // Build a video prompt from the scene (English, motion-focused)
 // Studio references by genre — matched to studios known for that genre
@@ -781,8 +825,14 @@ function getCompanionQuirk() {
   return state.universe.companionQuirk;
 }
 
-function buildVideoPrompt(s) {
-  const base      = (s.imagePromptA || s.narration || '').replace(/"/g,'').slice(0, 200);
+function buildVideoPrompt(s, slot = 'A') {
+  // The director writes the motion for each shot knowing which shot follows, so
+  // a clip ends where the next one's still image begins. Without that the model
+  // invents movement and the cut between clips jumps.
+  const movimiento = s['videoPrompt' + slot] || '';
+  const base = movimiento
+    ? movimiento.replace(/"/g, '').slice(0, 400)
+    : (s['imagePrompt' + slot] || s.imagePromptA || s.narration || '').replace(/"/g,'').slice(0, 200);
   // Read the genre from the SAVED universe, not from the form. The selects are
   // only the creation form: after a reload or a project switch they still show
   // their defaults, so this used to reference the wrong studio (accion/shonen)
@@ -796,7 +846,12 @@ function buildVideoPrompt(s) {
 
   const animeStyle = `STYLE — ABSOLUTELY MANDATORY: This clip must look like a still from a ${ANIME_VISUAL_STYLE_CORE} Animation quality reference: ${studio}${demoRef}. Target: a hand-painted, richly detailed 2D anime film frame — nothing simplified, nothing plastic-3D.`;
 
-  const motionRule = `MOTION — CRITICAL: Subtle cinematic movement only. Gentle breathing, slow camera drift, small natural gestures (head tilt, eye blink, hand movement). Characters stay in position — NO jumping, NO teleporting, NO sudden changes. Smooth and natural like a real animated series.`;
+  // With a director-written motion the clip has an explicit destination, so the
+  // generic "stay in place" rule would fight it. Without one, keep the old
+  // conservative rule so a clip cannot drift.
+  const motionRule = movimiento
+    ? `MOTION — CRITICAL: animate EXACTLY the movement described below and nothing more. The clip must END in the state described as its ending — that state is the first frame of the next shot, so overshooting it breaks the cut. No extra action, no camera moves beyond the one described, no new elements entering frame.`
+    : `MOTION — CRITICAL: Subtle cinematic movement only. Gentle breathing, slow camera drift, small natural gestures (head tilt, eye blink, hand movement). Characters stay in position — NO jumping, NO teleporting, NO sudden changes. Smooth and natural like a real animated series.`;
 
   return `${animeStyle} ${motionRule} ${noCamera} ${base}. ${audioRule}`;
 }
@@ -2601,6 +2656,14 @@ Un cambio de ángulo de cámara NO es un beat. Si lo único que cambiaría entre
 - CÁMARA LIBRE EN EL LUGAR: a lo largo del episodio mostrá el MISMO lugar desde posiciones y ángulos DIFERENTES (desde la puerta, desde la ventana, ángulo bajo, over-shoulder, rincones distintos) — no repitas siempre el mismo encuadre del escenario.
 - VESTIMENTA FIEL AL MUNDO: la ropa de cada personaje conserva el material y la CONDICIÓN de su ficha (basta, desteñida, con parches si es pobre) — nunca la embellezcas ni la conviertas en ropa elegante que la historia no justifica.
 
+⚠️ DECISIÓN 3 — EL MOVIMIENTO DE CADA PLANO (campo "movimientos", uno por plano, EN INGLÉS):
+Cada plano se convierte en un clip de video de 8 segundos que ARRANCA en su propia imagen. Por eso lo único que hay que controlar es DÓNDE TERMINA.
+- Escribí el movimiento como: qué se mueve, cuánto, y en qué estado QUEDA al final del clip.
+- ⚠️ REGLA DE ENGANCHE: el estado final del plano N debe ser EXACTAMENTE la imagen del plano N+1. Si el plano 2 muestra a Mei ya sentada, el movimiento del plano 1 termina con Mei sentándose — no con ella cruzando la habitación, ni de vuelta de pie. Mirá el prompt del plano siguiente antes de escribir el final de este.
+- El ÚLTIMO plano de la escena no engancha con nada: cierra con un movimiento que se aquieta.
+- MOVIMIENTO CONTENIDO: 8 segundos dan para un gesto, no para una secuencia. Respiración, un giro de cabeza, dar dos pasos, servir una taza, una deriva lenta de cámara. PROHIBIDO: que entren personajes nuevos, cambios de plano dentro del clip, saltos de lugar, acciones que el texto no narra.
+- Si el plano es contemplativo, el movimiento puede ser mínimo (respiración, parpadeo, pelo con el viento, luz que cambia) — eso es correcto, no lo fuerces.
+
 CAMPO "escenario": asigná a cada escena el id EXACTO del escenario del universo donde ocurre (de la lista provista). Si el fragmento ocurre en un lugar que NO está en la lista, dejá "escenario" como "" (vacío) y describí ese lugar nuevo con detalle DENTRO de los 3 prompts — NUNCA asignes un escenario incorrecto solo por llenar el campo, porque su descripción anclaría un fondo equivocado.
 
 REGLAS DE CADA PROMPT:
@@ -2626,11 +2689,23 @@ Responde SOLO JSON válido sin markdown`;
         u.escenarios.map(e => `${e.id} = "${e.name}": ${e.desc}`).join('\n')
       : 'ESCENARIOS DEL UNIVERSO: (ninguno definido — dejá "escenario" como "")';
 
+    // Shot prompts + the motion of each shot, onto the scene.
+    function aplicarPlanos(s, p) {
+      const [a, b, c] = p?.prompts || [];
+      const [ma, mb, mc] = p?.movimientos || [];
+      return {
+        ...s,
+        escenario: p?.escenario || '',
+        imagePromptA: a || '', imagePromptB: b || '', imagePromptC: c || '',
+        videoPromptA: ma || '', videoPromptB: mb || '', videoPromptC: mc || '',
+      };
+    }
+
     async function generateImagePromptsBatch(scenesForPrompt, prevContext = '') {
       const scenesText = scenesForPrompt.map(s =>
         `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`
       ).join('\n\n');
-      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTINUIDAD — ASÍ TERMINÓ LA ESCENA ANTERIOR A ESTE BLOQUE (el prompt 1 de la primera escena de abajo continúa desde aquí):\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena, genera el campo "escenario" + TRES prompts secuenciales con continuidad:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"prompts":["Scene with..."]},...]} con exactamente ${scenesForPrompt.length} objetos, uno por cada número de escena de arriba. "planos" es cuántos necesita ESA escena (1, 2 o 3) y "prompts" lleva exactamente esa cantidad.`;
+      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTINUIDAD — ASÍ TERMINÓ LA ESCENA ANTERIOR A ESTE BLOQUE (el prompt 1 de la primera escena de abajo continúa desde aquí):\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena, genera el campo "escenario" + TRES prompts secuenciales con continuidad:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"prompts":["Scene with..."],"movimientos":["slow motion description in English, ending state"]},...]} con exactamente ${scenesForPrompt.length} objetos, uno por cada número de escena de arriba. "planos" es cuántos necesita ESA escena (1, 2 o 3); "prompts" y "movimientos" llevan exactamente esa cantidad cada uno.`;
 
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
@@ -2641,28 +2716,20 @@ Responde SOLO JSON válido sin markdown`;
             .filter(p => p && p.num && Array.isArray(p.prompts) && p.prompts.filter(Boolean).length >= 1)
             .map(p => [p.num, p]));
           if (map.size >= scenesForPrompt.length) {
-            return scenesForPrompt.map(s => {
-              const p = map.get(s.num);
-              const [a, b, c] = p ? p.prompts : [];
-              return { ...s, escenario: p?.escenario || '', imagePromptA: a || '', imagePromptB: b || '', imagePromptC: c || '' };
-            });
+            return scenesForPrompt.map(s => aplicarPlanos(s, map.get(s.num)));
           }
           console.warn(`Image prompts intento ${attempt+1}: ${map.size}/${scenesForPrompt.length}`);
           if (attempt === 3) {
-            return scenesForPrompt.map(s => {
-              const p = map.get(s.num);
-              const [a, b, c] = p ? p.prompts : [];
-              return { ...s, escenario: p?.escenario || '', imagePromptA: a || '', imagePromptB: b || '', imagePromptC: c || '' };
-            });
+            return scenesForPrompt.map(s => aplicarPlanos(s, map.get(s.num)));
           }
           await new Promise(r => setTimeout(r, 3000));
         } catch(e) {
           console.error(`Image prompts intento ${attempt+1}:`, e.message);
           if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
-          else return scenesForPrompt.map(s => ({ ...s, escenario: '', imagePromptA: '', imagePromptB: '', imagePromptC: '' }));
+          else return scenesForPrompt.map(s => aplicarPlanos(s, null));
         }
       }
-      return scenesForPrompt.map(s => ({ ...s, escenario: '', imagePromptA: '', imagePromptB: '', imagePromptC: '' }));
+      return scenesForPrompt.map(s => aplicarPlanos(s, null));
     }
 
     // 3 prompts per scene = 45 total. Generated in chunks of 5 scenes
@@ -3048,24 +3115,27 @@ async function renderScenes() {
     const imgB    = await dbGet(sceneImgKeyB(s.id));
     const imgC    = await dbGet(sceneImgKeyC(s.id));
     const audData = await dbGet(sceneAudKey(s.id));
-    const vidUrl  = await dbGet(sceneVidKeyA(s.id));
-    return { s, imgA, imgB, imgC, audData, vidUrl };
+    // One clip per shot, keyed by slot.
+    const vids = {};
+    for (const sl of ['A','B','C']) vids[sl] = await dbGet(sceneVidKeyBy(s.id, sl));
+    return { s, imgA, imgB, imgC, audData, vids };
   }));
 
   const selRatio = document.getElementById('aspectRatio')?.value || '9:16';
   const cssRatio = selRatio === '16:9' ? '16/9' : '9/16';
   const u = state.universe || {};
 
-  c.innerHTML = items.map(({ s, imgA, imgB, imgC, audData, vidUrl }) => {
+  c.innerHTML = items.map(({ s, imgA, imgB, imgC, audData, vids }) => {
     const pad = String(s.num).padStart(2,'0');
     const escName = (u.escenarios || []).find(e => e.id === s.escenario)?.name || '';
     // Only the shots the director decided this scene needs. An already
     // generated image keeps its slot visible so nothing disappears from an
     // episode made before the count became a decision.
     const slots = ['A','B','C'].filter((sl, i) =>
-      s['imagePrompt' + sl] || [imgA, imgB, imgC][i] || sl === 'A');
+      s['imagePrompt' + sl] || [imgA, imgB, imgC][i] || vids[sl] || sl === 'A');
     const slotCell = (slot, img) => {
       const numLbl = slot === 'A' ? '1' : slot === 'B' ? '2' : '3';
+      const vid = vids[slot];
       return `
       <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
         <div class="scene-img" style="aspect-ratio:${cssRatio};overflow:hidden;min-height:0;margin-bottom:0;position:relative;${img ? 'cursor:zoom-in' : ''}"${img ? ` onclick="openImageFullscreen('${s.id}','${slot}')"` : ''}>
@@ -3074,6 +3144,16 @@ async function renderScenes() {
             : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim)">Plano ${numLbl}</div>`}
         </div>
         <button class="btn-sec" style="font-size:10px;padding:3px 4px;min-width:0" onclick="generateSceneImageAB('${s.id}','${slot}')">${img ? '🔄' : '🖼️'} ${numLbl}</button>
+        <button id="btnVid_${s.id}_${slot}" class="btn-sec" style="font-size:10px;padding:3px 4px;min-width:0;border-color:rgba(0,229,255,0.3);color:var(--accent2)"
+          onclick="generateSceneVideo('${s.id}','${slot}')">${vid ? '🔄' : '🎬'} ${numLbl}</button>
+        <div id="vidStatus_${s.id}_${slot}" style="font-size:9px;color:var(--text-dim);text-align:center;min-height:11px"></div>
+        ${vid ? `
+        <div style="border-radius:6px;overflow:hidden;background:#000">
+          <video data-sid="${s.id}" src="${vid}" crossorigin="anonymous"
+            controls playsinline style="width:100%;display:block;border-radius:6px"></video>
+        </div>
+        <button class="btn-sec" style="font-size:9px;padding:2px 4px;min-width:0;border-color:rgba(0,229,255,0.4);color:var(--accent2)"
+          onclick="downloadVideo('${vid}','escena_${pad}_${numLbl}.mp4')">⬇️ ${numLbl}</button>` : ''}
       </div>`;
     };
     return `
@@ -3092,17 +3172,9 @@ async function renderScenes() {
         </div>
         <div style="display:flex;gap:4px;justify-content:center">
           <button class="btn-sec" style="font-size:11px;padding:4px 8px;flex:1" onclick="generateSceneImage('${s.id}')">🖼️ ${(imgA||imgB||imgC) ? 'Regenerar' : 'Generar'} ${slots.length}</button>
-          <button id="btnVid_${s.id}_A" class="btn-sec" style="font-size:11px;padding:4px 8px;flex:1;border-color:rgba(0,229,255,0.3);color:var(--accent2)"
-            onclick="generateSceneVideo('${s.id}','A')">🎬 ${vidUrl ? 'Regenerar' : 'Video'}</button>
+          <button class="btn-sec" style="font-size:11px;padding:4px 8px;flex:1;border-color:rgba(0,229,255,0.3);color:var(--accent2)"
+            onclick="generateSceneVideos('${s.id}')">🎬 ${slots.some(sl => vids[sl]) ? 'Regenerar' : 'Video'} ${slots.length}</button>
         </div>
-        <div id="vidStatus_${s.id}_A" style="font-size:10px;color:var(--text-dim);text-align:center;min-height:12px"></div>
-        ${vidUrl ? `
-        <div style="border-radius:6px;overflow:hidden;background:#000">
-          <video data-sid="${s.id}" src="${vidUrl}" crossorigin="anonymous"
-            controls playsinline style="width:100%;display:block;border-radius:6px"></video>
-        </div>
-        <button class="btn-sec" style="width:100%;margin-top:4px;border-color:rgba(0,229,255,0.4);color:var(--accent2);font-size:11px"
-          onclick="downloadVideo('${vidUrl}','escena_${pad}.mp4')">⬇️ Descargar Video</button>` : ''}
       </div>
       <div class="scene-narration">${s.narration || ""}</div>
       <div class="scene-actions">
@@ -3474,11 +3546,11 @@ async function pollVideoStatus(operationName, projectId, onProgress, model) {
   throw new Error('Timeout — Veo tardó más de 10 minutos');
 }
 
-window.generateSceneVideo = async function(sceneId, ab) {
+window.generateSceneVideo = async function(sceneId, slot = 'A') {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
-  const btn = document.getElementById(`btnVid_${sceneId}_A`);
-  const statusEl = document.getElementById(`vidStatus_${sceneId}_A`);
+  const btn = document.getElementById(`btnVid_${sceneId}_${slot}`);
+  const statusEl = document.getElementById(`vidStatus_${sceneId}_${slot}`);
 
   const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
   const setBtn = (text, disabled = true) => { if (btn) { btn.textContent = text; btn.disabled = disabled; } };
@@ -3487,15 +3559,29 @@ window.generateSceneVideo = async function(sceneId, ab) {
   setStatus('Iniciando...');
 
   try {
-    const imgData = await dbGet(sceneImgKeyA(sceneId));
+    const imgData = await dbGet(sceneImgKeyBy(sceneId, slot));
+
+    // Continuity: this clip starts on its own still and ENDS on the next shot's
+    // still, so shot N and shot N+1 join without a jump. The last shot of the
+    // scene has nothing to join to — the scene cuts there.
+    const slots = await sceneSlots(s);
+    const idx = slots.indexOf(slot);
+    const next = idx >= 0 ? slots[idx + 1] : null;
+    const lastFrame = next ? await dbGet(sceneImgKeyBy(sceneId, next)) : null;
+
+    // Each shot gets its share of the narration. Without this the clip runs the
+    // full eight seconds and the character invents movement to fill them.
+    const segundos = (await sceneAudioSeconds(s)) / (slots.length || 1);
 
     const aspectRatio = document.getElementById('aspectRatio')?.value || '9:16';
     const res = await fetch('/api/video-start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        prompt: buildVideoPrompt(s),
+        prompt: buildVideoPrompt(s, slot),
         imageA: imgData || null,
+        lastFrame: lastFrame || null,
+        durationSeconds: segundos,
         aspectRatio,
         generateAudio: false,
         veoModel: document.getElementById('veoModelSelect')?.value || undefined,
@@ -3503,6 +3589,12 @@ window.generateSceneVideo = async function(sceneId, ab) {
     });
     const startData = await res.json();
     if (!res.ok || startData.error) throw new Error(startData.error || 'Error al iniciar video');
+    // Said once per session, not per clip: the answer is the same every time and
+    // it is a property of the chosen model, not of this shot.
+    if (startData.sinFotogramaFinal && !window.__avisoFotogramaFinal) {
+      window.__avisoFotogramaFinal = true;
+      showToast(startData.sinFotogramaFinal, 'error');
+    }
 
     setBtn('⏳ Procesando...', true);
     setStatus('Veo... (2-5 min)');
@@ -3516,13 +3608,23 @@ window.generateSceneVideo = async function(sceneId, ab) {
       startData.model
     );
 
-    await dbSet(sceneVidKeyA(sceneId), publicUrl);
+    await dbSet(sceneVidKeyBy(sceneId, slot), publicUrl);
     await renderScenes();
-    showToast(`Video ${s.num} listo 🎬`, 'success');
+    showToast(`Video ${s.num}${slot !== 'A' ? '-' + slot : ''} listo 🎬`, 'success');
   } catch(e) {
     setBtn('🎬 Video', false);
     setStatus('');
-    showToast(`Error video ${s.num}: ${e.message}`, 'error');
+    showToast(`Error video ${s.num}${slot !== 'A' ? '-' + slot : ''}: ${e.message}`, 'error');
+  }
+};
+
+// Every shot of one scene, in order.
+window.generateSceneVideos = async function(sceneId) {
+  const s = state.scenes.find(x => x.id === sceneId);
+  if (!s) return;
+  for (const sl of await sceneSlots(s)) {
+    try { await window.generateSceneVideo(sceneId, sl); }
+    catch (e) { console.warn(`Video ${s.num}-${sl}:`, e.message); }
   }
 };
 
@@ -3534,14 +3636,15 @@ window.generateAllVideos = async function() {
   let done = 0, errors = 0;
 
   for (const s of scenes) {
-    const existing = await dbGet(sceneVidKeyA(s.id));
-    if (existing) { done++; continue; }
-    try {
-      await window.generateSceneVideo(s.id, 'A');
-      done++;
-    } catch(e) {
-      errors++;
-      console.warn(`Video ${s.num}:`, e.message);
+    for (const sl of await sceneSlots(s)) {
+      if (await dbGet(sceneVidKeyBy(s.id, sl))) { done++; continue; }
+      try {
+        await window.generateSceneVideo(s.id, sl);
+        done++;
+      } catch(e) {
+        errors++;
+        console.warn(`Video ${s.num}-${sl}:`, e.message);
+      }
     }
   }
   showToast(`Videos: ${done} listos${errors ? ', ' + errors + ' fallidos' : ''} 🎬`, errors ? 'error' : 'success');
@@ -4363,25 +4466,39 @@ function buildMontarScript(scenes, opts) {
 
   scenes.forEach((s, i) => {
     const n = String(i).padStart(3, '0');
-    p('', `# escena ${i + 1}`);
+    // A scene made before shots existed carries its picture at the top level.
+    const planos = (s.planos && s.planos.length) ? s.planos : [{ clip: s.clip, image: s.image }];
+    p('', `# escena ${i + 1} — ${planos.length} plano${planos.length > 1 ? 's' : ''}`);
     p(s.audio ? `D=$(dur ${s.audio})` : 'D=2.0');
-    if (s.clip) {
-      p(`ffmpeg -y -stream_loop -1 -i ${s.clip} -t "$D" ` +
-        `-vf "scale=$W:$H:force_original_aspect_ratio=increase,crop=$W:$H,fps=$FPS" ` +
-        `-an -c:v libx264 -preset veryfast -pix_fmt yuv420p seg_${n}.mp4`);
-    } else if (s.image) {
-      // zoompan jitters at 1x, so it works on an upscaled copy.
-      p('F=$(awk "BEGIN{printf \\"%d\\", $D*24}")',
-        `ffmpeg -y -loop 1 -i ${s.image} -t "$D" ` +
-        `-vf "scale=$((W*2)):$((H*2)):force_original_aspect_ratio=increase,crop=$((W*2)):$((H*2)),` +
-        `zoompan=z='min(zoom+0.0006,1.12)':d=$F:s=${'${W}'}x${'${H}'}:fps=$FPS,format=yuv420p" ` +
-        `-an -c:v libx264 -preset veryfast seg_${n}.mp4`);
-    } else {
-      // Neither asset: black, so the picture never drifts from the audio.
-      p(`ffmpeg -y -f lavfi -i color=c=black:s=${'${W}'}x${'${H}'}:r=$FPS -t "$D" ` +
-        `-c:v libx264 -preset veryfast -pix_fmt yuv420p seg_${n}.mp4`);
+    if (planos.length > 1) {
+      // Every shot gets the same slice, and the last one absorbs the rounding
+      // so the shots always add up to the narration exactly.
+      p(`P=$(awk "BEGIN{printf \\"%.3f\\", $D/${planos.length}}")`,
+        `PL=$(awk "BEGIN{printf \\"%.3f\\", $D-${planos.length - 1}*$P}")`);
     }
-    p(`echo "file '$PWD/seg_${n}.mp4'" >> segs.txt`);
+    planos.forEach((pl, k) => {
+      const sufijo = planos.length > 1 ? `${n}_${k + 1}` : n;
+      // $T is what THIS shot lasts: its slice, or the whole scene when there is
+      // only one shot.
+      const T = planos.length === 1 ? '$D' : (k === planos.length - 1 ? '$PL' : '$P');
+      if (pl && pl.clip) {
+        p(`ffmpeg -y -stream_loop -1 -i ${pl.clip} -t "${T}" ` +
+          `-vf "scale=$W:$H:force_original_aspect_ratio=increase,crop=$W:$H,fps=$FPS" ` +
+          `-an -c:v libx264 -preset veryfast -pix_fmt yuv420p seg_${sufijo}.mp4`);
+      } else if (pl && pl.image) {
+        // zoompan jitters at 1x, so it works on an upscaled copy.
+        p(`F=$(awk "BEGIN{printf \\"%d\\", ${T}*24}")`,
+          `ffmpeg -y -loop 1 -i ${pl.image} -t "${T}" ` +
+          `-vf "scale=$((W*2)):$((H*2)):force_original_aspect_ratio=increase,crop=$((W*2)):$((H*2)),` +
+          `zoompan=z='min(zoom+0.0006,1.12)':d=$F:s=${'${W}'}x${'${H}'}:fps=$FPS,format=yuv420p" ` +
+          `-an -c:v libx264 -preset veryfast seg_${sufijo}.mp4`);
+      } else {
+        // Neither asset: black, so the picture never drifts from the audio.
+        p(`ffmpeg -y -f lavfi -i color=c=black:s=${'${W}'}x${'${H}'}:r=$FPS -t "${T}" ` +
+          `-c:v libx264 -preset veryfast -pix_fmt yuv420p seg_${sufijo}.mp4`);
+      }
+      p(`echo "file '$PWD/seg_${sufijo}.mp4'" >> segs.txt`);
+    });
   });
 
   p('', '# ─── unir los segmentos ───',
@@ -4486,17 +4603,28 @@ async function assembleEpisode() {
         entry.audio = `narr_${n}.wav`;
       } else missingAudio++;
 
-      // Veo clips already live in the bucket: reference them instead of
-      // downloading and re-uploading megabytes through the phone.
-      const clipUrl = useClips ? await dbGet(sceneVidKeyA(s.id)) : null;
-      const m = clipUrl && /storage\.googleapis\.com\/([^/]+)\/([^?]+)/.exec(clipUrl);
-      if (m) {
-        descargas.push({ origen: decodeURIComponent(m[2]), destino: `clip_${n}.mp4` });
-        entry.clip = `clip_${n}.mp4`;
-      } else {
-        const img = await dbGet(sceneImgKeyA(s.id));
-        if (img) { add(`img_${n}.png`, img, 'image/png'); entry.image = `img_${n}.png`; }
+      // One entry per shot: the scene's narration is split evenly between the
+      // shots the director asked for, so a three-shot scene shows three pieces
+      // of picture over the same voice line instead of one held still.
+      entry.planos = [];
+      const slots = await sceneSlots(s);
+      for (let k = 0; k < slots.length; k++) {
+        const sufijo = `${n}_${k + 1}`;
+        const plano = {};
+        // Veo clips already live in the bucket: reference them instead of
+        // downloading and re-uploading megabytes through the phone.
+        const clipUrl = useClips ? await dbGet(sceneVidKeyBy(s.id, slots[k])) : null;
+        const m = clipUrl && /storage\.googleapis\.com\/([^/]+)\/([^?]+)/.exec(clipUrl);
+        if (m) {
+          descargas.push({ origen: decodeURIComponent(m[2]), destino: `clip_${sufijo}.mp4` });
+          plano.clip = `clip_${sufijo}.mp4`;
+        } else {
+          const img = await dbGet(sceneImgKeyBy(s.id, slots[k]));
+          if (img) { add(`img_${sufijo}.png`, img, 'image/png'); plano.image = `img_${sufijo}.png`; }
+        }
+        if (plano.clip || plano.image) entry.planos.push(plano);
       }
+      if (!entry.planos.length) entry.planos.push({});
       guion.push(entry);
     }
 
@@ -4921,27 +5049,23 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
 
     for (const s of state.scenes) {
       const audStored = await dbGet(sceneAudKey(s.id));
-      const vidUrlA = await dbGet(sceneVidKeyA(s.id));
       const pad     = String(s.num).padStart(2, '0');
 
-      // imagenes/ folder — las 3 imágenes de la escena (slots A/B/C → _1/_2/_3)
+      // imagenes/ y videos/ — un archivo por plano (slots A/B/C → _1/_2/_3),
+      // con el mismo número, así una imagen y su clip se emparejan a simple vista.
       for (const [slot, suffix] of [['A','1'],['B','2'],['C','3']]) {
         const img = await dbGet(sceneImgKeyBy(s.id, slot));
         if (img) zip.file(`imagenes/${pad}_${suffix}.png`, img, { base64: true });
-      }
 
-      // videos/ folder — fetch from GCS and include
-      if (vidUrlA) {
-        btn.innerHTML = `<div class="spinner"></div> Descargando video ${s.num}...`;
+        const vidUrl = await dbGet(sceneVidKeyBy(s.id, slot));
+        if (!vidUrl) continue;
+        btn.innerHTML = `<div class="spinner"></div> Descargando video ${s.num}-${suffix}...`;
         try {
-          const vRes = await fetch(vidUrlA);
-          if (vRes.ok) {
-            const vBuf = await vRes.arrayBuffer();
-            zip.file(`videos/${pad}.mp4`, vBuf);
-          }
+          const vRes = await fetch(vidUrl);
+          if (vRes.ok) zip.file(`videos/${pad}_${suffix}.mp4`, await vRes.arrayBuffer());
         } catch(e) {
-          console.warn(`Video ${s.num} no descargado:`, e.message);
-          zip.file(`videos/${pad}_url.txt`, vidUrlA);
+          console.warn(`Video ${s.num}-${suffix} no descargado:`, e.message);
+          zip.file(`videos/${pad}_${suffix}_url.txt`, vidUrl);
         }
       }
 

@@ -4,11 +4,42 @@
 // ════════════════════════════════════════════════════════════════
 const { cfg, auth, vertexUrl, begin, fail } = require('./_lib/gcp');
 
+// Durations each Veo model accepts. Asking for a length the model does not
+// support is rejected, and asking for more seconds than the shot needs is worse:
+// the model fills the surplus with invented action.
+const DURACIONES = {
+  'veo-3.1-generate-001':      [4, 6, 8],
+  'veo-3.1-fast-generate-001': [4, 6, 8],
+  'veo-3.1-lite-generate-001': [4, 6, 8],
+  'veo-2.0-generate-001':      [5, 6, 7, 8],
+};
+
+// Closest supported duration. On a tie the LONGER one wins: the montage cuts
+// each clip to the exact length of its slice of narration, so a surplus second
+// is thrown away, while a missing second makes the clip loop back on itself.
+function duracionValida(model, pedida) {
+  const opciones = DURACIONES[model] || [4, 6, 8];
+  const d = Number(pedida);
+  if (!Number.isFinite(d) || d <= 0) return opciones[opciones.length - 1];
+  return opciones.reduce((mejor, o) =>
+    Math.abs(o - d) < Math.abs(mejor - d) || (Math.abs(o - d) === Math.abs(mejor - d) && o > mejor) ? o : mejor);
+}
+
+// Does this rejection mean "this model has no last frame" rather than "your
+// request is wrong"? Google words it differently per model and per version, so
+// match on the field name instead of on an exact sentence.
+function rechazaFotogramaFinal(msg) {
+  const m = String(msg || '').toLowerCase();
+  return m.includes('lastframe') ||
+    (m.includes('last frame') && /not support|unsupported|invalid|not allowed|no admite/.test(m));
+}
+
 module.exports = async function handler(req, res) {
   if (begin(req, res)) return;
 
   try {
-    const { prompt, imageA, imageB, aspectRatio = '9:16', generateAudio = false, veoModel } = req.body;
+    const { prompt, imageA, imageB, lastFrame, durationSeconds,
+            aspectRatio = '9:16', generateAudio = false, veoModel } = req.body;
     if (!prompt) return res.status(400).json({ error: 'prompt requerido' });
 
     const MODEL_ID = (veoModel || cfg.veoModel).trim();
@@ -22,38 +53,66 @@ module.exports = async function handler(req, res) {
 
     const url = vertexUrl(projectId, cfg.veoLocation, MODEL_ID, 'predictLongRunning');
 
-    const body = {
-      instances: [{
-        prompt,
-        ...(imageData ? { image: { bytesBase64Encoded: imageData, mimeType: 'image/png' } } : {}),
-      }],
-      parameters: {
-        aspectRatio: (aspectRatio === '16:9') ? '16:9' : '9:16',
-        sampleCount: 1,
-        durationSeconds: 8,
-        generateAudio: generateAudio === true,
-        storageUri: `gs://${bucket}/${cfg.prefix}/veo/`,
-      },
+    // lastFrame pins where the clip ENDS. Passing the next shot's still image
+    // makes Veo interpolate between the two instead of inventing its own
+    // ending, which is what makes consecutive clips cut together cleanly.
+    const finalData = (lastFrame || '').replace(/\s/g, '');
+
+    const parameters = {
+      aspectRatio: (aspectRatio === '16:9') ? '16:9' : '9:16',
+      sampleCount: 1,
+      durationSeconds: duracionValida(MODEL_ID, durationSeconds),
+      generateAudio: generateAudio === true,
+      personGeneration: 'allow_adult',
+      storageUri: `gs://${bucket}/${cfg.prefix}/veo/`,
+    };
+    const instancia = {
+      prompt,
+      ...(imageData ? { image: { bytesBase64Encoded: imageData, mimeType: 'image/png' } } : {}),
     };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'X-Goog-User-Project': projectId,
-      },
-      body: JSON.stringify(body),
-    });
+    const pedir = async (conFotogramaFinal) => {
+      const body = {
+        instances: [conFotogramaFinal
+          ? { ...instancia, lastFrame: { bytesBase64Encoded: finalData, mimeType: 'image/png' } }
+          : instancia],
+        parameters,
+      };
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-Goog-User-Project': projectId,
+        },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      return { ok: response.ok, status: response.status, data,
+        msg: data.error?.message || data.error?.status || JSON.stringify(data).slice(0, 200) };
+    };
 
-    const data = await response.json();
-    if (!response.ok) {
-      const msg = data.error?.message || data.error?.status || JSON.stringify(data).slice(0, 200);
-      return res.status(response.status).json({ error: `Veo: ${msg}` });
+    // Ask for the interpolated clip first. Not every Veo tier accepts a last
+    // frame, and Google's own docs disagree with each other about which do, so
+    // the model answers the question itself: if it rejects the field, the SAME
+    // model runs again without it and the response says so out loud. The model
+    // is never swapped — only the field it refused is dropped.
+    let r = await pedir(!!finalData);
+    let sinFotogramaFinal = null;
+    if (!r.ok && finalData && rechazaFotogramaFinal(r.msg)) {
+      sinFotogramaFinal = `${MODEL_ID} no acepta fotograma final — el clip se generó solo con la imagen inicial`;
+      r = await pedir(false);
     }
-    if (!data.name) return res.status(500).json({ error: 'Veo no devolvió operationName' });
 
-    return res.status(200).json({ operationName: data.name, projectId, model: MODEL_ID });
+    if (!r.ok) return res.status(r.status).json({ error: `Veo: ${r.msg}` });
+    if (!r.data.name) return res.status(500).json({ error: 'Veo no devolvió operationName' });
+
+    return res.status(200).json({
+      operationName: r.data.name, projectId, model: MODEL_ID,
+      durationSeconds: parameters.durationSeconds,
+      interpolado: !!finalData && !sinFotogramaFinal,
+      sinFotogramaFinal,
+    });
   } catch (e) {
     return fail(res, e);
   }

@@ -7,11 +7,11 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 |Paso             |Servicio                                                   |
 |-----------------|-----------------------------------------------------------|
 |Guión y narrativa|Gemini 3.1 Pro (`/api/script`)                             |
-|Imágenes         |Nano Banana Pro / 2 / base (`/api/image`)                   |
+|Imágenes         |Nano Banana 2 / Nano Banana (`/api/image`)                  |
 |Voces            |Gemini TTS / Cloud TTS Neural2-WaveNet (`/api/audio`)       |
 |Música           |Lyria (`/api/music`) — una pista instrumental por acto      |
 |Dirección        |Director creativo: biblia de serie, nota por capítulo, música|
-|Clips de video   |Veo 3.1 (`/api/video-start` + `/api/video-status`)          |
+|Clips de video   |Veo 3.1 Lite (`/api/video-start` + `/api/video-status`)     |
 |Subtítulos       |Alineados al audio real de cada escena (`/api/transcribe`)   |
 |Ensamblaje       |Cloud Run Job `diezmo-montaje` (ya desplegado) vía `/api/assemble`|
 
@@ -19,6 +19,8 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 
 - Duración configurable: 15 / 24 / 36 / 48 escenas (~5 a ~16 min)
 - El director decide cuántos planos necesita cada escena (1, 2 o 3) — no se generan imágenes de relleno
+- Un clip de video por plano, encadenados: el clip de un plano termina en la imagen del siguiente
+- Cada clip dura su parte de la narración, no ocho segundos fijos
 - Los episodios largos se escriben acto por acto, encadenando el texto ya escrito
 - Multi-episodio con continuidad de personajes y escenarios
 - Escenarios extraídos de la historia y reutilizados entre episodios
@@ -47,6 +49,7 @@ Cada proyecto lo dirige un director creativo especializado en anime, que trabaja
 2. **Nota de capítulo** — antes de escribir cada episodio: qué debe lograr en el arco, curva emocional, imagen clave y qué queda abierto.
 3. **Dirección musical** — el brief de cada pista, a partir de la identidad musical y de lo que ocurre en cada acto.
 4. **Desglose de planos** — cuántas imágenes necesita cada escena. Una conversación estática es UN plano; solo se abren dos o tres cuando hay beats visuales realmente distintos. Un cambio de ángulo no cuenta como beat.
+5. **Movimiento de cada plano** — qué se mueve y en qué estado queda el clip al terminar. El estado final de un plano tiene que ser la imagen del plano siguiente: es lo que hace que los clips de una escena se vean como una toma continua.
 
 El director **no puede cambiar el género**: recibe el mismo contrato de fidelidad que el resto del pipeline y su trabajo es hacer que ese género se sienta excelente, no reinterpretarlo. Puedes regenerar la biblia desde la pantalla de Universo.
 
@@ -68,7 +71,7 @@ Todo se genera con Google Cloud. No hay ningún project ID, bucket, modelo ni re
 |`GCP_LOCATION`              |`us-central1` (región por defecto) |
 |`SCRIPT_MODEL`              |`gemini-3.1-pro-preview`           |
 |`SCRIPT_LOCATION`           |`global`                           |
-|`IMAGE_MODEL`               |`gemini-3-pro-image`               |
+|`IMAGE_MODEL`               |`gemini-3.1-flash-image` (Nano Banana 2)|
 |`IMAGE_REGIONS`             |`us-central1,europe-west4,us-east4`|
 |`IMAGE_MODEL_LOCATIONS`     |JSON `{"modelo":"region"}`         |
 |`TTS_MODEL`                 |`gemini-2.5-flash-preview-tts`     |
@@ -98,6 +101,31 @@ En el proyecto nuevo hacen falta:
 - Acceso al modelo de texto `gemini-3.1-pro-preview`, del que depende el guión (no tiene fallback).
 
 **El modelo que elijas es el que se usa.** Si falla, la app devuelve el error de Google tal cual; nunca sustituye el modelo por otro a tus espaldas.
+
+Los defaults son los modelos baratos, que son los que se usan a diario: **Nano
+Banana 2** para imagen y **Veo 3.1 Lite** para video. Nano Banana Pro sigue en el
+selector, de último, para elegirlo a mano cuando haga falta.
+
+## Continuidad entre planos
+
+Cada plano de una escena se convierte en su propio clip. El clip del plano N se
+genera con **dos** referencias: la imagen del plano N como primer fotograma y la
+imagen del plano N+1 como último (`lastFrame`), así el clip termina justo donde
+empieza el siguiente y el corte no salta. El último plano de la escena no lleva
+fotograma final: ahí la escena corta.
+
+La duración también se controla: cada clip dura la parte de narración que le
+toca (narración de la escena ÷ número de planos), redondeada a lo que el modelo
+acepta — 4, 6 u 8 s en Veo 3.1; 5 a 8 s en Veo 2. Sin eso, un plano de tres
+segundos se generaría de ocho y el personaje se pondría a inventar movimiento en
+los cinco sobrantes. En un empate gana la duración mayor, porque el montaje
+recorta el sobrante pero no puede rellenar lo que falta.
+
+No todos los modelos de Veo aceptan fotograma final, y la documentación pública
+no coincide consigo misma sobre cuáles sí. Así que no se adivina: se pide con
+fotograma final y, si el modelo lo rechaza, **ese mismo modelo** se vuelve a
+pedir sin él y la app lo dice ("no acepta fotograma final"). El modelo elegido
+no se cambia nunca.
 
 ## Dónde se guarda todo
 
@@ -169,10 +197,12 @@ El encargo que se deja en `gs://<bucket>/<prefijo>/proyectos/<proyecto>/ep<NN>/`
 `hoja.json`, `montar.sh`, `descargas.txt` (TSV origen→nombre local) y un
 `error.txt` vacío. El job se lanza con `TRABAJO`, `PREFIJO` y `SALIDA`.
 
-Cada escena dura exactamente su narración (medida con ffprobe). Los clips de Veo
-ya están en el bucket, así que se referencian en su sitio en vez de bajarlos y
-volverlos a subir desde el teléfono. Si el render falla, el motivo real se lee
-de `error.txt`, porque Cloud Run solo sabe decir "exit code N".
+Cada escena dura exactamente su narración (medida con ffprobe), y dentro de la
+escena esa duración se reparte entre sus planos: el último absorbe el redondeo,
+así los planos siempre suman la narración exacta. Los clips de Veo ya están en el
+bucket, así que se referencian en su sitio en vez de bajarlos y volverlos a subir
+desde el teléfono. Si el render falla, el motivo real se lee de `error.txt`,
+porque Cloud Run solo sabe decir "exit code N".
 
 ## Reglas estéticas
 

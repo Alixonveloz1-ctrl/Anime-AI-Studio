@@ -33,8 +33,9 @@ const cfg = {
   // Gemini 3.x preview models are only served from the "global" endpoint.
   get scriptLocation() { return env('SCRIPT_LOCATION', 'global'); },
 
-  // Images.
-  get imageModel()     { return env('IMAGE_MODEL', 'gemini-3-pro-image'); },
+  // Images. Nano Banana 2 by default: Pro costs several times more per image
+  // and an episode is dozens of images, so Pro stays a deliberate manual pick.
+  get imageModel()     { return env('IMAGE_MODEL', 'gemini-3.1-flash-image'); },
   get imageRegions()   { return env('IMAGE_REGIONS', 'us-central1,europe-west4,us-east4')
                                   .split(',').map(s => s.trim()).filter(Boolean); },
 
