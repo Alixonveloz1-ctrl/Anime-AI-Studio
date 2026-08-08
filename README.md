@@ -114,12 +114,28 @@ imagen del plano N+1 como último (`lastFrame`), así el clip termina justo dond
 empieza el siguiente y el corte no salta. El último plano de la escena no lleva
 fotograma final: ahí la escena corta.
 
-La duración también se controla: cada clip dura la parte de narración que le
-toca (narración de la escena ÷ número de planos), redondeada a lo que el modelo
-acepta — 4, 6 u 8 s en Veo 3.1; 5 a 8 s en Veo 2. Sin eso, un plano de tres
-segundos se generaría de ocho y el personaje se pondría a inventar movimiento en
-los cinco sobrantes. En un empate gana la duración mayor, porque el montaje
-recorta el sobrante pero no puede rellenar lo que falta.
+La duración también se controla: a Veo se le pide la parte de narración que le
+toca a ese plano (narración de la escena ÷ número de planos), redondeada a lo que
+el modelo acepta — 4, 6 u 8 s en Veo 3.1; 5 a 8 s en Veo 2. Sin eso, un plano de
+tres segundos se generaría de ocho y el personaje se pondría a inventar
+movimiento en los cinco sobrantes.
+
+Como el redondeo nunca cae exacto, **el montaje ajusta la velocidad, no recorta**.
+Recortar el final sería justo tirar el fotograma de enganche, que es lo único que
+hace invisible el corte; y repetir el clip para rellenar un hueco lo devolvería a
+su primer fotograma, que es peor. Así que el montador mide la duración real del
+clip (Veo no siempre devuelve los segundos que se le pidieron), calcula
+`R = hueco ÷ duración real` y aplica `setpts` con ese factor: un plano de 3 s
+sacado de un clip de 4 s corre un poco más rápido, uno de 10 s sacado de uno de
+8 s corre un poco más lento, y **los dos extremos se conservan**.
+
+La ralentización se topa en 2×, porque más allá el movimiento se lee como cámara
+lenta en vez de como ritmo; lo que falte se queda quieto en el último fotograma —
+que es precisamente el fotograma de enganche, así que la unión sobrevive igual.
+
+Por eso el empate al elegir la duración lo gana la **menor**: al reajustar la
+velocidad, quedarse corto o pasarse cuesta lo mismo en imagen, y Veo cobra por
+segundo generado.
 
 No todos los modelos de Veo aceptan fotograma final, y la documentación pública
 no coincide consigo misma sobre cuáles sí. Así que no se adivina: se pide con
@@ -199,10 +215,11 @@ El encargo que se deja en `gs://<bucket>/<prefijo>/proyectos/<proyecto>/ep<NN>/`
 
 Cada escena dura exactamente su narración (medida con ffprobe), y dentro de la
 escena esa duración se reparte entre sus planos: el último absorbe el redondeo,
-así los planos siempre suman la narración exacta. Los clips de Veo ya están en el
-bucket, así que se referencian en su sitio en vez de bajarlos y volverlos a subir
-desde el teléfono. Si el render falla, el motivo real se lee de `error.txt`,
-porque Cloud Run solo sabe decir "exit code N".
+así los planos siempre suman la narración exacta. Cada clip se encaja en su hueco
+ajustando la velocidad, nunca recortándolo (ver *Continuidad entre planos*). Los
+clips de Veo ya están en el bucket, así que se referencian en su sitio en vez de
+bajarlos y volverlos a subir desde el teléfono. Si el render falla, el motivo real
+se lee de `error.txt`, porque Cloud Run solo sabe decir "exit code N".
 
 ## Reglas estéticas
 

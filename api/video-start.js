@@ -14,15 +14,17 @@ const DURACIONES = {
   'veo-2.0-generate-001':      [5, 6, 7, 8],
 };
 
-// Closest supported duration. On a tie the LONGER one wins: the montage cuts
-// each clip to the exact length of its slice of narration, so a surplus second
-// is thrown away, while a missing second makes the clip loop back on itself.
+// Closest supported duration. The montage does not trim or loop a clip to fit
+// its shot — it retimes it — so being a second over or a second under costs the
+// same: a slightly different pace, both ends intact. That makes the tie-break a
+// money question, and the SHORTER one wins, because Veo bills per second
+// generated: at 4 s a clip costs a third less than at 6 s.
 function duracionValida(model, pedida) {
   const opciones = DURACIONES[model] || [4, 6, 8];
   const d = Number(pedida);
   if (!Number.isFinite(d) || d <= 0) return opciones[opciones.length - 1];
   return opciones.reduce((mejor, o) =>
-    Math.abs(o - d) < Math.abs(mejor - d) || (Math.abs(o - d) === Math.abs(mejor - d) && o > mejor) ? o : mejor);
+    Math.abs(o - d) < Math.abs(mejor - d) || (Math.abs(o - d) === Math.abs(mejor - d) && o < mejor) ? o : mejor);
 }
 
 // Does this rejection mean "this model has no last frame" rather than "your

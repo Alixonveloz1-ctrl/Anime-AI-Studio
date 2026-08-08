@@ -4482,8 +4482,24 @@ function buildMontarScript(scenes, opts) {
       // only one shot.
       const T = planos.length === 1 ? '$D' : (k === planos.length - 1 ? '$PL' : '$P');
       if (pl && pl.clip) {
-        p(`ffmpeg -y -stream_loop -1 -i ${pl.clip} -t "${T}" ` +
-          `-vf "scale=$W:$H:force_original_aspect_ratio=increase,crop=$W:$H,fps=$FPS" ` +
+        // RETIMED, never trimmed. The clip's last frame is the next shot's
+        // still — cutting the end throws away exactly the frame that makes the
+        // cut invisible, and looping to fill a gap jumps back to the start.
+        // Stretching or compressing keeps BOTH ends and only changes the pace:
+        // a shot that needs 3 s from a 4 s clip runs slightly faster, one that
+        // needs 10 s from an 8 s clip runs slightly slower.
+        //
+        // R is measured against the clip's REAL length (Veo does not always
+        // return the number of seconds it was asked for). It is capped at 2×
+        // slower, because past that the movement reads as slow motion instead
+        // of as timing; whatever is still missing holds on the final frame —
+        // which is the continuity frame, so the join survives either way.
+        p(`C=$(dur ${pl.clip})`,
+          `R=$(awk "BEGIN{r=${T}/$C; if(r>2)r=2; if(r<0.25)r=0.25; printf \\"%.6f\\", r}")`,
+          `PAD=$(awk "BEGIN{p=${T}-$C*$R; if(p<0)p=0; printf \\"%.3f\\", p}")`,
+          `ffmpeg -y -i ${pl.clip} -t "${T}" ` +
+          `-vf "scale=$W:$H:force_original_aspect_ratio=increase,crop=$W:$H,` +
+          `setpts=PTS*$R,fps=$FPS,tpad=stop_mode=clone:stop_duration=$PAD" ` +
           `-an -c:v libx264 -preset veryfast -pix_fmt yuv420p seg_${sufijo}.mp4`);
       } else if (pl && pl.image) {
         // zoompan jitters at 1x, so it works on an upscaled copy.
