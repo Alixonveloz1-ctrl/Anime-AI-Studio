@@ -578,6 +578,16 @@
 
   <!-- ───────── EXPORT PANEL ───────── -->
   <div class="panel" id="panel-exportar">
+    <div class="card" style="margin-bottom:14px">
+      <h2>🎵 Música (Lyria)</h2>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 12px;line-height:1.5">Genera una pista instrumental por acto del episodio. El director creativo escribe la dirección musical a partir del género, el tono y lo que ocurre en cada acto — luego Lyria la compone. Sin voces: la música va por debajo de la narración.</p>
+      <div id="musicProgress" style="display:none;margin-bottom:10px">
+        <div class="progress-text" id="musicProgressText">Iniciando...</div>
+        <div class="progress"><div class="progress-bar" id="musicProgressBar" style="width:0%"></div></div>
+      </div>
+      <button class="btn" id="btnGenerarMusica">🎼 Generar música del episodio</button>
+      <div id="musicList" style="margin-top:12px"></div>
+    </div>
     <div class="card">
       <h2>📤 Exportar</h2>
       <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px">Descarga todo el proyecto. El ZIP incluye imágenes, audios individuales, subtítulos .srt por escena, y un audio_completo.wav con su subtítulo global sincronizado.</p>
@@ -624,7 +634,7 @@
 // ════════════════════════════════════════════════════════════════
 // STATE & STORAGE
 // ════════════════════════════════════════════════════════════════
-let state = { projectId: null, universe: null, characters: [], scenes: [] };
+let state = { projectId: null, universe: null, characters: [], scenes: [], episodeDirection: {} };
 let projects = [];
 let db = null;
 
@@ -853,6 +863,7 @@ function saveState() {
     characters: state.characters,
     episodes: state.episodes,
     currentEpisode: state.currentEpisode || 1,
+    episodeDirection: state.episodeDirection || {},
   };
   localStorage.setItem(`proj_${state.projectId}`, JSON.stringify(data));
   const i = projects.findIndex(p => p.id === state.projectId);
@@ -860,12 +871,13 @@ function saveState() {
 }
 function loadStateFor(pid) {
   const raw = localStorage.getItem(`proj_${pid}`);
-  state = { projectId: pid, universe: null, characters: [], episodes: { 1: [] }, currentEpisode: 1, scenes: [] };
+  state = { projectId: pid, universe: null, characters: [], episodes: { 1: [] }, currentEpisode: 1, scenes: [], episodeDirection: {} };
   if (!raw) return;
   try {
     const d = JSON.parse(raw);
     state.universe   = d.universe;
     state.characters = d.characters || [];
+    state.episodeDirection = d.episodeDirection || {};
     if (d.episodes) {
       // New multi-episode format
       state.episodes      = d.episodes;
@@ -885,7 +897,7 @@ async function newProject() {
   const pid = 'p' + Date.now();
   projects.push({ id: pid, name: 'Nuevo proyecto', updated: Date.now() });
   saveProjects();
-  state = { projectId: pid, universe: null, characters: [], scenes: [] };
+  state = { projectId: pid, universe: null, characters: [], scenes: [], episodeDirection: {} };
   saveState();
   renderAll();
 }
@@ -1779,6 +1791,19 @@ Devuelve JSON:
     state.characters = [];
     state.scenes = [];
     saveState();
+
+    // The creative director writes the series bible right after the universe:
+    // every later prompt (story, characters, images, music) reads from it, so
+    // the show has one authorial voice instead of per-episode drift.
+    btn.innerHTML = '<div class="spinner"></div> El director escribe la biblia...';
+    try {
+      await generateSeriesBible();
+    } catch (e) {
+      // A missing bible degrades quality but must never block the project.
+      console.warn('Biblia de dirección falló:', e.message);
+      showToast('Universo creado (la biblia de dirección falló — podés regenerarla)', 'error');
+    }
+
     renderUniverse();
     document.getElementById('cardGenerarEpisodio').style.display = 'block';
     showToast('¡Universo creado!', 'success');
@@ -1853,6 +1878,41 @@ const SUBGENERO_LABELS = {
   sistema_awakening:'Sistema / Awakening',
 };
 
+// The bible is the director's contract with the rest of the pipeline, so it is
+// visible and editable-by-regeneration rather than hidden in localStorage.
+function renderBible(b) {
+  const arr = v => Array.isArray(v) ? v : [];
+  if (!b) {
+    return `<div class="universe-display" style="margin-top:10px">
+      <div class="field"><div class="field-label">🎬 Dirección creativa</div>
+      Sin biblia de dirección. Los capítulos se generan igual, pero sin identidad visual ni arco de temporada.</div>
+      <button class="btn-sec" style="margin-top:8px" onclick="regenerateBible()">🎬 Generar biblia de dirección</button>
+    </div>`;
+  }
+  return `<div class="universe-display" style="margin-top:10px">
+    <h4 style="font-size:14px">🎬 Dirección creativa</h4>
+    ${b.direccionVisual   ? `<div class="field"><div class="field-label">Dirección visual</div>${b.direccionVisual}</div>` : ''}
+    ${b.identidadMusical  ? `<div class="field"><div class="field-label">Identidad musical</div>${b.identidadMusical}</div>` : ''}
+    ${b.ritmo             ? `<div class="field"><div class="field-label">Ritmo</div>${b.ritmo}</div>` : ''}
+    ${arr(b.motivosRecurrentes).length ? `<div class="field"><div class="field-label">Motivos recurrentes</div>${arr(b.motivosRecurrentes).join(' · ')}</div>` : ''}
+    ${arr(b.reglasDeOro).length ? `<div class="field"><div class="field-label">Reglas de oro</div>${arr(b.reglasDeOro).map(r => '• ' + r).join('<br>')}</div>` : ''}
+    ${arr(b.arcoTemporada).length ? `<div class="field"><div class="field-label">Arco de temporada</div>${arr(b.arcoTemporada).map((a, i) => `${i + 1}. ${a}`).join('<br>')}</div>` : ''}
+    <button class="btn-sec" style="margin-top:8px" onclick="regenerateBible()">🔄 Regenerar biblia</button>
+  </div>`;
+}
+
+window.regenerateBible = async function() {
+  if (!state.universe) { showToast('Crea un universo primero', 'error'); return; }
+  showToast('El director está escribiendo...', 'success');
+  try {
+    await generateSeriesBible();
+    renderUniverse();
+    showToast('Biblia de dirección lista 🎬', 'success');
+  } catch (e) {
+    openErrorModal('Error generando la biblia', e.message);
+  }
+};
+
 function renderUniverse() {
   const el = document.getElementById('universoDisplay');
   if (!state.universe) { el.innerHTML = ''; document.getElementById('cardGenerarEpisodio').style.display = 'none'; renderScenarios(); return; }
@@ -1875,6 +1935,7 @@ function renderUniverse() {
       <div class="field"><div class="field-label">Hook</div>${u.hook || ''}</div>
       ${Array.isArray(u.escenarios) && u.escenarios.length ? `<div class="field"><div class="field-label">Escenarios</div>${u.escenarios.map(e => e.name).join(' · ')}</div>` : ''}
     </div>
+    ${renderBible(u.bible)}
   `;
   document.getElementById('cardGenerarEpisodio').style.display = 'block';
   renderScenarios();
@@ -2172,7 +2233,7 @@ ${allAges
       // Lean, dedicated system prompt for character creation (avoids sending the
       // full ~7000-char scene-writing sysBase, which was pushing Edge Function
       // latency past Vercel's response-start limit and causing timeouts).
-      const charSysPrompt = `${charDesignerHeader}
+      const charSysPrompt = `${charDesignerHeader}${bibleVisualBrief()}
 ${u.conceptoOriginal ? `🎯 EL SETTING LO DEFINE EL CONCEPTO SEMILLA: el mundo, época y nivel tecnológico de los personajes deben coincidir con lo que describe el concepto semilla del usuario (canon), no con la estética típica del género. Si el concepto es contemporáneo/realista, los personajes son gente normal de hoy — sin reinos, magia, ni tecnología futurista que el concepto no mencione.\n` : ''}IMPORTANTE: si el concepto de la historia indica EXPLÍCITAMENTE que un personaje concreto (normalmente el protagonista) es un animal, criatura u objeto habitado por una consciencia humana, DEBES crear ese personaje igualmente y con el mismo detalle que los demás — nunca lo omitas ni lo humanices por defecto. Pero SOLO ese personaje específico: no inventes otros personajes no-humanos que el concepto no menciona. Si el concepto no dice nada sobre naturaleza no-humana, TODOS los personajes son humanos normales.
 ⚠️ FIDELIDAD DE NOMBRES: si el usuario proporcionó un concepto semilla con nombres de personajes específicos, ESOS SON LOS NOMBRES CORRECTOS Y OBLIGATORIOS — no los cambies, no los "mejores", no inventes alternativas. Úsalos exactamente como fueron escritos.
 ${comedyMode ? `🔒 SI incluyes un COMPAÑERO en el reparto — IGNORA CUALQUIER OTRO EJEMPLO MENCIONADO ARRIBA sobre su rasgo: su rasgo cómico fijo debe ser EXACTAMENTE este, ni hambre ni ningún otro salvo que coincida: "${getCompanionQuirk()}". Este rasgo va reflejado claramente en su campo "personality". NO uses hambre/comida como rasgo salvo que sea textualmente el asignado arriba. Si decides que esta historia NO necesita un compañero, simplemente no crees ese rol — no pasa nada.` : ''}
@@ -2430,11 +2491,15 @@ Cierre: resolución parcial + gancho claro hacia el próximo episodio.`}
 - Usá TODOS o la gran mayoría de los personajes listados en "PERSONAJES DEL EPISODIO" — no ignores a los secundarios enfocándote solo en 2. Si hay 5 personajes, los 5 deberían tener presencia real.
 - Extensión total: ${wordTarget.min}-${wordTarget.max} palabras.`;
 
-    // ─── CALL 1: the full story, uninterrupted, no checklist ───
-    setProg(30, 'Paso 2/5: Escribiendo la historia completa...');
+    // ─── The director gives the note for this chapter BEFORE it is written ───
     const prevEpSummary = buildPrevEpisodesSummary();
+    setProg(25, 'El director prepara el capítulo...');
+    const epDirection = await directEpisode(epNum, prevEpSummary);
+
+    // ─── CALL 1: the story, guided by the bible and the chapter note ───
+    setProg(30, 'Paso 2/5: Escribiendo la historia...');
     const fullStory = await generateFullStory(
-      `${ctx}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${storyArcGuide}\n\nEstás escribiendo el episodio ${epNum}.`
+      `${ctx}${bibleBrief()}${episodeDirectionBrief(epDirection)}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${storyArcGuide}\n\nEstás escribiendo el episodio ${epNum}.`
     );
 
     // ─── CALL 2: split the finished story into 15 scenes ───
@@ -2485,7 +2550,7 @@ REGLAS DE CADA PROMPT:
 - PERMANENCIA ENTRE ESCENAS: si escenas consecutivas ocurren en el MISMO escenario y la narración no dice que alguien se fue, los MISMOS personajes siguen presentes en todas — NUNCA alternes mostrando a uno por escena.
 - ESCALA Y PROPORCIÓN: proporción humana correcta del personaje respecto a muebles y espacio — un adulto de pie tendría espacio libre sobre la cabeza (el techo NO justo encima). Mantené el tamaño real del escenario; no comprimas el espacio ni encajones al personaje.\n- CRÍTICO: el personaje NUNCA mira a la cámara. Describe la acción que está haciendo según la narración. Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"
 - PROHIBIDO en los prompts: naked, nude, explicit, sexual, genitals, nipples
-- NO texto, NO letras, NO marcas de agua${genreExtraImage}
+- NO texto, NO letras, NO marcas de agua${genreExtraImage}${bibleVisualBrief()}
 Responde SOLO JSON válido sin markdown`;
 
     // Universe scenario list for prompt assignment
@@ -3842,6 +3907,309 @@ Responde SOLO JSON válido sin markdown`;
 });
 
 // ════════════════════════════════════════════════════════════════
+// CREATIVE DIRECTOR
+//
+// A single authorial voice over the whole production, so a series is
+// not a pile of independently-generated episodes. It works at three
+// levels:
+//
+//   1. SERIES BIBLE  — written once per universe. Visual direction,
+//      musical identity, pacing rules, season arc and the show's own
+//      golden rules. Injected into every later prompt.
+//   2. EPISODE DIRECTION — what THIS chapter must accomplish inside
+//      that arc, its emotional curve and its key image.
+//   3. MUSICAL DIRECTION — the cue brief for each act.
+//
+// The director is bound by the genre contract, never above it: the
+// bible is asked to serve the selected genre and subgenres, and the
+// same fidelity contract is included in its prompt.
+// ════════════════════════════════════════════════════════════════
+function directorSystemPrompt(genero, comedyMode) {
+  return `Eres un DIRECTOR CREATIVO de anime con veinte años de experiencia: has dirigido series completas, sabes qué hace que un capítulo se sienta de autor y no de plantilla, y conoces las convenciones reales de cada género.
+
+TU AUTORIDAD Y SUS LÍMITES:
+- Decides la identidad visual, sonora y de ritmo de la serie, y qué debe lograr cada capítulo.
+- NO decides el género: el género "${genero}" y los subgéneros seleccionados son un encargo cerrado. Tu trabajo es hacer que ESE género se sienta excelente, no reinterpretarlo ni suavizarlo.
+- NO inventas mecánicas que el género no tiene (sistemas, poderes, tropos de subgéneros no seleccionados).
+${comedyMode ? '- Esta serie es una comedia: la dirección debe servir al humor sin volverla una parodia sin stakes.' : '- Esta serie NO es una comedia: dirige con el tono serio real del género.'}
+
+CÓMO TRABAJAS:
+- Concreto sobre abstracto: "linterna de papel naranja como única fuente cálida en planos nocturnos" en vez de "iluminación atmosférica".
+- Cada decisión es ejecutable por un equipo: se puede dibujar, componer o cronometrar.
+- Coherencia por encima de novedad: lo que fijas en la biblia se respeta en todos los capítulos.
+Responde SOLO JSON válido sin markdown.`;
+}
+
+// Context every director call needs: the show, its genre contract and its cast.
+function directorContext() {
+  const u = state.universe || {};
+  const subs = effectiveSubgenres(u.subgenres || [], u.demo);
+  const cast = (state.characters || []).map(c => `- ${c.name} (${c.role}): ${c.personality || ''}`).join('\n');
+  return `SERIE: ${u.title || ''}
+Tagline: ${u.tagline || ''}
+Demografía: ${u.demo || ''}
+Género: ${u.genero || ''}
+Concepto: ${u.concepto || ''}
+Conflicto: ${u.conflicto || ''}
+Setting: ${u.setting || ''}
+Tono pedido por el usuario: ${u.tono || 'sin especificar'}
+
+${DEMO_PROMPTS[u.demo] || ''}
+
+${GENRE_PROMPTS[u.genero] || ''}
+
+${getSubgenreText(subs, u.genero)}
+
+${SUBGENRE_FIDELITY_CONTRACT}
+${cast ? `\nELENCO:\n${cast}` : ''}`;
+}
+
+// ─── 1. SERIES BIBLE ───
+async function generateSeriesBible() {
+  const u = state.universe;
+  if (!u) throw new Error('No hay universo');
+  const comedyMode = isComedyMode(u.genero, effectiveSubgenres(u.subgenres || [], u.demo));
+  const fmt = getEpisodeFormat();
+
+  const prompt = `${directorContext()}
+
+Formato de cada capítulo: ${fmt.scenes} escenas, ~${fmt.minutes} minutos, formato vertical para redes.
+
+Escribe la BIBLIA DE DIRECCIÓN de esta serie. Es el documento que seguirán todos los capítulos.
+
+Devuelve JSON:
+{
+  "direccionVisual": "Cómo se ve esta serie y solo esta serie: paleta concreta (3-4 colores nombrados), tratamiento de luz, lenguaje de cámara recurrente, textura. 3-4 frases ejecutables.",
+  "identidadMusical": "Instrumentación concreta, tempo, y el motivo que identifica a la serie. 2-3 frases.",
+  "ritmo": "Regla de ritmo propia de esta serie dentro del género: dónde acelera, dónde respira, cómo entra y sale de cada capítulo. 2-3 frases.",
+  "arcoTemporada": ["Capítulo 1: qué establece y con qué queda abierto", "Capítulo 2: ...", "Capítulo 3: ...", "Capítulo 4: ...", "Capítulo 5: ..."],
+  "motivosRecurrentes": ["objeto, gesto o encuadre que reaparece y significa algo", "otro", "otro"],
+  "reglasDeOro": ["regla concreta que esta serie NUNCA rompe", "otra", "otra", "otra"]
+}`;
+
+  const raw = await callGemini(prompt, directorSystemPrompt(u.genero, comedyMode));
+  const bible = safeParseJSON(raw);
+  state.universe.bible = bible;
+  saveState();
+  return bible;
+}
+
+// Compact bible text injected into the writing/art prompts.
+function bibleBrief() {
+  const b = state.universe?.bible;
+  if (!b) return '';
+  const arr = v => Array.isArray(v) ? v : [];
+  return `\n═══ BIBLIA DE DIRECCIÓN (decisiones del director creativo — obligatorias) ═══
+DIRECCIÓN VISUAL: ${b.direccionVisual || ''}
+RITMO: ${b.ritmo || ''}
+${arr(b.motivosRecurrentes).length ? `MOTIVOS RECURRENTES (hacelos aparecer con naturalidad): ${arr(b.motivosRecurrentes).join(' · ')}` : ''}
+${arr(b.reglasDeOro).length ? `REGLAS DE ORO (nunca se rompen):\n${arr(b.reglasDeOro).map(r => '- ' + r).join('\n')}` : ''}
+═══════════════════════════════════════════════════════════`;
+}
+
+// Visual half of the bible, for image-prompt generation.
+function bibleVisualBrief() {
+  const b = state.universe?.bible;
+  if (!b?.direccionVisual) return '';
+  const motifs = Array.isArray(b.motivosRecurrentes) ? b.motivosRecurrentes : [];
+  return `\n\nDIRECCIÓN VISUAL DE LA SERIE (del director creativo — aplicala en TODOS los prompts): ${b.direccionVisual}${motifs.length ? `\nMotivos visuales recurrentes: ${motifs.join(' · ')}` : ''}`;
+}
+
+// ─── 2. EPISODE DIRECTION ───
+async function directEpisode(epNum, prevSummary) {
+  const u = state.universe;
+  if (!u?.bible) return null;
+  const comedyMode = isComedyMode(u.genero, effectiveSubgenres(u.subgenres || [], u.demo));
+  const arc = Array.isArray(u.bible.arcoTemporada) ? u.bible.arcoTemporada : [];
+
+  const prompt = `${directorContext()}
+${bibleBrief()}
+
+${arc.length ? `ARCO DE TEMPORADA:\n${arc.map((a, i) => `${i + 1}. ${a}`).join('\n')}\n` : ''}
+${prevSummary ? `LO QUE YA PASÓ EN CAPÍTULOS ANTERIORES:\n${prevSummary}\n` : ''}
+Estás dirigiendo el CAPÍTULO ${epNum}. Da la nota de dirección al guionista antes de que escriba.
+
+Devuelve JSON:
+{
+  "objetivo": "Qué tiene que lograr este capítulo en el arco (1-2 frases concretas)",
+  "curvaEmocional": "De qué emoción parte el espectador y a cuál llega (1 frase)",
+  "imagenClave": "La imagen que el espectador debe recordar de este capítulo (1 frase visual concreta)",
+  "notaDeDireccion": "La instrucción más importante para que este capítulo no se sienta genérico (1-2 frases)",
+  "quedaAbierto": "Qué queda deliberadamente sin resolver para el capítulo siguiente (1 frase)"
+}`;
+
+  try {
+    const raw = await callGemini(prompt, directorSystemPrompt(u.genero, comedyMode));
+    const dir = safeParseJSON(raw);
+    if (!state.episodeDirection) state.episodeDirection = {};
+    state.episodeDirection[epNum] = dir;
+    saveState();
+    return dir;
+  } catch (e) {
+    console.warn('Dirección de episodio falló:', e.message);
+    return null;
+  }
+}
+
+function episodeDirectionBrief(dir) {
+  if (!dir) return '';
+  return `\n═══ NOTA DE DIRECCIÓN PARA ESTE CAPÍTULO ═══
+OBJETIVO: ${dir.objetivo || ''}
+CURVA EMOCIONAL: ${dir.curvaEmocional || ''}
+IMAGEN CLAVE (tiene que existir en el capítulo): ${dir.imagenClave || ''}
+NOTA DEL DIRECTOR: ${dir.notaDeDireccion || ''}
+QUEDA ABIERTO para el próximo capítulo: ${dir.quedaAbierto || ''}
+═══════════════════════════════════════════`;
+}
+
+// ─── 3. MUSICAL DIRECTION ───
+async function directMusic(acts) {
+  const u = state.universe || {};
+  const comedyMode = isComedyMode(u.genero, effectiveSubgenres(u.subgenres || [], u.demo));
+  const identity = u.bible?.identidadMusical || '';
+
+  const actsText = acts.map(a => {
+    const syn = actSynopsis(a);
+    return `- ${a} (${ACT_LABELS[a] || a}): ${syn || 'sin sinopsis'}`;
+  }).join('\n');
+
+  const prompt = `${directorContext()}
+${identity ? `\nIDENTIDAD MUSICAL DE LA SERIE (fijada en la biblia — todas las pistas la respetan): ${identity}` : ''}
+
+ACTOS DE ESTE CAPÍTULO Y LO QUE PASA EN CADA UNO:
+${actsText}
+
+Escribe la DIRECCIÓN MUSICAL de cada acto. Cada "prompt" se le entrega literalmente a un modelo de generación musical (Lyria), así que debe estar EN INGLÉS, ser puramente instrumental y describir instrumentación, tempo (BPM aproximado), textura y emoción — nada de nombres de artistas ni de obras existentes.
+
+Devuelve JSON:
+{
+  "cues": [
+    { "act": "${acts[0]}", "prompt": "instrumental cue description in English, with instrumentation, tempo and mood", "negative": "elementos a evitar, en inglés" }
+  ]
+}
+Un objeto por cada acto listado arriba, usando EXACTAMENTE esos identificadores de act.`;
+
+  const raw = await callGemini(prompt, directorSystemPrompt(u.genero, comedyMode));
+  const parsed = safeParseJSON(raw);
+  const out = {};
+  for (const cue of (parsed.cues || [])) {
+    if (cue?.act && cue?.prompt) out[cue.act] = { prompt: String(cue.prompt), negative: String(cue.negative || '') };
+  }
+  // Any act the director skipped still gets a usable cue.
+  for (const a of acts) {
+    if (!out[a]) out[a] = { prompt: `Instrumental anime score cue for the ${a} of a ${u.genero || 'drama'} episode, orchestral and restrained, moderate tempo`, negative: '' };
+  }
+  return out;
+}
+
+// ════════════════════════════════════════════════════════════════
+// MUSIC — one instrumental cue per act, composed by Lyria from a
+// musical direction written by the creative director.
+// ════════════════════════════════════════════════════════════════
+const ACT_ORDER = ['cold_open', 'act1', 'act2', 'clímax', 'resolución'];
+const ACT_LABELS = {
+  cold_open: 'Cold open', act1: 'Acto 1', act2: 'Acto 2',
+  'clímax': 'Clímax', 'resolución': 'Resolución',
+};
+const musicKey = act => `mus_${state.projectId}${epSfx()}_${act}`;
+
+// Acts actually present in this episode, in narrative order.
+function episodeActs() {
+  const present = new Set((state.scenes || []).map(s => s.act).filter(Boolean));
+  const ordered = ACT_ORDER.filter(a => present.has(a));
+  return ordered.length ? ordered : ['act1'];
+}
+
+// What happens in each act, so the direction is about THIS episode rather
+// than a generic mood word.
+function actSynopsis(act) {
+  const scenes = (state.scenes || []).filter(s => s.act === act && s.narration);
+  if (!scenes.length) return '';
+  return scenes.map(s => s.narration).join(' ').slice(0, 900);
+}
+
+async function generateEpisodeMusic() {
+  const btn  = document.getElementById('btnGenerarMusica');
+  const prog = document.getElementById('musicProgress');
+  const bar  = document.getElementById('musicProgressBar');
+  const txt  = document.getElementById('musicProgressText');
+  if (!state.universe) { showToast('Crea un universo primero', 'error'); return; }
+  if (!(state.scenes || []).some(s => s.narration)) { showToast('Genera el episodio primero', 'error'); return; }
+
+  const acts = episodeActs();
+  btn.disabled = true;
+  prog.style.display = 'block';
+  const setProg = (p, m) => { bar.style.width = p + '%'; txt.textContent = m; };
+
+  try {
+    // ─── Step 1: the creative director writes the musical direction ───
+    setProg(10, 'El director escribe la dirección musical...');
+    const briefs = await directMusic(acts);
+
+    // ─── Step 2: Lyria composes each cue ───
+    let done = 0, failed = 0;
+    for (const act of acts) {
+      setProg(20 + Math.round((done / acts.length) * 75), `Componiendo ${ACT_LABELS[act] || act}...`);
+      const brief = briefs[act];
+      if (!brief) { failed++; done++; continue; }
+      try {
+        const res = await fetch('/api/music', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: brief.prompt, negativePrompt: brief.negative || '' }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || `Music proxy ${res.status}`);
+        const clip = data.clips?.[0];
+        if (!clip?.audioData) throw new Error('sin audio');
+        await dbSet(musicKey(act), `${clip.mimeType}|${clip.audioData}`);
+        if (state.universe) {
+          state.universe.musicBriefs = { ...(state.universe.musicBriefs || {}), [act]: brief };
+          saveState();
+        }
+      } catch (e) {
+        console.warn(`Música ${act}:`, e.message);
+        failed++;
+      }
+      done++;
+      await renderMusic();
+    }
+
+    setProg(100, failed ? `${acts.length - failed}/${acts.length} pistas listas` : 'Música lista');
+    showToast(failed ? `${acts.length - failed}/${acts.length} pistas generadas` : 'Música del episodio lista 🎵',
+              failed ? 'error' : 'success');
+  } catch (e) {
+    openErrorModal('Error generando música', e.message);
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { prog.style.display = 'none'; }, 2500);
+  }
+}
+
+async function renderMusic() {
+  const el = document.getElementById('musicList');
+  if (!el) return;
+  const acts = episodeActs();
+  const rows = [];
+  for (const act of acts) {
+    const stored = await dbGet(musicKey(act));
+    const brief = state.universe?.musicBriefs?.[act];
+    rows.push(`
+      <div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <strong style="font-size:13px">${ACT_LABELS[act] || act}</strong>
+          <span style="font-size:11px;color:${stored ? '#64dc64' : 'var(--text-dim)'}">${stored ? '✅ lista' : '— sin generar'}</span>
+        </div>
+        ${brief?.prompt ? `<div style="font-size:11px;color:var(--text-dim);margin-top:6px;line-height:1.45">${brief.prompt}</div>` : ''}
+        ${stored ? `<audio controls preload="none" style="width:100%;margin-top:8px;height:34px" src="data:${stored.slice(0, stored.indexOf('|'))};base64,${stored.slice(stored.indexOf('|') + 1)}"></audio>` : ''}
+      </div>`);
+  }
+  el.innerHTML = rows.join('') || '<p style="color:var(--text-dim);font-size:12px">Genera el episodio para ver sus actos.</p>';
+}
+
+document.getElementById('btnGenerarMusica')?.addEventListener('click', generateEpisodeMusic);
+
+// ════════════════════════════════════════════════════════════════
 // EXPORT ZIP
 // ════════════════════════════════════════════════════════════════
 // Convert seconds to SRT timestamp format HH:MM:SS,mmm
@@ -4085,6 +4453,24 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
         console.warn('Audio combinado falló:', e);
         showToast('Audio combinado falló', 'error');
       }
+    }
+
+    // musica/ — una pista por acto
+    for (const act of episodeActs()) {
+      const stored = await dbGet(musicKey(act));
+      if (!stored) continue;
+      const sep = stored.indexOf('|');
+      const mime = sep > 0 ? stored.slice(0, sep) : 'audio/wav';
+      const data = sep > 0 ? stored.slice(sep + 1) : stored;
+      const ext = mime.includes('mpeg') ? 'mp3' : 'wav';
+      zip.file(`musica/${act}.${ext}`, data, { base64: true });
+    }
+    if (state.universe?.bible) {
+      zip.file('direccion_creativa.json', JSON.stringify({
+        biblia: state.universe.bible,
+        capitulos: state.episodeDirection || {},
+        musica: state.universe.musicBriefs || {},
+      }, null, 2));
     }
 
     btn.innerHTML = '<div class="spinner"></div> Generando ZIP...';
