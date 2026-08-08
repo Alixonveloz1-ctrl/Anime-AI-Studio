@@ -9,6 +9,13 @@
 // ════════════════════════════════════════════════════════════════
 const { cfg, auth, imageModelLocation, vertexUrl, begin, fail } = require('./_lib/gcp');
 
+// Google's wording when a project has no allowlist for a preview model.
+function sinAcceso(msg) {
+  const m = String(msg || '').toLowerCase();
+  return m.includes('was not found or your project does not have access')
+      || (m.includes('publisher model') && m.includes('not found'));
+}
+
 // ─── Words that trigger Gemini safety filters ───
 const BLOCKED_WORDS = [
   [/\bnaked\b/gi, 'in swimsuit'],
@@ -49,7 +56,11 @@ async function callGeminiAtUrl(url, parts, projectId, token, aspectRatio) {
     msg.includes('overload') || msg.includes('unavailable') || msg.includes('not found') || msg.includes('not support')
   );
   const isSafetyBlock = !r.ok && (msg.includes('safety') || msg.includes('block') || msg.includes('policy'));
-  return { ok: r.ok, shouldRotate, isSafetyBlock, status: r.status, data: d };
+  // No allowlist for the model is NOT a capacity problem: rotating regions
+  // wastes two more calls and, worse, the rotation wrapper truncates the
+  // message to 60 chars — cutting off the very words that identify the cause.
+  const isNoAccess = !r.ok && sinAcceso(d.error?.message);
+  return { ok: r.ok, shouldRotate: shouldRotate && !isNoAccess, isNoAccess, isSafetyBlock, status: r.status, data: d };
 }
 
 async function callGemini(model, prompt, characterRefs, projectId, token, isEcchi = false, aspectRatio = '9:16', continuityRef = null) {
@@ -106,7 +117,8 @@ ${cleanPrompt}` });
   if (location === 'global') {
     // Global models: single endpoint, no rotation
     const url = vertexUrl(projectId, 'global', model, 'generateContent');
-    const { ok, shouldRotate, isSafetyBlock, data } = await callGeminiAtUrl(url, parts, projectId, token, aspectRatio);
+    const { ok, shouldRotate, isNoAccess, isSafetyBlock, data } = await callGeminiAtUrl(url, parts, projectId, token, aspectRatio);
+    if (isNoAccess) return { error: data.error?.message || `Sin acceso a ${model}` };
     if (isSafetyBlock) {
       const finishReason = data.candidates?.[0]?.finishReason || 'SAFETY';
       return { error: `bloqueado [${finishReason}]` };
@@ -126,7 +138,11 @@ ${cleanPrompt}` });
   for (const region of regions) {
     const url = vertexUrl(projectId, region, model, 'generateContent');
 
-    const { ok, shouldRotate, isSafetyBlock, data } = await callGeminiAtUrl(url, parts, projectId, token, aspectRatio);
+    const { ok, shouldRotate, isNoAccess, isSafetyBlock, data } = await callGeminiAtUrl(url, parts, projectId, token, aspectRatio);
+
+    // Stop at the first region: the model is not available to this project
+    // anywhere, so the other regions would fail identically.
+    if (isNoAccess) return { error: data.error?.message || `Sin acceso a ${model}` };
 
     if (shouldRotate) {
       lastError = `${region}: ${data.error?.message?.slice(0,60) || 'no capacity'}`;
@@ -198,7 +214,26 @@ module.exports = async function handler(req, res) {
 
     const aspectRatio = body.aspectRatio || '9:16';
     const model = forceModel || cfg.imageModel;
-    const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true, aspectRatio, continuityRef);
+    let result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true, aspectRatio, continuityRef);
+
+    // Preview image models need an allowlist per project. Picking one the
+    // project cannot use used to fail with Google's raw "Publisher model … was
+    // not found or your project does not have access to it", which does not say
+    // what to do about it. Fall back once to the configured default and report
+    // the swap, so generation succeeds and the reason is visible.
+    if (result.error && sinAcceso(result.error) && model !== cfg.imageModel) {
+      const previo = model;
+      result = await callGemini(cfg.imageModel, prompt, characterRefs, projectId, token, isEcchi === true, aspectRatio, continuityRef);
+      if (!result.error) {
+        result.notice = `Tu proyecto no tiene acceso a "${previo}", así que se usó "${cfg.imageModel}". Cambia el modelo de imagen en Episodio para no volver a verlo, o pide acceso al modelo preview en Google Cloud.`;
+        result.fellBackFrom = previo;
+      }
+    }
+    if (result.error && sinAcceso(result.error)) {
+      result.error = `Tu proyecto de Google Cloud no tiene acceso al modelo de imagen "${model}". `
+        + `Elige otro en Episodio → Modelo de imagen (Gemini 2.5 Flash funciona sin allowlist), `
+        + `o cambia IMAGE_MODEL en Vercel. Detalle: ${result.error}`;
+    }
     return res.status(200).json(result);
   } catch(e) {
     return fail(res, e);
