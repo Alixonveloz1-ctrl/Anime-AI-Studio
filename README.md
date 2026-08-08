@@ -1,6 +1,6 @@
 # Anime AI Studio · Your Name Edition
 
-Estudio de generación de anime cinematográfico. Genera universos narrativos, personajes, episodios de ~5 minutos con 15 escenas y 45 imágenes, voces y clips de video — y exporta el animatic final como video MP4 (iPhone/iPad) o WebM (resto).
+Estudio de generación de anime cinematográfico. Genera universos narrativos, personajes, episodios de 5 a 16 minutos, imágenes, voces, música y clips de video — y exporta todo el material listo para montar.
 
 ## Pipeline
 
@@ -12,7 +12,7 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 |Música           |Lyria (`/api/music`) — una pista instrumental por acto      |
 |Dirección        |Director creativo: biblia de serie, nota por capítulo, música|
 |Clips de video   |Veo 3.1 (`/api/video-start` + `/api/video-status`)          |
-|Ensamblaje       |Canvas + MediaRecorder (Ken Burns)                          |
+|Subtítulos       |Alineados al audio real de cada escena (`/api/transcribe`)   |
 
 ## Características
 
@@ -20,16 +20,17 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 - Los episodios largos se escriben acto por acto, encadenando el texto ya escrito
 - Multi-episodio con continuidad de personajes y escenarios
 - Escenarios extraídos de la historia y reutilizados entre episodios
-- Ken Burns con 7 direcciones de movimiento
 - Formato 9:16 vertical o 16:9 widescreen
-- Export MP4 nativo en iPhone Safari
-- Persistencia en localStorage + IndexedDB, con Export/Import ZIP
+- Persistencia en localStorage + IndexedDB
+- Export ZIP: imágenes, videos, audios, música, subtítulos .srt y la dirección creativa
+
+> **Ensamblaje final:** el montaje del MP4 todavía no está en la app — el ZIP entrega todas las piezas ya sincronizadas para montarlas en un editor. Ver "Estado" al final.
 
 ## Uso
 
 1. Configura las dos variables de entorno en Vercel (ver más abajo)
 1. Elige demografía, género principal y subgéneros → Genera Universo
-1. Genera Episodio (personajes + historia + 15 escenas)
+1. Genera Episodio (personajes + historia + escenas)
 1. Genera las imágenes de las escenas
 1. Genera las voces
 1. Genera la música del episodio (una pista por acto)
@@ -105,6 +106,12 @@ Reglas de coherencia que aplica el código:
 - Los géneros sin componente sobrenatural reciben una restricción explícita de "sin magia ni poderes", salvo que un subgénero lo habilite.
 - Kodomomuke (infantil) desactiva los subgéneros para adultos (Ecchi, Harem, Harem Inverso, Gore).
 - Harem y Harem Inverso son mutuamente excluyentes.
+
+## Estado
+
+Ya funciona en la app: guion, personajes, escenarios, imágenes, voces, música, clips de video, subtítulos sincronizados y dirección creativa, todo exportable en un ZIP.
+
+Pendiente: el **ensamblaje final** en un único MP4 (imágenes/clips + narración + música + subtítulos quemados). Requiere un servicio con ffmpeg — Vercel no sirve para esto por el límite de 60s y el tamaño de los archivos.
 
 ## Reglas estéticas
 
