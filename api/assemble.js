@@ -31,7 +31,7 @@ module.exports = async function handler(req, res) {
     if (req.method === 'GET') {
       return res.status(200).json({
         available: !!bucket,
-        job, region,
+        job, region, prefix: cfg.prefix,
         hint: bucket ? null : 'Falta GCS_OUTPUT_BUCKET en Vercel',
       });
     }
@@ -139,5 +139,5 @@ module.exports = async function handler(req, res) {
 function carpetaDe(episodio, projectId) {
   const ep = String(parseInt(episodio, 10) || 1).padStart(2, '0');
   const proj = String(projectId || 'proyecto').replace(/[^\w-]/g, '');
-  return `anime-studio/${proj}/ep${ep}`;
+  return `${cfg.prefix}/proyectos/${proj}/ep${ep}`;
 }

@@ -16,7 +16,9 @@ function safePath(p) {
     .replace(/^\/+/, '')
     .replace(/\.\./g, '')
     .replace(/[^\w./-]/g, '_');
-  return clean.startsWith('anime-studio/') ? clean : null;
+  // Anything this app writes must stay inside its own prefix, so a bucket
+  // shared with other projects can never be written outside it.
+  return clean.startsWith(cfg.prefix + '/') ? clean : null;
 }
 
 module.exports = async function handler(req, res) {

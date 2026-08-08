@@ -73,6 +73,7 @@ Todo se genera con Google Cloud. No hay ningún project ID, bucket, modelo ni re
 |`VEO_MODEL`                 |`veo-3.1-lite-generate-001`        |
 |`MUSIC_MODEL`               |`lyria-002`                        |
 |`STT_MODEL` / `STT_LANGUAGE`|`latest_long` / `es-US`            |
+|`GCS_PREFIX`                |`anime-studio` (carpeta propia en el bucket)|
 |`MONTAJE_JOB`               |`diezmo-montaje`                   |
 |`MONTAJE_REGION`            |`us-central1`                      |
 
@@ -92,6 +93,27 @@ En el proyecto nuevo hacen falta:
 - Roles de la service account: `roles/aiplatform.user`, `roles/storage.admin` (hace falta `storage.buckets.update`: `video-status.js` aplica CORS al bucket) y `roles/serviceusage.serviceUsageConsumer`.
 - Bucket creado en ese proyecto, en US (Veo corre en `us-central1`).
 - Acceso a los modelos preview que uses: `gemini-3.1-pro-preview` (el guión depende de él y no tiene fallback), los modelos de imagen 3.x, y `veo-3.1-fast` / `veo-3.1-quality` requieren allowlist — `veo-3.1-lite` es el default.
+
+## Dónde se guarda todo
+
+El bucket se puede compartir con otros proyectos. **Todo lo que escribe esta
+herramienta vive bajo un único prefijo** (`anime-studio/` por defecto,
+configurable con `GCS_PREFIX`), y el código no puede escribir ni firmar nada
+fuera de él:
+
+```
+gs://<bucket>/
+├── diezmo/                        ← otros proyectos, intactos
+└── anime-studio/                  ← todo lo de esta herramienta
+    ├── veo/                       clips generados por Veo
+    └── proyectos/<proyecto>/ep01/
+        ├── hoja.json  montar.sh  descargas.txt  error.txt
+        ├── material/              imágenes, narración, música, subs.srt
+        └── completo.mp4           el episodio montado
+```
+
+`/api/upload-url` rechaza cualquier ruta fuera del prefijo y `/api/download-url`
+se niega a firmar objetos que no estén dentro de él.
 
 ## Géneros y categorías
 
@@ -128,7 +150,7 @@ navegador ──PUT firmado──▶ GCS ◀──baja── Cloud Run Job (ffmp
                                      MP4 ──▶ GCS ──▶ URL firmada
 ```
 
-El encargo que se deja en `gs://<bucket>/anime-studio/<proyecto>/ep<NN>/` es:
+El encargo que se deja en `gs://<bucket>/<prefijo>/proyectos/<proyecto>/ep<NN>/` es:
 `hoja.json`, `montar.sh`, `descargas.txt` (TSV origen→nombre local) y un
 `error.txt` vacío. El job se lanza con `TRABAJO`, `PREFIJO` y `SALIDA`.
 

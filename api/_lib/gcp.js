@@ -58,6 +58,10 @@ const cfg = {
 
   get bucket()         { return env('GCS_OUTPUT_BUCKET', '').replace(/^gs:\/\//, '').replace(/\/+$/, ''); },
 
+  // EVERYTHING this app writes lives under this single prefix, so it can share
+  // a bucket with other projects without mixing into their folders.
+  get prefix()         { return env('GCS_PREFIX', 'anime-studio').replace(/^\/+|\/+$/g, '') || 'anime-studio'; },
+
   // Cloud Run JOB that renders the final MP4. Defaults match the montador
   // already deployed in this account, so nothing new has to be configured.
   get montajeJob()     { return env('MONTAJE_JOB', 'diezmo-montaje'); },

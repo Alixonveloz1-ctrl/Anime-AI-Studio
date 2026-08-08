@@ -32,7 +32,7 @@ module.exports = async function handler(req, res) {
         sampleCount: 1,
         durationSeconds: 8,
         generateAudio: generateAudio === true,
-        storageUri: `gs://${bucket}/veo-outputs/`,
+        storageUri: `gs://${bucket}/${cfg.prefix}/veo/`,
       },
     };
 

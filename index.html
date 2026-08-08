@@ -4366,7 +4366,7 @@ async function checkAssemblyAvailable() {
     const res = await fetch('/api/assemble');
     const d = await res.json();
     if (d.available) {
-      el.innerHTML = `✅ Montador disponible — <code>${d.job}</code> en ${d.region}`;
+      el.innerHTML = `✅ Montador <code>${d.job}</code> (${d.region}) · todo se guarda en <code>${d.prefix}/</code>`;
       btn.disabled = false;
     } else {
       el.innerHTML = `⚠️ ${d.hint || 'No disponible'}`;
@@ -4396,7 +4396,10 @@ async function assembleEpisode() {
   try {
     const useClips = document.getElementById('assemblyUseClips')?.checked !== false;
     const epNum  = state.currentEpisode || 1;
-    const carpeta = `anime-studio/${String(state.projectId || 'proyecto').replace(/[^\w-]/g, '')}/ep${String(epNum).padStart(2, '0')}`;
+    // The prefix comes from the server so the bucket can be shared with other
+    // projects without this app ever writing outside its own folder.
+    const info = await (await fetch('/api/assemble')).json();
+    const carpeta = `${info.prefix || 'anime-studio'}/proyectos/${String(state.projectId || 'proyecto').replace(/[^\w-]/g, '')}/ep${String(epNum).padStart(2, '0')}`;
     const material = `${carpeta}/material`;
 
     // ─── 1. Gather the material, with flat local names the script expects ───

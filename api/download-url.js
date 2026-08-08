@@ -23,10 +23,10 @@ module.exports = async function handler(req, res) {
     const bucket = slash > 0 ? rest.slice(0, slash) : rest;
     const objectPath = slash > 0 ? rest.slice(slash + 1) : '';
 
-    // Only ever sign objects in this deployment's own bucket: the URI comes
-    // from the client, and signing is done with the service account's key.
-    if (bucket !== cfg.bucket || !objectPath) {
-      return res.status(400).json({ error: 'La ruta no pertenece al bucket configurado' });
+    // Only ever sign inside this app's own prefix: the URI comes from the
+    // client, and the bucket is shared with other projects.
+    if (bucket !== cfg.bucket || !objectPath.startsWith(cfg.prefix + '/')) {
+      return res.status(400).json({ error: 'La ruta no pertenece a esta herramienta' });
     }
 
     const sa = loadServiceAccount();
