@@ -23,6 +23,7 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 - Formato 9:16 vertical o 16:9 widescreen
 - Persistencia en localStorage + IndexedDB
 - Export ZIP: imágenes, videos, audios, música, subtítulos .srt y la dirección creativa
+- Subtítulos alineados palabra a palabra con el audio real (Speech-to-Text), con respaldo proporcional por escena
 
 > **Ensamblaje final:** el montaje del MP4 todavía no está en la app — el ZIP entrega todas las piezas ya sincronizadas para montarlas en un editor. Ver "Estado" al final.
 
@@ -85,7 +86,7 @@ Todo se genera con Google Cloud. No hay ningún project ID, bucket, modelo ni re
 En el proyecto nuevo hacen falta:
 
 - Facturación activa.
-- APIs habilitadas: `aiplatform.googleapis.com`, `storage.googleapis.com` y — solo si usas las voces `gcp_` Neural2/WaveNet — `texttospeech.googleapis.com`.
+- APIs habilitadas: `aiplatform.googleapis.com`, `storage.googleapis.com`, `speech.googleapis.com` (subtítulos con timing exacto) y — solo si usas las voces `gcp_` Neural2/WaveNet — `texttospeech.googleapis.com`.
 - Roles de la service account: `roles/aiplatform.user`, `roles/storage.admin` (hace falta `storage.buckets.update`: `video-status.js` aplica CORS al bucket) y `roles/serviceusage.serviceUsageConsumer`.
 - Bucket creado en ese proyecto, en US (Veo corre en `us-central1`).
 - Acceso a los modelos preview que uses: `gemini-3.1-pro-preview` (el guión depende de él y no tiene fallback), los modelos de imagen 3.x, y `veo-3.1-fast` / `veo-3.1-quality` requieren allowlist — `veo-3.1-lite` es el default.

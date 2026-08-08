@@ -590,7 +590,9 @@
     </div>
     <div class="card">
       <h2>📤 Exportar</h2>
-      <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px">Descarga todo el proyecto. El ZIP incluye imágenes, audios individuales, subtítulos .srt por escena, y un audio_completo.wav con su subtítulo global sincronizado.</p>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 12px">Descarga todo el proyecto: <code>imagenes/</code>, <code>videos/</code>, <code>musica/</code>, <code>audio_completo.wav</code>, <code>subtitulos.srt</code>, <code>guion.txt</code> y <code>direccion_creativa.json</code>.</p>
+      <label class="sg-chip selected" id="exactSubsChip" style="display:inline-flex;margin-bottom:12px"><input type="checkbox" id="exactSubs" checked> ⏱️ Subtítulos con timing exacto</label>
+      <p style="font-size:11px;color:var(--text-dim);margin:0 0 12px;line-height:1.5">Alinea cada palabra con el audio real usando Speech-to-Text. Si falla en alguna escena, esa escena usa timing proporcional. Requiere <code>speech.googleapis.com</code> habilitada.</p>
       <button class="btn" id="btnExportZip">📦 Descargar ZIP</button>
     </div>
   </div>
@@ -4208,6 +4210,9 @@ async function renderMusic() {
 }
 
 document.getElementById('btnGenerarMusica')?.addEventListener('click', generateEpisodeMusic);
+document.getElementById('exactSubs')?.addEventListener('change', function() {
+  document.getElementById('exactSubsChip')?.classList.toggle('selected', this.checked);
+});
 
 // ════════════════════════════════════════════════════════════════
 // EXPORT ZIP
@@ -4219,6 +4224,114 @@ function toSrtTime(seconds) {
   const m = Math.floor((seconds / 60) % 60);
   const h = Math.floor(seconds / 3600);
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')},${String(ms).padStart(3,'0')}`;
+}
+
+// ════════════════════════════════════════════════════════════════
+// FORCED ALIGNMENT — subtitles that match the real spoken timing.
+//
+// The proportional fallback below is already exact at scene
+// boundaries (each scene's audio is measured), but inside a scene it
+// only estimates. Speech-to-Text gives the real time of every spoken
+// word; those timings are mapped ONTO THE SCRIPT TEXT so the subtitle
+// always shows what was written, never what the recognizer thought it
+// heard. If anything fails, the proportional path is used instead —
+// subtitles must never be blocked by this.
+// ════════════════════════════════════════════════════════════════
+const normWord = w => String(w).toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // strip accents
+  .replace(/[^a-z0-9ñ]/gi, '');
+
+// Longest-common-subsequence match between the script words and the
+// recognized words. Script words that no recognized word matches are
+// interpolated between their matched neighbours, so a mis-heard word never
+// drops a subtitle or shifts the ones after it.
+function alignWords(scriptWords, heardWords) {
+  const a = scriptWords.map(normWord);
+  const b = heardWords.map(w => normWord(w.word));
+  const n = a.length, m = b.length;
+  if (!n || !m) return null;
+
+  // LCS table. Narration scenes are ~55 words, so this stays tiny.
+  const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] && a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const timed = new Array(n).fill(null);
+  let i = 0, j = 0, matches = 0;
+  while (i < n && j < m) {
+    if (a[i] && a[i] === b[j]) {
+      timed[i] = { start: heardWords[j].start, end: heardWords[j].end };
+      matches++; i++; j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
+    else j++;
+  }
+  // Too little overlap means the recognition is unusable for this scene.
+  if (matches < Math.max(3, Math.floor(n * 0.35))) return null;
+
+  // Interpolate the gaps, then extend to the scene edges.
+  const firstIdx = timed.findIndex(Boolean);
+  const lastIdx  = timed.length - 1 - [...timed].reverse().findIndex(Boolean);
+  for (let k = 0; k < firstIdx; k++) timed[k] = { start: timed[firstIdx].start, end: timed[firstIdx].start };
+  for (let k = lastIdx + 1; k < n; k++) timed[k] = { start: timed[lastIdx].end, end: timed[lastIdx].end };
+  let k = firstIdx;
+  while (k <= lastIdx) {
+    if (timed[k]) { k++; continue; }
+    let e = k; while (e <= lastIdx && !timed[e]) e++;
+    const from = timed[k - 1].end, to = timed[e].start;
+    const step = (to - from) / (e - k + 1);
+    for (let q = k; q < e; q++) timed[q] = { start: from + step * (q - k), end: from + step * (q - k + 1) };
+    k = e;
+  }
+  return timed;
+}
+
+// Group aligned words into readable cues, breaking at sentence ends and at a
+// max length so a line never overflows the frame.
+function cuesFromAlignedWords(scriptWords, timed, baseOffset, maxChars = 84) {
+  const cues = [];
+  let buf = [], start = null;
+  const flush = endIdx => {
+    if (!buf.length) return;
+    cues.push({
+      text: buf.join(' '),
+      start: baseOffset + start,
+      end:   baseOffset + timed[endIdx].end,
+    });
+    buf = []; start = null;
+  };
+  for (let i = 0; i < scriptWords.length; i++) {
+    if (start === null) start = timed[i].start;
+    buf.push(scriptWords[i]);
+    const endsSentence = /[.!?…]["'»”)]*$/.test(scriptWords[i]);
+    const tooLong = buf.join(' ').length >= maxChars;
+    if (endsSentence || tooLong) flush(i);
+  }
+  if (buf.length) flush(scriptWords.length - 1);
+  return cues;
+}
+
+// Real timings for one scene, or null when alignment is not possible.
+async function alignSceneNarration(narration, audioB64, mimeType, baseOffset) {
+  const text = cleanTextForTTS(narration);
+  const scriptWords = text.split(/\s+/).filter(Boolean);
+  if (scriptWords.length < 3) return null;
+  try {
+    const res = await fetch('/api/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ audioData: audioB64, mimeType }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error || !(data.words || []).length) return null;
+    const timed = alignWords(scriptWords, data.words);
+    if (!timed) return null;
+    return cuesFromAlignedWords(scriptWords, timed, baseOffset);
+  } catch (e) {
+    console.warn('Alineación falló:', e.message);
+    return null;
+  }
 }
 
 // Split narration into sentences and time them PROPORTIONALLY to length.
@@ -4433,14 +4546,24 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
           bin += String.fromCharCode.apply(null, wav.subarray(i, i + chunk));
         zip.file('audio_completo.wav', btoa(bin), { base64: true });
 
-        // SRT: ALL CAPS, synced to real audio offsets
+        // SRT: each scene is anchored to its measured audio offset. Inside the
+        // scene, use real per-word timings when forced alignment succeeds and
+        // fall back to proportional timing otherwise — per scene, so one
+        // failed alignment never degrades the whole file.
+        const exact = document.getElementById('exactSubs')?.checked !== false;
         const srtLines = [];
-        let cue = 1;
+        let cue = 1, aligned = 0, estimated = 0;
         for (const off of offsets) {
           const entry = audioEntries.find(e => e.idx === off.idx);
           if (!entry) continue;
           const sceneDur = off.end - off.start;
-          const timed = timeSentences(entry.narration, sceneDur, off.start);
+          let timed = null;
+          if (exact) {
+            btn.innerHTML = `<div class="spinner"></div> Alineando subtítulos ${off.idx + 1}/${offsets.length}...`;
+            timed = await alignSceneNarration(entry.narration, entry.data, entry.mime, off.start);
+          }
+          if (timed) aligned++;
+          else { timed = timeSentences(entry.narration, sceneDur, off.start); estimated++; }
           for (const t of timed) {
             srtLines.push(cue++);
             srtLines.push(`${toSrtTime(t.start)} --> ${toSrtTime(t.end)}`);
@@ -4449,6 +4572,8 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
           }
         }
         zip.file('subtitulos.srt', srtLines.join('\n'));
+        console.log(`Subtítulos: ${aligned} escenas alineadas al audio, ${estimated} estimadas`);
+        if (exact && aligned) showToast(`Subtítulos: ${aligned}/${aligned + estimated} escenas con timing exacto`, 'success');
       } catch(e) {
         console.warn('Audio combinado falló:', e);
         showToast('Audio combinado falló', 'error');
