@@ -588,6 +588,19 @@
       <button class="btn" id="btnGenerarMusica">🎼 Generar música del episodio</button>
       <div id="musicList" style="margin-top:12px"></div>
     </div>
+    <div class="card" style="margin-bottom:14px">
+      <h2>🎞️ Ensamblar video final</h2>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 12px;line-height:1.5">Une las imágenes (o los clips de Veo), la narración, la música y los subtítulos en un solo MP4, renderizado con ffmpeg en Google Cloud. Cada escena dura exactamente lo que dura su narración.</p>
+      <div id="assemblyStatus" style="font-size:12px;color:var(--text-dim);margin-bottom:10px">Comprobando disponibilidad…</div>
+      <label class="sg-chip selected" id="assemblyClipsChip" style="display:inline-flex;margin-bottom:10px"><input type="checkbox" id="assemblyUseClips" checked> 🎬 Usar clips de Veo cuando existan</label>
+      <div id="assemblyProgress" style="display:none;margin-bottom:10px">
+        <div class="progress-text" id="assemblyProgressText">Iniciando...</div>
+        <div class="progress"><div class="progress-bar" id="assemblyProgressBar" style="width:0%"></div></div>
+      </div>
+      <button class="btn" id="btnEnsamblar" disabled>🎞️ Ensamblar episodio</button>
+      <div id="assemblyResult" style="margin-top:12px"></div>
+    </div>
+
     <div class="card">
       <h2>📤 Exportar</h2>
       <p style="font-size:13px;color:var(--text-dim);margin:0 0 12px">Descarga todo el proyecto: <code>imagenes/</code>, <code>videos/</code>, <code>musica/</code>, <code>audio_completo.wav</code>, <code>subtitulos.srt</code>, <code>guion.txt</code> y <code>direccion_creativa.json</code>.</p>
@@ -4215,6 +4228,240 @@ document.getElementById('exactSubs')?.addEventListener('change', function() {
 });
 
 // ════════════════════════════════════════════════════════════════
+// FINAL ASSEMBLY
+//
+// Assets live in IndexedDB in the browser and the renderer runs on
+// Cloud Run, so they meet in the bucket: the browser uploads each
+// asset straight to GCS with a signed PUT URL, then sends a manifest
+// of object paths. Nothing large goes through a Vercel function.
+// ════════════════════════════════════════════════════════════════
+function b64ToBlob(b64, mime) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
+async function uploadAssets(items, onProgress) {
+  // items: [{ path, b64, mime }]
+  if (!items.length) return;
+  const res = await fetch('/api/upload-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paths: items.map(i => i.path) }),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || `upload-url ${res.status}`);
+
+  const byPath = new Map(data.urls.map(u => [u.path, u.url]));
+  let done = 0;
+  // Small concurrency: enough to be fast, low enough not to stall a phone.
+  const queue = [...items];
+  const worker = async () => {
+    while (queue.length) {
+      const it = queue.shift();
+      const url = byPath.get(it.path);
+      if (!url) throw new Error(`sin URL firmada para ${it.path}`);
+      const put = await fetch(url, { method: 'PUT', headers: { 'Content-Type': it.mime }, body: b64ToBlob(it.b64, it.mime) });
+      if (!put.ok) throw new Error(`subida falló (${put.status}) en ${it.path}`);
+      done++;
+      if (onProgress) onProgress(done, items.length);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, items.length) }, worker));
+}
+
+async function checkAssemblyAvailable() {
+  const el = document.getElementById('assemblyStatus');
+  const btn = document.getElementById('btnEnsamblar');
+  if (!el || !btn) return;
+  try {
+    const res = await fetch('/api/assemble');
+    const d = await res.json();
+    if (d.available) {
+      el.innerHTML = '✅ Servicio de ensamblaje disponible';
+      btn.disabled = false;
+    } else {
+      el.innerHTML = `⚠️ Servicio no configurado. ${d.hint || ''}`;
+      btn.disabled = true;
+    }
+  } catch (e) {
+    el.textContent = 'No se pudo comprobar el servicio de ensamblaje';
+    btn.disabled = true;
+  }
+}
+
+async function assembleEpisode() {
+  const btn  = document.getElementById('btnEnsamblar');
+  const prog = document.getElementById('assemblyProgress');
+  const bar  = document.getElementById('assemblyProgressBar');
+  const txt  = document.getElementById('assemblyProgressText');
+  const out  = document.getElementById('assemblyResult');
+  const setProg = (p, m) => { bar.style.width = p + '%'; txt.textContent = m; };
+
+  const scenes = (state.scenes || []).filter(s => s.narration);
+  if (!scenes.length) { showToast('Genera el episodio primero', 'error'); return; }
+
+  btn.disabled = true;
+  prog.style.display = 'block';
+  out.innerHTML = '';
+
+  try {
+    const useClips = document.getElementById('assemblyUseClips')?.checked !== false;
+    const epTag = `ep${state.currentEpisode || 1}`;
+    const prefix = `ensamblaje/${state.projectId}/${epTag}`;
+
+    // ─── 1. Collect what each scene contributes ───
+    setProg(3, 'Reuniendo material...');
+    const uploads = [];
+    const manifestScenes = [];
+    let missingAudio = 0;
+
+    for (const s of scenes) {
+      const entry = {};
+      const aud = await dbGet(sceneAudKey(s.id));
+      if (aud) {
+        const sep = aud.indexOf('|');
+        const mime = sep > 0 ? aud.slice(0, sep) : 'audio/wav';
+        const b64  = sep > 0 ? aud.slice(sep + 1) : aud;
+        entry.audio = `${prefix}/audio/${s.id}.wav`;
+        uploads.push({ path: entry.audio, b64, mime });
+      } else missingAudio++;
+
+      const clipUrl = useClips ? await dbGet(sceneVidKeyA(s.id)) : null;
+      if (clipUrl) {
+        // Clips already live in the bucket; pass the object path straight through.
+        const m = /storage\.googleapis\.com\/([^/]+)\/([^?]+)/.exec(clipUrl);
+        if (m) entry.clip = decodeURIComponent(m[2]);
+      }
+      if (!entry.clip) {
+        const img = await dbGet(sceneImgKeyA(s.id));
+        if (img) {
+          entry.image = `${prefix}/img/${s.id}.png`;
+          uploads.push({ path: entry.image, b64: img, mime: 'image/png' });
+        }
+      }
+      manifestScenes.push(entry);
+    }
+
+    if (missingAudio === scenes.length) throw new Error('Ninguna escena tiene narración generada');
+    if (missingAudio) showToast(`${missingAudio} escenas sin audio — se rellenan con 2s`, 'error');
+
+    // ─── 2. Music cues ───
+    const musicPaths = [];
+    for (const act of episodeActs()) {
+      const stored = await dbGet(musicKey(act));
+      if (!stored) continue;
+      const sep = stored.indexOf('|');
+      const mime = sep > 0 ? stored.slice(0, sep) : 'audio/wav';
+      const b64  = sep > 0 ? stored.slice(sep + 1) : stored;
+      const path = `${prefix}/music/${act}.wav`;
+      musicPaths.push(path);
+      uploads.push({ path, b64, mime });
+    }
+
+    // ─── 3. Subtitles, timed against the real audio ───
+    // Subtitles are the one optional layer here: if they cannot be built the
+    // episode still assembles without them, rather than losing the whole render.
+    setProg(8, 'Preparando subtítulos...');
+    let srt = '';
+    try {
+      srt = await buildEpisodeSrt(scenes, msg => setProg(10, msg));
+    } catch (e) {
+      console.warn('Subtítulos no generados:', e.message);
+      showToast('El video se ensambla sin subtítulos: ' + e.message, 'error');
+    }
+
+    // ─── 4. Upload ───
+    await uploadAssets(uploads, (d, t) => setProg(15 + Math.round((d / t) * 45), `Subiendo material ${d}/${t}...`));
+
+    // ─── 5. Render ───
+    setProg(62, 'Iniciando el render...');
+    const manifest = {
+      projectId: state.projectId,
+      aspectRatio: document.getElementById('aspectRatio')?.value || '9:16',
+      scenes: manifestScenes,
+      music: musicPaths,
+      srt,
+    };
+    const startRes = await fetch('/api/assemble', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ manifest }),
+    });
+    const start = await startRes.json();
+    if (!startRes.ok || start.error) throw new Error(start.error || `Ensamblaje ${startRes.status}`);
+
+    // ─── 6. Poll ───
+    let last = null;
+    for (let i = 0; i < 720; i++) {          // hasta 1 hora
+      await new Promise(r => setTimeout(r, 5000));
+      const r = await fetch('/api/assemble', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: start.jobId }),
+      });
+      last = await r.json();
+      if (!r.ok || last.error) throw new Error(last.error || `Estado ${r.status}`);
+      setProg(62 + Math.round((last.progress || 0) * 0.37), `Render: ${last.state}...`);
+      if (last.state === 'listo') break;
+    }
+    if (last?.state !== 'listo') throw new Error('El render no terminó a tiempo');
+
+    setProg(100, 'Listo');
+    out.innerHTML = `
+      <div style="background:rgba(100,220,100,0.08);border:1px solid rgba(100,220,100,0.3);border-radius:10px;padding:12px">
+        <div style="font-weight:600;margin-bottom:8px">✅ Episodio ensamblado${last.durationSeconds ? ` — ${Math.floor(last.durationSeconds / 60)}:${String(last.durationSeconds % 60).padStart(2, '0')}` : ''}</div>
+        <video controls playsinline style="width:100%;border-radius:8px;margin-bottom:8px" src="${last.url}"></video>
+        <a class="btn-sec" style="display:block;text-align:center;text-decoration:none" href="${last.url}" download>⬇️ Descargar MP4</a>
+      </div>`;
+    showToast('Video ensamblado 🎞️', 'success');
+  } catch (e) {
+    openErrorModal('Error al ensamblar', e.message);
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { prog.style.display = 'none'; }, 2500);
+  }
+}
+
+// Builds the episode SRT from the real audio: scene offsets come from the
+// measured durations, and inside each scene from forced alignment when it works.
+async function buildEpisodeSrt(scenes, onProgress) {
+  const entries = [];
+  for (const s of scenes) {
+    const aud = await dbGet(sceneAudKey(s.id));
+    if (!aud) continue;
+    const sep = aud.indexOf('|');
+    entries.push({
+      idx: entries.length,
+      mime: sep > 0 ? aud.slice(0, sep) : 'audio/wav',
+      data: sep > 0 ? aud.slice(sep + 1) : aud,
+      narration: s.narration,
+    });
+  }
+  if (!entries.length) return '';
+
+  const { offsets } = await combineAudiosToWav(entries);
+  const exact = document.getElementById('exactSubs')?.checked !== false;
+  const lines = [];
+  let cue = 1;
+  for (const off of offsets) {
+    const entry = entries.find(e => e.idx === off.idx);
+    if (!entry) continue;
+    if (onProgress) onProgress(`Subtítulos ${off.idx + 1}/${offsets.length}...`);
+    let timed = exact ? await alignSceneNarration(entry.narration, entry.data, entry.mime, off.start) : null;
+    if (!timed) timed = timeSentences(entry.narration, off.end - off.start, off.start);
+    for (const t of timed) {
+      lines.push(cue++, `${toSrtTime(t.start)} --> ${toSrtTime(t.end)}`, t.text.toUpperCase(), '');
+    }
+  }
+  return lines.join('\n');
+}
+
+document.getElementById('btnEnsamblar')?.addEventListener('click', assembleEpisode);
+document.getElementById('assemblyUseClips')?.addEventListener('change', function() {
+  document.getElementById('assemblyClipsChip')?.classList.toggle('selected', this.checked);
+});
+
+// ════════════════════════════════════════════════════════════════
 // EXPORT ZIP
 // ════════════════════════════════════════════════════════════════
 // Convert seconds to SRT timestamp format HH:MM:SS,mmm
@@ -4644,6 +4891,7 @@ function renderAll() {
   updateApiDot();
   applyDemoCompatibility();
   updateEpFormatNote();
+  checkAssemblyAvailable();
   renderAll();
 })();
 

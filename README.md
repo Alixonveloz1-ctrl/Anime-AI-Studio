@@ -13,6 +13,7 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 |Dirección        |Director creativo: biblia de serie, nota por capítulo, música|
 |Clips de video   |Veo 3.1 (`/api/video-start` + `/api/video-status`)          |
 |Subtítulos       |Alineados al audio real de cada escena (`/api/transcribe`)   |
+|Ensamblaje       |Cloud Run + ffmpeg (`cloud-run/`, vía `/api/assemble`)       |
 
 ## Características
 
@@ -24,8 +25,7 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 - Persistencia en localStorage + IndexedDB
 - Export ZIP: imágenes, videos, audios, música, subtítulos .srt y la dirección creativa
 - Subtítulos alineados palabra a palabra con el audio real (Speech-to-Text), con respaldo proporcional por escena
-
-> **Ensamblaje final:** el montaje del MP4 todavía no está en la app — el ZIP entrega todas las piezas ya sincronizadas para montarlas en un editor. Ver "Estado" al final.
+- Ensamblaje del MP4 final en la propia app: cada escena dura exactamente su narración, con música mezclada y subtítulos quemados
 
 ## Uso
 
@@ -35,7 +35,7 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 1. Genera las imágenes de las escenas
 1. Genera las voces
 1. Genera la música del episodio (una pista por acto)
-1. Exporta el ZIP con todo
+1. Ensambla el video final (MP4) o exporta el ZIP con todas las piezas
 
 ## Director creativo
 
@@ -73,6 +73,7 @@ Todo se genera con Google Cloud. No hay ningún project ID, bucket, modelo ni re
 |`VEO_MODEL`                 |`veo-3.1-lite-generate-001`        |
 |`MUSIC_MODEL`               |`lyria-002`                        |
 |`STT_MODEL` / `STT_LANGUAGE`|`latest_long` / `es-US`            |
+|`ASSEMBLY_SERVICE_URL`      |vacío — URL del servicio de Cloud Run|
 
 "Ver APIs configuradas" en la app muestra todos los valores resueltos y qué variable cambia cada uno.
 
@@ -108,11 +109,21 @@ Reglas de coherencia que aplica el código:
 - Kodomomuke (infantil) desactiva los subgéneros para adultos (Ecchi, Harem, Harem Inverso, Gore).
 - Harem y Harem Inverso son mutuamente excluyentes.
 
-## Estado
+## Ensamblaje final
 
-Ya funciona en la app: guion, personajes, escenarios, imágenes, voces, música, clips de video, subtítulos sincronizados y dirección creativa, todo exportable en un ZIP.
+El montaje del MP4 corre en un servicio propio de Cloud Run con ffmpeg (carpeta
+`cloud-run/`), porque Vercel corta las funciones a los 60 segundos y no puede
+sostener el render de un episodio de 16 minutos.
 
-Pendiente: el **ensamblaje final** en un único MP4 (imágenes/clips + narración + música + subtítulos quemados). Requiere un servicio con ffmpeg — Vercel no sirve para esto por el límite de 60s y el tamaño de los archivos.
+Se despliega una sola vez desde Cloud Shell:
+
+```bash
+cd cloud-run && ./deploy.sh mi-bucket-de-salida
+```
+
+y su URL va a Vercel como `ASSEMBLY_SERVICE_URL`. Ver `cloud-run/README.md`
+para el detalle. Mientras no esté configurado, la app lo indica y deja el botón
+deshabilitado en vez de fallar.
 
 ## Reglas estéticas
 

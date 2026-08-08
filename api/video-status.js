@@ -6,52 +6,7 @@
 // Edge Functions are deprecated on Vercel and hard-cap response-start
 // at 25s regardless of maxDuration.
 // ════════════════════════════════════════════════════════════════
-const crypto = require('crypto');
-const { cfg, loadServiceAccount, getAccessToken, vertexUrl, begin, fail } = require('./_lib/gcp');
-
-// ─── GCS V4 Signed URL — 7 days, works without public bucket ───
-async function generateSignedUrl(sa, bucket, objectPath, expiresSeconds = 604800) {
-  const now = new Date();
-  // Format: YYYYMMDDTHHMMSSZ
-  const datetime = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-  const date = datetime.slice(0, 8);
-
-  const credentialScope = `${date}/auto/storage/goog4_request`;
-  const credential = `${sa.client_email}/${credentialScope}`;
-
-  // Canonical query string (params must be sorted alphabetically)
-  const queryParams = [
-    `X-Goog-Algorithm=GOOG4-RSA-SHA256`,
-    `X-Goog-Credential=${encodeURIComponent(credential)}`,
-    `X-Goog-Date=${datetime}`,
-    `X-Goog-Expires=${expiresSeconds}`,
-    `X-Goog-SignedHeaders=host`,
-  ].join('&');
-
-  // Canonical request — path must include bucket for path-style GCS URLs
-  const canonicalRequest = [
-    'GET',
-    `/${bucket}/${objectPath}`,
-    queryParams,
-    `host:storage.googleapis.com`,
-    '',          // blank line after headers
-    'host',      // signed headers
-    'UNSIGNED-PAYLOAD',
-  ].join('\n');
-
-  // Hash canonical request (Node native — crypto.subtle is no longer imported)
-  const crHex = crypto.createHash('sha256').update(canonicalRequest).digest('hex');
-
-  // String to sign
-  const stringToSign = ['GOOG4-RSA-SHA256', datetime, credentialScope, crHex].join('\n');
-
-  // Sign with SA private key (Node native — same robust method, hex output)
-  const signer = crypto.createSign('RSA-SHA256');
-  signer.update(stringToSign);
-  const sigHex = signer.sign(sa.private_key, 'hex');
-
-  return `https://storage.googleapis.com/${bucket}/${objectPath}?${queryParams}&X-Goog-Signature=${sigHex}`;
-}
+const { cfg, loadServiceAccount, getAccessToken, vertexUrl, signedUrl, begin, fail } = require('./_lib/gcp');
 
 module.exports = async function handler(req, res) {
   if (begin(req, res)) return;
@@ -69,9 +24,9 @@ module.exports = async function handler(req, res) {
     // anyone who picked Veo Fast or Quality in the UI. The client echoes the
     // model back from /api/video-start; fall back to the configured default.
     const modelId = (model || '').trim() || cfg.veoModel;
-    const url = vertexUrl(pid, cfg.veoLocation, modelId, 'fetchPredictOperation');
+    const pollUrl = vertexUrl(pid, cfg.veoLocation, modelId, 'fetchPredictOperation');
 
-    const response = await fetch(url, {
+    const response = await fetch(pollUrl, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Goog-User-Project': pid },
       body: JSON.stringify({ operationName }),
@@ -113,9 +68,9 @@ module.exports = async function handler(req, res) {
     } catch(e) { console.warn('CORS patch:', e.message); }
 
     // Generate V4 Signed URL — 7 days, no public access needed
-    const signedUrl = await generateSignedUrl(sa, bucket, objPath, 604800);
+    const publicUrl = signedUrl(sa, bucket, objPath, { expiresSeconds: 604800 });
 
-    return res.status(200).json({ done: true, gcsUri, publicUrl: signedUrl });
+    return res.status(200).json({ done: true, gcsUri, publicUrl });
 
   } catch (e) {
     return fail(res, e);

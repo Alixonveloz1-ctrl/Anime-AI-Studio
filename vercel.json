@@ -23,6 +23,12 @@
     },
     "api/transcribe.js": {
       "maxDuration": 30
+    },
+    "api/assemble.js": {
+      "maxDuration": 30
+    },
+    "api/upload-url.js": {
+      "maxDuration": 30
     }
   }
 }

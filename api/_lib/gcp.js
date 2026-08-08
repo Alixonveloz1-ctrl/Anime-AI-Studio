@@ -57,6 +57,10 @@ const cfg = {
   get sttLanguage()    { return env('STT_LANGUAGE', 'es-US'); },
 
   get bucket()         { return env('GCS_OUTPUT_BUCKET', '').replace(/^gs:\/\//, '').replace(/\/+$/, ''); },
+
+  // Cloud Run ffmpeg service that assembles the final MP4. Empty until the
+  // service is deployed; the app reports it as unavailable instead of failing.
+  get assemblyUrl()    { return env('ASSEMBLY_SERVICE_URL', '').replace(/\/+$/, ''); },
 };
 
 // Per-model endpoint locations for image generation. Overridable wholesale
@@ -140,6 +144,75 @@ async function getAccessToken(sa) {
   return d.access_token;
 }
 
+// ─── GCS V4 signed URL ───
+// Works for GET (download) and PUT (direct browser upload), so large assets
+// never travel through a Vercel function.
+function signedUrl(sa, bucket, objectPath, { method = 'GET', expiresSeconds = 604800 } = {}) {
+  const now = new Date();
+  const datetime = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); // YYYYMMDDTHHMMSSZ
+  const date = datetime.slice(0, 8);
+
+  const credentialScope = `${date}/auto/storage/goog4_request`;
+  const credential = `${sa.client_email}/${credentialScope}`;
+
+  // Query params must be sorted alphabetically for the canonical request.
+  const queryParams = [
+    `X-Goog-Algorithm=GOOG4-RSA-SHA256`,
+    `X-Goog-Credential=${encodeURIComponent(credential)}`,
+    `X-Goog-Date=${datetime}`,
+    `X-Goog-Expires=${expiresSeconds}`,
+    `X-Goog-SignedHeaders=host`,
+  ].join('&');
+
+  // Path-style GCS URL, so the bucket is part of the canonical path.
+  const encodedPath = objectPath.split('/').map(encodeURIComponent).join('/');
+  const canonicalRequest = [
+    method,
+    `/${bucket}/${encodedPath}`,
+    queryParams,
+    `host:storage.googleapis.com`,
+    '',                 // blank line after headers
+    'host',             // signed headers
+    'UNSIGNED-PAYLOAD',
+  ].join('\n');
+
+  const crHex = crypto.createHash('sha256').update(canonicalRequest).digest('hex');
+  const stringToSign = ['GOOG4-RSA-SHA256', datetime, credentialScope, crHex].join('\n');
+
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(stringToSign);
+  const sigHex = signer.sign(sa.private_key, 'hex');
+
+  return `https://storage.googleapis.com/${bucket}/${encodedPath}?${queryParams}&X-Goog-Signature=${sigHex}`;
+}
+
+// ─── Google-signed ID token ───
+// Cloud Run is deployed private (--no-allow-unauthenticated); calling it needs
+// an ID token whose audience is the service URL, not an access token.
+async function getIdToken(sa, audience) {
+  const now = Math.floor(Date.now() / 1000);
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const payload = {
+    iss: sa.client_email, sub: sa.client_email, aud: sa.token_uri,
+    iat: now, exp: now + 3600,
+    target_audience: audience,
+  };
+  const signingInput = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64(payload)}`;
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(signingInput);
+  const sig = signer.sign(sa.private_key, 'base64')
+    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+  const r = await fetch(sa.token_uri, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${signingInput}.${sig}`,
+  });
+  const d = await r.json();
+  if (!d.id_token) throw new Error(`ID token: ${d.error_description || d.error || 'sin id_token'}`);
+  return d.id_token;
+}
+
 // Convenience: credentials + project + token in one call.
 async function auth() {
   const sa = loadServiceAccount();
@@ -183,7 +256,7 @@ function fail(res, e) {
 }
 
 module.exports = {
-  cfg, imageModelLocation, imageModelLocations,
+  cfg, imageModelLocation, imageModelLocations, signedUrl, getIdToken,
   ConfigError, loadServiceAccount, getAccessToken, auth,
   vertexUrl, CORS, begin, fail,
 };
