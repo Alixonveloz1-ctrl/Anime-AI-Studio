@@ -668,6 +668,7 @@ function initDB() {
 function dbSet(k, v) { return new Promise((res, rej) => { const tx = db.transaction('blobs','readwrite'); tx.objectStore('blobs').put(v, k); tx.oncomplete = res; tx.onerror = rej; }); }
 function dbGet(k)    { return new Promise((res, rej) => { const tx = db.transaction('blobs','readonly'); const r = tx.objectStore('blobs').get(k); r.onsuccess = () => res(r.result || null); r.onerror = rej; }); }
 function dbDel(k)    { return new Promise(res => { const tx = db.transaction('blobs','readwrite'); tx.objectStore('blobs').delete(k); tx.oncomplete = res; }); }
+function dbKeys()    { return new Promise((res, rej) => { const tx = db.transaction('blobs','readonly'); const r = tx.objectStore('blobs').getAllKeys(); r.onsuccess = () => res(r.result || []); r.onerror = rej; }); }
 
 const charImgKey   = id => `ci_${state.projectId}_${id}`;
 const sceneImgKey  = id => `si_${state.projectId}_${id}`;
@@ -684,6 +685,39 @@ const sceneVidKeyA = id => `sva_${state.projectId}${epSfx()}_${id}`;
 // existed are still found.
 const sceneVidKeyBy = (id, slot) => slot === 'A' ? sceneVidKeyA(id)
   : `sv${slot.toLowerCase()}_${state.projectId}${epSfx()}_${id}`;
+
+// Every stored file belonging to ONE episode of this project: the shot images,
+// the narration, the clips and the music.
+//
+// Careful with episode 1: its keys have no episode suffix (they predate
+// multi-episode), so its prefix `sia_<proj>_` also matches `sia_<proj>_ep2_s1`.
+// Anything that looks like another episode has to be excluded by hand.
+const MEDIA_TIPOS = ['sia', 'sib', 'sic', 'sa', 'sva', 'svb', 'svc', 'mus'];
+function esDeEsteEpisodio(k) {
+  if (typeof k !== 'string') return false;
+  const sfx = epSfx();                       // '' en el episodio 1, '_ep2' en el 2
+  for (const t of MEDIA_TIPOS) {
+    const pre = `${t}_${state.projectId}_`;
+    if (!k.startsWith(pre)) continue;
+    const resto = k.slice(pre.length);
+    return sfx ? resto.startsWith(`${sfx.slice(1)}_`) : !/^ep\d+_/.test(resto);
+  }
+  return false;
+}
+
+async function materialDelEpisodio() {
+  if (!db || !state.projectId) return [];
+  return (await dbKeys()).filter(esDeEsteEpisodio);
+}
+
+// Scene ids are positional (s1..sN) and every media key is built from them, so
+// a regenerated episode would inherit the previous story's images, voices and
+// clips — new narration under old pictures, silently. Regenerating clears them.
+async function borrarMaterialDelEpisodio() {
+  const claves = await materialDelEpisodio();
+  for (const k of claves) await dbDel(k);
+  return claves.length;
+}
 
 // The shots a scene actually has. The director decides the count, so this reads
 // it from the prompts it wrote; a slot with an image already generated stays in
@@ -2060,6 +2094,19 @@ function renderUniverse() {
 document.getElementById('btnGenerarEpisodio').addEventListener('click', async () => {
   if (!state.universe) { showToast('Crea un universo primero', 'error'); return; }
   const epNum = state.currentEpisode || 1;   // ← define early, used throughout
+
+  // Regenerating writes a NEW story over the same scene ids, so the old
+  // episode's images, voices, clips and music would stay attached to it — new
+  // narration under old pictures. Say so before starting, and clear them once
+  // the new scenes exist (not before: a failed generation must lose nothing).
+  const materialViejo = await materialDelEpisodio();
+  if (materialViejo.length && !confirm(
+      `El Episodio ${epNum} ya tiene ${materialViejo.length} archivo(s) generados ` +
+      `(imágenes, voces, videos y música).\n\n` +
+      `Volver a generarlo escribe una historia distinta, así que ese material dejaría de ` +
+      `corresponderle y se borrará.\n\n` +
+      `El universo, los personajes y sus imágenes NO se tocan.\n\n¿Seguir?`)) return;
+
   const btn = document.getElementById('btnGenerarEpisodio');
   const progress = document.getElementById('epProgress');
   const progressText = document.getElementById('epProgressText');
@@ -2756,6 +2803,15 @@ Responde SOLO JSON válido sin markdown`;
     } else {
       scenes = scenesNoImg.map(s => ({ ...s, escenario: '', imagePromptA: '', imagePromptB: '', imagePromptC: '' }));
     }
+
+    // The new story is written: now the old episode's material can go. Doing it
+    // here and not up front means a generation that fails loses nothing.
+    if (materialViejo.length) {
+      setProg(96, 'Limpiando el material del episodio anterior...');
+      const borrados = await borrarMaterialDelEpisodio();
+      if (borrados) showToast(`${borrados} archivo(s) del episodio anterior borrados`, 'success');
+    }
+    audioSecCache.clear();   // las duraciones medidas eran de la historia vieja
 
     state.scenes = scenes;
     state.episodes[epNum] = scenes;

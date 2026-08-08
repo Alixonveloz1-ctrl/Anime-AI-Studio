@@ -229,3 +229,16 @@ se lee de `error.txt`, porque Cloud Run solo sabe decir "exit code N".
 - Proporciones humanas realistas
 - NO render 3D, NO CGI, NO Disney/Pixar, NO webtoon plano, NO chibi
 - Personajes 18+ (excepto en la demografía Kodomomuke)
+
+## Regenerar un episodio
+
+Los ids de escena son posicionales (`s1`…`sN`) y todas las claves de material se
+construyen con ellos, así que volver a generar un episodio dejaría la imagen, la
+voz y el clip de la escena 1 vieja colgando de la escena 1 nueva — narración
+nueva debajo de dibujos viejos, sin avisar.
+
+Por eso el botón **avisa antes** (diciendo cuántos archivos se pierden) y borra
+ese material una vez escrita la historia nueva — nunca antes, para que una
+generación que falle no se lleve nada por delante. Se borra solo lo de **ese**
+episodio: el universo, los personajes, sus imágenes, los escenarios y los demás
+episodios quedan intactos.
