@@ -17,7 +17,8 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 
 ## Características
 
-- Duración configurable: 15 / 24 / 36 / 48 escenas (~5 a ~16 min), 3 imágenes por escena
+- Duración configurable: 15 / 24 / 36 / 48 escenas (~5 a ~16 min)
+- El director decide cuántos planos necesita cada escena (1, 2 o 3) — no se generan imágenes de relleno
 - Los episodios largos se escriben acto por acto, encadenando el texto ya escrito
 - Multi-episodio con continuidad de personajes y escenarios
 - Escenarios extraídos de la historia y reutilizados entre episodios
@@ -26,6 +27,7 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 - Export ZIP: imágenes, videos, audios, música, subtítulos .srt y la dirección creativa
 - Subtítulos alineados palabra a palabra con el audio real (Speech-to-Text), con respaldo proporcional por escena
 - Ensamblaje del MP4 final en la propia app: cada escena dura exactamente su narración, con música mezclada y subtítulos quemados
+- Export ZIP con todo el material por si prefieres montar fuera
 
 ## Uso
 
@@ -44,6 +46,7 @@ Cada proyecto lo dirige un director creativo especializado en anime, que trabaja
 1. **Biblia de serie** — se escribe al crear el universo: dirección visual (paleta y luz concretas), identidad musical, regla de ritmo, motivos recurrentes, reglas de oro y arco de temporada. Se inyecta en todos los prompts posteriores.
 2. **Nota de capítulo** — antes de escribir cada episodio: qué debe lograr en el arco, curva emocional, imagen clave y qué queda abierto.
 3. **Dirección musical** — el brief de cada pista, a partir de la identidad musical y de lo que ocurre en cada acto.
+4. **Desglose de planos** — cuántas imágenes necesita cada escena. Una conversación estática es UN plano; solo se abren dos o tres cuando hay beats visuales realmente distintos. Un cambio de ángulo no cuenta como beat.
 
 El director **no puede cambiar el género**: recibe el mismo contrato de fidelidad que el resto del pipeline y su trabajo es hacer que ese género se sienta excelente, no reinterpretarlo. Puedes regenerar la biblia desde la pantalla de Universo.
 

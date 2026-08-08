@@ -2579,15 +2579,24 @@ Cierre: resolución parcial + gancho claro hacia el próximo episodio.`}
     // which caused scene 10 to repeat scene 5 in an earlier attempt). ───
     setProg(70, 'Paso 5/5: Generando descripciones visuales...');
 
-    const imageSysPrompt = `Eres un director de arte para anime/manhua. Tu única tarea: para cada escena, escribir TRES prompts de imagen en inglés basados en la narración YA ESCRITA — no inventas historia nueva, solo describes visualmente lo que ya ocurre.
+    const imageSysPrompt = `Eres el DIRECTOR DE FOTOGRAFÍA de este anime. Tu tarea: decidir CUÁNTOS PLANOS necesita cada escena y escribir sus prompts de imagen en inglés, basados en la narración YA ESCRITA — no inventas historia nueva, solo decides el desglose visual de lo que ya ocurre.
 
-LOS 3 PROMPTS DE CADA ESCENA SON 3 MOMENTOS DISTINTOS de la escena (3 fotogramas clave consecutivos, NUNCA 3 versiones del mismo instante):
-- Primero dividí mentalmente la narración de la escena en sus BEATS: los eventos/acciones distintos que el texto cuenta, en orden. Prompt 1 = primer beat, Prompt 2 = beat intermedio, Prompt 3 = beat final (la consecuencia o revelación con la que cierra el fragmento).
-- ⚠️ COBERTURA TOTAL: entre los 3 quedan ilustrados TODOS los eventos del texto en orden cronológico. Si la narración cuenta dos acciones (ej.: repara el grifo Y cuenta los granos de arroz del frasco), los prompts las REPARTEN — PROHIBIDO gastar los 3 prompts en la misma acción. Solo si el texto narra UNA única acción, los 3 la muestran en fases distintas (inicio → durante → resultado) — y esas fases deben ser ESTADOS VISUALMENTE DISTINTOS (posición del cuerpo, estado de los objetos, distancia entre personajes cambian entre las 3); PROHIBIDO que sean la misma pose vista desde 3 ángulos.
+⚠️ DECISIÓN 1 — CUÁNTOS PLANOS (esto es lo más importante):
+Contá los BEATS VISUALES REALES de la narración: momentos que se ven DISTINTOS entre sí (cambia la posición de alguien, el estado de un objeto, quién está presente, o el lugar).
+- 1 PLANO si la escena es UN solo momento sostenido: una conversación en la que nadie se mueve, un personaje reflexionando, una sola acción continua sin cambio visible. La mayoría de escenas de diálogo estático son de UN plano.
+- 2 PLANOS si hay dos beats claros: acción → reacción, o llegada → descubrimiento.
+- 3 PLANOS solo si hay tres eventos visualmente distintos de verdad.
+
+🚫 PROHIBIDO RELLENAR: si no podés escribir dos planos que se vean CLARAMENTE distintos, devolvé UNO. Un plano de más que repite el anterior no aporta nada, cuesta una generación y arruina el video. Es MEJOR una escena de 1 plano bien elegido que 3 casi idénticos.
+Un cambio de ángulo de cámara NO es un beat. Si lo único que cambiaría entre dos planos es dónde está la cámara, es UN plano.
+
+⚠️ DECISIÓN 2 — QUÉ MUESTRA CADA PLANO (cuando hay más de uno):
+- Los planos son momentos CONSECUTIVOS: prompt 1 = primer beat, y el último = la consecuencia o revelación con la que cierra el fragmento.
+- COBERTURA TOTAL: entre todos quedan ilustrados los eventos del texto en orden cronológico. Si la narración cuenta dos acciones (ej.: repara el grifo Y cuenta los granos de arroz), los planos las REPARTEN — PROHIBIDO gastar varios planos en la misma acción.
 - ⚠️ CAUSALIDAD ESTRICTA — cada prompt describe SOLO el estado del mundo en SU momento: lo que se revela DESPUÉS no puede verse ANTES (si todavía no abrió la puerta, el interior, el cuerpo o la sangre NO son visibles en ese prompt; si todavía no agarró el frasco, no lo tiene en la mano). Y lo ya ocurrido NO se deshace (si la puerta ya se abrió en el beat 2, en el beat 3 sigue abierta).
 - LA POSICIÓN AVANZA: si el texto dice que el personaje se mueve (entra, cruza, se agacha, sale, llega a otra parte del lugar), el prompt de ese beat lo muestra YA en la nueva posición con la acción completada — ej.: beat "gira el pomo y entra" → el prompt lo muestra DENTRO de la habitación con la puerta abierta detrás de él viendo lo que hay, NO tocando la puerta otra vez.
-- CONTINUIDAD OBLIGATORIA entre los 3: MISMO escenario asignado, MISMA ropa y peinado de cada personaje, MISMA iluminación y clima. Lo que SÍ cambia entre los 3: la acción (avanza), la posición de los personajes en el espacio, el estado de los objetos según el texto, y el ÁNGULO de cámara — los 3 encuadres deben ser claramente distintos entre sí, y el ángulo se elige al servicio de cada beat (no uses una plantilla fija).
-- CONTINUIDAD ENTRE ESCENAS: el prompt 1 de cada escena CONTINÚA desde donde quedó el prompt 3 de la escena anterior — las 45 imágenes del episodio son UNA secuencia visual continua de la misma historia, no ilustraciones sueltas. Si la escena anterior terminó en un lugar y esta empieza en otro, el prompt 1 muestra la llegada/transición natural.
+- CONTINUIDAD OBLIGATORIA entre los planos de una escena: MISMO escenario asignado, MISMA ropa y peinado de cada personaje, MISMA iluminación y clima. Lo que SÍ cambia: la acción (avanza), la posición de los personajes en el espacio, el estado de los objetos según el texto, y el ÁNGULO de cámara — los encuadres deben ser claramente distintos entre sí, y el ángulo se elige al servicio de cada beat (no uses una plantilla fija).
+- CONTINUIDAD ENTRE ESCENAS: el primer prompt de cada escena CONTINÚA desde donde quedó el último prompt de la escena anterior — las 45 imágenes del episodio son UNA secuencia visual continua de la misma historia, no ilustraciones sueltas. Si la escena anterior terminó en un lugar y esta empieza en otro, el prompt 1 muestra la llegada/transición natural.
 - INTEGRACIÓN FÍSICA: el personaje está DENTRO del espacio — interactuando con muebles y objetos, con sombras e iluminación coherentes con el lugar. NUNCA debe verse como un personaje pegado sobre un fondo.
 - CÁMARA LIBRE EN EL LUGAR: a lo largo del episodio mostrá el MISMO lugar desde posiciones y ángulos DIFERENTES (desde la puerta, desde la ventana, ángulo bajo, over-shoulder, rincones distintos) — no repitas siempre el mismo encuadre del escenario.
 - VESTIMENTA FIEL AL MUNDO: la ropa de cada personaje conserva el material y la CONDICIÓN de su ficha (basta, desteñida, con parches si es pobre) — nunca la embellezcas ni la conviertas en ropa elegante que la historia no justifica.
@@ -2603,7 +2612,7 @@ REGLAS DE CADA PROMPT:
 - NUNCA decir solo "the protagonist" o "a man" — SIEMPRE el nombre real
 - Si 2+ personajes en la escena: "Scene with Kenji and Ayame:" y describir apariencia de cada uno
 - Máximo 3 personajes por imagen
-- TODOS LOS PRESENTES APARECEN: si la narración tiene 2+ personajes presentes en el lugar, el prompt 1 (plano amplio) los muestra a TODOS juntos interactuando; los prompts 2-3 pueden acercarse a uno, pero los demás siguen visibles en el encuadre o en segundo plano. Un personaje presente NUNCA desaparece del lugar entre las 3 imágenes de la misma escena.
+- TODOS LOS PRESENTES APARECEN: si la narración tiene 2+ personajes presentes en el lugar, el primer plano (amplio) los muestra a TODOS juntos interactuando; los siguientes pueden acercarse a uno, pero los demás siguen visibles en el encuadre o en segundo plano. Un personaje presente NUNCA desaparece del lugar entre los planos de la misma escena.
 - PRESENCIA CONTINUA: cuando un fragmento se enfoca en las acciones o diálogos de UN personaje, el protagonista y cualquier otro personaje ya presentes en el lugar SIGUEN AHÍ — inclúyelos por su nombre en los prompts, salvo que la narración diga explícitamente que salieron.
 - PERMANENCIA ENTRE ESCENAS: si escenas consecutivas ocurren en el MISMO escenario y la narración no dice que alguien se fue, los MISMOS personajes siguen presentes en todas — NUNCA alternes mostrando a uno por escena.
 - ESCALA Y PROPORCIÓN: proporción humana correcta del personaje respecto a muebles y espacio — un adulto de pie tendría espacio libre sobre la cabeza (el techo NO justo encima). Mantené el tamaño real del escenario; no comprimas el espacio ni encajones al personaje.\n- CRÍTICO: el personaje NUNCA mira a la cámara. Describe la acción que está haciendo según la narración. Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"
@@ -2621,7 +2630,7 @@ Responde SOLO JSON válido sin markdown`;
       const scenesText = scenesForPrompt.map(s =>
         `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`
       ).join('\n\n');
-      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTINUIDAD — ASÍ TERMINÓ LA ESCENA ANTERIOR A ESTE BLOQUE (el prompt 1 de la primera escena de abajo continúa desde aquí):\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena, genera el campo "escenario" + TRES prompts secuenciales con continuidad:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","prompts":["Scene with...","Scene with...","Scene with..."]},...]} con exactamente ${scenesForPrompt.length} objetos, uno por cada número de escena de arriba, cada uno con exactamente 3 prompts.`;
+      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTINUIDAD — ASÍ TERMINÓ LA ESCENA ANTERIOR A ESTE BLOQUE (el prompt 1 de la primera escena de abajo continúa desde aquí):\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena, genera el campo "escenario" + TRES prompts secuenciales con continuidad:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"prompts":["Scene with..."]},...]} con exactamente ${scenesForPrompt.length} objetos, uno por cada número de escena de arriba. "planos" es cuántos necesita ESA escena (1, 2 o 3) y "prompts" lleva exactamente esa cantidad.`;
 
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
@@ -3050,6 +3059,11 @@ async function renderScenes() {
   c.innerHTML = items.map(({ s, imgA, imgB, imgC, audData, vidUrl }) => {
     const pad = String(s.num).padStart(2,'0');
     const escName = (u.escenarios || []).find(e => e.id === s.escenario)?.name || '';
+    // Only the shots the director decided this scene needs. An already
+    // generated image keeps its slot visible so nothing disappears from an
+    // episode made before the count became a decision.
+    const slots = ['A','B','C'].filter((sl, i) =>
+      s['imagePrompt' + sl] || [imgA, imgB, imgC][i] || sl === 'A');
     const slotCell = (slot, img) => {
       const numLbl = slot === 'A' ? '1' : slot === 'B' ? '2' : '3';
       return `
@@ -3057,7 +3071,7 @@ async function renderScenes() {
         <div class="scene-img" style="aspect-ratio:${cssRatio};overflow:hidden;min-height:0;margin-bottom:0;position:relative;${img ? 'cursor:zoom-in' : ''}"${img ? ` onclick="openImageFullscreen('${s.id}','${slot}')"` : ''}>
           ${img
             ? `<img src="data:image/png;base64,${img}" style="width:100%;height:100%;object-fit:contain;display:block;background:#000"><div class="img-zoom-badge">🔍</div>`
-            : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim)">Sin imagen ${slot}</div>`}
+            : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim)">Plano ${numLbl}</div>`}
         </div>
         <button class="btn-sec" style="font-size:10px;padding:3px 4px;min-width:0" onclick="generateSceneImageAB('${s.id}','${slot}')">${img ? '🔄' : '🖼️'} ${numLbl}</button>
       </div>`;
@@ -3073,11 +3087,11 @@ async function renderScenes() {
         </div>
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:4px">
-        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;width:100%">
-          ${slotCell('A', imgA)}${slotCell('B', imgB)}${slotCell('C', imgC)}
+        <div style="display:grid;grid-template-columns:repeat(${slots.length},minmax(0,1fr));gap:4px;width:100%">
+          ${slots.map(sl => slotCell(sl, sl === 'A' ? imgA : sl === 'B' ? imgB : imgC)).join('')}
         </div>
         <div style="display:flex;gap:4px;justify-content:center">
-          <button class="btn-sec" style="font-size:11px;padding:4px 8px;flex:1" onclick="generateSceneImage('${s.id}')">🖼️ ${(imgA||imgB||imgC) ? 'Regenerar 3' : 'Generar 3'}</button>
+          <button class="btn-sec" style="font-size:11px;padding:4px 8px;flex:1" onclick="generateSceneImage('${s.id}')">🖼️ ${(imgA||imgB||imgC) ? 'Regenerar' : 'Generar'} ${slots.length}</button>
           <button id="btnVid_${s.id}_A" class="btn-sec" style="font-size:11px;padding:4px 8px;flex:1;border-color:rgba(0,229,255,0.3);color:var(--accent2)"
             onclick="generateSceneVideo('${s.id}','A')">🎬 ${vidUrl ? 'Regenerar' : 'Video'}</button>
         </div>
@@ -3902,8 +3916,10 @@ RULES:
     if (needsImageOnlyIdx.length) {
       btn.innerHTML = `<div class="spinner"></div> Generando ${needsImageOnlyIdx.length} descripciones visuales...`;
 
-      const imageSys = `Eres un director de arte para anime/manhua. Para cada escena escribe TRES prompts de imagen en inglés (secuencia continua: momento inicial → desarrollo → cierre del fragmento), basados en la narración ya escrita — no inventas historia nueva. Entre los 3 prompts deben cubrir TODO lo que el texto de la escena narra, en orden cronológico. Los 3 prompts de una escena: MISMO lugar, MISMA ropa/peinado de cada personaje, solo cambia la acción que avanza y el ángulo de cámara. También asigna el campo "escenario" con el id exacto del escenario del universo donde ocurre la escena — si el lugar no está en la lista, deja "escenario" como "" y describe ese lugar dentro de los prompts (nunca asignes un escenario incorrecto).
-REGLAS: SIEMPRE en inglés. Cada prompt empieza con "${ANIME_STYLE_LEAD_IN} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello con material y condición fieles a su ficha y a la economía del mundo (sin embellecer). Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. Si 2+ personajes están presentes en la escena, TODOS aparecen: el prompt 1 los muestra juntos; los prompts 2-3 pueden enfocar a uno pero los demás siguen visibles. Cuando el texto se enfoca en un personaje, el protagonista y los demás ya presentes SIGUEN en el lugar — inclúyelos por nombre salvo que la narración diga que salieron. Entre escenas consecutivas en el mismo escenario los personajes permanecen presentes salvo que la narración los saque. Los 3 prompts de cada escena son 3 MOMENTOS consecutivos que cubren TODO el fragmento en orden — nunca 3 versiones del mismo instante; cada prompt muestra SOLO lo visible en su momento (nada revelado después puede verse antes) y si el texto dice que el personaje entra o se mueve, ese prompt YA lo muestra en la nueva posición. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.${repairEcchi ? `
+      const imageSys = `Eres el director de fotografía de este anime. Para cada escena decidí CUÁNTOS PLANOS necesita (1, 2 o 3) y escribí sus prompts en inglés, basados en la narración ya escrita — no inventás historia nueva.
+⚠️ CUÁNTOS PLANOS: contá los beats visuales REALES (cambia la posición de alguien, el estado de un objeto, quién está presente o el lugar). Una conversación estática o una sola acción continua = 1 PLANO. Un cambio de ángulo NO es un beat. PROHIBIDO rellenar: si dos planos no se verían claramente distintos, devolvé uno solo.
+Cuando hay más de uno son momentos consecutivos que cubren TODO lo que el texto narra, en orden. Todos los planos de una escena: MISMO lugar, MISMA ropa/peinado de cada personaje; solo cambia la acción que avanza y el ángulo de cámara. También asigna el campo "escenario" con el id exacto del escenario del universo donde ocurre la escena — si el lugar no está en la lista, deja "escenario" como "" y describe ese lugar dentro de los prompts (nunca asignes un escenario incorrecto).
+REGLAS: SIEMPRE en inglés. Cada prompt empieza con "${ANIME_STYLE_LEAD_IN} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello con material y condición fieles a su ficha y a la economía del mundo (sin embellecer). Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. Si 2+ personajes están presentes en la escena, TODOS aparecen: el prompt 1 los muestra juntos; los prompts 2-3 pueden enfocar a uno pero los demás siguen visibles. Cuando el texto se enfoca en un personaje, el protagonista y los demás ya presentes SIGUEN en el lugar — inclúyelos por nombre salvo que la narración diga que salieron. Entre escenas consecutivas en el mismo escenario los personajes permanecen presentes salvo que la narración los saque. Los planos de cada escena son momentos consecutivos que cubren TODO el fragmento en orden — nunca dos versiones del mismo instante; cada prompt muestra SOLO lo visible en su momento (nada revelado después puede verse antes) y si el texto dice que el personaje entra o se mueve, ese prompt YA lo muestra en la nueva posición. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.${repairEcchi ? `
 ECCHI ACTIVO — LENGUAJE VISUAL: TODOS los personajes son ADULTOS (18 en adelante, cada uno con su edad adulta según su rol), en contextos adultos acordes al género — jamás uniformes escolares ni aulas, nada que sugiera menores. Usa lenguaje de cámara ecchi cuando la escena lo permita: "low angle shot revealing her thighs", "form-fitting dress emphasizing her shape", "wet shirt clinging to her figure", "hourglass silhouette", "long slender legs", "curvy figure" — sensual y sugerente, sin desnudez explícita.` : ''}
 Responde SOLO JSON válido sin markdown`;
 
@@ -3913,7 +3929,7 @@ Responde SOLO JSON válido sin markdown`;
 
       const scenesToDescribe = needsImageOnlyIdx.map(idx => state.scenes[idx]);
       const scenesText = scenesToDescribe.map(s => `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`).join('\n\n');
-      const imgPrompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${repairScenarioList}\n\nESCENAS YA ESCRITAS:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","prompts":["Scene with...","Scene with...","Scene with..."]}]} con exactamente ${scenesToDescribe.length} objetos, cada uno con exactamente 3 prompts.`;
+      const imgPrompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${repairScenarioList}\n\nESCENAS YA ESCRITAS:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"prompts":["Scene with..."]}]} con exactamente ${scenesToDescribe.length} objetos. "planos" es cuántos necesita esa escena (1, 2 o 3) y "prompts" lleva exactamente esa cantidad.`;
 
       let imgMap = new Map();
       for (let attempt = 0; attempt < 3; attempt++) {
