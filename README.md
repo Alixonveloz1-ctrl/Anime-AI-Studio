@@ -13,7 +13,7 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 |Dirección        |Director creativo: biblia de serie, nota por capítulo, música|
 |Clips de video   |Veo 3.1 (`/api/video-start` + `/api/video-status`)          |
 |Subtítulos       |Alineados al audio real de cada escena (`/api/transcribe`)   |
-|Ensamblaje       |Cloud Run + ffmpeg (`cloud-run/`, vía `/api/assemble`)       |
+|Ensamblaje       |Cloud Run Job `diezmo-montaje` (ya desplegado) vía `/api/assemble`|
 
 ## Características
 
@@ -73,7 +73,8 @@ Todo se genera con Google Cloud. No hay ningún project ID, bucket, modelo ni re
 |`VEO_MODEL`                 |`veo-3.1-lite-generate-001`        |
 |`MUSIC_MODEL`               |`lyria-002`                        |
 |`STT_MODEL` / `STT_LANGUAGE`|`latest_long` / `es-US`            |
-|`ASSEMBLY_SERVICE_URL`      |vacío — URL del servicio de Cloud Run|
+|`MONTAJE_JOB`               |`diezmo-montaje`                   |
+|`MONTAJE_REGION`            |`us-central1`                      |
 
 "Ver APIs configuradas" en la app muestra todos los valores resueltos y qué variable cambia cada uno.
 
@@ -111,19 +112,30 @@ Reglas de coherencia que aplica el código:
 
 ## Ensamblaje final
 
-El montaje del MP4 corre en un servicio propio de Cloud Run con ffmpeg (carpeta
-`cloud-run/`), porque Vercel corta las funciones a los 60 segundos y no puede
-sostener el render de un episodio de 16 minutos.
+El montaje del MP4 lo hace el **Cloud Run Job que ya está desplegado en esta
+cuenta** (`diezmo-montaje`). No hay que desplegar nada nuevo: ese contenedor es
+genérico — baja un encargo del bucket y ejecuta el script de ffmpeg que la app
+deja ahí. Toda la lógica de render vive en `buildMontarScript()` en la app, así
+que cambiar cómo se ve un episodio no requiere volver a desplegar nada.
 
-Se despliega una sola vez desde Cloud Shell:
+Flujo:
 
-```bash
-cd cloud-run && ./deploy.sh mi-bucket-de-salida
+```
+navegador ──PUT firmado──▶ GCS ◀──baja── Cloud Run Job (ffmpeg)
+    │                                          │
+    └──encargo──▶ /api/assemble ──:run─────────┘
+                   (Vercel)                    │
+                                     MP4 ──▶ GCS ──▶ URL firmada
 ```
 
-y su URL va a Vercel como `ASSEMBLY_SERVICE_URL`. Ver `cloud-run/README.md`
-para el detalle. Mientras no esté configurado, la app lo indica y deja el botón
-deshabilitado en vez de fallar.
+El encargo que se deja en `gs://<bucket>/anime-studio/<proyecto>/ep<NN>/` es:
+`hoja.json`, `montar.sh`, `descargas.txt` (TSV origen→nombre local) y un
+`error.txt` vacío. El job se lanza con `TRABAJO`, `PREFIJO` y `SALIDA`.
+
+Cada escena dura exactamente su narración (medida con ffprobe). Los clips de Veo
+ya están en el bucket, así que se referencian en su sitio en vez de bajarlos y
+volverlos a subir desde el teléfono. Si el render falla, el motivo real se lee
+de `error.txt`, porque Cloud Run solo sabe decir "exit code N".
 
 ## Reglas estéticas
 

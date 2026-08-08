@@ -2,10 +2,10 @@
 // UPLOAD URL — mints V4 signed PUT URLs so the browser uploads the
 // episode's assets straight to GCS.
 //
-// An episode can carry 144 images plus audio, music and clips. None
-// of that can travel through a Vercel function (body limits, 60s),
-// so the browser uploads directly and the assembly service reads the
-// objects from the bucket with its own identity.
+// An episode can carry 144 images plus audio, music and subtitles.
+// None of that can travel through a Vercel function (body limits,
+// 60s), so the browser uploads directly and the Cloud Run job reads
+// the objects from the bucket with its own identity.
 // ════════════════════════════════════════════════════════════════
 const { cfg, loadServiceAccount, signedUrl, begin, fail } = require('./_lib/gcp');
 
@@ -16,7 +16,7 @@ function safePath(p) {
     .replace(/^\/+/, '')
     .replace(/\.\./g, '')
     .replace(/[^\w./-]/g, '_');
-  return clean.startsWith('ensamblaje/') ? clean : null;
+  return clean.startsWith('anime-studio/') ? clean : null;
 }
 
 module.exports = async function handler(req, res) {

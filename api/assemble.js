@@ -1,81 +1,143 @@
 // ════════════════════════════════════════════════════════════════
-// ASSEMBLE — authenticated proxy to the Cloud Run ffmpeg service.
+// ASSEMBLE — launches the Cloud Run JOB that renders the final MP4.
 //
-// The service is deployed private, so it is reached with a Google
-// signed ID token minted from the same GCP_SERVICE_ACCOUNT. Proxying
-// through here also keeps the service URL and CORS out of the
-// browser's problem space.
+// It reuses the montador already deployed in this Google Cloud
+// account (the one DIEZMO uses). That container carries nothing
+// project-specific: it downloads a job folder from the bucket and
+// runs whatever ffmpeg script the app put there. So the render logic
+// lives here, and nothing new has to be deployed.
 //
-// The render itself runs in the background on Cloud Run: this
-// endpoint only starts a job and reports its status, so it never
-// approaches Vercel's function timeout.
+// Contract expected by the container (montaje/montar.sh):
+//   gs://<bucket>/<carpeta>/hoja.json      the spec, for the record
+//   gs://<bucket>/<carpeta>/montar.sh      the ffmpeg script it runs
+//   gs://<bucket>/<carpeta>/descargas.txt  TSV: gs://origen <TAB> nombre-local
+//   gs://<bucket>/<carpeta>/error.txt      emptied at start; the reason on failure
+// launched with TRABAJO / PREFIJO / SALIDA as container env overrides.
 //
-//   POST /api/assemble { manifest }        → { jobId }
-//   POST /api/assemble { jobId }           → { state, progress, url }
-//   GET  /api/assemble                     → { available, url }
+//   POST { manifest }  → { operationName, salida }
+//   POST { operationName, episodio } → { done, error? }
+//   GET                → { available, job, region }
 // ════════════════════════════════════════════════════════════════
-const { cfg, loadServiceAccount, getIdToken, begin, fail } = require('./_lib/gcp');
+const { cfg, auth, gcsUpload, gcsReadText, begin, fail } = require('./_lib/gcp');
 
 module.exports = async function handler(req, res) {
   if (begin(req, res, ['GET', 'POST'])) return;
 
   try {
-    const base = cfg.assemblyUrl;
+    const bucket = cfg.bucket;
+    const job = cfg.montajeJob;
+    const region = cfg.montajeRegion;
 
-    // Availability probe, so the UI can explain what is missing instead of
-    // showing a button that fails.
     if (req.method === 'GET') {
       return res.status(200).json({
-        available: !!base,
-        url: base || null,
-        hint: base ? null : 'Desplegá cloud-run/ y poné su URL en ASSEMBLY_SERVICE_URL',
+        available: !!bucket,
+        job, region,
+        hint: bucket ? null : 'Falta GCS_OUTPUT_BUCKET en Vercel',
       });
     }
 
-    if (!base) {
-      return res.status(503).json({
-        error: 'El servicio de ensamblaje no está configurado. Desplegá cloud-run/ (ver su README) y añadí ASSEMBLY_SERVICE_URL en Vercel.',
-        configError: true,
-      });
+    if (!bucket) {
+      return res.status(500).json({ error: 'GCS_OUTPUT_BUCKET no configurado en Vercel', configError: true });
     }
 
-    const { manifest, jobId } = req.body || {};
-    // Validate before minting a token: a malformed request should not cost an
+    const { manifest, operationName, episodio, projectId: appProject } = req.body || {};
+    // Validate before authenticating: a malformed encargo should not cost an
     // OAuth round-trip.
-    if (!jobId && !manifest?.scenes?.length) {
-      return res.status(400).json({ error: 'manifest.scenes o jobId requerido' });
+    if (!operationName && (!manifest?.script || !Array.isArray(manifest.descargas) || !manifest.descargas.length)) {
+      return res.status(400).json({ error: 'manifest.script y manifest.descargas son requeridos' });
     }
+    const { projectId, token } = await auth();
 
-    const sa = loadServiceAccount();
-    const idToken = await getIdToken(sa, base);
-
-    // ─── Status ───
-    if (jobId) {
-      const r = await fetch(`${base}/status/${encodeURIComponent(jobId)}`, {
-        headers: { Authorization: `Bearer ${idToken}` },
+    // ─── Poll ───
+    if (operationName) {
+      const r = await fetch(`https://run.googleapis.com/v2/${operationName}`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) return res.status(r.status).json({ error: data.error || `Estado del ensamblaje: ${r.status}` });
-      return res.status(200).json(data);
+      const raw = await r.text();
+      let j = null;
+      try { j = JSON.parse(raw); } catch (e) { /* respuesta no-JSON */ }
+      if (!r.ok) return res.status(r.status).json({ error: `Montaje: consulta ${r.status}`, detail: raw.slice(0, 500) });
+
+      j = j || {};
+      if (!j.done) return res.status(200).json({ done: false });
+      if (j.error) {
+        // Cloud Run only reports "exit code N". The container writes the real
+        // reason into error.txt before dying, which is the only thing readable
+        // from a phone — prefer it.
+        let motivo = '';
+        if (episodio) {
+          const nota = await gcsReadText(token, bucket, `${carpetaDe(episodio, appProject)}/error.txt`);
+          if (nota) motivo = nota.trim().slice(0, 700);
+        }
+        return res.status(200).json({
+          done: true,
+          error: motivo || `${(j.error.message || JSON.stringify(j.error)).slice(0, 400)} — el registro completo está en Cloud Run → Jobs → ${job} → Ejecuciones.`,
+        });
+      }
+      return res.status(200).json({ done: true });
     }
 
     // ─── Start ───
-    const r = await fetch(`${base}/render`, {
+    const carpeta  = carpetaDe(manifest.episodio, manifest.projectId);
+    const material = `${carpeta}/material`;
+    const salida   = `${carpeta}/completo.mp4`;
+
+    // TSV, read by a shell loop in the container — no JSON parser needed there.
+    // THE TRAILING NEWLINE IS NOT OPTIONAL: shell `read` returns false on a
+    // last line without one, silently dropping the final file.
+    const lista = manifest.descargas
+      .map(d => `gs://${bucket}/${d.origen}\t${d.destino}`)
+      .join('\n') + '\n';
+
+    await gcsUpload(token, bucket, `${carpeta}/hoja.json`,
+      Buffer.from(JSON.stringify(manifest.hoja || {}, null, 2)), 'application/json');
+    await gcsUpload(token, bucket, `${carpeta}/montar.sh`,
+      Buffer.from(String(manifest.script)), 'text/x-shellscript');
+    await gcsUpload(token, bucket, `${carpeta}/descargas.txt`,
+      Buffer.from(lista), 'text/plain');
+    // Clear the previous reason, so a run that fails without leaving a note
+    // does not inherit the complaint from the last attempt.
+    await gcsUpload(token, bucket, `${carpeta}/error.txt`, Buffer.from(''), 'text/plain');
+
+    const url = `https://run.googleapis.com/v2/projects/${projectId}/locations/${region}/jobs/${job}:run`;
+    const r = await fetch(url, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ manifest }),
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        overrides: {
+          containerOverrides: [{
+            env: [
+              { name: 'TRABAJO', value: `gs://${bucket}/${carpeta}` },
+              { name: 'PREFIJO', value: `gs://${bucket}/${material}` },
+              { name: 'SALIDA',  value: `gs://${bucket}/${salida}` },
+            ],
+          }],
+        },
+      }),
     });
-    const data = await r.json().catch(() => ({}));
+
+    const raw = await r.text();
     if (!r.ok) {
-      // 403 here almost always means the app's service account was never
-      // granted run.invoker on the service.
-      const extra = r.status === 403
-        ? ' — ¿le diste roles/run.invoker a la service account de la app sobre el servicio de Cloud Run?'
-        : '';
-      return res.status(r.status).json({ error: (data.error || `Ensamblaje: ${r.status}`) + extra });
+      const pista = r.status === 404
+        ? ` No se encuentra el montador "${job}" en ${region}. Comprueba el nombre con MONTAJE_JOB / MONTAJE_REGION.`
+        : r.status === 403
+          ? ' La cuenta de servicio no tiene permiso para lanzar el montador (roles/run.invoker sobre el job).'
+          : '';
+      return res.status(r.status).json({ error: `Montaje: inicio ${r.status}.${pista}`, detail: raw.slice(0, 500) });
     }
-    return res.status(200).json(data);
+
+    let out = {};
+    try { out = JSON.parse(raw); } catch (e) { /* respuesta no-JSON */ }
+    return res.status(200).json({ operationName: out.name || '', salida: `gs://${bucket}/${salida}` });
   } catch (e) {
     return fail(res, e);
   }
 };
+
+// Job folder for an episode. Keyed by app project so two projects rendering at
+// the same time never overwrite each other's encargo.
+function carpetaDe(episodio, projectId) {
+  const ep = String(parseInt(episodio, 10) || 1).padStart(2, '0');
+  const proj = String(projectId || 'proyecto').replace(/[^\w-]/g, '');
+  return `anime-studio/${proj}/ep${ep}`;
+}

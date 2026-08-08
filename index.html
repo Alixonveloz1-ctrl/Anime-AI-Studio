@@ -590,7 +590,7 @@
     </div>
     <div class="card" style="margin-bottom:14px">
       <h2>🎞️ Ensamblar video final</h2>
-      <p style="font-size:13px;color:var(--text-dim);margin:0 0 12px;line-height:1.5">Une las imágenes (o los clips de Veo), la narración, la música y los subtítulos en un solo MP4, renderizado con ffmpeg en Google Cloud. Cada escena dura exactamente lo que dura su narración.</p>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 12px;line-height:1.5">Une las imágenes (o los clips de Veo), la narración, la música y los subtítulos en un solo MP4. Lo renderiza con ffmpeg el montador que ya tienes desplegado en tu cuenta de Google Cloud. Cada escena dura exactamente lo que dura su narración.</p>
       <div id="assemblyStatus" style="font-size:12px;color:var(--text-dim);margin-bottom:10px">Comprobando disponibilidad…</div>
       <label class="sg-chip selected" id="assemblyClipsChip" style="display:inline-flex;margin-bottom:10px"><input type="checkbox" id="assemblyUseClips" checked> 🎬 Usar clips de Veo cuando existan</label>
       <div id="assemblyProgress" style="display:none;margin-bottom:10px">
@@ -4230,10 +4230,14 @@ document.getElementById('exactSubs')?.addEventListener('change', function() {
 // ════════════════════════════════════════════════════════════════
 // FINAL ASSEMBLY
 //
-// Assets live in IndexedDB in the browser and the renderer runs on
-// Cloud Run, so they meet in the bucket: the browser uploads each
-// asset straight to GCS with a signed PUT URL, then sends a manifest
-// of object paths. Nothing large goes through a Vercel function.
+// Rendering runs on the Cloud Run job already deployed in this Google
+// Cloud account. That container is generic: it downloads a job folder
+// from the bucket and executes the ffmpeg script the app left there.
+// So the render logic lives HERE, in buildMontarScript(), and nothing
+// needs to be deployed or redeployed to change how episodes look.
+//
+// Assets live in IndexedDB, so the browser uploads them straight to
+// GCS with signed PUT URLs; only the manifest travels through Vercel.
 // ════════════════════════════════════════════════════════════════
 function b64ToBlob(b64, mime) {
   const bin = atob(b64);
@@ -4243,11 +4247,9 @@ function b64ToBlob(b64, mime) {
 }
 
 async function uploadAssets(items, onProgress) {
-  // items: [{ path, b64, mime }]
   if (!items.length) return;
   const res = await fetch('/api/upload-url', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ paths: items.map(i => i.path) }),
   });
   const data = await res.json();
@@ -4255,7 +4257,6 @@ async function uploadAssets(items, onProgress) {
 
   const byPath = new Map(data.urls.map(u => [u.path, u.url]));
   let done = 0;
-  // Small concurrency: enough to be fast, low enough not to stall a phone.
   const queue = [...items];
   const worker = async () => {
     while (queue.length) {
@@ -4271,6 +4272,92 @@ async function uploadAssets(items, onProgress) {
   await Promise.all(Array.from({ length: Math.min(4, items.length) }, worker));
 }
 
+// The ffmpeg script the container runs. It executes inside the job's working
+// directory with every file from descargas.txt already downloaded under the
+// local names used here.
+//
+// The container's wrapper looks for DIEZMO-EP*.mp4 to know the render finished,
+// so the local filename has to match that glob. The name it gets in the bucket
+// comes from SALIDA, not from here, so this never reaches the user.
+function buildMontarScript(scenes, opts) {
+  const { vertical, hasMusic, hasSubs, episodio } = opts;
+  const W = vertical ? 1080 : 1920;
+  const H = vertical ? 1920 : 1080;
+  const marginV = vertical ? 160 : 40;
+  const fontSize = vertical ? 18 : 22;
+  const L = [];
+  const p = (...x) => L.push(...x);
+
+  p('#!/bin/bash',
+    'set -euo pipefail',
+    `W=${W}; H=${H}; FPS=24`,
+    'dur() { ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$1"; }',
+    '',
+    '# ─── narración: se concatena y da la duración de cada escena ───',
+    ': > narr.txt');
+  scenes.forEach(s => { if (s.audio) p(`echo "file '$PWD/${s.audio}'" >> narr.txt`); });
+  p('ffmpeg -y -f concat -safe 0 -i narr.txt -c copy narracion.wav',
+    'TOTAL=$(dur narracion.wav)',
+    '',
+    '# ─── un segmento de video por escena, con la duración de su narración ───',
+    ': > segs.txt');
+
+  scenes.forEach((s, i) => {
+    const n = String(i).padStart(3, '0');
+    p('', `# escena ${i + 1}`);
+    p(s.audio ? `D=$(dur ${s.audio})` : 'D=2.0');
+    if (s.clip) {
+      p(`ffmpeg -y -stream_loop -1 -i ${s.clip} -t "$D" ` +
+        `-vf "scale=$W:$H:force_original_aspect_ratio=increase,crop=$W:$H,fps=$FPS" ` +
+        `-an -c:v libx264 -preset veryfast -pix_fmt yuv420p seg_${n}.mp4`);
+    } else if (s.image) {
+      // zoompan jitters at 1x, so it works on an upscaled copy.
+      p('F=$(awk "BEGIN{printf \\"%d\\", $D*24}")',
+        `ffmpeg -y -loop 1 -i ${s.image} -t "$D" ` +
+        `-vf "scale=$((W*2)):$((H*2)):force_original_aspect_ratio=increase,crop=$((W*2)):$((H*2)),` +
+        `zoompan=z='min(zoom+0.0006,1.12)':d=$F:s=${'${W}'}x${'${H}'}:fps=$FPS,format=yuv420p" ` +
+        `-an -c:v libx264 -preset veryfast seg_${n}.mp4`);
+    } else {
+      // Neither asset: black, so the picture never drifts from the audio.
+      p(`ffmpeg -y -f lavfi -i color=c=black:s=${'${W}'}x${'${H}'}:r=$FPS -t "$D" ` +
+        `-c:v libx264 -preset veryfast -pix_fmt yuv420p seg_${n}.mp4`);
+    }
+    p(`echo "file '$PWD/seg_${n}.mp4'" >> segs.txt`);
+  });
+
+  p('', '# ─── unir los segmentos ───',
+    'ffmpeg -y -f concat -safe 0 -i segs.txt -c copy mudo.mp4', '');
+
+  if (hasMusic) {
+    p('# ─── música: se encadenan las pistas de cada acto y se repiten ───',
+      ': > mus.txt',
+      'for m in mus_*.wav; do echo "file \'$PWD/$m\'" >> mus.txt; done',
+      'ffmpeg -y -f concat -safe 0 -i mus.txt -c copy musica.wav',
+      'FADE=$(awk "BEGIN{printf \\"%.2f\\", ($TOTAL-3)>0 ? $TOTAL-3 : 0}")',
+      'ffmpeg -y -i narracion.wav -stream_loop -1 -i musica.wav ' +
+      '-filter_complex "[1:a]volume=0.18,afade=t=in:st=0:d=2,afade=t=out:st=$FADE:d=3[m];' +
+      '[0:a][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]" ' +
+      '-map "[a]" -t "$TOTAL" mezcla.wav');
+  } else {
+    p('cp narracion.wav mezcla.wav');
+  }
+
+  p('', '# ─── mezcla final ───');
+  const salida = `DIEZMO-EP${String(episodio).padStart(2, '0')}.mp4`;
+  if (hasSubs) {
+    p(`ffmpeg -y -i mudo.mp4 -i mezcla.wav ` +
+      `-vf "subtitles=subs.srt:force_style='FontName=DejaVu Sans,Fontsize=${fontSize},` +
+      `PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,` +
+      `Alignment=2,MarginV=${marginV}'" ` +
+      `-c:v libx264 -preset medium -crf 20 -c:a aac -b:a 192k -shortest -movflags +faststart ${salida}`);
+  } else {
+    p(`ffmpeg -y -i mudo.mp4 -i mezcla.wav -c:v copy -c:a aac -b:a 192k -shortest ` +
+      `-movflags +faststart ${salida}`);
+  }
+  p(`echo "Montado: ${salida}"`);
+  return L.join('\n') + '\n';
+}
+
 async function checkAssemblyAvailable() {
   const el = document.getElementById('assemblyStatus');
   const btn = document.getElementById('btnEnsamblar');
@@ -4279,14 +4366,14 @@ async function checkAssemblyAvailable() {
     const res = await fetch('/api/assemble');
     const d = await res.json();
     if (d.available) {
-      el.innerHTML = '✅ Servicio de ensamblaje disponible';
+      el.innerHTML = `✅ Montador disponible — <code>${d.job}</code> en ${d.region}`;
       btn.disabled = false;
     } else {
-      el.innerHTML = `⚠️ Servicio no configurado. ${d.hint || ''}`;
+      el.innerHTML = `⚠️ ${d.hint || 'No disponible'}`;
       btn.disabled = true;
     }
   } catch (e) {
-    el.textContent = 'No se pudo comprobar el servicio de ensamblaje';
+    el.textContent = 'No se pudo comprobar el montador';
     btn.disabled = true;
   }
 }
@@ -4308,122 +4395,149 @@ async function assembleEpisode() {
 
   try {
     const useClips = document.getElementById('assemblyUseClips')?.checked !== false;
-    const epTag = `ep${state.currentEpisode || 1}`;
-    const prefix = `ensamblaje/${state.projectId}/${epTag}`;
+    const epNum  = state.currentEpisode || 1;
+    const carpeta = `anime-studio/${String(state.projectId || 'proyecto').replace(/[^\w-]/g, '')}/ep${String(epNum).padStart(2, '0')}`;
+    const material = `${carpeta}/material`;
 
-    // ─── 1. Collect what each scene contributes ───
+    // ─── 1. Gather the material, with flat local names the script expects ───
     setProg(3, 'Reuniendo material...');
     const uploads = [];
-    const manifestScenes = [];
+    const descargas = [];
+    const guion = [];
     let missingAudio = 0;
 
-    for (const s of scenes) {
+    const add = (nombre, b64, mime) => {
+      uploads.push({ path: `${material}/${nombre}`, b64, mime });
+      descargas.push({ origen: `${material}/${nombre}`, destino: nombre });
+    };
+
+    for (let i = 0; i < scenes.length; i++) {
+      const s = scenes[i];
+      const n = String(i).padStart(3, '0');
       const entry = {};
+
       const aud = await dbGet(sceneAudKey(s.id));
       if (aud) {
         const sep = aud.indexOf('|');
-        const mime = sep > 0 ? aud.slice(0, sep) : 'audio/wav';
-        const b64  = sep > 0 ? aud.slice(sep + 1) : aud;
-        entry.audio = `${prefix}/audio/${s.id}.wav`;
-        uploads.push({ path: entry.audio, b64, mime });
+        add(`narr_${n}.wav`, sep > 0 ? aud.slice(sep + 1) : aud, sep > 0 ? aud.slice(0, sep) : 'audio/wav');
+        entry.audio = `narr_${n}.wav`;
       } else missingAudio++;
 
+      // Veo clips already live in the bucket: reference them instead of
+      // downloading and re-uploading megabytes through the phone.
       const clipUrl = useClips ? await dbGet(sceneVidKeyA(s.id)) : null;
-      if (clipUrl) {
-        // Clips already live in the bucket; pass the object path straight through.
-        const m = /storage\.googleapis\.com\/([^/]+)\/([^?]+)/.exec(clipUrl);
-        if (m) entry.clip = decodeURIComponent(m[2]);
-      }
-      if (!entry.clip) {
+      const m = clipUrl && /storage\.googleapis\.com\/([^/]+)\/([^?]+)/.exec(clipUrl);
+      if (m) {
+        descargas.push({ origen: decodeURIComponent(m[2]), destino: `clip_${n}.mp4` });
+        entry.clip = `clip_${n}.mp4`;
+      } else {
         const img = await dbGet(sceneImgKeyA(s.id));
-        if (img) {
-          entry.image = `${prefix}/img/${s.id}.png`;
-          uploads.push({ path: entry.image, b64: img, mime: 'image/png' });
-        }
+        if (img) { add(`img_${n}.png`, img, 'image/png'); entry.image = `img_${n}.png`; }
       }
-      manifestScenes.push(entry);
+      guion.push(entry);
     }
 
     if (missingAudio === scenes.length) throw new Error('Ninguna escena tiene narración generada');
     if (missingAudio) showToast(`${missingAudio} escenas sin audio — se rellenan con 2s`, 'error');
 
-    // ─── 2. Music cues ───
-    const musicPaths = [];
+    // ─── 2. Music, one cue per act ───
+    let hasMusic = false;
     for (const act of episodeActs()) {
       const stored = await dbGet(musicKey(act));
       if (!stored) continue;
       const sep = stored.indexOf('|');
-      const mime = sep > 0 ? stored.slice(0, sep) : 'audio/wav';
-      const b64  = sep > 0 ? stored.slice(sep + 1) : stored;
-      const path = `${prefix}/music/${act}.wav`;
-      musicPaths.push(path);
-      uploads.push({ path, b64, mime });
+      add(`mus_${act.replace(/[^\w]/g, '')}.wav`, sep > 0 ? stored.slice(sep + 1) : stored, 'audio/wav');
+      hasMusic = true;
     }
 
-    // ─── 3. Subtitles, timed against the real audio ───
-    // Subtitles are the one optional layer here: if they cannot be built the
-    // episode still assembles without them, rather than losing the whole render.
+    // ─── 3. Subtitles — optional: never lose the render over them ───
     setProg(8, 'Preparando subtítulos...');
-    let srt = '';
+    let hasSubs = false;
     try {
-      srt = await buildEpisodeSrt(scenes, msg => setProg(10, msg));
+      const srt = await buildEpisodeSrt(scenes, msg => setProg(10, msg));
+      if (srt && srt.trim()) {
+        add('subs.srt', btoa(unescape(encodeURIComponent(srt))), 'text/plain');
+        hasSubs = true;
+      }
     } catch (e) {
       console.warn('Subtítulos no generados:', e.message);
-      showToast('El video se ensambla sin subtítulos: ' + e.message, 'error');
+      showToast('Se montará sin subtítulos: ' + e.message, 'error');
     }
 
     // ─── 4. Upload ───
     await uploadAssets(uploads, (d, t) => setProg(15 + Math.round((d / t) * 45), `Subiendo material ${d}/${t}...`));
 
-    // ─── 5. Render ───
-    setProg(62, 'Iniciando el render...');
+    // ─── 5. Launch the job ───
+    setProg(62, 'Lanzando el montador...');
+    const vertical = (document.getElementById('aspectRatio')?.value || '9:16') !== '16:9';
     const manifest = {
       projectId: state.projectId,
-      aspectRatio: document.getElementById('aspectRatio')?.value || '9:16',
-      scenes: manifestScenes,
-      music: musicPaths,
-      srt,
+      episodio: epNum,
+      hoja: { titulo: state.universe?.title || '', episodio: epNum, escenas: guion.length, vertical, hasMusic, hasSubs },
+      script: buildMontarScript(guion, { vertical, hasMusic, hasSubs, episodio: epNum }),
+      descargas,
     };
     const startRes = await fetch('/api/assemble', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ manifest }),
     });
     const start = await startRes.json();
-    if (!startRes.ok || start.error) throw new Error(start.error || `Ensamblaje ${startRes.status}`);
+    if (!startRes.ok || start.error) throw new Error(start.error + (start.detail ? `\n${start.detail}` : ''));
 
     // ─── 6. Poll ───
     let last = null;
-    for (let i = 0; i < 720; i++) {          // hasta 1 hora
+    for (let i = 0; i < 720; i++) {
       await new Promise(r => setTimeout(r, 5000));
+      setProg(65 + Math.min(Math.round(i / 6), 30), `Montando... (${Math.round(i * 5 / 60)} min)`);
       const r = await fetch('/api/assemble', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: start.jobId }),
+        body: JSON.stringify({ operationName: start.operationName, episodio: epNum, projectId: state.projectId }),
       });
       last = await r.json();
-      if (!r.ok || last.error) throw new Error(last.error || `Estado ${r.status}`);
-      setProg(62 + Math.round((last.progress || 0) * 0.37), `Render: ${last.state}...`);
-      if (last.state === 'listo') break;
+      if (!r.ok) throw new Error(last.error || `Estado ${r.status}`);
+      if (last.done) break;
     }
-    if (last?.state !== 'listo') throw new Error('El render no terminó a tiempo');
+    if (!last?.done) throw new Error('El montaje no terminó a tiempo');
+    if (last.error) throw new Error(last.error);
 
     setProg(100, 'Listo');
+    state.lastAssembly = start.salida;
+    saveState();
     out.innerHTML = `
       <div style="background:rgba(100,220,100,0.08);border:1px solid rgba(100,220,100,0.3);border-radius:10px;padding:12px">
-        <div style="font-weight:600;margin-bottom:8px">✅ Episodio ensamblado${last.durationSeconds ? ` — ${Math.floor(last.durationSeconds / 60)}:${String(last.durationSeconds % 60).padStart(2, '0')}` : ''}</div>
-        <video controls playsinline style="width:100%;border-radius:8px;margin-bottom:8px" src="${last.url}"></video>
-        <a class="btn-sec" style="display:block;text-align:center;text-decoration:none" href="${last.url}" download>⬇️ Descargar MP4</a>
+        <div style="font-weight:600;margin-bottom:8px">✅ Episodio ${epNum} montado</div>
+        <div style="font-size:12px;color:var(--text-dim);word-break:break-all;margin-bottom:8px">${start.salida}</div>
+        <button class="btn-sec" onclick="descargarMontaje()">⬇️ Descargar MP4</button>
       </div>`;
-    showToast('Video ensamblado 🎞️', 'success');
+    showToast('Video montado 🎞️', 'success');
   } catch (e) {
-    openErrorModal('Error al ensamblar', e.message);
+    openErrorModal('Error al montar', e.message);
   } finally {
     btn.disabled = false;
     setTimeout(() => { prog.style.display = 'none'; }, 2500);
   }
 }
 
-// Builds the episode SRT from the real audio: scene offsets come from the
-// measured durations, and inside each scene from forced alignment when it works.
+// The MP4 lands in the bucket, which is private, so a signed link is minted on
+// demand instead of being kept around.
+window.descargarMontaje = async function() {
+  const gs = state.lastAssembly;
+  if (!gs) { showToast('No hay ningún montaje todavía', 'error'); return; }
+  try {
+    const res = await fetch('/api/download-url', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gcsUri: gs }),
+    });
+    const d = await res.json();
+    if (!res.ok || d.error) throw new Error(d.error || `download-url ${res.status}`);
+    window.open(d.url, '_blank');
+  } catch (e) {
+    openErrorModal('No se pudo generar el enlace', e.message);
+  }
+};
+
+// Builds the episode SRT from the real audio: scene offsets from the measured
+// durations, and inside each scene from forced alignment when it works.
 async function buildEpisodeSrt(scenes, onProgress) {
   const entries = [];
   for (const s of scenes) {

@@ -29,6 +29,9 @@
     },
     "api/upload-url.js": {
       "maxDuration": 30
+    },
+    "api/download-url.js": {
+      "maxDuration": 15
     }
   }
 }

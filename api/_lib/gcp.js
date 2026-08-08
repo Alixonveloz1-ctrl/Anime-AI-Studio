@@ -58,9 +58,10 @@ const cfg = {
 
   get bucket()         { return env('GCS_OUTPUT_BUCKET', '').replace(/^gs:\/\//, '').replace(/\/+$/, ''); },
 
-  // Cloud Run ffmpeg service that assembles the final MP4. Empty until the
-  // service is deployed; the app reports it as unavailable instead of failing.
-  get assemblyUrl()    { return env('ASSEMBLY_SERVICE_URL', '').replace(/\/+$/, ''); },
+  // Cloud Run JOB that renders the final MP4. Defaults match the montador
+  // already deployed in this account, so nothing new has to be configured.
+  get montajeJob()     { return env('MONTAJE_JOB', 'diezmo-montaje'); },
+  get montajeRegion()  { return env('MONTAJE_REGION', env('GCP_LOCATION', 'us-central1')); },
 };
 
 // Per-model endpoint locations for image generation. Overridable wholesale
@@ -213,6 +214,25 @@ async function getIdToken(sa, audience) {
   return d.id_token;
 }
 
+// ─── Cloud Storage (small objects: the job spec, never media) ───
+async function gcsUpload(token, bucket, objectPath, body, contentType) {
+  const url = `https://storage.googleapis.com/upload/storage/v1/b/${bucket}/o`
+            + `?uploadType=media&name=${encodeURIComponent(objectPath)}`;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': contentType || 'application/octet-stream' },
+    body,
+  });
+  if (!r.ok) throw new Error(`GCS subida ${objectPath}: ${r.status} ${(await r.text()).slice(0, 200)}`);
+}
+
+async function gcsReadText(token, bucket, objectPath) {
+  const url = `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodeURIComponent(objectPath)}?alt=media`;
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!r.ok) return null;
+  return r.text();
+}
+
 // Convenience: credentials + project + token in one call.
 async function auth() {
   const sa = loadServiceAccount();
@@ -257,6 +277,7 @@ function fail(res, e) {
 
 module.exports = {
   cfg, imageModelLocation, imageModelLocations, signedUrl, getIdToken,
+  gcsUpload, gcsReadText,
   ConfigError, loadServiceAccount, getAccessToken, auth,
   vertexUrl, CORS, begin, fail,
 };
