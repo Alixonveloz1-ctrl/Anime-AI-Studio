@@ -103,17 +103,27 @@ fuera de él:
 
 ```
 gs://<bucket>/
-├── diezmo/                        ← otros proyectos, intactos
-└── anime-studio/                  ← todo lo de esta herramienta
-    ├── veo/                       clips generados por Veo
-    └── proyectos/<proyecto>/ep01/
-        ├── hoja.json  montar.sh  descargas.txt  error.txt
-        ├── material/              imágenes, narración, música, subs.srt
-        └── completo.mp4           el episodio montado
+├── diezmo/                                    ← otros proyectos, intactos
+└── anime-studio/                              ← todo lo de esta herramienta
+    ├── veo/                                   clips generados por Veo
+    └── proyectos/
+        ├── el-ultimo-cultivador-379829/ep01/  ← una carpeta por universo
+        │   ├── hoja.json  montar.sh  descargas.txt  error.txt
+        │   ├── material/                      imágenes, narración, música, subs.srt
+        │   └── completo.mp4                   el episodio montado
+        └── angeles-de-neon-tokio-2099-000001/ep01/
 ```
 
-`/api/upload-url` rechaza cualquier ruta fuera del prefijo y `/api/download-url`
-se niega a firmar objetos que no estén dentro de él.
+Cada universo tiene su carpeta con **su propio nombre**, derivado del título, para
+poder distinguirlos al mirar el bucket. Lleva un sufijo corto y estable porque dos
+universos pueden llamarse igual, y porque un título puede cambiar si regeneras el
+universo: la carpeta se fija al crearlo y ya no se mueve, así renombrar nunca deja
+huérfano el material ya renderizado. Los archivos de dentro llevan nombres
+genéricos (`img_000.png`, `narr_000.wav`) — la carpeta ya identifica de quién son.
+
+`/api/upload-url` rechaza cualquier ruta fuera del prefijo, `/api/download-url` se
+niega a firmar objetos que no estén dentro de él, y el nombre de la carpeta se
+vuelve a sanear en el servidor porque viene del cliente.
 
 ## Géneros y categorías
 

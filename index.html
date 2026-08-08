@@ -1796,6 +1796,8 @@ Devuelve JSON:
     state.universe.genero    = genero;
     state.universe.subgenres = subgenres;
     state.universe.epFormat  = document.getElementById('epLengthSelect')?.value || 'medio';
+    // Fixed now, from the title the model just produced, so it never moves.
+    state.universe.carpeta   = slugCarpeta(state.universe.title, state.projectId);
     state.universe.tono      = tono || '';
     state.universe.conceptoOriginal = concepto || '';
     // Scenarios start EMPTY — they are extracted from each episode's story
@@ -1829,6 +1831,35 @@ Devuelve JSON:
     btn.innerHTML = '🌌 Generar Universo';
   }
 });
+
+// Folder name for this universe inside the bucket. Readable, so projects can be
+// told apart when browsing Cloud Storage, plus a short stable suffix: two
+// universes can share a title, and a title can change when the universe is
+// regenerated — the suffix keeps the folder unique and stable either way.
+// Computed ONCE and stored on the universe, so renaming never orphans the
+// material already rendered.
+function slugCarpeta(titulo, projectId) {
+  const base = String(titulo || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // sin acentos
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50)
+    .replace(/-+$/, '');
+  const sufijo = String(projectId || '').replace(/[^\w]/g, '').slice(-6) || 'xxxxxx';
+  return (base ? `${base}-${sufijo}` : `proyecto-${sufijo}`);
+}
+
+// Returns the stored folder, assigning one the first time it is needed so
+// projects created before this existed also get a readable name.
+function carpetaProyecto() {
+  if (!state.universe) return slugCarpeta('', state.projectId);
+  if (!state.universe.carpeta) {
+    state.universe.carpeta = slugCarpeta(state.universe.title, state.projectId);
+    saveState();
+  }
+  return state.universe.carpeta;
+}
 
 // Keeps the episode-format note in sync with the selector, and persists the
 // choice on the universe so episodes 2+ and repairs keep the same shape.
@@ -1943,6 +1974,7 @@ function renderUniverse() {
       <h4>${u.title || 'Universo'}</h4>
       <div class="tag">${u.tagline || ''}</div>
       ${clasificacion ? `<div class="field"><div class="field-label">Clasificación</div>${clasificacion}</div>` : ''}
+      <div class="field"><div class="field-label">Carpeta en el bucket</div><code>proyectos/${carpetaProyecto()}/</code></div>
       ${subs.length ? `<div class="field"><div class="field-label">Subgéneros</div>${subs.map(s => SUBGENERO_LABELS[s] || s).join(' · ')}</div>` : ''}
       <div class="field"><div class="field-label">Concepto</div>${u.concepto || ''}</div>
       <div class="field"><div class="field-label">Conflicto</div>${u.conflicto || ''}</div>
@@ -4399,7 +4431,8 @@ async function assembleEpisode() {
     // The prefix comes from the server so the bucket can be shared with other
     // projects without this app ever writing outside its own folder.
     const info = await (await fetch('/api/assemble')).json();
-    const carpeta = `${info.prefix || 'anime-studio'}/proyectos/${String(state.projectId || 'proyecto').replace(/[^\w-]/g, '')}/ep${String(epNum).padStart(2, '0')}`;
+    const carpetaProy = carpetaProyecto();
+    const carpeta = `${info.prefix || 'anime-studio'}/proyectos/${carpetaProy}/ep${String(epNum).padStart(2, '0')}`;
     const material = `${carpeta}/material`;
 
     // ─── 1. Gather the material, with flat local names the script expects ───
@@ -4474,7 +4507,7 @@ async function assembleEpisode() {
     setProg(62, 'Lanzando el montador...');
     const vertical = (document.getElementById('aspectRatio')?.value || '9:16') !== '16:9';
     const manifest = {
-      projectId: state.projectId,
+      carpeta: carpetaProy,
       episodio: epNum,
       hoja: { titulo: state.universe?.title || '', episodio: epNum, escenas: guion.length, vertical, hasMusic, hasSubs },
       script: buildMontarScript(guion, { vertical, hasMusic, hasSubs, episodio: epNum }),
@@ -4494,7 +4527,7 @@ async function assembleEpisode() {
       setProg(65 + Math.min(Math.round(i / 6), 30), `Montando... (${Math.round(i * 5 / 60)} min)`);
       const r = await fetch('/api/assemble', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operationName: start.operationName, episodio: epNum, projectId: state.projectId }),
+        body: JSON.stringify({ operationName: start.operationName, episodio: epNum, carpeta: carpetaProy }),
       });
       last = await r.json();
       if (!r.ok) throw new Error(last.error || `Estado ${r.status}`);

@@ -40,7 +40,7 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: 'GCS_OUTPUT_BUCKET no configurado en Vercel', configError: true });
     }
 
-    const { manifest, operationName, episodio, projectId: appProject } = req.body || {};
+    const { manifest, operationName, episodio, carpeta: carpetaProy } = req.body || {};
     // Validate before authenticating: a malformed encargo should not cost an
     // OAuth round-trip.
     if (!operationName && (!manifest?.script || !Array.isArray(manifest.descargas) || !manifest.descargas.length)) {
@@ -66,7 +66,7 @@ module.exports = async function handler(req, res) {
         // from a phone — prefer it.
         let motivo = '';
         if (episodio) {
-          const nota = await gcsReadText(token, bucket, `${carpetaDe(episodio, appProject)}/error.txt`);
+          const nota = await gcsReadText(token, bucket, `${carpetaDe(episodio, carpetaProy)}/error.txt`);
           if (nota) motivo = nota.trim().slice(0, 700);
         }
         return res.status(200).json({
@@ -78,7 +78,7 @@ module.exports = async function handler(req, res) {
     }
 
     // ─── Start ───
-    const carpeta  = carpetaDe(manifest.episodio, manifest.projectId);
+    const carpeta  = carpetaDe(manifest.episodio, manifest.carpeta);
     const material = `${carpeta}/material`;
     const salida   = `${carpeta}/completo.mp4`;
 
@@ -134,10 +134,18 @@ module.exports = async function handler(req, res) {
   }
 };
 
-// Job folder for an episode. Keyed by app project so two projects rendering at
-// the same time never overwrite each other's encargo.
-function carpetaDe(episodio, projectId) {
+// Job folder for an episode, named after the universe so projects can be told
+// apart when browsing the bucket. The name comes from the client (it is derived
+// from a title the model wrote), so it is re-sanitised here: lowercase, no
+// accents, no separators, no traversal, bounded length.
+function carpetaDe(episodio, carpetaProyecto) {
   const ep = String(parseInt(episodio, 10) || 1).padStart(2, '0');
-  const proj = String(projectId || 'proyecto').replace(/[^\w-]/g, '');
+  const proj = String(carpetaProyecto || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64)
+    .replace(/-+$/, '') || 'proyecto';
   return `${cfg.prefix}/proyectos/${proj}/ep${ep}`;
 }
