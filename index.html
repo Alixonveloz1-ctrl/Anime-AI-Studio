@@ -491,18 +491,17 @@
       <h2>🎬 Episodio</h2>
       <label>Modelo de imagen</label>
       <select id="imageModelSelect">
-        <option value="gemini-2.5-flash-image">⚡ Gemini 2.5 Flash — Económico y rápido</option>
-        <option value="gemini-3.1-flash-image-preview">🌟 Gemini 3.1 Flash — Alta calidad (requiere acceso)</option>
-        <option value="gemini-3-pro-image-preview">👑 Gemini 3 Pro — Máxima calidad (requiere acceso)</option>
+        <option value="gemini-3-pro-image">👑 Nano Banana Pro — máxima calidad</option>
+        <option value="gemini-3.1-flash-image">🌟 Nano Banana 2 — nuevo y rápido</option>
+        <option value="gemini-2.5-flash-image">⚡ Nano Banana — estable y rápido</option>
       </select>
-
-      <p style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.5">Los modelos Gemini 3.x son preview y necesitan que tu proyecto tenga acceso. Si no lo tiene, la app usa Gemini 2.5 Flash y te avisa.</p>
 
       <label>Modelo de video (Veo)</label>
       <select id="veoModelSelect">
-        <option value="veo-3.1-lite-generate-001">⚡ Veo 3.1 Lite — $0.24/video · Más económico</option>
-        <option value="veo-3.1-fast-generate-001">🌟 Veo 3.1 Fast — $1.20/video · Balance calidad/costo (requiere allowlist)</option>
-        <option value="veo-3.1-generate-001">👑 Veo 3.1 Quality — $3.20/video · Máxima calidad (requiere allowlist)</option>
+        <option value="veo-3.1-lite-generate-001">⚡ Veo 3.1 Lite — el más económico</option>
+        <option value="veo-3.1-fast-generate-001">🌟 Veo 3.1 Fast — equilibrado</option>
+        <option value="veo-3.1-generate-001">👑 Veo 3.1 — máxima calidad</option>
+        <option value="veo-2.0-generate-001">🎞️ Veo 2 — generación anterior</option>
       </select>
 
       <label>Formato de imagen y video</label>
@@ -1435,12 +1434,6 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
     throw new Error(data.error || `Image proxy ${res.status}`);
   }
   if (!data.imageData) throw new Error('Imagen: respuesta sin datos');
-  // Surfaced once per swap so the reason is visible without reading logs.
-  if (data.notice && !generateImage._avisado) {
-    generateImage._avisado = true;
-    showToast(`Modelo de imagen cambiado a ${data.model} — tu proyecto no tiene acceso al elegido`, 'error');
-    console.warn(data.notice);
-  }
   return data.imageData;
 }
 

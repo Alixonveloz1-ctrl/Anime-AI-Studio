@@ -7,7 +7,7 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 |Paso             |Servicio                                                   |
 |-----------------|-----------------------------------------------------------|
 |Guión y narrativa|Gemini 3.1 Pro (`/api/script`)                             |
-|Imágenes         |Gemini Image — 2.5 Flash / 3.1 Flash / 3 Pro (`/api/image`) |
+|Imágenes         |Nano Banana Pro / 2 / base (`/api/image`)                   |
 |Voces            |Gemini TTS / Cloud TTS Neural2-WaveNet (`/api/audio`)       |
 |Música           |Lyria (`/api/music`) — una pista instrumental por acto      |
 |Dirección        |Director creativo: biblia de serie, nota por capítulo, música|
@@ -65,11 +65,11 @@ Todo se genera con Google Cloud. No hay ningún project ID, bucket, modelo ni re
 |`GCP_LOCATION`              |`us-central1` (región por defecto) |
 |`SCRIPT_MODEL`              |`gemini-3.1-pro-preview`           |
 |`SCRIPT_LOCATION`           |`global`                           |
-|`IMAGE_MODEL`               |`gemini-2.5-flash-image`           |
+|`IMAGE_MODEL`               |`gemini-3-pro-image`               |
 |`IMAGE_REGIONS`             |`us-central1,europe-west4,us-east4`|
 |`IMAGE_MODEL_LOCATIONS`     |JSON `{"modelo":"region"}`         |
-|`TTS_MODEL`                 |`gemini-3.1-flash-tts-preview`     |
-|`TTS_FALLBACK_MODEL`        |`gemini-2.5-flash-preview-tts`     |
+|`TTS_MODEL`                 |`gemini-2.5-flash-preview-tts`     |
+|`TTS_FALLBACK_MODEL`        |`gemini-2.5-pro-preview-tts`       |
 |`VEO_MODEL`                 |`veo-3.1-lite-generate-001`        |
 |`MUSIC_MODEL`               |`lyria-002`                        |
 |`STT_MODEL` / `STT_LANGUAGE`|`latest_long` / `es-US`            |
@@ -92,7 +92,9 @@ En el proyecto nuevo hacen falta:
 - APIs habilitadas: `aiplatform.googleapis.com`, `storage.googleapis.com`, `speech.googleapis.com` (subtítulos con timing exacto) y — solo si usas las voces `gcp_` Neural2/WaveNet — `texttospeech.googleapis.com`.
 - Roles de la service account: `roles/aiplatform.user`, `roles/storage.admin` (hace falta `storage.buckets.update`: `video-status.js` aplica CORS al bucket) y `roles/serviceusage.serviceUsageConsumer`.
 - Bucket creado en ese proyecto, en US (Veo corre en `us-central1`).
-- Acceso a los modelos preview que uses: `gemini-3.1-pro-preview` (el guión depende de él y no tiene fallback), los modelos de imagen 3.x, y `veo-3.1-fast` / `veo-3.1-quality` requieren allowlist — `veo-3.1-lite` es el default.
+- Acceso al modelo de texto `gemini-3.1-pro-preview`, del que depende el guión (no tiene fallback).
+
+**El modelo que elijas es el que se usa.** Si falla, la app devuelve el error de Google tal cual; nunca sustituye el modelo por otro a tus espaldas.
 
 ## Dónde se guarda todo
 

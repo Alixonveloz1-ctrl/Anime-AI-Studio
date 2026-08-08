@@ -9,7 +9,9 @@
 // ════════════════════════════════════════════════════════════════
 const { cfg, auth, imageModelLocation, vertexUrl, begin, fail } = require('./_lib/gcp');
 
-// Google's wording when a project has no allowlist for a preview model.
+// Google's wording when a model id does not exist for this project. Kept so the
+// region rotation does not treat it as a capacity problem: retrying the other
+// regions is pointless and its wrapper truncates the message, hiding the cause.
 function sinAcceso(msg) {
   const m = String(msg || '').toLowerCase();
   return m.includes('was not found or your project does not have access')
@@ -214,26 +216,10 @@ module.exports = async function handler(req, res) {
 
     const aspectRatio = body.aspectRatio || '9:16';
     const model = forceModel || cfg.imageModel;
-    let result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true, aspectRatio, continuityRef);
-
-    // Preview image models need an allowlist per project. Picking one the
-    // project cannot use used to fail with Google's raw "Publisher model … was
-    // not found or your project does not have access to it", which does not say
-    // what to do about it. Fall back once to the configured default and report
-    // the swap, so generation succeeds and the reason is visible.
-    if (result.error && sinAcceso(result.error) && model !== cfg.imageModel) {
-      const previo = model;
-      result = await callGemini(cfg.imageModel, prompt, characterRefs, projectId, token, isEcchi === true, aspectRatio, continuityRef);
-      if (!result.error) {
-        result.notice = `Tu proyecto no tiene acceso a "${previo}", así que se usó "${cfg.imageModel}". Cambia el modelo de imagen en Episodio para no volver a verlo, o pide acceso al modelo preview en Google Cloud.`;
-        result.fellBackFrom = previo;
-      }
-    }
-    if (result.error && sinAcceso(result.error)) {
-      result.error = `Tu proyecto de Google Cloud no tiene acceso al modelo de imagen "${model}". `
-        + `Elige otro en Episodio → Modelo de imagen (Gemini 2.5 Flash funciona sin allowlist), `
-        + `o cambia IMAGE_MODEL en Vercel. Detalle: ${result.error}`;
-    }
+    // NO fallback: the selected model is the one used. If it fails, the error
+    // says so — silently substituting another model would hand back images the
+    // user did not ask for.
+    const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true, aspectRatio, continuityRef);
     return res.status(200).json(result);
   } catch(e) {
     return fail(res, e);

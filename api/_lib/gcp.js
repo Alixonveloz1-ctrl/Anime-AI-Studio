@@ -34,14 +34,14 @@ const cfg = {
   get scriptLocation() { return env('SCRIPT_LOCATION', 'global'); },
 
   // Images.
-  get imageModel()     { return env('IMAGE_MODEL', 'gemini-2.5-flash-image'); },
+  get imageModel()     { return env('IMAGE_MODEL', 'gemini-3-pro-image'); },
   get imageRegions()   { return env('IMAGE_REGIONS', 'us-central1,europe-west4,us-east4')
                                   .split(',').map(s => s.trim()).filter(Boolean); },
 
   // Narration (Gemini TTS, with a fallback for projects without access to
   // the preferred model).
-  get ttsModel()       { return env('TTS_MODEL', 'gemini-3.1-flash-tts-preview'); },
-  get ttsFallback()    { return env('TTS_FALLBACK_MODEL', 'gemini-2.5-flash-preview-tts'); },
+  get ttsModel()       { return env('TTS_MODEL', 'gemini-2.5-flash-preview-tts'); },
+  get ttsFallback()    { return env('TTS_FALLBACK_MODEL', 'gemini-2.5-pro-preview-tts'); },
   get ttsLocation()    { return env('TTS_LOCATION', this.location); },
 
   // Video.
@@ -71,10 +71,11 @@ const cfg = {
 // Per-model endpoint locations for image generation. Overridable wholesale
 // with IMAGE_MODEL_LOCATIONS as JSON, e.g. {"my-model":"global"}.
 function imageModelLocations() {
+  // Gemini 3.x image models are served only from the global endpoint.
   const base = {
-    'gemini-2.5-flash-image':         'us-central1',
-    'gemini-3.1-flash-image-preview': 'global',
-    'gemini-3-pro-image-preview':     'global',
+    'gemini-2.5-flash-image':  'us-central1',
+    'gemini-3.1-flash-image':  'global',
+    'gemini-3-pro-image':      'global',
   };
   try {
     return { ...base, ...JSON.parse(env('IMAGE_MODEL_LOCATIONS', '{}')) };
