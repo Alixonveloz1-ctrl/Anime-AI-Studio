@@ -74,19 +74,38 @@ module.exports = async function handler(req, res) {
 
   const projectId = sa.project_id;
 
-  // Vertex AI reachable + enabled for this project
-  try {
-    const r = await fetch(
-      `https://${cfg.location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${cfg.location}/publishers/google/models`,
-      { headers: { Authorization: `Bearer ${token}`, 'X-Goog-User-Project': projectId } },
-    );
-    if (r.ok) out.checks.vertexAI = { ok: true };
-    else {
+  // Which APIs are actually enabled on the project.
+  //
+  // This replaced a probe that listed publisher models under
+  // projects/*/locations/*/publishers/google/models — a path that is not valid
+  // for that collection, so it failed even on healthy projects and reported a
+  // red "Vertex AI — error" with no detail. Asking Service Usage answers the
+  // real question ("is this API turned on?") instead of guessing from a call.
+  const SERVICIOS = [
+    ['aiplatform.googleapis.com',   'Vertex AI',      'guiones, imágenes, video y música'],
+    ['storage.googleapis.com',      'Cloud Storage',  'bucket y montaje'],
+    ['speech.googleapis.com',       'Speech-to-Text', 'subtítulos con timing exacto'],
+    ['texttospeech.googleapis.com', 'Cloud TTS',      'solo para las voces Neural2/WaveNet'],
+    ['run.googleapis.com',          'Cloud Run',      'montaje del MP4'],
+  ];
+  out.services = [];
+  for (const [id, nombre, para] of SERVICIOS) {
+    try {
+      const r = await fetch(`https://serviceusage.googleapis.com/v1/projects/${projectId}/services/${id}`, {
+        headers: { Authorization: `Bearer ${token}`, 'X-Goog-User-Project': projectId },
+      });
       const d = await r.json().catch(() => ({}));
-      out.checks.vertexAI = { ok: false, status: r.status, error: (d.error?.message || 'error').slice(0, 200) };
+      if (!r.ok) {
+        // A 403 here means the service account cannot READ the API list, which
+        // says nothing about whether the API works. Do not call that a failure.
+        out.services.push({ id, nombre, para, state: 'desconocido',
+          note: r.status === 403 ? 'sin permiso para consultarlo (roles/serviceusage.serviceUsageConsumer)' : `consulta ${r.status}` });
+      } else {
+        out.services.push({ id, nombre, para, state: d.state === 'ENABLED' ? 'habilitada' : 'apagada' });
+      }
+    } catch (e) {
+      out.services.push({ id, nombre, para, state: 'desconocido', note: e.message.slice(0, 120) });
     }
-  } catch (e) {
-    out.checks.vertexAI = { ok: false, error: e.message };
   }
 
   // Bucket exists and the service account can read its metadata
@@ -99,7 +118,10 @@ module.exports = async function handler(req, res) {
       if (r.ok) {
         out.checks.bucket = { ok: true, location: d.location || null, sameProject: true };
       } else {
-        out.checks.bucket = { ok: false, status: r.status, error: (d.error?.message || 'error').slice(0, 200) };
+        // Always carry the status and a body snippet: "error" on its own is
+        // unactionable, especially from a phone.
+        out.checks.bucket = { ok: false, status: r.status,
+          error: `${r.status} — ${(d.error?.message || JSON.stringify(d) || 'sin detalle').slice(0, 180)}` };
       }
     } catch (e) {
       out.checks.bucket = { ok: false, error: e.message };

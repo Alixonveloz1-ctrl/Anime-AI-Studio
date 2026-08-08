@@ -995,8 +995,18 @@ async function loadApiHealth() {
       : row('Bucket', false, h.bucket?.error || 'no configurado'));
 
     if (h.checks?.credentials) parts.push(row('Credenciales', h.checks.credentials.ok, h.checks.credentials.error || 'token obtenido correctamente'));
-    if (h.checks?.vertexAI)    parts.push(row('Vertex AI', h.checks.vertexAI.ok, h.checks.vertexAI.error || 'habilitado y accesible'));
     if (h.checks?.bucket)      parts.push(row('Acceso al bucket', h.checks.bucket.ok, h.checks.bucket.error || `accesible${h.checks.bucket.location ? ' · ' + h.checks.bucket.location : ''}`));
+
+    if (Array.isArray(h.services) && h.services.length) {
+      parts.push('<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-weight:600">APIs del proyecto</div>');
+      for (const s of h.services) {
+        // "desconocido" is not a failure: it means the service account cannot
+        // read the API list, which says nothing about whether the API works.
+        const icon = s.state === 'habilitada' ? true : s.state === 'apagada' ? false : null;
+        parts.push(row(s.nombre, icon,
+          `${s.state}${s.note ? ' (' + s.note + ')' : ''} <span style="color:var(--text-dim)">· ${s.para}</span>`));
+      }
+    }
 
     box.innerHTML = parts.join('');
   } catch (e) {
