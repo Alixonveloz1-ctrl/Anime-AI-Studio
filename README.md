@@ -8,7 +8,7 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 |-----------------|-----------------------------------------------------------|
 |Guión y narrativa|Gemini 3.1 Pro (`/api/script`)                             |
 |Imágenes         |Gemini Image — 2.5 Flash / 3.1 Flash / 3 Pro (`/api/image`) |
-|Voces            |Gemini TTS o ElevenLabs (`/api/audio`)                      |
+|Voces            |Gemini TTS / Cloud TTS Neural2-WaveNet (`/api/audio`)       |
 |Clips de video   |Veo 3.1 (`/api/video-start` + `/api/video-status`)          |
 |Ensamblaje       |Canvas + MediaRecorder (Ken Burns)                          |
 
@@ -24,12 +24,36 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 
 ## Uso
 
-1. Las API keys se configuran como variables de entorno en Vercel (`GCP_SERVICE_ACCOUNT`, `GCS_OUTPUT_BUCKET`, `ELEVENLABS_API_KEY`)
+1. Configura las dos variables de entorno en Vercel (ver más abajo)
 1. Elige demografía, género principal y subgéneros → Genera Universo
 1. Genera Episodio (personajes + historia + 15 escenas)
 1. Genera las imágenes de las escenas
 1. Genera las voces
 1. Ensambla y exporta el video
+
+## Configuración — solo dos variables de entorno
+
+Todo se genera con Google Cloud. No hay ningún project ID ni nombre de bucket escrito en el código: el proyecto sale siempre del `project_id` de la service account.
+
+|Variable              |Contenido                                                        |
+|----------------------|-----------------------------------------------------------------|
+|`GCP_SERVICE_ACCOUNT` |JSON completo de la service account (una sola línea o con saltos) |
+|`GCS_OUTPUT_BUCKET`   |Nombre del bucket de salida de Veo, sin `gs://`                    |
+
+### Cambiar de cuenta de Google Cloud
+
+1. Crea una service account en el proyecto nuevo y descarga su JSON.
+2. Pega el JSON completo en `GCP_SERVICE_ACCOUNT` y el bucket nuevo en `GCS_OUTPUT_BUCKET`.
+3. **Redeploy** — Vercel no aplica variables nuevas a un deployment ya construido.
+4. Abre "APIs configuradas" en la app: muestra el proyecto, la service account y el bucket en uso, y verifica credenciales, Vertex AI y acceso al bucket (`/api/health`).
+
+En el proyecto nuevo hacen falta:
+
+- Facturación activa.
+- APIs habilitadas: `aiplatform.googleapis.com`, `storage.googleapis.com` y — solo si usas las voces `gcp_` Neural2/WaveNet — `texttospeech.googleapis.com`.
+- Roles de la service account: `roles/aiplatform.user`, `roles/storage.admin` (hace falta `storage.buckets.update`: `video-status.js` aplica CORS al bucket) y `roles/serviceusage.serviceUsageConsumer`.
+- Bucket creado en ese proyecto, en US (Veo corre en `us-central1`).
+- Acceso a los modelos preview que uses: `gemini-3.1-pro-preview` (el guión depende de él y no tiene fallback), los modelos de imagen 3.x, y `veo-3.1-fast` / `veo-3.1-quality` requieren allowlist — `veo-3.1-lite` es el default.
 
 ## Géneros y categorías
 

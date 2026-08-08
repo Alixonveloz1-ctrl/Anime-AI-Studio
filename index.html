@@ -503,23 +503,10 @@
 
       <label>Voz de narración</label>
       <select id="voiceSelect">
-        <optgroup label="⚡ ElevenLabs v3 (máxima calidad)">
-          <option value="elevenlabs">🎙️ ElevenLabs — Voz personalizada</option>
-        </optgroup>
-        <optgroup label="🔵 Google Cloud TTS — Español Latino (neutral)">
-          <option value="gcp_es-US-Neural2-B">Neural2-B — Masculina, neutral</option>
-          <option value="gcp_es-US-Neural2-D">Neural2-D — Masculina, profunda</option>
-          <option value="gcp_es-US-Neural2-A">Neural2-A — Femenina, neutral</option>
-          <option value="gcp_es-US-Neural2-C">Neural2-C — Femenina, clara</option>
-          <option value="gcp_es-US-Wavenet-B">Wavenet-B — Masculina, suave</option>
-          <option value="gcp_es-US-Wavenet-C">Wavenet-C — Masculina, natural</option>
-          <option value="gcp_es-US-Wavenet-A">Wavenet-A — Femenina, suave</option>
-          <option value="gcp_es-US-Wavenet-F">Wavenet-F — Femenina, limpia</option>
-        </optgroup>
         <optgroup label="🔮 Gemini TTS — Masculinas">
+          <option value="gemini_Orus">Orus — Natural y cálido</option>
           <option value="gemini_Charon">Charon — Grave y firme</option>
           <option value="gemini_Fenrir">Fenrir — Dramático e intenso</option>
-          <option value="gemini_Orus">Orus — Natural y cálido</option>
           <option value="gemini_Perseus">Perseus — Claro y directo</option>
           <option value="gemini_Puck">Puck — Energético y ágil</option>
           <option value="gemini_Achird">Achird — Suave y sereno</option>
@@ -536,20 +523,18 @@
           <option value="gemini_Vindemiatrix">Vindemiatrix — Segura y madura</option>
           <option value="gemini_Sulafat">Sulafat — Suave y delicada</option>
         </optgroup>
+        <optgroup label="🔵 Google Cloud TTS — Español Latino (neutral)">
+          <option value="gcp_es-US-Neural2-B">Neural2-B — Masculina, neutral</option>
+          <option value="gcp_es-US-Neural2-D">Neural2-D — Masculina, profunda</option>
+          <option value="gcp_es-US-Neural2-A">Neural2-A — Femenina, neutral</option>
+          <option value="gcp_es-US-Neural2-C">Neural2-C — Femenina, clara</option>
+          <option value="gcp_es-US-Wavenet-B">Wavenet-B — Masculina, suave</option>
+          <option value="gcp_es-US-Wavenet-C">Wavenet-C — Masculina, natural</option>
+          <option value="gcp_es-US-Wavenet-A">Wavenet-A — Femenina, suave</option>
+          <option value="gcp_es-US-Wavenet-F">Wavenet-F — Femenina, limpia</option>
+        </optgroup>
       </select>
-
-      <div id="elevenlabsConfig" style="display:none;margin-top:8px;padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;border:1px solid rgba(255,255,255,0.08)">
-        <label style="font-size:11px;margin-bottom:4px">Modelo ElevenLabs</label>
-        <select id="elevenlabsModel" style="margin-bottom:8px;font-size:13px">
-          <option value="eleven_v3">Eleven v3 — Más expresivo, 70+ idiomas</option>
-          <option value="eleven_multilingual_v2">Eleven Multilingual v2 — Más realista, 29 idiomas</option>
-          <option value="eleven_flash_v2_5">Eleven Flash v2.5 — Ultra rápido, 32 idiomas</option>
-        </select>
-        <label style="font-size:11px;margin-bottom:4px">Voice ID de ElevenLabs</label>
-        <input type="text" id="elevenlabsVoiceId" placeholder="ej: 21m00Tcm4TlvDq8ikWAM" style="margin-bottom:8px;font-size:13px"
-          oninput="localStorage.setItem('elevenlabs_voice_id', this.value.trim())">
-        <p style="font-size:11px;color:var(--text-dim);margin:0">La API key de ElevenLabs está en las variables de entorno de Vercel.</p>
-      </div>
+      <p style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.5">Las voces Gemini TTS responden a la velocidad y a la expresividad de abajo. Las voces Google Cloud TTS solo aplican la velocidad, y requieren la API <code>texttospeech.googleapis.com</code> habilitada en el proyecto.</p>
 
       <label>Velocidad de narración — <span id="speedLabel" style="color:var(--accent)">Normal (1.0x)</span></label>
       <input type="range" id="voiceSpeed" min="0.5" max="2.0" step="0.05" value="1.0"
@@ -949,18 +934,54 @@ function updateApiDot() {
   const dot = document.getElementById('apiDot');
   if (dot) dot.className = 'dot ok';
 }
+// Fills the diagnostic box in the "APIs configuradas" modal with the Google
+// Cloud project, service account and bucket this deployment is actually using
+// — so a change of account can be verified without opening the Vercel panel.
+async function loadApiHealth() {
+  const box = document.getElementById('apiHealth');
+  if (!box) return;
+  const row = (label, ok, detail) =>
+    `<div style="display:flex;gap:6px;align-items:flex-start"><span>${ok === null ? '•' : ok ? '✅' : '❌'}</span><span><strong>${label}</strong>${detail ? ' — ' + detail : ''}</span></div>`;
+  try {
+    const r = await fetch('/api/health');
+    const h = await r.json();
+    const parts = [];
+
+    if (!h.serviceAccount?.configured) {
+      parts.push(row('Service account', false, h.serviceAccount?.error || 'no configurada'));
+    } else {
+      parts.push(row('Proyecto GCP', !h.serviceAccount.error, `<code>${h.serviceAccount.projectId || '—'}</code>`));
+      parts.push(row('Service account', !h.serviceAccount.error, `<code>${h.serviceAccount.clientEmail || '—'}</code>`));
+      if (h.serviceAccount.error) parts.push(row('Aviso', false, h.serviceAccount.error));
+    }
+
+    parts.push(h.bucket?.configured
+      ? row('Bucket', !h.bucket.error, `<code>${h.bucket.name}</code>${h.bucket.warning ? ' — ⚠️ ' + h.bucket.warning : ''}`)
+      : row('Bucket', false, h.bucket?.error || 'no configurado'));
+
+    if (h.checks?.credentials) parts.push(row('Credenciales', h.checks.credentials.ok, h.checks.credentials.error || 'token obtenido correctamente'));
+    if (h.checks?.vertexAI)    parts.push(row('Vertex AI', h.checks.vertexAI.ok, h.checks.vertexAI.error || 'habilitado y accesible'));
+    if (h.checks?.bucket)      parts.push(row('Acceso al bucket', h.checks.bucket.ok, h.checks.bucket.error || `accesible${h.checks.bucket.location ? ' · ' + h.checks.bucket.location : ''}`));
+
+    box.innerHTML = parts.join('');
+  } catch (e) {
+    box.innerHTML = row('Diagnóstico', false, 'no se pudo consultar /api/health: ' + e.message);
+  }
+}
+
 document.getElementById('btnApis').addEventListener('click', () => {
   openModal(`
     <h3>ℹ️ APIs configuradas</h3>
     <p style="font-size:13px;color:var(--text-dim);line-height:1.6;margin:0 0 16px">
-      Todas las APIs están configuradas como variables de entorno en Vercel:<br><br>
-      • <strong>GCP_SERVICE_ACCOUNT</strong> — Gemini (guiones, imágenes, audio, video)<br>
-      • <strong>GCS_OUTPUT_BUCKET</strong> — almacenamiento de videos<br>
-      • <strong>ELEVENLABS_API_KEY</strong> — ElevenLabs TTS<br><br>
-      Para cambiar una key ve a Vercel → Settings → Environment Variables.
+      Todo se genera con Google Cloud. Solo hacen falta DOS variables de entorno en Vercel:<br><br>
+      • <strong>GCP_SERVICE_ACCOUNT</strong> — JSON completo de la service account. Su <code>project_id</code> es el proyecto que se usa para guiones, imágenes, audio y video.<br>
+      • <strong>GCS_OUTPUT_BUCKET</strong> — nombre del bucket donde Veo deja los videos (sin <code>gs://</code>).<br><br>
+      Para cambiar de cuenta de Google Cloud basta con reemplazar estas dos y volver a desplegar — no hay ningún project ID ni bucket escrito en el código.
     </p>
+    <div id="apiHealth" style="font-size:12px;line-height:1.6;background:var(--bg-soft);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:14px">Comprobando…</div>
     <button class="btn" onclick="closeModal()">Entendido</button>
   `);
+  loadApiHealth();
 });
 
 // Chip toggle for subgenres — listen on the checkbox change (not label click)
@@ -1015,12 +1036,8 @@ document.querySelectorAll('.sg-chip input[type="checkbox"]').forEach(cb => {
 // ADULT_ONLY_SUBGENRES is initialised further down (temporal dead zone).
 document.getElementById('demoSelect')?.addEventListener('change', applyDemoCompatibility);
 
-// Restore saved ElevenLabs voice ID
-(function restoreVoiceId() {
-  const saved = localStorage.getItem('elevenlabs_voice_id');
-  const el = document.getElementById('elevenlabsVoiceId');
-  if (saved && el) el.value = saved;
-})();
+// Drop the leftover key from the removed ElevenLabs integration.
+try { localStorage.removeItem('elevenlabs_voice_id'); } catch(e) {}
 
 function getSelectedSubgenres() {
   return [...document.querySelectorAll('#subgeneroGrid .sg-chip.selected')]
@@ -1166,11 +1183,6 @@ ECCHI/HAREM ACTIVO — REGLA GENERAL (contenido adulto):
   return text;
 }
 
-// Show/hide ElevenLabs config when selected
-document.getElementById('voiceSelect').addEventListener('change', function() {
-  const el = document.getElementById('elevenlabsConfig');
-  if (el) el.style.display = this.value === 'elevenlabs' ? 'block' : 'none';
-});
 
 // ════════════════════════════════════════════════════════════════
 // PROJECTS MODAL
@@ -1419,13 +1431,9 @@ function speedLabel(v) {
   return `Rápido (${v.toFixed(2)}x)`;
 }
 
-// NOTE: a client-side generateElevenLabsAudio() function used to live here.
-// It was never called anywhere in the app (dead code), relied on an undefined
-// getKeys() function (guaranteed crash if ever invoked), and would have exposed
-// the ElevenLabs key directly in the browser. The real, working ElevenLabs path
-// is generateAudio() below → POST /api/audio → server-side key from Vercel env
-// vars (api/audio.js). Removed to avoid confusion for future edits.
-
+// All narration audio is generated by Google Cloud: Gemini TTS (Vertex AI) for
+// the gemini_* voices, Cloud TTS Neural2/WaveNet for the gcp_* voices. Both go
+// through /api/audio, which authenticates with the single GCP_SERVICE_ACCOUNT.
 async function generateAudio(text, voice, act) {
   const cleanText = cleanTextForTTS(text);
   if (!cleanText || cleanText.length < 3) throw new Error('Texto vacío para audio');
@@ -1433,20 +1441,10 @@ async function generateAudio(text, voice, act) {
   const speed = getVoiceSpeed();
   const emotion = document.getElementById('voiceEmotion')?.value || 'neutral';
 
-  // All audio goes through the proxy — keys are in Vercel env vars
-  const body = { text: cleanText, speed, emotion, act };
-
-  if (voice === 'elevenlabs') {
-    const voiceId = document.getElementById('elevenlabsVoiceId')?.value.trim()
-      || localStorage.getItem('elevenlabs_voice_id') || '';
-    if (!voiceId) throw new Error('Ingresa el Voice ID de ElevenLabs');
-    localStorage.setItem('elevenlabs_voice_id', voiceId);
-    body.provider = 'elevenlabs';
-    body.voiceId = voiceId;
-  } else {
-    body.provider = 'gemini';
-    body.voice = voice;
-  }
+  // Everything goes through the proxy — credentials live in Vercel env vars.
+  // The server picks the engine from the voice prefix: gcp_* → Cloud TTS,
+  // anything else → Gemini TTS.
+  const body = { text: cleanText, speed, emotion, act, voice };
 
   const res = await fetch('/api/audio', {
     method: 'POST',

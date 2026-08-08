@@ -1,5 +1,7 @@
 // ════════════════════════════════════════════════════════════════
-// AUDIO PROXY — Gemini TTS + ElevenLabs (keys from env vars)
+// AUDIO PROXY — Google Cloud only: Gemini TTS (Vertex AI) and
+// Cloud TTS Neural2/WaveNet. Credentials come from the single
+// GCP_SERVICE_ACCOUNT env var, same as every other endpoint.
 // Node.js runtime (NOT Edge): Vercel Edge Functions are deprecated
 // and hard-cap "must begin sending a response" at 25s regardless of
 // any maxDuration set in vercel.json — that 25s cap is exactly what
@@ -62,49 +64,17 @@ function pcmToWav(pcmB64) {
   return Buffer.from(wav).toString('base64');
 }
 
-function b64ToBase64(buf) {
-  const bytes = new Uint8Array(buf);
-  let bin = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-  }
-  return btoa(bin);
-}
-
 module.exports = async function handler(req, res) {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { text, provider, voice, voiceId, speed, emotion } = req.body || {};
+    const { text, speed, emotion } = req.body || {};
     if (!text) return res.status(400).json({ error: 'text required' });
-
-    // ─── ElevenLabs via proxy (key from env var) ───
-    if (provider === 'elevenlabs') {
-      const elKey = (process.env.ELEVENLABS_API_KEY || '').trim();
-      if (!elKey) return res.status(500).json({ error: 'ELEVENLABS_API_KEY no configurado en Vercel' });
-      if (!voiceId) return res.status(400).json({ error: 'voiceId requerido para ElevenLabs' });
-
-      const modelId = 'eleven_v3';
-      const voiceSettings = { stability: 0.45, similarity_boost: 0.80, style: 0.35, use_speaker_boost: true };
-
-      const elRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-        method: 'POST',
-        headers: { 'xi-api-key': elKey, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
-        body: JSON.stringify({ text, model_id: modelId, voice_settings: voiceSettings }),
-      });
-
-      if (!elRes.ok) {
-        const err = await elRes.json().catch(() => ({}));
-        const detail = err.detail?.message || err.detail || elRes.statusText;
-        return res.status(elRes.status).json({ error: `ElevenLabs ${elRes.status}: ${typeof detail === 'string' ? detail : JSON.stringify(detail)}` });
-      }
-
-      const buf = await elRes.arrayBuffer();
-      return res.status(200).json({ audioData: b64ToBase64(buf), mimeType: 'audio/mpeg' });
-    }
+    // The engine is chosen by the voice prefix; default to the same Gemini
+    // voice the TTS branch falls back to, so a missing value can never throw.
+    const voice = String((req.body || {}).voice || 'gemini_Orus');
 
     // ─── Google Cloud TTS (Neural2 / WaveNet) ───
     if (voice.startsWith('gcp_')) {

@@ -4,6 +4,7 @@
     "api/audio.js":        { "maxDuration": 60 },
     "api/script.js":       { "maxDuration": 60 },
     "api/video-start.js":  { "maxDuration": 30 },
-    "api/video-status.js": { "maxDuration": 30 }
+    "api/video-status.js": { "maxDuration": 30 },
+    "api/health.js":       { "maxDuration": 15 }
   }
 }

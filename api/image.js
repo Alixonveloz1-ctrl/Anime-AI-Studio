@@ -231,8 +231,16 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    const projectId = process.env.GCP_PROJECT_ID || JSON.parse(process.env.GCP_SERVICE_ACCOUNT).project_id;
-    const sa = JSON.parse(process.env.GCP_SERVICE_ACCOUNT);
+    // The service account JSON is the SINGLE source of the GCP project: its
+    // own project_id is used, exactly like every other endpoint. A separate
+    // GCP_PROJECT_ID override used to take precedence here only, so switching
+    // accounts by replacing the service account left images pointing at the
+    // old project while script/audio/video moved to the new one.
+    const saRaw = (process.env.GCP_SERVICE_ACCOUNT || '').trim();
+    if (!saRaw) return res.status(500).json({ error: 'GCP_SERVICE_ACCOUNT no configurado en Vercel' });
+    const sa = JSON.parse(saRaw);
+    const projectId = sa.project_id;
+    if (!projectId) return res.status(500).json({ error: 'GCP_SERVICE_ACCOUNT sin project_id — pega el JSON completo de la service account' });
     const token = await getAccessToken(sa);
 
     const aspectRatio = body.aspectRatio || '9:16';
