@@ -154,7 +154,7 @@ async function getAccessToken(sa) {
 // ─── GCS V4 signed URL ───
 // Works for GET (download) and PUT (direct browser upload), so large assets
 // never travel through a Vercel function.
-function signedUrl(sa, bucket, objectPath, { method = 'GET', expiresSeconds = 604800 } = {}) {
+function signedUrl(sa, bucket, objectPath, { method = 'GET', expiresSeconds = 604800, descargarComo = '' } = {}) {
   const now = new Date();
   const datetime = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); // YYYYMMDDTHHMMSSZ
   const date = datetime.slice(0, 8);
@@ -162,14 +162,29 @@ function signedUrl(sa, bucket, objectPath, { method = 'GET', expiresSeconds = 60
   const credentialScope = `${date}/auto/storage/goog4_request`;
   const credential = `${sa.client_email}/${credentialScope}`;
 
+  const params = [
+    ['X-Goog-Algorithm', 'GOOG4-RSA-SHA256'],
+    ['X-Goog-Credential', credential],
+    ['X-Goog-Date', datetime],
+    ['X-Goog-Expires', String(expiresSeconds)],
+    ['X-Goog-SignedHeaders', 'host'],
+  ];
+
+  // Sin esto el navegador ABRE el MP4 en una pestaña y sólo deja verlo: un
+  // vídeo servido sin Content-Disposition es algo que se reproduce, no algo
+  // que se descarga. La cabecera la pone GCS a partir de este parámetro, y va
+  // FIRMADA — añadirla a la URL después de firmar hace que se rechace la
+  // petición entera.
+  if (descargarComo) {
+    const nombre = String(descargarComo).replace(/[^\w.-]+/g, '_').slice(0, 120) || 'descarga';
+    params.push(['response-content-disposition', `attachment; filename="${nombre}"`]);
+  }
+
+  // Percent-encoding RFC 3986: encodeURIComponent deja pasar !'()* y la firma
+  // canónica no los admite.
+  const enc = s => encodeURIComponent(s).replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
   // Query params must be sorted alphabetically for the canonical request.
-  const queryParams = [
-    `X-Goog-Algorithm=GOOG4-RSA-SHA256`,
-    `X-Goog-Credential=${encodeURIComponent(credential)}`,
-    `X-Goog-Date=${datetime}`,
-    `X-Goog-Expires=${expiresSeconds}`,
-    `X-Goog-SignedHeaders=host`,
-  ].join('&');
+  const queryParams = params.map(([k, v]) => `${enc(k)}=${enc(v)}`).sort().join('&');
 
   // Path-style GCS URL, so the bucket is part of the canonical path.
   const encodedPath = objectPath.split('/').map(encodeURIComponent).join('/');

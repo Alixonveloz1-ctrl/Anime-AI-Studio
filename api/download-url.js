@@ -30,8 +30,12 @@ module.exports = async function handler(req, res) {
     }
 
     const sa = loadServiceAccount();
+    // Se firma como descarga, no como reproducción: sin esto el móvil abre el
+    // MP4 en una pestaña nueva y sólo lo deja ver.
+    const nombre = objectPath.split('/').pop() || 'video.mp4';
     return res.status(200).json({
-      url: signedUrl(sa, bucket, objectPath, { expiresSeconds: 6 * 3600 }),
+      nombre,
+      url: signedUrl(sa, bucket, objectPath, { expiresSeconds: 6 * 3600, descargarComo: nombre }),
     });
   } catch (e) {
     return fail(res, e);
