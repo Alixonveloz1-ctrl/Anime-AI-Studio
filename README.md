@@ -207,6 +207,31 @@ exactamente los segundos que vas a oír.
 
 El volumen sí va en la petición, que ese Chirp lo admite.
 
+### El texto que llega al motor
+
+Un TTS lee lo que está escrito, literalmente: no sabe que `+10` significa "más
+diez", dice **"más uno cero"**, porque eso son los caracteres. Así que nada
+numérico ni simbólico llega crudo — todo se convierte a palabras antes de salir:
+
+|Se escribe|Se dice|
+|----------|-------|
+|`+10` · `-5`|más diez · menos cinco|
+|`3 días`|tres días|
+|`21:00` · `9:12`|las veintiuna · las nueve y doce|
+|`40%`|cuarenta por ciento|
+|`$1500` · `12 km` · `8,4`|mil quinientos dólares · doce kilómetros · ocho coma cuatro|
+|`152.000`|ciento cincuenta y dos mil|
+|`lote 07`|lote cero siete (con cero delante es un código, se deletrea)|
+
+**Tartamudeos.** Un `Q-Que` lo lee como *"cu, que"*, porque una letra sola se lee
+por su nombre. Con una sola letra se quita y queda `Que`. Con dos o tres, que ya
+se pueden pronunciar, se conserva el tartamudeo y sólo se cambia el guion por una
+coma: `Pe-pero` → `Pe, pero`.
+
+No es una regla contra las letras dobles: sólo entra cuando lo de delante del
+guion es el principio de la palabra de detrás. `teórico-práctico`, `Ana-María` y
+`reencarnar` se quedan exactamente como están.
+
 ### Dónde vive el clima
 
 Veo trata la lluvia como una capa de partículas a pantalla completa: si la ve en

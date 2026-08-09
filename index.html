@@ -1633,9 +1633,134 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
 // AUDIO GENERATION (via /api/audio → Vertex AI Gemini TTS)
 // ════════════════════════════════════════════════════════════════
 // Clean narration text for TTS: remove markdown markers, decorative chars, normalize quotes
+// ════════════════════════════════════════════════════════════════
+// NORMALIZACIÓN PARA VOZ
+//
+// A TTS engine reads what is written, literally. It has no idea that "+10"
+// means "más diez": it says "más uno cero", because those are the characters.
+// Everything numeric or symbolic has to reach it already spelled out in words.
+// ════════════════════════════════════════════════════════════════
+const NUM_UNI = ['cero','uno','dos','tres','cuatro','cinco','seis','siete','ocho','nueve',
+  'diez','once','doce','trece','catorce','quince','dieciséis','diecisiete','dieciocho',
+  'diecinueve','veinte','veintiuno','veintidós','veintitrés','veinticuatro','veinticinco',
+  'veintiséis','veintisiete','veintiocho','veintinueve'];
+const NUM_DEC = ['','','','treinta','cuarenta','cincuenta','sesenta','setenta','ochenta','noventa'];
+const NUM_CEN = ['','ciento','doscientos','trescientos','cuatrocientos','quinientos',
+  'seiscientos','setecientos','ochocientos','novecientos'];
+
+function tresCifras(n, femenino) {
+  if (n === 0) return '';
+  if (n === 100) return 'cien';
+  let s = '';
+  const c = Math.floor(n / 100), r = n % 100;
+  if (c) s += femenino ? NUM_CEN[c].replace(/os$/, 'as') : NUM_CEN[c];
+  if (r) {
+    if (s) s += ' ';
+    if (r < 30) s += NUM_UNI[r];
+    else { s += NUM_DEC[Math.floor(r / 10)]; if (r % 10) s += ' y ' + NUM_UNI[r % 10]; }
+  }
+  if (femenino) s = s.replace(/\bveintiuno\b/, 'veintiuna').replace(/\buno\b/, 'una');
+  return s;
+}
+// "uno" → "un" y "veintiuno" → "veintiún" cuando va delante de mil o millones.
+const apocope = s => s.replace(/veintiuno$/, 'veintiún').replace(/\buno$/, 'un');
+
+function enLetras(n, femenino) {
+  n = Math.trunc(Number(n));
+  if (!isFinite(n)) return '';
+  if (n < 0) return 'menos ' + enLetras(-n, femenino);
+  if (n === 0) return 'cero';
+  const partes = [];
+  const millones = Math.floor(n / 1e6), resto = n % 1e6;
+  const miles = Math.floor(resto / 1000), unidades = resto % 1000;
+  if (millones) partes.push(millones === 1 ? 'un millón' : apocope(enLetras(millones)) + ' millones');
+  if (miles)    partes.push(miles === 1 ? 'mil' : apocope(tresCifras(miles)) + ' mil');
+  if (unidades) partes.push(tresCifras(unidades, femenino));
+  return partes.join(' ');
+}
+
+const digitoAdigito = s => String(s).split('').map(d => NUM_UNI[Number(d)] ?? d).join(' ');
+
+// Ordinales que de verdad aparecen en un guion. Más allá de décimo se dice el
+// cardinal, que es lo que hace todo el mundo al hablar.
+const ORDINALES = ['', 'primer', 'segund', 'tercer', 'cuart', 'quint', 'sext', 'séptim', 'octav', 'noven', 'décim'];
+
+// Un tartamudeo se escribe "Q-Que" o "Pe-pero". El motor lee la letra suelta por
+// su nombre —"cu, que"— o incluso lee el guion. Con una sola letra se quita: no
+// hay forma de que suene a tartamudeo. Con dos o tres, que ya se pueden
+// pronunciar, se deja el tartamudeo y sólo se cambia el guion por una coma.
+// Sólo entra si lo de delante es principio de la palabra de detrás, así que
+// "teórico-práctico" o "Ana-María" no se tocan.
+function arreglarTartamudeo(t) {
+  // Los límites de palabra de JavaScript (\b) son ASCII: "é" no cuenta como
+  // letra, así que "Qué-Qué" no casaba. Con \p{L} y las miradas alrededor sí,
+  // y funciona igual en cualquier idioma acentuado.
+  const norm = s => s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+  return String(t).replace(/(?<!\p{L})(\p{L}{1,3})-(\p{L}{2,})(?!\p{L})/gu,
+    (m, pre, palabra) => {
+      if (!norm(palabra).startsWith(norm(pre))) return m;   // no es tartamudeo
+      return pre.length === 1 ? palabra : `${pre}, ${palabra}`;
+    });
+}
+
+function normalizarParaVoz(texto) {
+  let t = String(texto);
+
+  t = arreglarTartamudeo(t);
+
+  // Signos delante de un número: el motor los deletrea o los ignora.
+  t = t.replace(/\+\s?(\d)/g, 'más $1').replace(/−\s?(\d)/g, 'menos $1');
+  t = t.replace(/(^|[\s(])-\s?(\d)/g, '$1menos $2');
+  t = t.replace(/(\d)\s?°\s?C\b/gi, '$1 grados').replace(/(\d)\s?º\s?C\b/gi, '$1 grados');
+
+  // Horas: 21:00 → las veintiuna · 09:12 → las nueve y doce
+  t = t.replace(/((?:a\s+)?las\s+)?\b(\d{1,2}):(\d{2})(?::\d{2})?\b/gi, (m, pre, h, mi) => {
+    const H = Number(h), M = Number(mi);
+    if (H > 23 || M > 59) return m;
+    const hh = enLetras(H, true);
+    const cuerpo = M === 0 ? hh : hh + ' y ' + enLetras(M);
+    return pre ? pre + cuerpo : 'las ' + cuerpo;
+  });
+
+  // Ordinales: 1º 2ª 3er
+  t = t.replace(/\b(\d{1,2})\s?(º|°|o\b)/g, (m, n) => ORDINALES[+n] ? ORDINALES[+n] + (n === '1' || n === '3' ? 'o' : 'o') : m);
+  t = t.replace(/\b(\d{1,2})\s?(ª|a\b)/g, (m, n) => ORDINALES[+n] ? ORDINALES[+n].replace(/r$/, 'ra') + (ORDINALES[+n].endsWith('r') ? '' : 'a') : m);
+
+  // Monedas y unidades pegadas al número
+  t = t.replace(/¥\s?(\d[\d.,]*)/g, (_, n) => enLetras(n.replace(/[.,]/g, '')) + ' yenes');
+  t = t.replace(/\$\s?(\d[\d.,]*)/g, (_, n) => enLetras(n.replace(/[.,]/g, '')) + ' dólares');
+  t = t.replace(/€\s?(\d[\d.,]*)/g, (_, n) => enLetras(n.replace(/[.,]/g, '')) + ' euros');
+  t = t.replace(/(\d+)\s?%/g, (_, n) => enLetras(n) + ' por ciento');
+  t = t.replace(/(\d+)\s?km²/gi, (_, n) => enLetras(n) + ' kilómetros cuadrados');
+  t = t.replace(/(\d+)\s?km\b/gi, (_, n) => enLetras(n) + ' kilómetros');
+  t = t.replace(/(\d+)\s?kg\b/gi, (_, n) => enLetras(n) + ' kilos');
+  t = t.replace(/(\d+)\s?m\b/g,  (_, n) => enLetras(n) + ' metros');
+  t = t.replace(/(\d+)\s?cm\b/gi, (_, n) => enLetras(n) + ' centímetros');
+
+  // Decimales con coma y miles con punto (uso español)
+  t = t.replace(/\b(\d+),(\d+)\b/g,
+    (_, a, b) => enLetras(a) + ' coma ' + (b.length > 2 ? digitoAdigito(b) : enLetras(b)));
+  t = t.replace(/\b\d{1,3}(?:\.\d{3})+\b/g, n => enLetras(n.replace(/\./g, '')));
+
+  // Enteros sueltos. Con cero delante se leen dígito a dígito: es un código, una
+  // matrícula o una hora, no una cantidad.
+  t = t.replace(/\b0(\d+)\b/g, m => digitoAdigito(m));
+  t = t.replace(/\b\d{1,9}\b/g, n => enLetras(n));
+  t = t.replace(/\d/g, d => NUM_UNI[Number(d)] || '');   // lo que quede suelto
+
+  // Símbolos que el motor lee mal o deletrea
+  t = t.replace(/&/g, ' y ').replace(/[¥$€]/g, '')
+       .replace(/[²³]/g, '').replace(/[+±×÷=<>#@^|\\/]/g, ' ')
+       .replace(/_/g, ' ');
+
+  // Un espacio delante de una coma se lee como pausa doble. Sale solo al
+  // convertir "Dijo —con calma—" en "Dijo , con calma,".
+  return t.replace(/\s+([,.;:!?…])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+}
+
 function cleanTextForTTS(text) {
   if (!text) return '';
-  return String(text)
+  return normalizarParaVoz(String(text)
     // Markdown italic/bold markers — these mark thoughts, not to be read
     .replace(/\*\*([^*]+)\*\*/g, '$1')   // **bold**
     .replace(/\*([^*]+)\*/g, '$1')        // *italic*
@@ -1656,7 +1781,7 @@ function cleanTextForTTS(text) {
     .replace(/\.{3,}/g, '...')
     .replace(/!+/g, '!')
     .replace(/\?+/g, '?')
-    .trim();
+    .trim());
 }
 
 function getVoiceSpeed() {
