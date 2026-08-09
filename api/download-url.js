@@ -10,7 +10,10 @@ module.exports = async function handler(req, res) {
   if (begin(req, res)) return;
 
   try {
-    const { gcsUri } = req.body || {};
+    // `descarga: false` pide el enlace para VER, no para bajar. Un enlace
+    // firmado como adjunto sirve para el botón de descarga pero estorba a un
+    // <video>, así que la vista previa pide el suyo.
+    const { gcsUri, descarga } = req.body || {};
     if (!gcsUri || !String(gcsUri).startsWith('gs://')) {
       return res.status(400).json({ error: 'gcsUri requerido (gs://…)' });
     }
@@ -30,12 +33,16 @@ module.exports = async function handler(req, res) {
     }
 
     const sa = loadServiceAccount();
-    // Se firma como descarga, no como reproducción: sin esto el móvil abre el
-    // MP4 en una pestaña nueva y sólo lo deja ver.
+    // Para descargar se firma como adjunto: sin eso el móvil abre el MP4 en una
+    // pestaña nueva y sólo lo deja ver.
     const nombre = objectPath.split('/').pop() || 'video.mp4';
+    const paraVer = descarga === false;
     return res.status(200).json({
       nombre,
-      url: signedUrl(sa, bucket, objectPath, { expiresSeconds: 6 * 3600, descargarComo: nombre }),
+      url: signedUrl(sa, bucket, objectPath, {
+        expiresSeconds: 6 * 3600,
+        descargarComo: paraVer ? '' : nombre,
+      }),
     });
   } catch (e) {
     return fail(res, e);

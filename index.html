@@ -569,6 +569,18 @@
       <label class="sg-chip selected" id="assemblyClipsChip" style="display:inline-flex;margin-bottom:10px"><input type="checkbox" id="assemblyUseClips" checked> 🎬 Usar clips de Veo cuando existan</label>
       <label class="sg-chip" id="assemblyMusicChip" style="display:inline-flex;margin-bottom:10px"><input type="checkbox" id="assemblyUseMusic"> 🎵 Música de fondo</label>
       <p style="font-size:11px;color:var(--text-dim);margin:0 0 10px;line-height:1.5">Apagado: se monta <strong>sólo con la voz</strong>, aunque el episodio tenga música generada. La música se le puede poner después en CapCut, eligiéndola tú.</p>
+
+      <div id="assemblyMusicVolBox" style="display:none;margin-bottom:12px">
+        <label style="margin-top:0">Volumen de la música — <span id="musicVolLabel" style="color:var(--accent)">25%</span></label>
+        <input type="range" id="assemblyMusicVol" min="0" max="80" step="5" value="25"
+          style="padding:4px 0;cursor:pointer;accent-color:var(--accent)"
+          oninput="document.getElementById('musicVolLabel').textContent = this.value + '%'">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);margin-top:2px">
+          <span>0% Sin música</span><span>25% Fondo</span><span>80% Muy presente</span>
+        </div>
+        <button class="btn-sec" id="btnPreviewMezcla" style="margin-top:8px;width:100%">🔊 Escuchar cómo quedaría</button>
+        <div id="mezclaPreview" style="margin-top:8px"></div>
+      </div>
       <div id="assemblyProgress" style="display:none;margin-bottom:10px">
         <div class="progress-text" id="assemblyProgressText">Iniciando...</div>
         <div class="progress"><div class="progress-bar" id="assemblyProgressBar" style="width:0%"></div></div>
@@ -1933,13 +1945,14 @@ function pintarVocesDelIdioma() {
 // ════════════════════════════════════════════════════════════════
 const AJUSTES_KEY = 'ajustes_estudio';
 const CAMPOS_AJUSTE = ['imageModelSelect', 'veoModelSelect', 'aspectRatio',
-                       'voiceLang', 'voiceSelect', 'voiceSpeed', 'voiceVolumen'];
+                       'voiceLang', 'voiceSelect', 'voiceSpeed', 'voiceVolumen',
+                       'assemblyUseClips', 'assemblyUseMusic', 'assemblyMusicVol'];
 
 function guardarAjustes() {
   const datos = {};
   for (const id of CAMPOS_AJUSTE) {
     const el = document.getElementById(id);
-    if (el) datos[id] = el.value;
+    if (el) datos[id] = el.type === 'checkbox' ? el.checked : el.value;
   }
   try { localStorage.setItem(AJUSTES_KEY, JSON.stringify(datos)); } catch (e) { /* cuota llena */ }
 }
@@ -1954,6 +1967,7 @@ function ajustesGuardados() {
 function aplicarAjuste(id, valor) {
   const el = document.getElementById(id);
   if (!el || valor == null) return false;
+  if (el.type === 'checkbox') { el.checked = !!valor; return true; }
   if (el.tagName === 'SELECT' && ![...el.options].some(o => o.value === valor)) return false;
   el.value = valor;
   return true;
@@ -1970,6 +1984,16 @@ function restaurarAjustes() {
   const vlab = document.getElementById('volLabel');
   if (vol && vlab) vlab.textContent = vol.value == 0 ? 'Normal (0 dB)'
     : (vol.value > 0 ? `+${vol.value} dB` : `${vol.value} dB`);
+  const mv = document.getElementById('assemblyMusicVol');
+  const mlab = document.getElementById('musicVolLabel');
+  if (mv && mlab) mlab.textContent = mv.value + '%';
+  // Las casillas pintan su propia pastilla, y la de música abre o cierra el
+  // control de volumen.
+  document.getElementById('assemblyClipsChip')
+    ?.classList.toggle('selected', document.getElementById('assemblyUseClips')?.checked !== false);
+  document.getElementById('assemblyMusicChip')
+    ?.classList.toggle('selected', document.getElementById('assemblyUseMusic')?.checked === true);
+  sincronizarCajaDeMusica();
   for (const id of CAMPOS_AJUSTE) {
     document.getElementById(id)?.addEventListener('change', guardarAjustes);
   }
@@ -5467,6 +5491,13 @@ async function uploadAssets(items, onProgress) {
 // comes from SALIDA, not from here, so this never reaches the user.
 function buildMontarScript(scenes, opts) {
   const { vertical, hasMusic, episodio } = opts;
+  // Porcentaje en la interfaz, ganancia lineal aquí. Acotado por si llega algo
+  // raro: por encima de 1 la música pasaría por encima de la voz.
+  // Si NO llega valor se usa el mismo 25% que enseña la interfaz, no 0: un
+  // parámetro que se olvide tiene que sonar de más, no dejar el episodio mudo
+  // de música sin que nada lo diga. Quien no la quiera, apaga la casilla.
+  const pedido = Number(opts.musicVol);
+  const volMusica = Math.min(1, Math.max(0, (Number.isFinite(pedido) ? pedido : 25) / 100));
   const W = vertical ? 1080 : 1920;
   const H = vertical ? 1920 : 1080;
   const L = [];
@@ -5561,15 +5592,16 @@ function buildMontarScript(scenes, opts) {
       // `afade=t=out:st=:d=3`, and every episode WITH MUSIC died on it — with
       // nothing but "exit code 1" to show for it.
       'FADE=$(awk "BEGIN{f=$TOTAL-3; if(f<0)f=0; printf \\"%.2f\\", f}")',
-      // La música es un complemento: tiene que oírse apenas, sólo para que la
-      // voz no suene seca. Dos cambios sobre lo de antes:
-      //   volume 0.18 -> 0.09, y un hueco de 7 dB alrededor de 2 kHz, que es la
-      //   banda donde se entiende el habla. Medido: la voz pasa de estar 14 dB
-      //   por encima de la música a estar 21 dB.
-      // (Se probó además ducking con sidechaincompress y NO servía: con la voz
-      //  en mono a 24 kHz y la música en estéreo a 48 kHz medía 0 dB de bajada.)
-      'ffmpeg -y -i narracion.wav -stream_loop -1 -i musica.wav ' +
-      '-filter_complex "[1:a]volume=0.09,equalizer=f=2000:width_type=o:width=2:g=-7,' +
+      // El volumen lo elige quien monta, y lo oye antes con "Escuchar cómo
+      // quedaría": clavarlo en el código sale mal en las dos direcciones — 0.18
+      // tapaba la voz y 0.09 no se oía.
+      // El hueco de 7 dB alrededor de 2 kHz sí es fijo: esa es la banda donde se
+      // entiende el habla, y vaciarla deja subir la música sin que se coma la
+      // voz. Medido: con el hueco, la voz saca 21 dB a la música en vez de 14.
+      // (Se probó ducking con sidechaincompress y NO servía: con la voz en mono
+      //  a 24 kHz y la música en estéreo a 48 kHz medía 0 dB de bajada.)
+      `ffmpeg -y -i narracion.wav -stream_loop -1 -i musica.wav ` +
+      `-filter_complex "[1:a]volume=${volMusica.toFixed(2)},equalizer=f=2000:width_type=o:width=2:g=-7,` +
       'afade=t=in:st=0:d=2,afade=t=out:st=$FADE:d=3[m];' +
       '[0:a][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]" ' +
       '-map "[a]" -t "$TOTAL" mezcla.wav');
@@ -5595,6 +5627,131 @@ function buildMontarScript(scenes, opts) {
   p(`echo "Montado: ${salida}"`);
   return L.join('\n') + '\n';
 }
+
+// ════════════════════════════════════════════════════════════════
+// VOLUMEN DE LA MÚSICA — se elige y se ESCUCHA antes de montar.
+//
+// Estaba clavado en el código y salió mal en las dos direcciones: 0.18 tapaba
+// la voz, 0.09 no se oía. La única forma de acertar es oírlo, y oírlo ANTES de
+// gastar un render de varios minutos.
+//
+// La escucha se arma con el mismo montaje que hará ffmpeg — misma ganancia y
+// mismo hueco en la banda de la voz — para que lo que suena aquí sea lo que va
+// a salir, no una aproximación.
+// ════════════════════════════════════════════════════════════════
+const MUSICA_EQ_FREQ = 2000;   // banda donde se entiende el habla
+const MUSICA_EQ_GAIN = -7;     // dB, igual que el equalizer de ffmpeg
+// ffmpeg mide el ancho en octavas; la Web Audio API lo mide en Q.
+// Para N octavas: Q = 2^(N/2) / (2^N − 1). Con N = 2 → 2/3.
+const MUSICA_EQ_Q = Math.pow(2, 2 / 2) / (Math.pow(2, 2) - 1);
+
+function volumenDeMusica() {
+  const el = document.getElementById('assemblyMusicVol');
+  const v = Number(el?.value);
+  return Number.isFinite(v) ? v : 25;
+}
+
+function sincronizarCajaDeMusica() {
+  const on = document.getElementById('assemblyUseMusic')?.checked === true;
+  const caja = document.getElementById('assemblyMusicVolBox');
+  if (caja) caja.style.display = on ? 'block' : 'none';
+}
+
+// Un trozo de narración con la música por debajo, mezclado aquí mismo.
+async function previsualizarMezcla() {
+  const btn  = document.getElementById('btnPreviewMezcla');
+  const cont = document.getElementById('mezclaPreview');
+  if (!btn || !cont) return;
+  const original = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Preparando...';
+  cont.innerHTML = '';
+
+  try {
+    const escenas = (state.scenes || []).filter(s => s.narration);
+    // Se toma la primera escena CON audio y la música de su propio acto: así se
+    // oye una combinación que existe de verdad en este episodio.
+    let voz = null, acto = null;
+    for (const s of escenas) {
+      const a = await dbGet(sceneAudKey(s.id));
+      if (a) { voz = a; acto = s.act; break; }
+    }
+    if (!voz) throw new Error('Ninguna escena tiene narración generada todavía');
+
+    let mus = acto ? await dbGet(musicKey(acto)) : null;
+    if (!mus) for (const a of episodeActs()) { mus = await dbGet(musicKey(a)); if (mus) break; }
+    if (!mus) throw new Error('Este episodio no tiene música generada');
+
+    const trozo = d => { const i = d.indexOf('|'); return i > 0 ? d.slice(i + 1) : d; };
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const bufVoz = await ctx.decodeAudioData(base64ToArrayBuffer(trozo(voz)));
+    const bufMus = await ctx.decodeAudioData(base64ToArrayBuffer(trozo(mus)));
+    await ctx.close();
+
+    const sr   = Math.max(bufVoz.sampleRate, bufMus.sampleRate);
+    const segs = Math.min(bufVoz.duration, 20);
+    const off  = new OfflineAudioContext(2, Math.ceil(segs * sr), sr);
+
+    const nVoz = off.createBufferSource();
+    nVoz.buffer = bufVoz;
+    nVoz.connect(off.destination);
+    nVoz.start(0);
+
+    // La música se repite hasta cubrir la narración, igual que el -stream_loop
+    // del montaje.
+    const gan = off.createGain();
+    gan.gain.value = Math.min(1, Math.max(0, volumenDeMusica() / 100));
+    const eq = off.createBiquadFilter();
+    eq.type = 'peaking';
+    eq.frequency.value = MUSICA_EQ_FREQ;
+    eq.Q.value = MUSICA_EQ_Q;
+    eq.gain.value = MUSICA_EQ_GAIN;
+    eq.connect(gan).connect(off.destination);
+    for (let t = 0; t < segs; t += bufMus.duration) {
+      const n = off.createBufferSource();
+      n.buffer = bufMus;
+      n.connect(eq);
+      n.start(t);
+    }
+
+    const wav = audioBufferToWav(await off.startRendering());
+    const url = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }));
+    cont.innerHTML = `
+      <audio controls autoplay src="${url}" style="width:100%"></audio>
+      <div style="font-size:10px;color:var(--text-dim);margin-top:4px">
+        Escena ${escenas.find(s => s.act === acto)?.num || 1} con la música al ${volumenDeMusica()}% — así se montará.
+      </div>`;
+  } catch (e) {
+    cont.innerHTML = `<div style="font-size:11px;color:#ff9b9b">${e.message}</div>`;
+  } finally {
+    btn.disabled = false; btn.innerHTML = original;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// VISTA PREVIA DEL MONTAJE — el MP4 terminado, reproducido en la app.
+// Pide su enlace SIN cabecera de descarga: un enlace firmado como adjunto
+// sirve para el botón de bajar, pero a un <video> le estorba.
+// ════════════════════════════════════════════════════════════════
+window.verMontaje = async function(destino = 'assemblyResult') {
+  const gs = state.lastAssembly;
+  const cont = document.getElementById(destino);
+  if (!gs) { showToast('No hay ningún montaje todavía', 'error'); return; }
+  if (!cont) return;
+  const previo = document.getElementById('montajeVideo');
+  if (previo) { previo.closest('div').remove(); return; }   // segundo toque: se cierra
+  try {
+    const d = await enlaceDeDescarga(gs, false);
+    const caja = document.createElement('div');
+    caja.style.marginTop = '10px';
+    caja.innerHTML = `
+      <video id="montajeVideo" src="${d.url}" controls playsinline preload="metadata"
+        style="width:100%;max-height:70vh;border-radius:10px;background:#000;display:block"></video>`;
+    cont.appendChild(caja);
+    caja.querySelector('video').play().catch(() => {});
+  } catch (e) {
+    openErrorModal('No se pudo abrir la vista previa', e.message);
+  }
+};
 
 async function checkAssemblyAvailable() {
   const el = document.getElementById('assemblyStatus');
@@ -5699,6 +5856,7 @@ async function assembleEpisode() {
     // un episodio no se pierde por eso. Con el interruptor en off se monta con
     // la voz sola y la música se elige después, fuera.
     const usarMusica = document.getElementById('assemblyUseMusic')?.checked === true;
+    const musicVol = volumenDeMusica();
     let hasMusic = false;
     if (usarMusica) {
       for (const act of episodeActs()) {
@@ -5722,8 +5880,8 @@ async function assembleEpisode() {
     const manifest = {
       carpeta: carpetaProy,
       episodio: epNum,
-      hoja: { titulo: state.universe?.title || '', episodio: epNum, escenas: guion.length, vertical, hasMusic },
-      script: buildMontarScript(guion, { vertical, hasMusic, episodio: epNum }),
+      hoja: { titulo: state.universe?.title || '', episodio: epNum, escenas: guion.length, vertical, hasMusic, musicVol },
+      script: buildMontarScript(guion, { vertical, hasMusic, musicVol, episodio: epNum }),
       descargas,
     };
     const startRes = await fetch('/api/assemble', {
@@ -5754,10 +5912,14 @@ async function assembleEpisode() {
     saveState();
     out.innerHTML = `
       <div style="background:rgba(100,220,100,0.08);border:1px solid rgba(100,220,100,0.3);border-radius:10px;padding:12px">
-        <div style="font-weight:600;margin-bottom:8px">✅ Episodio ${epNum} montado</div>
+        <div style="font-weight:600;margin-bottom:8px">✅ Episodio ${epNum} montado${hasMusic ? ` · música al ${musicVol}%` : ' · sin música'}</div>
         <div style="font-size:12px;color:var(--text-dim);word-break:break-all;margin-bottom:8px">${start.salida}</div>
-        <button class="btn-sec" onclick="descargarMontaje()">⬇️ Descargar MP4</button>
+        <div class="btn-row">
+          <button class="btn-sec" onclick="verMontaje()">▶️ Ver</button>
+          <button class="btn-sec" onclick="descargarMontaje()">⬇️ Descargar MP4</button>
+        </div>
       </div>`;
+    verMontaje();
     showToast('Video montado 🎞️', 'success');
   } catch (e) {
     openErrorModal('Error al montar', e.message);
@@ -5769,10 +5931,10 @@ async function assembleEpisode() {
 
 // The MP4 lands in the bucket, which is private, so a signed link is minted on
 // demand instead of being kept around.
-async function enlaceDeDescarga(gcsUri) {
+async function enlaceDeDescarga(gcsUri, descarga = true) {
   const res = await fetch('/api/download-url', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ gcsUri }),
+    body: JSON.stringify({ gcsUri, descarga }),
   });
   const d = await res.json();
   if (!res.ok || d.error) throw new Error(d.error || `download-url ${res.status}`);
@@ -5840,7 +6002,29 @@ document.getElementById('assemblyUseClips')?.addEventListener('change', function
 });
 document.getElementById('assemblyUseMusic')?.addEventListener('change', function() {
   document.getElementById('assemblyMusicChip')?.classList.toggle('selected', this.checked);
+  sincronizarCajaDeMusica();
 });
+document.getElementById('btnPreviewMezcla')?.addEventListener('click', previsualizarMezcla);
+// Mover el volumen invalida lo que se acaba de escuchar.
+document.getElementById('assemblyMusicVol')?.addEventListener('change', function() {
+  const c = document.getElementById('mezclaPreview');
+  if (c && c.innerHTML) c.innerHTML = '<div style="font-size:10px;color:var(--text-dim)">Volumen cambiado — vuelve a escuchar</div>';
+});
+
+// Un montaje de una sesión anterior sigue en el bucket: se puede ver y bajar sin
+// volver a montar.
+function mostrarUltimoMontaje() {
+  const out = document.getElementById('assemblyResult');
+  if (!out || !state.lastAssembly || out.innerHTML.trim()) return;
+  out.innerHTML = `
+    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px">
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Último montaje de este episodio</div>
+      <div class="btn-row">
+        <button class="btn-sec" onclick="verMontaje()">▶️ Ver</button>
+        <button class="btn-sec" onclick="descargarMontaje()">⬇️ Descargar MP4</button>
+      </div>
+    </div>`;
+}
 
 // ════════════════════════════════════════════════════════════════
 // EXPORT ZIP
@@ -6333,6 +6517,7 @@ function renderAll() {
   document.getElementById('voiceLang')?.addEventListener('change', pintarVocesDelIdioma);
   cargarVoces();
   renderAll();
+  mostrarUltimoMontaje();
 })();
 
 </script>
