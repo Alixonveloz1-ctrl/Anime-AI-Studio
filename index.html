@@ -3913,6 +3913,11 @@ async function renderScenes() {
     const slotCell = (slot, img) => {
       const numLbl = slot === 'A' ? '1' : slot === 'B' ? '2' : '3';
       const vid = vids[slot];
+      // Encadenar sólo tiene sentido si hay un plano siguiente al que llegar.
+      const iSlot = slots.indexOf(slot);
+      const haySiguiente = iSlot >= 0 && iSlot < slots.length - 1;
+      const suelto = !!s['sueltoPlano' + slot];
+      const sigLbl = haySiguiente ? (slots[iSlot + 1] === 'B' ? '2' : '3') : '';
       return `
       <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
         <div class="scene-img" style="aspect-ratio:${cssRatio};overflow:hidden;min-height:0;margin-bottom:0;position:relative;${img ? 'cursor:zoom-in' : ''}"${img ? ` onclick="openImageFullscreen('${s.id}','${slot}')"` : ''}>
@@ -3923,6 +3928,14 @@ async function renderScenes() {
         <button class="btn-sec" style="font-size:10px;padding:3px 4px;min-width:0" onclick="generateSceneImageAB('${s.id}','${slot}')">${img ? '🔄' : '🖼️'} ${numLbl}</button>
         <button id="btnVid_${s.id}_${slot}" class="btn-sec" style="font-size:10px;padding:3px 4px;min-width:0;border-color:rgba(0,229,255,0.3);color:var(--accent2)"
           onclick="generateSceneVideo('${s.id}','${slot}')">${vid ? '🔄' : '🎬'} ${numLbl}</button>
+        ${haySiguiente ? `
+        <button id="btnCad_${s.id}_${slot}" class="btn-sec" onclick="alternarEncadenado('${s.id}','${slot}')"
+          data-sig="${sigLbl}"
+          title="${suelto ? `Sólo usa la imagen ${numLbl}` : `Empieza en la imagen ${numLbl} y termina en la ${sigLbl}`}"
+          style="font-size:9px;padding:2px 3px;min-width:0;${suelto
+            ? 'border-color:rgba(255,255,255,0.15);color:var(--text-dim)'
+            : 'border-color:rgba(180,120,255,0.45);color:#c39bff'}"
+          >${suelto ? `✂️ solo ${numLbl}` : `🔗 ${numLbl}→${sigLbl}`}</button>` : ''}
         <div id="vidStatus_${s.id}_${slot}" style="font-size:9px;color:var(--text-dim);text-align:center;min-height:11px"></div>
         ${vid ? `
         <div style="border-radius:6px;overflow:hidden;background:#000">
@@ -4363,6 +4376,46 @@ function prepararFotograma(b64) {
   });
 }
 
+// Encadenar dos planos es lo normal: el clip termina en la imagen del plano
+// siguiente y el corte no se nota. Pero cuando los dos planos son PERSONAJES
+// DISTINTOS en un sitio que se ve igual por todas partes —un pantano, un
+// bosque— Veo no entiende que tiene que cambiar de personaje: los funde en uno.
+// No hay forma de arreglar eso desde el prompt, así que se decide por plano.
+window.alternarEncadenado = function(sceneId, slot) {
+  const s = (state.scenes || []).find(x => x.id === sceneId);
+  if (!s) return;
+  const campo = 'sueltoPlano' + slot;
+  s[campo] = !s[campo];
+  saveState();
+
+  // Se repinta sólo este botón: volver a dibujar 48 escenas en el móvil pierde
+  // la posición del scroll justo cuando estás revisando plano por plano.
+  const btn = document.getElementById(`btnCad_${sceneId}_${slot}`);
+  if (!btn) { renderScenes(); return; }
+  const num = slot === 'A' ? '1' : slot === 'B' ? '2' : '3';
+  // Cuál es el plano siguiente lo decidió el dibujo y va guardado en el botón:
+  // sacarlo del texto daba "1→1", porque en "✂️ solo 1" el único dígito es el
+  // del propio plano.
+  const sig = btn.dataset.sig || (slot === 'A' ? '2' : '3');
+  if (s[campo]) {
+    btn.textContent = `✂️ solo ${num}`;
+    btn.style.borderColor = 'rgba(255,255,255,0.15)';
+    btn.style.color = 'var(--text-dim)';
+    btn.title = `Sólo usa la imagen ${num}`;
+  } else {
+    btn.textContent = `🔗 ${num}→${sig}`;
+    btn.style.borderColor = 'rgba(180,120,255,0.45)';
+    btn.style.color = '#c39bff';
+    btn.title = `Empieza en la imagen ${num} y termina en la ${sig}`;
+  }
+  // El clip ya generado se hizo con la otra regla, así que deja de valer.
+  if (state.scenes.some(x => x.id === sceneId)) {
+    dbGet(sceneVidKeyBy(sceneId, slot)).then(v => {
+      if (v) showToast(`El clip ${num} de la escena ${s.num} ya no coincide — regeneralo`, 'error');
+    });
+  }
+};
+
 window.generateSceneVideo = async function(sceneId, slot = 'A') {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
@@ -4381,9 +4434,11 @@ window.generateSceneVideo = async function(sceneId, slot = 'A') {
     // Continuity: this clip starts on its own still and ENDS on the next shot's
     // still, so shot N and shot N+1 join without a jump. The last shot of the
     // scene has nothing to join to — the scene cuts there.
+    // ...salvo que este plano esté marcado como suelto: dos personajes distintos
+    // en un escenario uniforme salen fundidos en vez de sucederse.
     const slots = await sceneSlots(s);
     const idx = slots.indexOf(slot);
-    const next = idx >= 0 ? slots[idx + 1] : null;
+    const next = (idx >= 0 && !s['sueltoPlano' + slot]) ? slots[idx + 1] : null;
     const lastFrame = next ? await dbGet(sceneImgKeyBy(sceneId, next)) : null;
 
     // Each shot gets its share of the narration. Without this the clip runs the
@@ -4412,7 +4467,7 @@ window.generateSceneVideo = async function(sceneId, slot = 'A') {
     if (cuerpo.length > MAX_CUERPO) {
       throw new Error(`las imágenes de esta escena pesan ${(cuerpo.length / 1048576).toFixed(1)} MB `
         + `y el límite de envío es 4 MB. Regenerá la imagen del plano ${slot} (suelen salir más ligeras) `
-        + `o generá el clip sin encadenar con el plano siguiente.`);
+        + `o dale al botón 🔗 de ese plano para dejarlo suelto: así viaja una sola imagen.`);
     }
 
     setStatus('Enviando a Veo...');
