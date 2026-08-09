@@ -885,12 +885,21 @@ function palabrasDe(txt) {
 }
 
 function espacioDeEscena(s) {
-  const esc = (state.universe?.escenarios || []).find(e => e.id === s?.escenario);
-  if (!esc) return 'desconocido';
   const cuenta = (txt, set) => palabrasDe(txt).reduce((n, w) => n + (set.has(w) ? 1 : 0), 0);
-  const score = cuenta(esc.name, SET_INTERIOR) * 3 + cuenta(esc.desc, SET_INTERIOR)
-              - cuenta(esc.name, SET_EXTERIOR) * 3 - cuenta(esc.desc, SET_EXTERIOR);
-  return score > 0 ? 'interior' : (score < 0 ? 'exterior' : 'desconocido');
+  const veredicto = n => n > 0 ? 'interior' : (n < 0 ? 'exterior' : 'desconocido');
+  const esc = (state.universe?.escenarios || []).find(e => e.id === s?.escenario);
+  if (esc) {
+    return veredicto(cuenta(esc.name, SET_INTERIOR) * 3 + cuenta(esc.desc, SET_INTERIOR)
+                   - cuenta(esc.name, SET_EXTERIOR) * 3 - cuenta(esc.desc, SET_EXTERIOR));
+  }
+  // No scenario assigned is a legitimate case — the DP is told to leave the id
+  // empty and describe the place inside the prompt rather than point at the
+  // wrong location. But that used to switch off the weather rule with it, so a
+  // scene with no id lost the very protection this exists for. Fall back to the
+  // shot's own text, which is where that place is described.
+  const texto = ['A','B','C'].map(sl => s?.['imagePrompt' + sl] || '').join(' ');
+  if (!texto.trim()) return 'desconocido';
+  return veredicto(cuenta(texto, SET_INTERIOR) - cuenta(texto, SET_EXTERIOR));
 }
 
 function buildVideoPrompt(s, slot = 'A', opts = {}) {
