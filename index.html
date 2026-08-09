@@ -4276,6 +4276,38 @@ async function pollVideoStatus(operationName, projectId, onProgress, model) {
   throw new Error('Timeout — Veo tardó más de 10 minutos');
 }
 
+// ─── Los fotogramas que viajan a Veo ───
+// Nano Banana devuelve PNG, y un PNG de 1024×1792 con fondo detallado pesa
+// ~3,8 MB en base64. Con un solo fotograma cabía justo; desde que el clip lleva
+// también el fotograma final son ~7,7 MB y el cuerpo revienta el límite de 4,5 MB
+// de una función serverless. Por eso fallaban unas escenas sí y otras no —las de
+// fondo más detallado— y por eso reintentar nunca servía: la imagen es la misma.
+//
+// Se reencoda a JPEG SIN cambiar de tamaño: los mismos píxeles, ~9 veces menos
+// bytes. Veo recibe la misma imagen y vuelve a comprimir de todos modos.
+const MAX_CUERPO = 4 * 1024 * 1024;   // margen por debajo del límite real
+
+function prepararFotograma(b64) {
+  const limpio = String(b64 || '').replace(/^data:image\/[a-z]+;base64,/i, '').replace(/\s/g, '');
+  if (!limpio) return Promise.resolve(null);
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width; canvas.height = img.height;   // sin reescalar
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      try {
+        const jpg = canvas.toDataURL('image/jpeg', 0.92).split(',')[1];
+        resolve(jpg && jpg.length < limpio.length
+          ? { data: jpg, mimeType: 'image/jpeg' }
+          : { data: limpio, mimeType: 'image/png' });
+      } catch { resolve({ data: limpio, mimeType: 'image/png' }); }
+    };
+    img.onerror = () => resolve({ data: limpio, mimeType: 'image/png' });
+    img.src = 'data:image/png;base64,' + limpio;
+  });
+}
+
 window.generateSceneVideo = async function(sceneId, slot = 'A') {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
@@ -4303,23 +4335,41 @@ window.generateSceneVideo = async function(sceneId, slot = 'A') {
     // full eight seconds and the character invents movement to fill them.
     const segundos = (await sceneAudioSeconds(s)) / (slots.length || 1);
 
+    const inicial = await prepararFotograma(imgData);
+    const final   = await prepararFotograma(lastFrame);
+
     const aspectRatio = document.getElementById('aspectRatio')?.value || '9:16';
-    const res = await fetch('/api/video-start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt: buildVideoPrompt(s, slot, { hasLastFrame: !!lastFrame }),
-        negativePrompt: buildVideoNegative(s, slot, { hasLastFrame: !!lastFrame }),
-        imageA: imgData || null,
-        lastFrame: lastFrame || null,
-        durationSeconds: segundos,
-        aspectRatio,
-        generateAudio: false,
-        veoModel: document.getElementById('veoModelSelect')?.value || undefined,
-      }),
+    const cuerpo = JSON.stringify({
+      prompt: buildVideoPrompt(s, slot, { hasLastFrame: !!final }),
+      negativePrompt: buildVideoNegative(s, slot, { hasLastFrame: !!final }),
+      imageA: inicial ? inicial.data : null,
+      imageMimeType: inicial ? inicial.mimeType : undefined,
+      lastFrame: final ? final.data : null,
+      lastFrameMimeType: final ? final.mimeType : undefined,
+      durationSeconds: segundos,
+      aspectRatio,
+      generateAudio: false,
+      veoModel: document.getElementById('veoModelSelect')?.value || undefined,
     });
-    const startData = await res.json();
-    if (!res.ok || startData.error) throw new Error(startData.error || 'Error al iniciar video');
+
+    // Comprobado ANTES de mandarlo: pasado el límite, el servidor contesta un
+    // error del transporte que no dice nada útil. Este sí dice qué pasa.
+    if (cuerpo.length > MAX_CUERPO) {
+      throw new Error(`las imágenes de esta escena pesan ${(cuerpo.length / 1048576).toFixed(1)} MB `
+        + `y el límite de envío es 4 MB. Regenerá la imagen del plano ${slot} (suelen salir más ligeras) `
+        + `o generá el clip sin encadenar con el plano siguiente.`);
+    }
+
+    setStatus('Enviando a Veo...');
+    const res = await fetch('/api/video-start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: cuerpo,
+    });
+    // Pasado el límite del transporte la respuesta no es JSON, y `res.json()`
+    // reventaba con un mensaje del navegador que no señalaba a nada.
+    const startData = await res.json().catch(() => ({
+      error: `el servidor respondió ${res.status} sin JSON (cuerpo de ${(cuerpo.length / 1048576).toFixed(1)} MB)`,
+    }));
+    if (!res.ok || startData.error) throw new Error(startData.error || `Error al iniciar video (${res.status})`);
     // Said once per session, not per clip: the answer is the same every time and
     // it is a property of the chosen model, not of this shot.
     if (startData.sinFotogramaFinal && !window.__avisoFotogramaFinal) {

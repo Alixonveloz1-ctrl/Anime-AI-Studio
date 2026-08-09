@@ -41,7 +41,12 @@ module.exports = async function handler(req, res) {
 
   try {
     const { prompt, negativePrompt, imageA, imageB, lastFrame, durationSeconds,
+            imageMimeType, lastFrameMimeType,
             aspectRatio = '9:16', generateAudio = false, veoModel } = req.body;
+    // The frames used to be hardcoded as image/png. They arrive re-encoded as
+    // JPEG now (two detailed PNGs were 7.7 MB, over the 4.5 MB body limit), and
+    // declaring the wrong type is how a valid image gets rejected.
+    const tipo = t => (t === 'image/jpeg' || t === 'image/png') ? t : 'image/png';
     if (!prompt) return res.status(400).json({ error: 'prompt requerido' });
 
     const MODEL_ID = (veoModel || cfg.veoModel).trim();
@@ -76,13 +81,13 @@ module.exports = async function handler(req, res) {
     };
     const instancia = {
       prompt,
-      ...(imageData ? { image: { bytesBase64Encoded: imageData, mimeType: 'image/png' } } : {}),
+      ...(imageData ? { image: { bytesBase64Encoded: imageData, mimeType: tipo(imageMimeType) } } : {}),
     };
 
     const pedir = async (conFotogramaFinal) => {
       const body = {
         instances: [conFotogramaFinal
-          ? { ...instancia, lastFrame: { bytesBase64Encoded: finalData, mimeType: 'image/png' } }
+          ? { ...instancia, lastFrame: { bytesBase64Encoded: finalData, mimeType: tipo(lastFrameMimeType) } }
           : instancia],
         parameters,
       };

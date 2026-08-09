@@ -257,6 +257,22 @@ Por el mismo motivo se arregló la deriva de cámara: la regla de encuadre le pe
 "usa ángulos over-shoulder" a un clip cuyo ángulo ya viene fijado por el primer
 fotograma, así que la única forma de obedecer era mover la cámara.
 
+### Lo que pesa el envío
+
+Nano Banana devuelve PNG, y uno de 1024×1792 con fondo detallado son **~3,8 MB**
+en base64. Con un solo fotograma cabía justo; desde que el clip lleva también el
+fotograma final del plano siguiente eran ~7,7 MB, por encima del límite de 4,5 MB
+del cuerpo de una función serverless. De ahí que fallaran unas escenas sí y otras
+no —las de fondo más cargado— y que reintentar no sirviera: la imagen es la misma.
+
+Los dos fotogramas se reencodan a JPEG **sin cambiar de tamaño** antes de salir:
+los mismos píxeles, del orden de nueve veces menos bytes. Veo recibe el tipo real
+declarado, no un `image/png` a ciegas, y vuelve a comprimir de todos modos.
+
+Si aun así no cupiera, se comprueba **antes** de enviarlo y el error dice cuánto
+pesa y qué hacer, en vez del mensaje del navegador al intentar leer una respuesta
+que no era JSON.
+
 No todos los modelos de Veo aceptan fotograma final, y la documentación pública
 no coincide consigo misma sobre cuáles sí. Así que no se adivina: se pide con
 fotograma final y, si el modelo lo rechaza, **ese mismo modelo** se vuelve a
