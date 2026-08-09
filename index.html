@@ -5206,6 +5206,8 @@ async function uploadAssets(items, onProgress) {
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error || `upload-url ${res.status}`);
 
+  if (data.corsWarning) showToast(data.corsWarning, 'error');
+
   const byPath = new Map(data.urls.map(u => [u.path, u.url]));
   let done = 0;
   const queue = [...items];
@@ -5214,7 +5216,15 @@ async function uploadAssets(items, onProgress) {
       const it = queue.shift();
       const url = byPath.get(it.path);
       if (!url) throw new Error(`sin URL firmada para ${it.path}`);
-      const put = await fetch(url, { method: 'PUT', headers: { 'Content-Type': it.mime }, body: b64ToBlob(it.b64, it.mime) });
+      // A rejected fetch here is almost always the CORS preflight, and the
+      // browser's own wording for that ("Load failed" on Safari) names nothing.
+      let put;
+      try {
+        put = await fetch(url, { method: 'PUT', headers: { 'Content-Type': it.mime }, body: b64ToBlob(it.b64, it.mime) });
+      } catch (e) {
+        throw new Error(`no se pudo subir ${it.path} — el navegador rechazó la petición (${e.message}). `
+          + `Suele ser el permiso CORS del bucket: tiene que permitir PUT.${data.corsWarning ? ' ' + data.corsWarning : ''}`);
+      }
       if (!put.ok) throw new Error(`subida falló (${put.status}) en ${it.path}`);
       done++;
       if (onProgress) onProgress(done, items.length);

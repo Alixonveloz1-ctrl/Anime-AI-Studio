@@ -220,6 +220,45 @@ async function getIdToken(sa, audience) {
   return d.id_token;
 }
 
+// ─── CORS del bucket ───
+//
+// The browser does two cross-origin things with this bucket: it READS the Veo
+// clips (GET, to play and to zip them) and it WRITES the montage material with
+// signed PUT URLs. A PUT carrying a Content-Type is preflighted, so the bucket
+// has to allow PUT and OPTIONS — not just GET.
+//
+// This used to live inline in video-status.js with `method: ['GET','HEAD']`, and
+// the PATCH REPLACES the whole cors array. So finishing a Veo clip silently
+// revoked the permission the assembly needs, and the upload died as a bare
+// "Load failed" with no way to tell it came from a preflight. It only showed up
+// on projects that generate video: with images alone that code never runs.
+//
+// One list, in one place, with everything the app needs.
+const CORS_BUCKET = [{
+  origin: ['*'],
+  method: ['GET', 'HEAD', 'PUT', 'POST', 'OPTIONS'],
+  responseHeader: ['Content-Type', 'Content-Length', 'Content-Range', 'Content-Disposition',
+                   'ETag', 'x-goog-resumable', 'Authorization'],
+  maxAgeSeconds: 3600,
+}];
+
+async function asegurarCors(token, bucket) {
+  try {
+    const r = await fetch(`https://storage.googleapis.com/storage/v1/b/${bucket}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cors: CORS_BUCKET }),
+    });
+    if (!r.ok) {
+      const d = await r.text();
+      return { ok: false, error: `${r.status} — ${d.slice(0, 160)}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
 // ─── Cloud Storage (small objects: the job spec, never media) ───
 async function gcsUpload(token, bucket, objectPath, body, contentType) {
   const url = `https://storage.googleapis.com/upload/storage/v1/b/${bucket}/o`
@@ -283,7 +322,7 @@ function fail(res, e) {
 
 module.exports = {
   cfg, imageModelLocation, imageModelLocations, signedUrl, getIdToken,
-  gcsUpload, gcsReadText,
+  gcsUpload, gcsReadText, asegurarCors,
   ConfigError, loadServiceAccount, getAccessToken, auth,
   vertexUrl, CORS, begin, fail,
 };

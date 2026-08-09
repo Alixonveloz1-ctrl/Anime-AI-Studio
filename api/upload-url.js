@@ -7,7 +7,7 @@
 // 60s), so the browser uploads directly and the Cloud Run job reads
 // the objects from the bucket with its own identity.
 // ════════════════════════════════════════════════════════════════
-const { cfg, loadServiceAccount, signedUrl, begin, fail } = require('./_lib/gcp');
+const { cfg, loadServiceAccount, getAccessToken, signedUrl, asegurarCors, begin, fail } = require('./_lib/gcp');
 
 // Object paths come from the client, so they are constrained here: no
 // traversal, no absolute paths, and everything under a known prefix.
@@ -47,7 +47,30 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    return res.status(200).json({ bucket: cfg.bucket, contentType: contentType || 'application/octet-stream', urls });
+    // A signed PUT carrying a Content-Type is preflighted by the browser, so the
+    // bucket has to allow PUT. Guaranteed HERE, right before the upload, because
+    // this endpoint is the one that needs it — leaving it to whoever happened to
+    // set CORS last is how finishing a Veo clip silently broke the montage.
+    // It is reported rather than thrown: the URLs are valid either way, and a
+    // bucket already configured by hand should not fail for lack of permission
+    // to re-set what is already right.
+    //
+    // Firmar no necesita red — la clave privada firma aquí mismo — y esto sí.
+    // Así que va envuelto: un token que no se puede pedir NO puede impedir que
+    // se entreguen unas URLs que son válidas igual.
+    let cors = { ok: true };
+    try {
+      cors = await asegurarCors(await getAccessToken(sa), cfg.bucket);
+    } catch (e) {
+      cors = { ok: false, error: e.message };
+    }
+
+    return res.status(200).json({
+      bucket: cfg.bucket, contentType: contentType || 'application/octet-stream', urls,
+      corsWarning: cors.ok ? undefined
+        : `No se pudo asegurar el CORS del bucket (${cors.error}). Si la subida falla con "Load failed", `
+          + `dale a la service account el permiso storage.buckets.update o configura el CORS del bucket a mano con PUT permitido.`,
+    });
   } catch (e) {
     return fail(res, e);
   }

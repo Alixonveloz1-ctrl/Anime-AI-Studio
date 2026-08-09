@@ -345,6 +345,26 @@ navegador ──PUT firmado──▶ GCS ◀──baja── Cloud Run Job (ffmp
                                      MP4 ──▶ GCS ──▶ URL firmada
 ```
 
+### El CORS del bucket
+
+El navegador hace dos cosas de origen cruzado con el bucket: **lee** los clips de
+Veo (reproducirlos, meterlos en el ZIP) y **escribe** el material del montaje con
+URLs firmadas `PUT`. Un `PUT` que lleva `Content-Type` se pregunta antes
+(*preflight*), así que el bucket tiene que permitir `PUT` y `OPTIONS`, no sólo
+`GET`.
+
+Esto vivía suelto dentro de `video-status.js` con `method: ['GET','HEAD']`, y ese
+`PATCH` **reemplaza el array entero**: cada clip de Veo que terminaba revocaba en
+silencio el permiso que el montaje necesita para subir. La subida moría con un
+`Load failed` a secas, que no señala a nada, y sólo pasaba en proyectos que
+generan video — con imágenes solas ese código nunca corre.
+
+Ahora la lista está en un único sitio (`_lib/gcp.js`) con todo lo que la app
+necesita, y la asegura **quien la necesita**: `/api/upload-url` la deja puesta
+justo antes de que empiece la subida. Si no puede (falta `storage.buckets.update`),
+entrega las URLs igual —el bucket puede estar ya bien configurado a mano— y avisa
+de qué falta.
+
 El encargo que se deja en `gs://<bucket>/<prefijo>/proyectos/<proyecto>/ep<NN>/` es:
 `hoja.json`, `montar.sh`, `descargas.txt` (TSV origen→nombre local) y un
 `error.txt` vacío. El job se lanza con `TRABAJO`, `PREFIJO` y `SALIDA`.
