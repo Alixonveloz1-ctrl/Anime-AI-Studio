@@ -8,7 +8,7 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 |-----------------|-----------------------------------------------------------|
 |Guión y narrativa|Gemini 3.1 Pro (`/api/script`)                             |
 |Imágenes         |Nano Banana 2 / Nano Banana (`/api/image`)                  |
-|Voces            |Gemini TTS / Cloud TTS Neural2-WaveNet (`/api/audio`)       |
+|Voces            |Gemini TTS (30 voces) / Chirp 3: HD / Neural2-WaveNet (`/api/audio`)|
 |Música           |Lyria (`/api/music`) — una pista instrumental por acto      |
 |Dirección        |Director creativo: biblia de serie, nota por capítulo, música|
 |Clips de video   |Veo 3.1 Lite (`/api/video-start` + `/api/video-status`)     |
@@ -160,6 +160,45 @@ que es precisamente el fotograma de enganche, así que la unión sobrevive igual
 Por eso el empate al elegir la duración lo gana la **menor**: al reajustar la
 velocidad, quedarse corto o pasarse cuesta lo mismo en imagen, y Veo cobra por
 segundo generado.
+
+## Dirigir la voz
+
+Cada motor obedece cosas distintas, y el panel solo enseña los mandos que el
+elegido puede cumplir. Un deslizador que no hace nada es peor que no tenerlo.
+
+|Motor|Qué obedece|Para qué sirve|
+|-----|-----------|--------------|
+|**Gemini TTS** (30 voces)|Actuación, tono, ritmo, indicación libre, velocidad|Máxima expresividad|
+|**Chirp 3: HD** (4 voces)|Solo volumen|El **mismo narrador** de principio a fin|
+|**Neural2 / WaveNet**|Velocidad, tono (semitonos), volumen|Voz neutra y previsible|
+
+Gemini TTS no tiene ningún mando numérico para la expresión: el registro se fija
+con la instrucción que va delante del texto. Por eso los controles son cuatro y
+todos escriben esa instrucción:
+
+- **Cuánto actúa la voz** — plana (voz en off, sin actuar) · natural · sutil ·
+  dramática. Si las voces te salen exageradas, esto es lo que hay que bajar.
+- **Tono** — sobrio, íntimo, tenso, cálido, melancólico, épico contenido, frío,
+  susurrado.
+- **Ritmo** — pausado, normal, ágil.
+- **Indicación libre** — se la escribís como a un actor ("como quien recuerda algo
+  que preferiría olvidar") y llega tal cual.
+
+**"🔊 Probar la voz"** genera una muestra con los ajustes actuales antes de lanzar
+el episodio entero.
+
+Dos cosas que conviene saber:
+
+- Gemini TTS vuelve a interpretar en cada llamada, así que en un episodio largo el
+  registro puede variar un poco entre escenas. **Chirp 3: HD** no: lee con menos
+  rango dramático pero mantiene el mismo narrador de principio a fin.
+- Chirp 3: HD **no admite velocidad ni tono**. Mandárselos no sintetiza más
+  rápido: estira el audio ya hecho y suena metálico. Por eso esos dos mandos se
+  desactivan solos al elegir una voz Chirp.
+
+Los nombres de voz se validan en el servidor antes de autenticar: una voz que no
+existe responde *"la voz X no existe en Gemini TTS"* en vez del error crudo de
+Vertex. La app llegó a ofrecer `Perseus`, que no es una de ellas.
 
 ### Dónde vive el clima
 
