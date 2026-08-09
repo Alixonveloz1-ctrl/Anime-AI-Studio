@@ -2175,6 +2175,26 @@ function isComedyMode(genero, subgenres) {
 const SYSTEM_COMEDY_LAYER = `
 CAPA DE COMEDIA DE SISTEMA (esta historia SÍ tiene un sistema de poder): the system speaks in formal, bureaucratic notifications and congratulates the protagonist for what are obviously disasters. Its detections are technically accurate and contextually catastrophic — the joke is the gap between what the system promises and what it delivers. An authority figure who follows every rule correctly keeps paying the price for the protagonist's accidental wins. Running gag: the official record of the protagonist grows in increasingly resigned language, episode after episode.`;
 
+// ── ESCALADA DE HUMILLACIÓN: quién la tiene y quién no ──
+// El "face-slapping" (humillación pública → aguante → revancha con testigos) es
+// el motor del drama corto chino viral, y es material GENUINO de revenge, mafia,
+// dark y de todo lo donghua. NO es material de romcom, deportes, slice of life
+// ni kodomomuke: pegado ahí sobrescribe el género que el usuario eligió, que es
+// exactamente el bug que SYSTEM_COMEDY_LAYER vino a arreglar.
+const FACESLAP_SUBGENRES = ['revenge', 'mafia', 'dark'];
+function allowsHumiliationArc(genero, subgenres = [], demo = '') {
+  // Kodomomuke primero y sin excepción: ADULT_ONLY_SUBGENRES no incluye
+  // revenge/mafia/dark, así que la interfaz SÍ deja marcarlos con demografía
+  // infantil y effectiveSubgenres no los filtra. Este corte es lo único que lo
+  // impide.
+  if (isAllAges(demo)) return false;
+  return genero === 'donghua' || demo === 'donghua'
+      || (subgenres || []).some(s => FACESLAP_SUBGENRES.includes(s));
+}
+
+const HUMILLACION_LAYER = `
+CAPA DE HUMILLACIÓN Y REVANCHA (la selección del usuario SÍ la pide): la injusticia es PÚBLICA y con testigos que tienen nombre — no basta con que el protagonista lo pase mal en privado. Quien humilla sube la apuesta con actos concretos y visibles; el protagonista aguanta por un motivo material que el espectador entiende (una deuda, alguien a quien protege, una prueba que todavía no tiene); y el desquite llega con algo que TODOS los testigos ven: un papel, una cifra, un objeto, un nombre dicho en voz alta. Quien humilló reacciona EN PANTALLA — su cara, su frase, su silencio. Prohibido narrar la revancha en resumen, prohibido que la justicia llegue fuera de escena y prohibido el salvador externo: el vuelco lo produce algo que el protagonista hizo o supo antes y que el espectador ya vio.`;
+
 // ════════════════════════════════════════════════════════════════
 // EPISODE FORMATS — length is data, not a hardcoded 15.
 // words ≈ scenes × 52, because TTS runs at ~150 words/minute and each
@@ -2650,10 +2670,12 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     // The system-comedy formula is a LAYER, not the baseline: it is appended
     // only when this story genuinely has a power/stat system.
     const storyHasSystem = hasPowerSystem(genero, subgenres);
-    const genreTone = comedyMode
+    const storyHasHumiliation = allowsHumiliationArc(genero, subgenres, demo);
+    const genreTone = (comedyMode
       ? (GENRE_TONE[genero] || 'Third person, protagonist always named. Specific details. Let situations create impact, not emotional adjectives.')
         + (storyHasSystem ? SYSTEM_COMEDY_LAYER : '')
-      : (GENRE_TONE_FIEL[genero] || 'Faithful to the selected genre: third person with the protagonist always named, specific concrete details, let events — not empty adjectives — create the impact.');
+      : (GENRE_TONE_FIEL[genero] || 'Faithful to the selected genre: third person with the protagonist always named, specific concrete details, let events — not empty adjectives — create the impact.'))
+      + (storyHasHumiliation ? HUMILLACION_LAYER : '');
 
     const SCENE_ENDING = {
       accion:       'Each scene ends with an exciting moment, a power move, or a clash that makes you want to see the next second.',
@@ -2680,6 +2702,33 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
       ? 'Each scene ends with visible progression from the system — a stat rising, a skill unlocking, a threshold crossed, or a notification landing at the worst possible moment.'
       : (SCENE_ENDING[genero] || 'Each scene ends naturally for the genre — no forced drama.');
 
+    // Espejo de SCENE_ENDING. El código legislaba cómo TERMINA cada escena y no
+    // decía nada de cómo EMPIEZA: esa asimetría es la que dejó que un episodio
+    // abriera con meteorología. "Abrir fuerte" es obligatorio en los 17 géneros;
+    // lo que cambia es la MONEDA del arranque, así el género sigue mandando y un
+    // slice of life no se convierte en un drama de venganza.
+    const SCENE_OPENING = {
+      accion:       'un golpe, una persecución o una amenaza YA en curso — alguien esquiva, cae o encaja',
+      fantasia:     'una regla mágica YA rota o un precio que YA se está cobrando — el prodigio ocurriendo, nunca explicado',
+      isekai:       'una regla del mundo nuevo golpeando al protagonista, o una deuda ajena que alguien le reclama en la cara',
+      donghua:      'una humillación, un desafío o una orden dicha en voz alta delante de testigos con nombre',
+      videojuego:   'una notificación ya en pantalla y la decisión que le fuerza — nunca la explicación de cómo funciona el sistema',
+      mecha:        'una alarma, una orden de despegue o un impacto sobre la máquina',
+      romcom:       'un roce, una frase que se malinterpreta o una situación incómoda ya empezada — vergüenza y torpeza, nunca crueldad',
+      drama:        'la frase que ya dolió o la decisión que ya se tomó — una cifra, un papel firmado, una silla vacía',
+      slice_of_life:'alguien con las manos ya ocupadas en una tarea y un contratiempo pequeño, concreto y de HOY (faltan dos huevos y vienen cuatro a cenar) — sin villanos y sin catástrofes: lo que lo hace fuerte es que es HOY y es específico, no que sea grave',
+      terror:       'un detalle equivocado que un personaje ACABA de notar — el sujeto es él, no el lugar',
+      psicologico:  'una certeza del protagonista chocando contra lo que la propia escena muestra',
+      misterio:     'una ausencia, un hallazgo o una contradicción que alguien acaba de decir en voz alta',
+      deportes:     'el número YA en contra — el marcador, el cronómetro, el nombre que no salió en la lista',
+      sci_fi:       'alguien operando la tecnología y la tecnología respondiendo mal',
+      aventura:     'un paso del viaje ya dado y el obstáculo que aparece encima — el puente caído, el barco que zarpa',
+      sobrenatural: 'un personaje tocando, oyendo o viendo lo que no debería — él primero, el fenómeno después',
+      supervivencia:'la cuenta ya en rojo — litros, días de comida, un recurso que se acaba de perder',
+    };
+    const sceneOpening = SCENE_OPENING[genero]
+      || 'un personaje con nombre ya metido en lo que el género considera un problema';
+
     const sysBase = `${comedyMode
       ? 'Eres un guionista de comedia viral para anime/manhua, escribiendo para Facebook Reels — capítulos cortos, ritmo ágil, tono absurdo y directo.'
       : `Eres un guionista de anime/manhua viral para Facebook Reels — capítulos cortos, ritmo ágil, ESTRICTAMENTE FIEL al tono del género "${genero}". NO es comedia: no agregues chistes, sistemas cómicos ni tono paródico que el género no pide.`}
@@ -2693,16 +2742,19 @@ CRITICAL: el campo JSON es "story" (un solo bloque de texto continuo, no un arra
 TU TAREA: escribí LA HISTORIA COMPLETA del episodio como narración continua y natural — NO como una lista de escenas desconectadas ni como una checklist que hay que marcar en cada párrafo. Contá una historia real de RITMO RÁPIDO CONSTANTE — esto es un Reel de Facebook, no un capítulo de anime de 24 minutos: el espectador abandona en segundos si la historia no avanza. Diálogo cuando aporte. ${comedyMode ? 'Que la comedia fluya como la escribiría un guionista humano.' : 'Que la historia fluya como la escribiría un guionista humano del género.'}
 
 ESTILO NARRATIVO VIRAL (obligatorio para TODOS los géneros — el género decide QUÉ pasa; esto decide CÓMO se cuenta):
-- TERCERA PERSONA omnisciente con el protagonista SIEMPRE NOMBRADO ("Kenji entró...", nunca "yo" ni "me").
-- GANCHO INICIAL: las primeras 3-4 frases de la historia plantean el conflicto o la injusticia con datos concretos que obligan a seguir viendo.
+- PRIMERA ORACIÓN DEL EPISODIO — es una regla de POSICIÓN, no una ventana: el SUJETO de la primera oración es una PERSONA CON NOMBRE, haciendo o diciendo algo concreto. Antes de la palabra 15 ya se sabe qué está en juego para ella: qué le falta, qué le acaban de hacer, qué quiere y no puede, o qué acaba de descubrir. Una línea de diálogo como primera frase también vale.
+  🚫 PROHIBIDO ABRIR CON: clima, calor, frío, viento, hora del día, luz, polvo, olor, silencio, ni con el pueblo / la ciudad / la casa / la sala.
+  TEST: si tu primera oración se puede ilustrar SIN ningún personaje en el cuadro, está mal — reescribila empezando por la persona.
+  TEST DEL BORRADO (hacelo antes de entregar): tapá tu primera oración y leé desde la segunda. Si no se pierde ningún HECHO, sobraba: borrala y empezá por la segunda, que casi siempre era el verdadero comienzo. El material fuerte NUNCA va en segundo lugar.
+  ARRANQUE PROPIO DE ESTE GÉNERO (el género decide QUÉ es un arranque fuerte; la regla de arriba sólo exige que esté primero): ${sceneOpening}.
 - DIÁLOGO DIRECTO constante tejido en la narración — los personajes hablan con sus propias voces en líneas cortas ("—¿Crees que puedes entrar aquí?"); apuntá a que cerca de la MITAD del texto sean voces de personajes.
 - Frases CORTAS de hechos concretos. Números específicos siempre que aporten ("tres años", "mil yuanes", "una semana") — nunca vaguedades ("mucho tiempo", "mucho dinero").
 - PROHIBIDO el lirismo y los adjetivos emocionales vacíos ("sintió un terror indescriptible", "todo cambió en ese momento") — la emoción sale de lo que PASA y de lo que DICEN.
 - PREGUNTAS RETÓRICAS dosificadas (máximo 1-2 por tramo) al espectador o entre personajes ("¿Una semana? Le bastaron dos días.").
 - MINI-CLÍMAX CONSTANTES: cada 2-3 escenas un golpe de giro propio del género (venganza: humillación → bofetada de karma; misterio: pista → vuelco; romance: acercamiento → interrupción; terror: falsa calma → golpe; comedia: plan → desastre absurdo). NO un solo clímax al final.
 - Ritmo de avance permanente: cada frase mueve la historia; nada de párrafos contemplativos. Esto aplica incluso a géneros de ritmo tradicionalmente lento (slice of life, drama, terror): el QUÉ es del género, el ritmo Reel no se negocia.
-- AMBIENTACIÓN MÍNIMA: máximo UNA frase corta de descripción cuando la historia llega a un lugar NUEVO — la imagen ya muestra el lugar, la narración no debe describirlo. PROHIBIDO gastar frases en clima, luz, temperatura, olores o texturas ("el aire helado", "la luz entraba por las rendijas", "el suelo estaba frío") salvo que ese detalle CAUSE un evento de la trama.
-- DENSIDAD DE EVENTOS: en cada tramo de ~50 palabras deben ocurrir 2-3 cosas DISTINTAS y visualizables (acción → reacción → consecuencia), no un solo momento estirado. Si un tramo se puede resumir en una sola imagen, le falta historia.
+- AMBIENTACIÓN SIN FRASE PROPIA, NUNCA: un lugar nuevo se nombra en 6 palabras o menos DENTRO de una oración cuyo sujeto es un personaje y cuyo verbo es una acción ("Lin Yan cruzó el patio de la casa Wei"). Jamás en oración propia, jamás antes de que el personaje entre en el cuadro — la imagen ya muestra el lugar y el espectador la está viendo mientras te escucha. PROHIBIDO gastar frases en clima, luz, temperatura, olores, polvo o texturas ("el aire helado", "la luz entraba por las rendijas"). ÚNICA excepción: que ese detalle CAUSE un evento de la trama, y entonces se escribe como causa dentro de una acción ("el barro le tragó la sandalia"), nunca como estampa. Esa excepción NO EXISTE en la primera oración del episodio ni en la primera oración de un tramo: ahí arranca la persona, siempre.
+- DENSIDAD Y ORDEN DE CADA TRAMO: este texto se corta después en ${fmt.scenes} fragmentos consecutivos de ~${WORDS_PER_SCENE} palabras, y CADA fragmento se convierte en un video suelto con su propia imagen y su propia voz. Escribí como si cada ~${WORDS_PER_SCENE} palabras empezara un video nuevo que tiene que retener solo: el tramo ABRE con lo más fuerte que tenga dentro (una acción, una voz entrando en frío, una cifra, una revelación) y lo explicativo, lo que ata cabos y lo descriptivo va SIEMPRE después, nunca en su primera oración. Dentro de cada tramo pasan 2-3 cosas DISTINTAS y visualizables (acción → reacción → consecuencia), nunca un solo momento estirado. Al menos UNO DE CADA TRES tramos abre con diálogo.
 
 ⚠️ NADA se convierte en tic mecánico repetido en cada párrafo — ni ${comedyMode ? 'el dinero/recompensa, ni ' : ''}una reacción fija de un personaje, ni una frase tipo. ${comedyMode ? 'Si el protagonista calcula una recompensa, que pase con variación real a lo largo de la historia — no lo repitas después de cada incidente como si fuera una casilla que hay que marcar.' : 'Cualquier recurso narrativo debe variar de forma real a lo largo de la historia — nada de repetir la misma fórmula en cada tramo.'}
 
@@ -2712,7 +2764,8 @@ TONO DE GÉNERO (${comedyMode ? 'mecánica cómica de referencia, no mandato de 
 ${genreTone}
 ${u.conceptoOriginal ? `🎯 EL CONCEPTO DEFINE EL SETTING: el concepto semilla del usuario (marcado CANON arriba) es el mundo real de esta historia. Si es contemporáneo/realista, quedate ahí — sin reinos, magia ni tecnología futurista que el concepto no mencione. Aplicá solo la mecánica cómica de tono (arriba) a ese setting ya establecido.` : ''}
 
-CIERRE: ${sceneEnding} — terminá con un CLIFFHANGER seco y concreto hacia el episodio ${epNum + 1} — una amenaza visible, una llegada, una frase cortada; no una reflexión.
+CIERRE: ${sceneEnding} — terminá con un CLIFFHANGER seco y concreto hacia el episodio ${epNum + 1} — una amenaza visible, una llegada, una frase cortada; no una reflexión.${allAges ? '' : `
+QUE LO COMENTEN (los últimos segundos deciden si escriben o si sólo miran): 1) la ÚLTIMA LÍNEA del episodio la DICE un personaje en voz alta —una amenaza, una condición, una cifra, un plazo—, nunca el narrador. 2) El protagonista hace por lo menos UNA cosa que se puede criticar con razón, y el antagonista dice en voz alta UN motivo que se entiende aunque lo que haga siga estando mal: si al bando contrario no le diste ni una línea con la que alguien podría estar de acuerdo, escribiste un sermón y nadie discute. 3) Queda una decisión a punto de tomarse que una parte del público aprobaría y otra condenaría, y el episodio corta ANTES de que la tome — mostrala y cortá, SIN VEREDICTO: si el episodio dice quién tiene razón, el comentario ya está escrito y nadie lo escribe. Todo esto se mide en cosas concretas (cuánto dinero, cuántos días, quién se queda con qué, quién cuida a quién), nunca en abstracciones.`}
 ${isGrounded ? `MODO COTIDIANO ACTIVO: día a día real y específico, CERO fantasmas, CERO poderes — ${comedyMode ? 'el humor' : 'el interés'} viene de situaciones reales.` : `MODO NARRATIVO ACTIVO: la emoción viene de los hechos, no de adjetivos. "Kenji dispara y falla. El monstruo está a diez metros." No "el terror lo paraliza".`}
 ${!allowsSuper && !allowsSuper2 ? `⚠️ RESTRICCIÓN: sin elementos sobrenaturales para el género ${genero} — ni magia, ni poderes, ni sistemas, ni fenómenos inexplicables. Todo lo que ocurre tiene una causa del mundo real.` : ''}
 
@@ -2976,13 +3029,13 @@ Nombres reales y coherentes con el setting. Responde SOLO JSON válido sin markd
 
     // Arc beats per part, so each call knows what its act has to accomplish.
     const PART_BRIEFS = {
-      1: ['la historia COMPLETA: planteo, desarrollo, clímax y cierre con cliffhanger'],
-      2: ['PRIMERA MITAD: planteo, primer incidente y escalada hasta un punto de giro fuerte (NO cierres la historia)',
+      1: ['la historia COMPLETA: abrí con la historia YA EN MARCHA (una persona con nombre y algo en juego desde la primera oración — nada de presentar el mundo antes), desarrollo, clímax y cierre con cliffhanger'],
+      2: ['PRIMERA MITAD: abrí con la historia YA EN MARCHA (una persona con nombre y algo en juego desde la primera oración), primer incidente y escalada hasta un punto de giro fuerte (NO cierres la historia)',
           'SEGUNDA MITAD: consecuencias del giro, escalada final, clímax y cierre con cliffhanger'],
-      3: ['ACTO 1: planteo, presentación del elenco y el primer evento que rompe la normalidad (NO cierres nada)',
+      3: ['ACTO 1: abrí con la historia YA EN MARCHA (una persona con nombre y algo en juego desde la primera oración); el elenco se presenta actuando, y el primer evento que rompe la normalidad (NO cierres nada)',
           'ACTO 2: escalada — complicaciones, alianzas y traiciones, un giro que sube las apuestas (NO cierres la historia)',
           'ACTO 3: convergencia de los hilos sembrados, clímax y cierre con cliffhanger'],
-      4: ['ACTO 1: planteo y primer incidente que rompe la normalidad (NO cierres nada)',
+      4: ['ACTO 1: abrí con la historia YA EN MARCHA (una persona con nombre y algo en juego desde la primera oración) y primer incidente que rompe la normalidad (NO cierres nada)',
           'ACTO 2: complicaciones que escalan y un primer giro real (NO cierres nada)',
           'ACTO 3: las apuestas suben al máximo, todo se complica antes del final (NO cierres la historia)',
           'ACTO 4: convergencia de los hilos sembrados, clímax y cierre con cliffhanger'],
@@ -3099,11 +3152,11 @@ Responde SOLO JSON válido sin markdown.`;
 
     const storyArcGuide = `ARCO DEL EPISODIO (guía de ritmo, NO plantilla mecánica escena-por-escena):
 ${comedyMode
-  ? `Planteo: situación cotidiana del protagonista, primer incidente cómico.
+  ? `Arranque en caliente: el protagonista YA metido en el primer incidente cómico desde la primera oración — su rutina se deduce de lo que el incidente le rompe, no se cuenta antes.
 Desarrollo: 3-4 incidentes que escalan en absurdo, con chistes recurrentes que se van sembrando y retomando.
 Clímax: el incidente más grande del episodio, donde convergen los chistes recurrentes.
 Cierre: resolución parcial + gancho claro hacia el próximo episodio.`
-  : `Planteo: situación inicial del protagonista, primer evento que rompe la normalidad (fiel al género).
+  : `Arranque en caliente: el protagonista YA dentro del primer evento que rompe su normalidad, desde la primera oración (fiel al género) — la situación previa se deduce de lo que ese evento le quita, no se cuenta antes.
 Desarrollo: 3-4 eventos que escalan la tensión propia del género, sembrando elementos que se retoman después.
 Clímax: el evento más intenso del episodio, donde convergen los hilos sembrados.
 Cierre: resolución parcial + gancho claro hacia el próximo episodio.`}
@@ -4745,7 +4798,7 @@ document.getElementById('btnRepairScenes').addEventListener('click', async () =>
         : `You are a viral anime scriptwriter for Facebook Reels${repairAllAges ? ', all-ages audience' : ', adult audience'}. Write THIRD-PERSON Spanish narrations (protagonist always NAMED, never first person; constant direct dialogue woven into the narration; short concrete sentences with specific numbers) STRICTLY FAITHFUL to the "${u.genero}" genre's real tone — no comedy, no parody, no comedic detection systems. Show, don't tell: build the genre's emotion from concrete events, actions and sensory detail, never empty emotional adjectives.`}${repairSuper ? '' : `\nGENRE RESTRICTION: the "${u.genero}" genre of this universe has NO magic, powers, status systems or supernatural phenomena. Everything that happens has a real-world cause.`}${repairEcchi ? '\nECCHI/HAREM ACTIVE (adult content): all characters are adults (18 or older, each with their own adult age fitting their story role) in adult settings appropriate to the genre — never school uniforms or classrooms, nothing that frames characters as minors. Weave suggestive fan-service moments naturally where scenes allow, with genuine sensory detail; the only limit is what Gemini actually blocks.' : ''}${repairAllAges ? '\nALL-AGES (Kodomomuke): no explicit violence, no sexual or suggestive content, no adult themes. Warm tone with a clear moral.' : ''}
 RULES:
 - JSON field MUST be "narration" (no accent). EXACTLY 48-55 Spanish words. Count them. Fast-paced: 2-3 distinct visualizable events per narration, minimal atmosphere (max one short setting phrase), the rest is action and dialogue.
-- Drop into the scene immediately. Specific over vague. End naturally for the genre.
+- OPEN with a NAMED person doing or saying something concrete — never with weather, light, time of day, or a description of the place. If the first sentence can be illustrated with nobody in frame, rewrite it starting from the person. Specific over vague. End naturally for the genre.
 - Respond ONLY with valid JSON, no markdown`;
 
       const firstBroken = needsNarrationIdx[0];
@@ -4940,7 +4993,7 @@ Escribe la BIBLIA DE DIRECCIÓN de esta serie. Es el documento que seguirán tod
 Devuelve JSON:
 {
   "direccionVisual": "Cómo se ve esta serie y solo esta serie: paleta concreta (3-4 colores nombrados), tratamiento de luz, lenguaje de cámara recurrente, textura. 3-4 frases ejecutables.",
-  "identidadMusical": "Instrumentación concreta, tempo, y el motivo que identifica a la serie. 2-3 frases.",
+  "identidadMusical": "El COLOR de fondo de la serie: familia instrumental, textura y tempo. Es un colchón que suena POR DEBAJO de una narración, no una pieza de concierto — así que nada de melodías ni de instrumentos solistas llevando un tema. 2-3 frases.",
   "ritmo": "Regla de ritmo propia de esta serie dentro del género: dónde acelera, dónde respira, cómo entra y sale de cada capítulo. 2-3 frases.",
   "arcoTemporada": ["Capítulo 1: qué establece y con qué queda abierto", "Capítulo 2: ...", "Capítulo 3: ...", "Capítulo 4: ...", "Capítulo 5: ..."],
   "motivosRecurrentes": ["objeto, gesto o encuadre que reaparece y significa algo", "otro", "otro"],
@@ -4959,8 +5012,14 @@ function bibleBrief() {
   const b = state.universe?.bible;
   if (!b) return '';
   const arr = v => Array.isArray(v) ? v : [];
+  // La dirección visual llega sola a los prompts de imagen (bibleVisualBrief).
+  // Mandársela también al que escribe la PROSA fue la causa directa del episodio
+  // que abrió con "el calor del mediodía... tiñendo de ocre el polvo": el modelo
+  // no se distrajo, ejecutó la orden campo por campo — ocre era la paleta, el
+  // mediodía la luz, el polvo la textura.
   return `\n═══ BIBLIA DE DIRECCIÓN (decisiones del director creativo — obligatorias) ═══
-DIRECCIÓN VISUAL: ${b.direccionVisual || ''}
+DIRECCIÓN VISUAL (ES EL ENCARGO DEL EQUIPO DE ARTE, NO TUYO): ${b.direccionVisual || ''}
+⚠️ Esa paleta, esa luz y esa textura YA se aplican solas en las imágenes: el espectador las está VIENDO mientras te escucha. En el texto no las describas — escribirlas es repetir en palabras lo que ya está en pantalla y gastar el arranque en decorado.
 RITMO: ${b.ritmo || ''}
 ${arr(b.motivosRecurrentes).length ? `MOTIVOS RECURRENTES (hacelos aparecer con naturalidad): ${arr(b.motivosRecurrentes).join(' · ')}` : ''}
 ${arr(b.reglasDeOro).length ? `REGLAS DE ORO (nunca se rompen):\n${arr(b.reglasDeOro).map(r => '- ' + r).join('\n')}` : ''}
@@ -5045,14 +5104,33 @@ ${identity ? `\nIDENTIDAD MUSICAL DE LA SERIE (fijada en la biblia — todas las
 ACTOS DE ESTE CAPÍTULO Y LO QUE PASA EN CADA UNO:
 ${actsText}
 
-Escribe la DIRECCIÓN MUSICAL de cada acto. Cada "prompt" se le entrega literalmente a un modelo de generación musical (Lyria), así que debe estar EN INGLÉS, ser puramente instrumental y describir instrumentación, tempo (BPM aproximado), textura y emoción — nada de nombres de artistas ni de obras existentes.
+Escribe la DIRECCIÓN MUSICAL de cada acto. Cada "prompt" se le entrega literalmente a un modelo de generación musical (Lyria), así que debe estar EN INGLÉS y ser puramente instrumental — nada de nombres de artistas ni de obras existentes.
+
+⚠️ ESTO NO ES LA BANDA SONORA DEL CAPÍTULO. Es un COLCHÓN que va por debajo de una voz que narra
+sin parar, mezclado a un décimo de su volumen. El espectador no debe poder tararearlo ni notar
+cuándo entra. Si suena a "pieza", está mal.
+
+REGLAS DEL COLCHÓN (van en cada prompt, en inglés):
+- SIN MELODÍA y SIN SOLISTA. Nada de un instrumento llevando un tema. Texturas sostenidas: pads,
+  cuerdas en bloque con arco largo, notas tenidas, un ostinato mínimo de dos o tres notas como mucho.
+- SIN INSTRUMENTO DE ÉPOCA O DE REGIÓN HACIENDO DE SOLISTA — nada de erhu, guzheng, shakuhachi,
+  shamisen, flauta o violín solos tocando una tonada. Aunque la historia pase en la China antigua,
+  el fondo de una narración de anime es un fondo moderno; la época se ve en la imagen, no se toca.
+- FUERA DEL REGISTRO DE LA VOZ: grave y agudo, con el centro vacío. Nada que compita con alguien
+  hablando.
+- Sin percusión marcada, sin batería, sin golpes, sin crescendos, sin cambios bruscos: entra y se
+  queda. Tempo lento y estable.
+- Se puede repetir cuatro minutos sin que canse ni llame la atención.
 
 Devuelve JSON:
 {
   "cues": [
-    { "act": "${acts[0]}", "prompt": "instrumental cue description in English, with instrumentation, tempo and mood", "negative": "elementos a evitar, en inglés" }
+    { "act": "${acts[0]}", "prompt": "ambient underscore bed in English: instrument family, texture, approximate BPM, mood — no melody, no solo instrument", "negative": "elementos a evitar, en inglés" }
   ]
 }
+El campo "negative" incluye SIEMPRE, además de lo propio del acto: "solo instrument, lead melody,
+melodic hook, erhu, guzheng, shakuhachi, shamisen, solo violin, solo flute, vocals, drums,
+percussion hits, crescendo, orchestral stabs".
 Un objeto por cada acto listado arriba, usando EXACTAMENTE esos identificadores de act.`;
 
   const raw = await callGemini(prompt, directorSystemPrompt(u.genero, comedyMode));
@@ -5063,10 +5141,28 @@ Un objeto por cada acto listado arriba, usando EXACTAMENTE esos identificadores 
   }
   // Any act the director skipped still gets a usable cue.
   for (const a of acts) {
-    if (!out[a]) out[a] = { prompt: `Instrumental anime score cue for the ${a} of a ${u.genero || 'drama'} episode, orchestral and restrained, moderate tempo`, negative: '' };
+    if (!out[a]) out[a] = { prompt: LECHO_POR_DEFECTO, negative: '' };
+  }
+  // El negativo NO se deja a criterio del director. Un episodio ambientado en la
+  // China antigua se llevó un erhu solo tocando una tonada: correcto de época y
+  // horrible por debajo de una voz. Esta lista va siempre, la escriba o no.
+  for (const a of Object.keys(out)) {
+    out[a].negative = [out[a].negative, NEGATIVO_LECHO].filter(Boolean).join(', ');
   }
   return out;
 }
+
+// Un fondo de narración, no una pieza: el que se usa cuando el director no
+// escribió nada para un acto.
+const LECHO_POR_DEFECTO =
+  'Sustained ambient underscore bed: warm low strings and soft synth pad, slow and static, '
+  + 'around 60 BPM, no melody, no lead instrument, mid frequencies left empty for a speaking voice, '
+  + 'loops seamlessly under narration without drawing attention';
+
+const NEGATIVO_LECHO =
+  'solo instrument, lead melody, melodic hook, erhu, guzheng, shakuhachi, shamisen, solo violin, '
+  + 'solo flute, solo piano melody, vocals, singing, drums, percussion hits, crescendo, '
+  + 'orchestral stabs, tempo changes';
 
 // ════════════════════════════════════════════════════════════════
 // MUSIC — one instrumental cue per act, composed by Lyria from a
@@ -5336,8 +5432,16 @@ function buildMontarScript(scenes, opts) {
       // `afade=t=out:st=:d=3`, and every episode WITH MUSIC died on it — with
       // nothing but "exit code 1" to show for it.
       'FADE=$(awk "BEGIN{f=$TOTAL-3; if(f<0)f=0; printf \\"%.2f\\", f}")',
+      // La música es un complemento: tiene que oírse apenas, sólo para que la
+      // voz no suene seca. Dos cambios sobre lo de antes:
+      //   volume 0.18 -> 0.09, y un hueco de 7 dB alrededor de 2 kHz, que es la
+      //   banda donde se entiende el habla. Medido: la voz pasa de estar 14 dB
+      //   por encima de la música a estar 21 dB.
+      // (Se probó además ducking con sidechaincompress y NO servía: con la voz
+      //  en mono a 24 kHz y la música en estéreo a 48 kHz medía 0 dB de bajada.)
       'ffmpeg -y -i narracion.wav -stream_loop -1 -i musica.wav ' +
-      '-filter_complex "[1:a]volume=0.18,afade=t=in:st=0:d=2,afade=t=out:st=$FADE:d=3[m];' +
+      '-filter_complex "[1:a]volume=0.09,equalizer=f=2000:width_type=o:width=2:g=-7,' +
+      'afade=t=in:st=0:d=2,afade=t=out:st=$FADE:d=3[m];' +
       '[0:a][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]" ' +
       '-map "[a]" -t "$TOTAL" mezcla.wav');
   } else {
@@ -5931,14 +6035,16 @@ Reglas:
   hacen. Nada de títulos de capítulo tipo "El despertar" o "Capítulo 1: el inicio". Máx. 90 caracteres.
 - La DESCRIPCIÓN abre con la injusticia o la traición, no con el contexto. Dos o tres frases. La última
   deja el episodio abierto.
-- El COMENTARIO FIJADO es una pregunta que obliga a tomar bando. La gente comenta cuando cree que la
-  otra mitad se equivoca, no cuando le preguntan si le gustó.
-- HASHTAGS: 22 a 28. Mezclá los grandes de anime en español con los del género de esta historia. Sin
-  repetir, sin espacios dentro de un hashtag, todos en minúscula.
+- La PREGUNTA va al final de la descripción, en su propia línea, y obliga a tomar bando. La gente
+  comenta cuando cree que la otra mitad se equivoca, no cuando le preguntan si le gustó. Una sola
+  línea, sin "comenta abajo" ni "dime qué opinas".
+- HASHTAGS: exactamente 6. Ni uno más — una pared de etiquetas la lee Facebook como spam. Elegí los
+  seis que de verdad busca alguien que quiere ver esto: dos generales de anime en español, dos del
+  género, dos de la historia concreta. Sin espacios dentro de un hashtag, todos en minúscula.
 - Nada de inventar datos que no estén en la historia. Nada de prometer lo que el episodio no da.
 
 Devolvé SÓLO este JSON:
-{"titulo":"...","descripcion":"...","comentario":"...","hashtags":["#...","#..."]}`;
+{"titulo":"...","descripcion":"...","pregunta":"...","hashtags":["#...","#..."]}`;
 
   const prompt = `TÍTULO DE LA SERIE: ${u.title || '(sin título)'}
 GÉNERO: ${u.genero || ''}${(u.subgenres || []).length ? ' · ' + (u.subgenres || []).join(', ') : ''}
@@ -5953,17 +6059,26 @@ ${final}`;
 
   const raw = await callGemini(prompt, sys);
   const d = safeParseJSON(raw) || {};
+  // Seis, aunque el modelo mande veinte: una pared de etiquetas se lee como spam.
   const hashtags = (Array.isArray(d.hashtags) ? d.hashtags : [])
     .map(h => '#' + String(h).replace(/^#+/, '').replace(/\s+/g, '').toLowerCase())
-    .filter((h, i, a) => h.length > 1 && a.indexOf(h) === i);
+    .filter((h, i, a) => h.length > 1 && a.indexOf(h) === i)
+    .slice(0, 6);
 
+  // Un solo bloque, sin rótulos. Antes iba con TÍTULO / DESCRIPCIÓN / COMENTARIO
+  // / HASHTAGS y había que copiar cuatro veces, saltando de la app al archivo.
+  // Esto se selecciona entero, se copia una vez y se pega tal cual. La pregunta
+  // que arranca el debate va dentro, como última línea: ahí también funciona y
+  // deja de ser un segundo copiado.
   const ep = String(state.currentEpisode || 1).padStart(2, '0');
   return [
-    'TÍTULO', '══════', d.titulo || `${u.title || 'Episodio'} — Episodio ${ep}`, '',
-    'DESCRIPCIÓN', '═══════════', d.descripcion || '', '',
-    'COMENTARIO FIJADO (péganlo tú mismo y fíjalo — es lo que arranca el debate)',
-    '═════════════════', d.comentario || '', '',
-    'HASHTAGS', '════════', hashtags.join(' '), '',
+    d.titulo || `${u.title || 'Episodio'} — Episodio ${ep}`,
+    '',
+    d.descripcion || '',
+    ...(d.pregunta ? ['', d.pregunta] : []),
+    '',
+    hashtags.join(' '),
+    '',
   ].join('\n');
 }
 
