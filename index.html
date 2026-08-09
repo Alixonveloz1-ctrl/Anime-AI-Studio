@@ -501,8 +501,8 @@
         <option value="veo-3.1-lite-generate-001">⚡ Veo 3.1 Lite — el más económico</option>
         <option value="veo-3.1-fast-generate-001">🌟 Veo 3.1 Fast — equilibrado</option>
         <option value="veo-3.1-generate-001">👑 Veo 3.1 — máxima calidad</option>
-        <option value="veo-2.0-generate-001">🎞️ Veo 2 — generación anterior</option>
       </select>
+      <p style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.5">Sin audio y a 720p, que es como genera esta app: Lite <strong>$0,03/s</strong> · Fast <strong>$0,08/s</strong> · 3.1 <strong>$0,20/s</strong>. Un clip de 8 s sale a $0,24 · $0,64 · $1,60.</p>
 
       <label>Formato de imagen y video</label>
       <select id="aspectRatio">
@@ -1903,14 +1903,76 @@ function pintarVocesDelIdioma() {
   // "Charon" in es-ES are the same voice reading another language.
   const mismaPersona = previo && VOCES_DISPONIBLES.find(v => `gcp_${v.name}` === previo);
   const enEsteIdioma = mismaPersona && dellang.find(v => v.etiqueta === mismaPersona.etiqueta);
-  const quiero = (enEsteIdioma && `gcp_${enEsteIdioma.name}`)
+  // La voz elegida la última vez manda, si existe en este idioma. Va primero
+  // porque la lista llega de la red DESPUÉS de restaurar los ajustes: cuando se
+  // restauran, el menú todavía sólo tiene el hueco de relleno.
+  // Al cambiar de idioma no estorba: una voz de otro idioma no está en dellang.
+  const guardada = ajustesGuardados().voiceSelect;
+  const quiero = (guardada && dellang.some(v => `gcp_${v.name}` === guardada) && guardada)
+    || (enEsteIdioma && `gcp_${enEsteIdioma.name}`)
     || (dellang.find(v => v.etiqueta === 'Charon') && `gcp_${dellang.find(v => v.etiqueta === 'Charon').name}`)
     || selVoz.options[0]?.value;
   if (quiero) selVoz.value = quiero;
+  guardarAjustes();
   // The count has to match what the menu is showing, which is one language.
   if (nota) nota.innerHTML = HAY_CHIRP
     ? `<strong>${dellang.length}</strong> voces Chirp 3: HD en este idioma. Mantienen el <strong>mismo narrador de principio a fin</strong>, sin cambiar de registro entre escenas. La velocidad se aplica después de generar, conservando el tono.`
     : `⚠️ Tu proyecto no tiene voces Chirp 3: HD. Se muestran las demás (${dellang.length} en este idioma).`;
+}
+
+// ════════════════════════════════════════════════════════════════
+// AJUSTES DEL PANEL DE EPISODIO — se recuerdan entre visitas.
+//
+// No se guardaban. En el móvil la página se recarga sola en cuanto cambiás de
+// aplicación, y al volver el menú estaba otra vez en la PRIMERA opción: elegías
+// Veo Fast, te ibas a mirar algo, volvías, y seguías generando en Lite sin que
+// nada te lo dijera. Un fallo silencioso que se paga en calidad.
+//
+// Van fuera del proyecto, en su propia clave: son preferencias de la aplicación
+// (con qué modelo generás, con qué voz narrás), no contenido de un anime.
+// ════════════════════════════════════════════════════════════════
+const AJUSTES_KEY = 'ajustes_estudio';
+const CAMPOS_AJUSTE = ['imageModelSelect', 'veoModelSelect', 'aspectRatio',
+                       'voiceLang', 'voiceSelect', 'voiceSpeed', 'voiceVolumen'];
+
+function guardarAjustes() {
+  const datos = {};
+  for (const id of CAMPOS_AJUSTE) {
+    const el = document.getElementById(id);
+    if (el) datos[id] = el.value;
+  }
+  try { localStorage.setItem(AJUSTES_KEY, JSON.stringify(datos)); } catch (e) { /* cuota llena */ }
+}
+
+function ajustesGuardados() {
+  try { return JSON.parse(localStorage.getItem(AJUSTES_KEY) || '{}') || {}; } catch (e) { return {}; }
+}
+
+// Sólo se aplica lo que el menú ofrece HOY: si un modelo se retiró de la lista
+// —Veo 2, por ejemplo— el valor guardado se ignora y queda el que haya, en vez
+// de dejar el <select> en blanco y mandar un modelo que ya no está.
+function aplicarAjuste(id, valor) {
+  const el = document.getElementById(id);
+  if (!el || valor == null) return false;
+  if (el.tagName === 'SELECT' && ![...el.options].some(o => o.value === valor)) return false;
+  el.value = valor;
+  return true;
+}
+
+function restaurarAjustes() {
+  const datos = ajustesGuardados();
+  for (const id of CAMPOS_AJUSTE) aplicarAjuste(id, datos[id]);
+  // Las etiquetas de los deslizadores no se actualizan solas al cambiar .value.
+  const vel = document.getElementById('voiceSpeed');
+  const lab = document.getElementById('speedLabel');
+  if (vel && lab) lab.textContent = speedLabel(vel.value);
+  const vol = document.getElementById('voiceVolumen');
+  const vlab = document.getElementById('volLabel');
+  if (vol && vlab) vlab.textContent = vol.value == 0 ? 'Normal (0 dB)'
+    : (vol.value > 0 ? `+${vol.value} dB` : `${vol.value} dB`);
+  for (const id of CAMPOS_AJUSTE) {
+    document.getElementById(id)?.addEventListener('change', guardarAjustes);
+  }
 }
 
 // ─── VELOCIDAD ───
@@ -6261,6 +6323,9 @@ function renderAll() {
     loadStateFor(projects[projects.length - 1].id);
   }
   updateApiDot();
+  // Antes de dibujar nada: el formato (9:16 / 16:9) decide cómo se recortan las
+  // miniaturas de cada escena.
+  restaurarAjustes();
   applyDemoCompatibility();
   updateEpFormatNote();
   checkAssemblyAvailable();
