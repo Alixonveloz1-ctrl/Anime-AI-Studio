@@ -18,6 +18,9 @@
     "api/health.js": {
       "maxDuration": 15
     },
+    "api/voices.js": {
+      "maxDuration": 15
+    },
     "api/music.js": {
       "maxDuration": 60
     },

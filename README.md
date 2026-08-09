@@ -8,7 +8,7 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 |-----------------|-----------------------------------------------------------|
 |Guión y narrativa|Gemini 3.1 Pro (`/api/script`)                             |
 |Imágenes         |Nano Banana 2 / Nano Banana (`/api/image`)                  |
-|Voces            |Gemini TTS (30 voces) / Chirp 3: HD / Neural2-WaveNet (`/api/audio`)|
+|Voces            |Chirp 3: HD (`/api/audio`, lista real desde `/api/voices`)   |
 |Música           |Lyria (`/api/music`) — una pista instrumental por acto      |
 |Dirección        |Director creativo: biblia de serie, nota por capítulo, música|
 |Clips de video   |Veo 3.1 Lite (`/api/video-start` + `/api/video-status`)     |
@@ -98,8 +98,6 @@ Todo se genera con Google Cloud. No hay ningún project ID, bucket, modelo ni re
 |`IMAGE_MODEL`               |`gemini-3.1-flash-image` (Nano Banana 2)|
 |`IMAGE_REGIONS`             |`us-central1,europe-west4,us-east4`|
 |`IMAGE_MODEL_LOCATIONS`     |JSON `{"modelo":"region"}`         |
-|`TTS_MODEL`                 |`gemini-2.5-flash-preview-tts`     |
-|`TTS_FALLBACK_MODEL`        |`gemini-2.5-pro-preview-tts`       |
 |`VEO_MODEL`                 |`veo-3.1-lite-generate-001`        |
 |`MUSIC_MODEL`               |`lyria-002`                        |
 |`STT_MODEL` / `STT_LANGUAGE`|`latest_long` / `es-US`            |
@@ -119,7 +117,7 @@ Todo se genera con Google Cloud. No hay ningún project ID, bucket, modelo ni re
 En el proyecto nuevo hacen falta:
 
 - Facturación activa.
-- APIs habilitadas: `aiplatform.googleapis.com`, `storage.googleapis.com`, `speech.googleapis.com` (subtítulos con timing exacto) y — solo si usas las voces `gcp_` Neural2/WaveNet — `texttospeech.googleapis.com`.
+- APIs habilitadas: `aiplatform.googleapis.com`, `storage.googleapis.com`, `speech.googleapis.com` (subtítulos con timing exacto) y `texttospeech.googleapis.com` (las voces).
 - Roles de la service account: `roles/aiplatform.user`, `roles/storage.admin` (hace falta `storage.buckets.update`: `video-status.js` aplica CORS al bucket) y `roles/serviceusage.serviceUsageConsumer`.
 - Bucket creado en ese proyecto, en US (Veo corre en `us-central1`).
 - Acceso al modelo de texto `gemini-3.1-pro-preview`, del que depende el guión (no tiene fallback).
@@ -161,44 +159,47 @@ Por eso el empate al elegir la duración lo gana la **menor**: al reajustar la
 velocidad, quedarse corto o pasarse cuesta lo mismo en imagen, y Veo cobra por
 segundo generado.
 
-## Dirigir la voz
+## La voz
 
-Cada motor obedece cosas distintas, y el panel solo enseña los mandos que el
-elegido puede cumplir. Un deslizador que no hace nada es peor que no tenerlo.
+**Solo Chirp 3: HD.** Las otras dos familias se probaron y se descartaron por
+motivos concretos:
 
-|Motor|Qué obedece|Para qué sirve|
-|-----|-----------|--------------|
-|**Gemini TTS** (30 voces)|Actuación, tono, ritmo, indicación libre, velocidad|Máxima expresividad|
-|**Chirp 3: HD** (4 voces)|Solo volumen|El **mismo narrador** de principio a fin|
-|**Neural2 / WaveNet**|Velocidad, tono (semitonos), volumen|Voz neutra y previsible|
+- **Gemini TTS** vuelve a interpretar en cada llamada. En un episodio de quince
+  escenas eso se oye como varios narradores distintos: cambia el registro y hasta
+  el timbre, y ninguna cantidad de dirección lo arregla, porque no hay ningún
+  parámetro que fije la interpretación.
+- **Neural2 / WaveNet** son estables pero suenan a máquina.
 
-Gemini TTS no tiene ningún mando numérico para la expresión: el registro se fija
-con la instrucción que va delante del texto. Por eso los controles son cuatro y
-todos escriben esa instrucción:
+Chirp mantiene **la misma persona de principio a fin**, que es lo que hace falta
+para narrar.
 
-- **Cuánto actúa la voz** — plana (voz en off, sin actuar) · natural · sutil ·
-  dramática. Si las voces te salen exageradas, esto es lo que hay que bajar.
-- **Tono** — sobrio, íntimo, tenso, cálido, melancólico, épico contenido, frío,
-  susurrado.
-- **Ritmo** — pausado, normal, ágil.
-- **Indicación libre** — se la escribís como a un actor ("como quien recuerda algo
-  que preferiría olvidar") y llega tal cual.
+### El menú no está escrito en el código
 
-**"🔊 Probar la voz"** genera una muestra con los ajustes actuales antes de lanzar
-el episodio entero.
+Se lo pide a Google (`/api/voices` → `texttospeech.googleapis.com/v1/voices`) y
+ofrece exactamente las voces que tu service account puede sintetizar, en todos
+los idiomas que tenga. Una lista escrita a mano es lo que hizo que la app
+ofreciera `Perseus`, que no existe, y sólo cuatro voces Chirp cuando el proyecto
+tiene muchas más. Cuando Google añada voces, aparecen solas.
 
-Dos cosas que conviene saber:
+El selector de idioma sale de las voces disponibles, y al cambiarlo se conserva
+la personalidad elegida si esa misma voz existe en el idioma nuevo.
 
-- Gemini TTS vuelve a interpretar en cada llamada, así que en un episodio largo el
-  registro puede variar un poco entre escenas. **Chirp 3: HD** no: lee con menos
-  rango dramático pero mantiene el mismo narrador de principio a fin.
-- Chirp 3: HD **no admite velocidad ni tono**. Mandárselos no sintetiza más
-  rápido: estira el audio ya hecho y suena metálico. Por eso esos dos mandos se
-  desactivan solos al elegir una voz Chirp.
+### La velocidad
 
-Los nombres de voz se validan en el servidor antes de autenticar: una voz que no
-existe responde *"la voz X no existe en Gemini TTS"* en vez del error crudo de
-Vertex. La app llegó a ofrecer `Perseus`, que no es una de ellas.
+Chirp 3: HD **no acepta `speakingRate` ni `pitch`** — está documentado, y la API
+los ignora. Remuestrear el audio ya generado lo aceleraría, pero también le
+subiría el tono: es el efecto ardilla, y suena metálico.
+
+Así que el tempo se cambia en el navegador con **WSOLA**: la onda se corta en
+ventanas solapadas, cada una se desliza hasta donde mejor continúa a la anterior,
+y se suman al nuevo espaciado. El periodo de la onda se conserva, así que **el
+tono no se mueve — sólo el ritmo**. Hay una prueba que lo mide: a 0,5x y a 2x el
+audio sigue sonando a 440 Hz, y el caso de control (remuestrear) sube a 660 Hz.
+
+Se aplica antes de guardar el audio, así que los subtítulos y el montaje miden
+exactamente los segundos que vas a oír.
+
+El volumen sí va en la petición, que ese Chirp lo admite.
 
 ### Dónde vive el clima
 

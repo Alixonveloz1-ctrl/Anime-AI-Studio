@@ -510,65 +510,11 @@
         <option value="16:9">🖥️ 16:9 Horizontal — YouTube / Widescreen</option>
       </select>
 
-      <label>Voz de narración</label>
-      <select id="voiceSelect">
-        <optgroup label="🔮 Gemini TTS — graves y firmes">
-          <option value="gemini_Charon">Charon — grave, informativa</option>
-          <option value="gemini_Algenib">Algenib — rasposa, grave</option>
-          <option value="gemini_Gacrux">Gacrux — madura</option>
-          <option value="gemini_Fenrir">Fenrir — vehemente</option>
-          <option value="gemini_Orus">Orus — firme</option>
-          <option value="gemini_Alnilam">Alnilam — firme</option>
-          <option value="gemini_Kore">Kore — firme (femenina)</option>
-        </optgroup>
-        <optgroup label="🔮 Gemini TTS — relajadas y cercanas">
-          <option value="gemini_Umbriel">Umbriel — relajada</option>
-          <option value="gemini_Callirrhoe">Callirrhoe — relajada</option>
-          <option value="gemini_Achird">Achird — amigable</option>
-          <option value="gemini_Zubenelgenubi">Zubenelgenubi — casual</option>
-          <option value="gemini_Vindemiatrix">Vindemiatrix — gentil</option>
-          <option value="gemini_Sulafat">Sulafat — cálida</option>
-        </optgroup>
-        <optgroup label="🔮 Gemini TTS — claras y expertas">
-          <option value="gemini_Rasalgethi">Rasalgethi — informativa</option>
-          <option value="gemini_Sadaltager">Sadaltager — experta</option>
-          <option value="gemini_Iapetus">Iapetus — clara</option>
-          <option value="gemini_Erinome">Erinome — clara</option>
-          <option value="gemini_Schedar">Schedar — uniforme</option>
-          <option value="gemini_Pulcherrima">Pulcherrima — directa</option>
-        </optgroup>
-        <optgroup label="🔮 Gemini TTS — suaves">
-          <option value="gemini_Achernar">Achernar — suave</option>
-          <option value="gemini_Algieba">Algieba — suave</option>
-          <option value="gemini_Despina">Despina — suave</option>
-          <option value="gemini_Enceladus">Enceladus — susurrante</option>
-        </optgroup>
-        <optgroup label="🔮 Gemini TTS — luminosas y animadas">
-          <option value="gemini_Aoede">Aoede — ligera</option>
-          <option value="gemini_Zephyr">Zephyr — brillante</option>
-          <option value="gemini_Autonoe">Autonoe — brillante</option>
-          <option value="gemini_Puck">Puck — animada</option>
-          <option value="gemini_Laomedeia">Laomedeia — animada</option>
-          <option value="gemini_Sadachbia">Sadachbia — vivaz</option>
-          <option value="gemini_Leda">Leda — juvenil</option>
-        </optgroup>
-        <optgroup label="🎧 Chirp 3: HD — el mismo narrador de principio a fin">
-          <option value="gcp_es-US-Chirp3-HD-Charon">Charon HD — grave</option>
-          <option value="gcp_es-US-Chirp3-HD-Orus">Orus HD — firme, algo más tensa</option>
-          <option value="gcp_es-US-Chirp3-HD-Fenrir">Fenrir HD — áspera y rotunda</option>
-          <option value="gcp_es-US-Chirp3-HD-Puck">Puck HD — clara y ligera</option>
-        </optgroup>
-        <optgroup label="🔵 Google Cloud TTS — Español Latino (neutral)">
-          <option value="gcp_es-US-Neural2-B">Neural2-B — Masculina, neutral</option>
-          <option value="gcp_es-US-Neural2-D">Neural2-D — Masculina, profunda</option>
-          <option value="gcp_es-US-Neural2-A">Neural2-A — Femenina, neutral</option>
-          <option value="gcp_es-US-Neural2-C">Neural2-C — Femenina, clara</option>
-          <option value="gcp_es-US-Wavenet-B">Wavenet-B — Masculina, suave</option>
-          <option value="gcp_es-US-Wavenet-C">Wavenet-C — Masculina, natural</option>
-          <option value="gcp_es-US-Wavenet-A">Wavenet-A — Femenina, suave</option>
-          <option value="gcp_es-US-Wavenet-F">Wavenet-F — Femenina, limpia</option>
-        </optgroup>
-      </select>
+      <label>Idioma</label>
+      <select id="voiceLang" style="font-size:13px"><option value="es-US">Español · Latinoamérica</option></select>
+
+      <label style="margin-top:12px">Voz</label>
+      <select id="voiceSelect"><option value="gcp_es-US-Chirp3-HD-Charon">Charon</option></select>
       <p id="voiceEngineNote" style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.5"></p>
 
       <label>Velocidad de narración — <span id="speedLabel" style="color:var(--accent)">Normal (1.0x)</span></label>
@@ -579,57 +525,10 @@
         <span>0.5x Lento</span><span>1.0x Normal</span><span>2.0x Rápido</span>
       </div>
 
-      <!-- ── Dirección de voz: solo Gemini TTS ── -->
-      <div id="voiceGeminiControls">
-        <label style="margin-top:12px">Cuánto actúa la voz</label>
-        <select id="voiceIntensidad" style="font-size:13px">
-          <option value="plana">😐 Plana — voz en off, sin actuar nada</option>
-          <option value="natural" selected>🗣️ Natural — narración fluida, sin exagerar</option>
-          <option value="sutil">🎭 Sutil — leve énfasis en clímax y final</option>
-          <option value="dramatica">🔥 Dramática — actuación completa de anime</option>
-        </select>
-
-        <label style="margin-top:12px">Tono</label>
-        <select id="voiceTono" style="font-size:13px">
-          <option value="neutro" selected>— Sin indicación (el de la voz)</option>
-          <option value="sobrio">Sobrio y contenido — documental serio</option>
-          <option value="intimo">Íntimo — como hablándole a una sola persona</option>
-          <option value="tenso">Tenso — controlado, aguantando algo</option>
-          <option value="calido">Cálido y amable</option>
-          <option value="melancolico">Melancólico — con un peso que no se anuncia</option>
-          <option value="epico">Épico contenido — grave, nunca gritado</option>
-          <option value="frio">Frío y distante</option>
-          <option value="susurrado">Susurrado — muy cerca del micrófono</option>
-        </select>
-
-        <label style="margin-top:12px">Ritmo</label>
-        <select id="voiceRitmo" style="font-size:13px">
-          <option value="normal" selected>— Normal</option>
-          <option value="pausado">Pausado — que las frases respiren</option>
-          <option value="agil">Ágil — hacia adelante, pausas cortas</option>
-        </select>
-
-        <label style="margin-top:12px">Indicación libre al narrador (opcional)</label>
-        <input type="text" id="voiceIndicacion" maxlength="300" style="font-size:13px"
-          placeholder="Ej: como quien recuerda algo que preferiría olvidar">
-        <p style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.5">Escribí la dirección como se la darías a un actor. Va tal cual al narrador.</p>
-      </div>
-
-      <!-- ── Controles numéricos: solo Cloud TTS ── -->
-      <div id="voiceGcpControls" style="display:none">
-        <label style="margin-top:12px">Tono de voz — <span id="pitchLabel" style="color:var(--accent)">Normal (0)</span></label>
-        <input type="range" id="voicePitch" min="-10" max="10" step="0.5" value="0"
-          style="padding:4px 0;cursor:pointer;accent-color:var(--accent)"
-          oninput="document.getElementById('pitchLabel').textContent = this.value == 0 ? 'Normal (0)' : (this.value > 0 ? 'Más agudo (+' + this.value + ')' : 'Más grave (' + this.value + ')')">
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);margin-top:2px">
-          <span>−10 Grave</span><span>0 Normal</span><span>+10 Agudo</span>
-        </div>
-
-        <label style="margin-top:12px">Volumen — <span id="volLabel" style="color:var(--accent)">Normal (0 dB)</span></label>
-        <input type="range" id="voiceVolumen" min="-12" max="12" step="0.5" value="0"
-          style="padding:4px 0;cursor:pointer;accent-color:var(--accent)"
-          oninput="document.getElementById('volLabel').textContent = this.value == 0 ? 'Normal (0 dB)' : (this.value > 0 ? '+' + this.value + ' dB' : this.value + ' dB')">
-      </div>
+      <label style="margin-top:12px">Volumen — <span id="volLabel" style="color:var(--accent)">Normal (0 dB)</span></label>
+      <input type="range" id="voiceVolumen" min="-12" max="12" step="0.5" value="0"
+        style="padding:4px 0;cursor:pointer;accent-color:var(--accent)"
+        oninput="document.getElementById('volLabel').textContent = this.value == 0 ? 'Normal (0 dB)' : (this.value > 0 ? '+' + this.value + ' dB' : this.value + ' dB')">
 
       <button class="btn-sec" onclick="probarVoz()" style="margin-top:12px;width:100%">🔊 Probar la voz con estos ajustes</button>
 
@@ -1773,43 +1672,164 @@ function speedLabel(v) {
 // All narration audio is generated by Google Cloud: Gemini TTS (Vertex AI) for
 // the gemini_* voices, Cloud TTS Neural2/WaveNet for the gcp_* voices. Both go
 // through /api/audio, which authenticates with the single GCP_SERVICE_ACCOUNT.
-// ─── DIRECCIÓN DE VOZ ───
-// Gemini TTS has no numeric control for expression: the register is set by the
-// instruction prefixed to the text. Cloud TTS is the opposite — it ignores that
-// instruction and has real numbers (pitch, gain). So the panel shows the
-// controls the chosen engine can actually obey, and both travel in the request.
+// ════════════════════════════════════════════════════════════════
+// VOCES — Chirp 3: HD
+//
+// Only Chirp. Gemini TTS re-performs on every call, so across an episode the
+// narrator changes register and even timbre from scene to scene, and no amount
+// of direction fixes that. Neural2/WaveNet hold steady but read like a machine.
+// Chirp is the one that stays the same person from start to finish.
+//
+// The list is NOT written here: it is asked of Google. A hand-written list is
+// how the app came to offer "Perseus", which does not exist, and only four Chirp
+// voices when the project has many more.
+// ════════════════════════════════════════════════════════════════
+const NOMBRE_IDIOMA = {
+  'es-US': 'Español · Latinoamérica', 'es-ES': 'Español · España',
+  'es-419': 'Español · América', 'en-US': 'Inglés · EE.UU.', 'en-GB': 'Inglés · Reino Unido',
+  'pt-BR': 'Portugués · Brasil', 'ja-JP': 'Japonés', 'fr-FR': 'Francés',
+  'it-IT': 'Italiano', 'de-DE': 'Alemán', 'ko-KR': 'Coreano', 'zh-CN': 'Chino mandarín',
+};
+let VOCES_DISPONIBLES = [];
+
 const val = (id, def) => document.getElementById(id)?.value ?? def;
 
 function ajustesDeVoz() {
-  return {
-    intensidad: val('voiceIntensidad', 'natural'),
-    tono:       val('voiceTono', 'neutro'),
-    ritmo:      val('voiceRitmo', 'normal'),
-    indicacion: String(val('voiceIndicacion', '')).trim(),
-    pitch:      parseFloat(val('voicePitch', 0)) || 0,
-    volumen:    parseFloat(val('voiceVolumen', 0)) || 0,
-  };
+  return { volumen: parseFloat(val('voiceVolumen', 0)) || 0 };
 }
 
-// Chirp 3: HD accepts neither speed nor pitch — the pace has to come from the
-// voice itself. Saying so beats letting the user drag a slider that does nothing.
+async function cargarVoces() {
+  const selLang = document.getElementById('voiceLang');
+  const selVoz  = document.getElementById('voiceSelect');
+  const nota    = document.getElementById('voiceEngineNote');
+  if (!selLang || !selVoz) return;
+  try {
+    const r = await fetch('/api/voices');
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error((d.error || r.status) + (d.hint ? ` — ${d.hint}` : ''));
+
+    // Chirp 3: HD if the project has it; otherwise everything, rather than an
+    // empty menu the user cannot act on.
+    const chirp = (d.voices || []).filter(v => v.familia === 'chirp3hd');
+    VOCES_DISPONIBLES = chirp.length ? chirp : (d.voices || []);
+    if (!VOCES_DISPONIBLES.length) throw new Error('el proyecto no tiene ninguna voz disponible');
+
+    const idiomas = [...new Set(VOCES_DISPONIBLES.map(v => v.lang))];
+    const previo = selLang.value;
+    selLang.innerHTML = idiomas.map(l => `<option value="${l}">${NOMBRE_IDIOMA[l] || l}</option>`).join('');
+    selLang.value = idiomas.includes(previo) ? previo : (idiomas.includes('es-US') ? 'es-US' : idiomas[0]);
+    HAY_CHIRP = chirp.length > 0;
+    pintarVocesDelIdioma();
+  } catch (e) {
+    if (nota) nota.innerHTML = `⚠️ No se pudo cargar la lista de voces: ${e.message}`;
+  }
+}
+
+let HAY_CHIRP = true;
+
+function pintarVocesDelIdioma() {
+  const selLang = document.getElementById('voiceLang');
+  const selVoz  = document.getElementById('voiceSelect');
+  const nota    = document.getElementById('voiceEngineNote');
+  if (!selLang || !selVoz) return;
+  const lang = selLang.value;
+  const previo = selVoz.value;
+  const dellang = VOCES_DISPONIBLES.filter(v => v.lang === lang);
+  const etiqueta = v => `${v.etiqueta}${v.genero === 'male' ? ' — masculina' : v.genero === 'female' ? ' — femenina' : ''}`;
+  selVoz.innerHTML = dellang.map(v => `<option value="gcp_${v.name}">${etiqueta(v)}</option>`).join('');
+  // Keep the chosen personality when switching language: "Charon" in es-US and
+  // "Charon" in es-ES are the same voice reading another language.
+  const mismaPersona = previo && VOCES_DISPONIBLES.find(v => `gcp_${v.name}` === previo);
+  const enEsteIdioma = mismaPersona && dellang.find(v => v.etiqueta === mismaPersona.etiqueta);
+  const quiero = (enEsteIdioma && `gcp_${enEsteIdioma.name}`)
+    || (dellang.find(v => v.etiqueta === 'Charon') && `gcp_${dellang.find(v => v.etiqueta === 'Charon').name}`)
+    || selVoz.options[0]?.value;
+  if (quiero) selVoz.value = quiero;
+  // The count has to match what the menu is showing, which is one language.
+  if (nota) nota.innerHTML = HAY_CHIRP
+    ? `<strong>${dellang.length}</strong> voces Chirp 3: HD en este idioma. Mantienen el <strong>mismo narrador de principio a fin</strong>, sin cambiar de registro entre escenas. La velocidad se aplica después de generar, conservando el tono.`
+    : `⚠️ Tu proyecto no tiene voces Chirp 3: HD. Se muestran las demás (${dellang.length} en este idioma).`;
+}
+
+// ─── VELOCIDAD ───
+// Chirp 3: HD does not accept speakingRate — Google's docs say so plainly, and
+// the API ignores it. Resampling the finished audio would speed it up AND raise
+// the pitch, which is the metallic chipmunk sound.
+//
+// So the tempo is changed here, with WSOLA: the waveform is cut into overlapping
+// windows, each is slid to where it best continues the previous one, and they
+// are overlap-added at the new spacing. The period of the wave is preserved, so
+// the pitch does not move — only the pace. It runs on the stored audio, before
+// anything else sees it, so the subtitles and the montage measure the same
+// seconds the user will hear.
+function estirarTempo(canal, rate, sr) {
+  if (!isFinite(rate) || Math.abs(rate - 1) < 0.01) return canal;
+  const N   = Math.max(256, Math.round(sr * 0.06));  // ventana ~60 ms
+  const Hs  = Math.round(N / 2);                     // salto de síntesis
+  const Ha  = Math.max(1, Math.round(Hs * rate));    // salto de análisis
+  const tol = Math.round(sr * 0.01);                 // ±10 ms para buscar el encaje
+  const win = new Float32Array(N);
+  for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (N - 1));
+
+  const outLen = Math.ceil(canal.length / rate) + 2 * N;
+  const out  = new Float32Array(outLen);
+  const norm = new Float32Array(outLen);
+
+  let ana = 0, syn = 0, prev = null, fin = 0;
+  while (ana + N < canal.length && syn + N < outLen) {
+    let best = ana;
+    if (prev) {
+      let mejor = -Infinity;
+      const lo = Math.max(0, ana - tol), hi = Math.min(canal.length - N, ana + tol);
+      for (let c = lo; c <= hi; c++) {
+        let s = 0;
+        for (let i = 0; i < prev.length; i += 2) s += prev[i] * canal[c + i];
+        if (s > mejor) { mejor = s; best = c; }
+      }
+    }
+    for (let i = 0; i < N; i++) { out[syn + i] += canal[best + i] * win[i]; norm[syn + i] += win[i]; }
+    const p0 = best + Hs, p1 = Math.min(p0 + Hs, canal.length);
+    prev = p1 > p0 ? canal.subarray(p0, p1) : null;
+    fin = syn + N;
+    ana += Ha; syn += Hs;
+  }
+  for (let i = 0; i < fin; i++) if (norm[i] > 1e-6) out[i] /= norm[i];
+  return out.subarray(0, fin);
+}
+
+function floatAWav(canal, sr) {
+  const n = canal.length;
+  const buf = new ArrayBuffer(44 + n * 2);
+  const dv = new DataView(buf);
+  const w = (off, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(off + i, s.charCodeAt(i)); };
+  w(0,'RIFF'); dv.setUint32(4, 36 + n*2, true); w(8,'WAVE'); w(12,'fmt ');
+  dv.setUint32(16,16,true); dv.setUint16(20,1,true); dv.setUint16(22,1,true);
+  dv.setUint32(24,sr,true); dv.setUint32(28,sr*2,true); dv.setUint16(32,2,true);
+  dv.setUint16(34,16,true); w(36,'data'); dv.setUint32(40, n*2, true);
+  for (let i = 0; i < n; i++) {
+    const v = Math.max(-1, Math.min(1, canal[i]));
+    dv.setInt16(44 + i*2, v < 0 ? v * 0x8000 : v * 0x7FFF, true);
+  }
+  let bin = ''; const bytes = new Uint8Array(buf); const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  return btoa(bin);
+}
+
+async function aplicarVelocidad(b64, mime, rate) {
+  if (!isFinite(rate) || Math.abs(rate - 1) < 0.01) return b64;
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  try {
+    const audio = await ctx.decodeAudioData(bytes.buffer);
+    return floatAWav(estirarTempo(audio.getChannelData(0), rate, audio.sampleRate), audio.sampleRate);
+  } finally { ctx.close(); }
+}
+
 function actualizarPanelDeVoz() {
-  const voz = document.getElementById('voiceSelect')?.value || '';
-  const esGcp   = voz.startsWith('gcp_');
-  const esChirp = /Chirp/i.test(voz);
-  const mostrar = (id, on) => { const e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; };
-  mostrar('voiceGeminiControls', !esGcp);
-  mostrar('voiceGcpControls', esGcp);
-  const vel = document.getElementById('voiceSpeed');
-  if (vel) { vel.disabled = esChirp; vel.style.opacity = esChirp ? 0.4 : 1; }
-  const pitch = document.getElementById('voicePitch');
-  if (pitch) { pitch.disabled = esChirp; pitch.style.opacity = esChirp ? 0.4 : 1; }
   const nota = document.getElementById('voiceEngineNote');
-  if (nota) nota.innerHTML = esChirp
-    ? 'Chirp 3: HD mantiene el <strong>mismo narrador de principio a fin</strong> — lee con menos rango dramático, pero no cambia de registro entre escenas. No admite velocidad ni tono: sólo volumen. Requiere <code>texttospeech.googleapis.com</code>.'
-    : esGcp
-    ? 'Voces Google Cloud TTS: obedecen velocidad, tono y volumen, pero <strong>no</strong> las indicaciones de actuación. Requieren <code>texttospeech.googleapis.com</code> habilitada.'
-    : 'Voces Gemini TTS: actúan según las indicaciones de abajo. Ojo: cada escena es una interpretación nueva, así que en un episodio largo el registro puede variar un poco entre escenas.';
+  if (nota && !nota.innerHTML) nota.textContent = 'Cargando las voces de tu proyecto...';
 }
 
 // One scene's worth of narration, with the current settings, before committing
@@ -1841,7 +1861,12 @@ async function generateAudio(text, voice, act) {
   // The server picks the engine from the voice prefix: gcp_* → Cloud TTS,
   // anything else → Gemini TTS. Both sets of controls are always sent; each
   // engine takes the ones it actually has.
-  const body = { text: cleanText, act, voice, speed: getVoiceSpeed(), ...ajustesDeVoz() };
+  // Chirp cannot do the speed itself, so it is not asked for: the tempo is
+  // changed here afterwards, pitch intact. Any other engine does it natively and
+  // better, so there it travels in the request.
+  const rate = getVoiceSpeed();
+  const chirp = /Chirp/i.test(voice);
+  const body = { text: cleanText, act, voice, speed: chirp ? 1 : rate, ...ajustesDeVoz() };
 
   const res = await fetch('/api/audio', {
     method: 'POST',
@@ -1850,7 +1875,9 @@ async function generateAudio(text, voice, act) {
   });
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error || `Audio proxy ${res.status}`);
-  return { audioData: data.audioData, mimeType: data.mimeType || 'audio/wav' };
+
+  const audioData = chirp ? await aplicarVelocidad(data.audioData, data.mimeType, rate) : data.audioData;
+  return { audioData, mimeType: chirp && rate !== 1 ? 'audio/wav' : (data.mimeType || 'audio/wav') };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -5774,8 +5801,9 @@ function renderAll() {
   applyDemoCompatibility();
   updateEpFormatNote();
   checkAssemblyAvailable();
-  document.getElementById('voiceSelect')?.addEventListener('change', actualizarPanelDeVoz);
   actualizarPanelDeVoz();
+  document.getElementById('voiceLang')?.addEventListener('change', pintarVocesDelIdioma);
+  cargarVoces();
   renderAll();
 })();
 
