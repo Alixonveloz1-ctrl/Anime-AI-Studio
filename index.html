@@ -564,9 +564,11 @@
     </div>
     <div class="card" style="margin-bottom:14px">
       <h2>🎞️ Ensamblar video final</h2>
-      <p style="font-size:13px;color:var(--text-dim);margin:0 0 12px;line-height:1.5">Une las imágenes (o los clips de Veo), la narración y la música en un solo MP4. Lo renderiza con ffmpeg el montador que ya tienes desplegado en tu cuenta de Google Cloud. Cada escena dura exactamente lo que dura su narración. <strong>Sin subtítulos quemados</strong>: el <code>.srt</code> va en el ZIP para montarlo en CapCut con el tamaño que quieras.</p>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 12px;line-height:1.5">Une las imágenes (o los clips de Veo) y la narración en un solo MP4. Lo renderiza con ffmpeg el montador que ya tienes desplegado en tu cuenta de Google Cloud. Cada escena dura exactamente lo que dura su narración. <strong>Sin subtítulos quemados</strong>: el <code>.srt</code> va en el ZIP para montarlo en CapCut con el tamaño que quieras.</p>
       <div id="assemblyStatus" style="font-size:12px;color:var(--text-dim);margin-bottom:10px">Comprobando disponibilidad…</div>
       <label class="sg-chip selected" id="assemblyClipsChip" style="display:inline-flex;margin-bottom:10px"><input type="checkbox" id="assemblyUseClips" checked> 🎬 Usar clips de Veo cuando existan</label>
+      <label class="sg-chip" id="assemblyMusicChip" style="display:inline-flex;margin-bottom:10px"><input type="checkbox" id="assemblyUseMusic"> 🎵 Música de fondo</label>
+      <p style="font-size:11px;color:var(--text-dim);margin:0 0 10px;line-height:1.5">Apagado: se monta <strong>sólo con la voz</strong>, aunque el episodio tenga música generada. La música se le puede poner después en CapCut, eligiéndola tú.</p>
       <div id="assemblyProgress" style="display:none;margin-bottom:10px">
         <div class="progress-text" id="assemblyProgressText">Iniciando...</div>
         <div class="progress"><div class="progress-bar" id="assemblyProgressBar" style="width:0%"></div></div>
@@ -5111,8 +5113,12 @@ sin parar, mezclado a un décimo de su volumen. El espectador no debe poder tara
 cuándo entra. Si suena a "pieza", está mal.
 
 REGLAS DEL COLCHÓN (van en cada prompt, en inglés):
-- SIN MELODÍA y SIN SOLISTA. Nada de un instrumento llevando un tema. Texturas sostenidas: pads,
-  cuerdas en bloque con arco largo, notas tenidas, un ostinato mínimo de dos o tres notas como mucho.
+- ACÚSTICO Y ORQUESTAL, NUNCA ELECTRÓNICO. Cuerdas frotadas sostenidas (chelos y violas en bloque,
+  arco largo), notas tenidas de piano de fieltro, maderas graves. PROHIBIDO el sintetizador, el pad
+  electrónico y cualquier figura corta que se repita: un pad sintético repitiendo tres notas suena a
+  música de videojuego, que es justo lo contrario de un fondo de anime narrado.
+- SIN MELODÍA y SIN SOLISTA. Nada de un instrumento llevando un tema, y nada de motivos que se puedan
+  tararear. Acordes largos que cambian despacio, y ya.
 - SIN INSTRUMENTO DE ÉPOCA O DE REGIÓN HACIENDO DE SOLISTA — nada de erhu, guzheng, shakuhachi,
   shamisen, flauta o violín solos tocando una tonada. Aunque la historia pase en la China antigua,
   el fondo de una narración de anime es un fondo moderno; la época se ve en la imagen, no se toca.
@@ -5128,9 +5134,10 @@ Devuelve JSON:
     { "act": "${acts[0]}", "prompt": "ambient underscore bed in English: instrument family, texture, approximate BPM, mood — no melody, no solo instrument", "negative": "elementos a evitar, en inglés" }
   ]
 }
-El campo "negative" incluye SIEMPRE, además de lo propio del acto: "solo instrument, lead melody,
-melodic hook, erhu, guzheng, shakuhachi, shamisen, solo violin, solo flute, vocals, drums,
-percussion hits, crescendo, orchestral stabs".
+El campo "negative" incluye SIEMPRE, además de lo propio del acto: "chiptune, 8-bit, video game
+music, synthesizer, synth pad, synth arpeggio, electronic, repeating ostinato, solo instrument,
+lead melody, melodic hook, erhu, guzheng, shakuhachi, shamisen, solo violin, solo flute, vocals,
+drums, percussion hits, crescendo, orchestral stabs".
 Un objeto por cada acto listado arriba, usando EXACTAMENTE esos identificadores de act.`;
 
   const raw = await callGemini(prompt, directorSystemPrompt(u.genero, comedyMode));
@@ -5154,15 +5161,20 @@ Un objeto por cada acto listado arriba, usando EXACTAMENTE esos identificadores 
 
 // Un fondo de narración, no una pieza: el que se usa cuando el director no
 // escribió nada para un acto.
+// Decía "soft synth pad" y pedía un ostinato corto: eso es la receta exacta de
+// la música de videojuego, y salía sonando a Nintendo. Ahora es acústico y son
+// acordes largos, sin nada que se repita.
 const LECHO_POR_DEFECTO =
-  'Sustained ambient underscore bed: warm low strings and soft synth pad, slow and static, '
-  + 'around 60 BPM, no melody, no lead instrument, mid frequencies left empty for a speaking voice, '
-  + 'loops seamlessly under narration without drawing attention';
+  'Sustained orchestral underscore bed: low bowed cellos and violas holding long chords, '
+  + 'soft felt piano sustained notes, slow and static, around 60 BPM, acoustic only, '
+  + 'no melody, no lead instrument, no repeating motif, mid frequencies left empty for a '
+  + 'speaking voice, sits under narration without drawing attention';
 
 const NEGATIVO_LECHO =
-  'solo instrument, lead melody, melodic hook, erhu, guzheng, shakuhachi, shamisen, solo violin, '
-  + 'solo flute, solo piano melody, vocals, singing, drums, percussion hits, crescendo, '
-  + 'orchestral stabs, tempo changes';
+  'chiptune, 8-bit, video game music, retro game, synthesizer, synth pad, synth arpeggio, '
+  + 'electronic, repeating ostinato, solo instrument, lead melody, melodic hook, erhu, guzheng, '
+  + 'shakuhachi, shamisen, solo violin, solo flute, solo piano melody, vocals, singing, drums, '
+  + 'percussion hits, crescendo, orchestral stabs, tempo changes';
 
 // ════════════════════════════════════════════════════════════════
 // MUSIC — one instrumental cue per act, composed by Lyria from a
@@ -5565,13 +5577,21 @@ async function assembleEpisode() {
     if (missingAudio) showToast(`${missingAudio} escenas sin audio — se rellenan con 2s`, 'error');
 
     // ─── 2. Music, one cue per act ───
+    // Apagada por defecto y a mano: generar una pista que quede bien por debajo
+    // de una narración es un tiro a ciegas —el modelo compone lo que compone— y
+    // un episodio no se pierde por eso. Con el interruptor en off se monta con
+    // la voz sola y la música se elige después, fuera.
+    const usarMusica = document.getElementById('assemblyUseMusic')?.checked === true;
     let hasMusic = false;
-    for (const act of episodeActs()) {
-      const stored = await dbGet(musicKey(act));
-      if (!stored) continue;
-      const sep = stored.indexOf('|');
-      add(`mus_${act.replace(/[^\w]/g, '')}.wav`, sep > 0 ? stored.slice(sep + 1) : stored, 'audio/wav');
-      hasMusic = true;
+    if (usarMusica) {
+      for (const act of episodeActs()) {
+        const stored = await dbGet(musicKey(act));
+        if (!stored) continue;
+        const sep = stored.indexOf('|');
+        add(`mus_${act.replace(/[^\w]/g, '')}.wav`, sep > 0 ? stored.slice(sep + 1) : stored, 'audio/wav');
+        hasMusic = true;
+      }
+      if (!hasMusic) showToast('No hay música generada — se monta sólo con la voz', 'error');
     }
 
     // ─── 3. Upload ───
@@ -5700,6 +5720,9 @@ async function buildEpisodeSrt(scenes, onProgress) {
 document.getElementById('btnEnsamblar')?.addEventListener('click', assembleEpisode);
 document.getElementById('assemblyUseClips')?.addEventListener('change', function() {
   document.getElementById('assemblyClipsChip')?.classList.toggle('selected', this.checked);
+});
+document.getElementById('assemblyUseMusic')?.addEventListener('change', function() {
+  document.getElementById('assemblyMusicChip')?.classList.toggle('selected', this.checked);
 });
 
 // ════════════════════════════════════════════════════════════════
