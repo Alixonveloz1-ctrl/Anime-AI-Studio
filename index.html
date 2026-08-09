@@ -859,14 +859,59 @@ function getCompanionQuirk() {
   return state.universe.companionQuirk;
 }
 
-function buildVideoPrompt(s, slot = 'A') {
+// ─── EQUIPO: DIRECCIÓN DE ARTE — ¿esta escena tiene techo? ───
+// Se responde en el momento, a partir del escenario ya guardado en el universo
+// ({id, name, desc}), sin reescribir nada del estado: un episodio escrito hace
+// semanas se clasifica igual que uno nuevo. El NOMBRE pesa el triple porque es
+// la etiqueta canónica del lugar ("Pasillo del edificio principal"), mientras
+// que la descripción menciona de pasada lo que se ve por la ventana ("patio",
+// "cielo") y ensucia la cuenta.
+const PALABRAS_INTERIOR = ['pasillo','corredor','aula','salon','salón','sala','habitacion','habitación','cuarto','dormitorio','cocina','baño','bano','oficina','despacho','biblioteca','gimnasio','sotano','sótano','atico','ático','apartamento','departamento','tienda','taller','laboratorio','enfermeria','enfermería','cafeteria','cafetería','comedor','vestuario','escalera','ascensor','garaje','almacen','almacén','bodega','vagon','vagón','interior','dentro',
+  'hallway','corridor','classroom','room','bedroom','kitchen','bathroom','office','library','gym','basement','attic','apartment','indoor','indoors','interior','shop','store','cafeteria','lobby','stairwell','staircase','elevator','garage','warehouse','dormitory','infirmary','workshop','laboratory','ceiling','fluorescent'];
+const PALABRAS_EXTERIOR = ['calle','avenida','plaza','parque','patio','jardin','jardín','azotea','tejado','terraza','playa','bosque','montaña','montana','campo','rio','río','puente','muelle','carretera','camino','cementerio','exterior','afuera','intemperie',
+  'street','road','alley','rooftop','roof','courtyard','garden','park','beach','forest','mountain','field','river','bridge','outdoor','outdoors','exterior','sky','path','hill','shore','dock','sidewalk','pavement'];
+
+const SET_INTERIOR = new Set(PALABRAS_INTERIOR);
+const SET_EXTERIOR = new Set(PALABRAS_EXTERIOR);
+
+// Whole words only. Matching by substring looked equivalent and was not:
+// "interior" CONTAINS "rio" and "urbano" CONTAINS "baño" without the tilde, so
+// an interior description scored points for being a river and a bathroom at the
+// same time. Words are split on anything that is not a letter, and a trailing
+// plural "s" is dropped so "classrooms" still counts as "classroom".
+function palabrasDe(txt) {
+  return String(txt || '').toLowerCase().split(/[^a-záéíóúüñ]+/).filter(Boolean)
+    .map(w => (w.length > 4 && w.endsWith('s')) ? w.slice(0, -1) : w);
+}
+
+function espacioDeEscena(s) {
+  const esc = (state.universe?.escenarios || []).find(e => e.id === s?.escenario);
+  if (!esc) return 'desconocido';
+  const cuenta = (txt, set) => palabrasDe(txt).reduce((n, w) => n + (set.has(w) ? 1 : 0), 0);
+  const score = cuenta(esc.name, SET_INTERIOR) * 3 + cuenta(esc.desc, SET_INTERIOR)
+              - cuenta(esc.name, SET_EXTERIOR) * 3 - cuenta(esc.desc, SET_EXTERIOR);
+  return score > 0 ? 'interior' : (score < 0 ? 'exterior' : 'desconocido');
+}
+
+function buildVideoPrompt(s, slot = 'A', opts = {}) {
   // The director writes the motion for each shot knowing which shot follows, so
   // a clip ends where the next one's still image begins. Without that the model
   // invents movement and the cut between clips jumps.
   const movimiento = s['videoPrompt' + slot] || '';
+  // The motion used to be cut at 400 characters mid-word. The END of that
+  // sentence is what pins where the clip stops (the hand-off rule), so a blind
+  // cut removed exactly the part that keeps Veo from inventing an ending. Cut on
+  // a sentence break instead, and with more room.
+  const recortar = (txt, max) => {
+    const t = String(txt || '').replace(/"/g, '').replace(/\s+/g, ' ').trim();
+    if (t.length <= max) return t;
+    const corte = t.slice(0, max);
+    const fin = Math.max(corte.lastIndexOf('. '), corte.lastIndexOf('; '), corte.lastIndexOf(', '));
+    return (fin > max * 0.5 ? corte.slice(0, fin) : corte.slice(0, corte.lastIndexOf(' '))).trim();
+  };
   const base = movimiento
-    ? movimiento.replace(/"/g, '').slice(0, 400)
-    : (s['imagePrompt' + slot] || s.imagePromptA || s.narration || '').replace(/"/g,'').slice(0, 200);
+    ? recortar(movimiento, 700)
+    : recortar(s['imagePrompt' + slot] || s.imagePromptA || s.narration || '', 300);
   // Read the genre from the SAVED universe, not from the form. The selects are
   // only the creation form: after a reload or a project switch they still show
   // their defaults, so this used to reference the wrong studio (accion/shonen)
@@ -875,19 +920,95 @@ function buildVideoPrompt(s, slot = 'A') {
   const demo      = state.universe?.demo   || document.getElementById('demoSelect')?.value   || 'shonen';
   const studio   = STUDIO_BY_GENRE[genre]  || STUDIO_BY_GENRE['accion'];
   const demoRef  = STUDIO_BY_DEMO[demo]    || '';
-  const noCamera = 'CRITICAL: Characters must be ACTING and DOING things in the scene, fully immersed in the story — NEVER posing, NEVER looking at the camera, NEVER facing the viewer. Use side angles, 3/4 views, over-shoulder, or from-behind perspectives. Characters interact with each other or with their environment.';
+  // This was called noCamera, for "never look at the lens" — but its text ALSO
+  // ordered "use side angles, 3/4 views, over-shoulder or from-behind". That was
+  // written for IMAGE prompts, where choosing an angle is free. In VIDEO the
+  // angle is already fixed by the first frame, so the only way Veo can obey it is
+  // by MOVING the camera — fighting the "no camera moves" rule sitting right next
+  // to it, and winning by recency. That is where the drift to close-up came from.
+  const actuacion = 'PERFORMANCE — CRITICAL: the characters are acting inside the scene and stay in the story — never posing, never turning toward the lens, never making eye contact with the camera, never addressing the viewer. The angle on them is ALREADY set by the first frame (side, 3/4, over-shoulder or from behind); keep that relationship to them for the whole clip.';
   const audioRule = 'NO voice dialogue, NO narration, NO singing. ONLY instrumental background music fitting the scene mood and genre.';
 
-  const animeStyle = `STYLE — ABSOLUTELY MANDATORY: This clip must look like a still from a ${ANIME_VISUAL_STYLE_CORE} Animation quality reference: ${studio}${demoRef}. Target: a hand-painted, richly detailed 2D anime film frame — nothing simplified, nothing plastic-3D.`;
+  // ANIME_VISUAL_STYLE_CORE carries "wet-surface reflections": it was written to
+  // give the IMAGES a cinematic sheen. Inside a video prompt it reads as a literal
+  // order to wet the floor — indoors, next to a still with rain on the window. The
+  // rain inside the corridor was not only the model hallucinating: we were asking
+  // for it. Dropped on the video path only; the images keep the style intact.
+  const estiloVideo = ANIME_VISUAL_STYLE_CORE.replace('wet-surface reflections, ', '');
+  const animeStyle = `STYLE — ABSOLUTELY MANDATORY: This clip must look like a moving frame of a ${estiloVideo} Animation quality reference: ${studio}${demoRef}. Target: a hand-painted, richly detailed 2D anime film frame — nothing simplified, nothing plastic-3D.`;
 
   // With a director-written motion the clip has an explicit destination, so the
   // generic "stay in place" rule would fight it. Without one, keep the old
-  // conservative rule so a clip cannot drift.
+  // conservative rule so a clip cannot drift. The promise about "the next shot"
+  // is only made when a last frame is actually being sent: on the last shot of a
+  // scene there is no next still, and describing a constraint that is not being
+  // applied is part of what let the camera close in to fill the seconds.
   const motionRule = movimiento
-    ? `MOTION — CRITICAL: animate EXACTLY the movement described below and nothing more. The clip must END in the state described as its ending — that state is the first frame of the next shot, so overshooting it breaks the cut. No extra action, no camera moves beyond the one described, no new elements entering frame.`
-    : `MOTION — CRITICAL: Subtle cinematic movement only. Gentle breathing, slow camera drift, small natural gestures (head tilt, eye blink, hand movement). Characters stay in position — NO jumping, NO teleporting, NO sudden changes. Smooth and natural like a real animated series.`;
+    ? `MOTION — CRITICAL: animate EXACTLY the movement written in SHOT MOTION below and nothing more. The clip must END in the state described there${opts.hasLastFrame ? ' — that state is the first frame of the next shot, so overshooting it breaks the cut' : ', and settle there'}. No extra action, no new elements entering frame, and no camera move beyond ${opts.hasLastFrame ? 'the one written and the travel to the provided final frame described under FRAMING' : 'the one written'}.`
+    : `MOTION — CRITICAL: Subtle cinematic movement only. Gentle breathing, small natural gestures (head tilt, eye blink, hand movement). Characters stay in position — NO jumping, NO teleporting, NO sudden changes. Smooth and natural like a real animated series.`;
 
-  return `${animeStyle} ${motionRule} ${noCamera} ${base}. ${audioRule}`;
+  // WHERE the shot happens never reached Veo. With a director-written motion,
+  // `base` is ONLY that motion, so the word "corridor" never appeared anywhere in
+  // what Veo reads: it had to infer the geography from the still image, and the
+  // one thing it can read there is "there is rain". Only the FIRST sentence of the
+  // description is injected — enough to say indoors or outdoors, without handing
+  // it new nouns to draw that the image does not contain.
+  const esc = (state.universe?.escenarios || []).find(e => e.id === s.escenario);
+  const locRule = esc
+    ? `SETTING — already built into the input image, do not redesign it: ${String(esc.desc || esc.name).replace(/"/g, '').split('. ')[0]}.`
+    : '';
+
+  // Veo treats rain as a full-frame particle layer: in its training material rain
+  // is shot in the open or laid over the picture, and "particles that only live
+  // behind glass" barely exists. So any rain in the first frame spreads over the
+  // whole shot. The base rule is a no-op outdoors — it only forbids INVENTING
+  // weather — and the hard clause is added solely for confirmed interiors.
+  const espacio = espacioDeEscena(s);
+  const climaRule = 'WEATHER GEOGRAPHY — HARD RULE: the first frame defines where weather lives, and this clip may not move it. Rain, drizzle, snow, fog and wind-blown particles exist ONLY in the outdoor volume already visible in the first frame: beyond the window glass, beyond an open doorway, past the building line. Rain seen through a window stays behind that glass — droplets and runnels ON the pane, soft out-of-focus blur BEYOND it, never streaks crossing the room, the characters or the foreground. Add no precipitation, spray or mist that is not already visible in the first frame, and every surface keeps exactly the wetness it has there: dry stays dry, wet stays wet.'
+    + (espacio === 'interior'
+      ? ' THIS SHOT IS INTERIOR: the camera is inside an enclosed built space with a ceiling and walls overhead. Nothing falls from above inside this space at any moment of the clip — no rain, no drizzle, no snow, no mist, no spray, no gust. The indoor air stays clear, indoor floors and furniture stay dry, and the characters\' hair and clothing stay dry. All weather belongs to the world outside the windows and the doorway and never crosses into the room.'
+      : '');
+
+  // With a last frame the change of framing IS the job of the shot, so locking it
+  // would fight the interpolation. Without one Veo has no arrival anchor, and its
+  // default for a static shot with one character is the slow push-in.
+  const framingRule = opts.hasLastFrame
+    ? 'FRAMING — INTERPOLATION: this clip travels from the first frame to the provided final frame and must LAND exactly on that final framing — same camera distance, same shot size, same lens, same character positions. Move between the two smoothly and at an even rate; do not overshoot past the final framing and add no camera movement beyond what is needed to get there.'
+    : 'FRAMING — LOCKED: the first frame sets the camera position, the lens and the shot size for the ENTIRE clip. Hold that exact framing from first frame to last: same distance to the subject, same lens, same shot size, same headroom, same amount of the room visible. The camera sits on a locked tripod unless the SHOT MOTION line names a camera move — if it names none, there is no zoom, no push-in, no pull-back and no reframing at any point.';
+
+  return `${animeStyle} ${motionRule} ${framingRule} ${locRule} ${climaRule} ${actuacion} SHOT MOTION: ${base}. ${audioRule}`;
+}
+
+// ─── EQUIPO: lo que Veo NO debe poner ───
+// Google's rule for negativePrompt is counterintuitive and load-bearing: it is a
+// LIST OF THINGS, never an order. "no rain indoors" does nothing; "indoor rain"
+// works. So: nouns, comma separated, no "no" and no "don't". It matters more than
+// it looks, because Veo 3.x always runs its prompt rewriter — it cannot be turned
+// off — and the negative prompt is applied downstream of that rewrite.
+function buildVideoNegative(s, slot = 'A', opts = {}) {
+  const espacio    = espacioDeEscena(s);
+  const movimiento = (s['videoPrompt' + slot] || '').toLowerCase();
+  // If the director asked for a camera move on purpose, do not forbid it.
+  const camaraEscrita = /zoom|push[- ]?in|pull[- ]?back|pull[- ]?out|dolly|truck|track|pan|tilt|crane|orbit|arc|handheld|camera (move|moves|slowly|drifts|glides|pushes|pulls|rises|lowers)/.test(movimiento);
+
+  const partes = [
+    'blurry, distorted face, deformed face, warped anatomy, extra limbs, extra fingers, morphing hands, flickering, warping background, melting geometry, duplicated character',
+    'text, letters, subtitles, captions, watermark, logo, timestamp, letterboxing, black bars, split screen',
+    'character facing the camera, eye contact with the camera, posing for the camera',
+    // Inert outdoors (there is no "indoor" there), so these ship on every clip:
+    // they name the exact failure to kill.
+    'indoor rain, rain inside a room, rain inside a corridor, precipitation indoors, water falling indoors, wet indoor floor, puddles indoors, indoor snow',
+  ];
+  if (espacio === 'interior') {
+    partes.push('rain streaks across the frame, rain in the foreground, weather particles over the characters, raindrops on the lens, indoor mist, indoor fog, wind blowing indoors, wet hair, wet clothing, water dripping from the ceiling');
+  }
+  // Skipped when the clip MUST travel: with a last frame the change of framing is
+  // the shot's job, not a defect.
+  if (!camaraEscrita && !opts.hasLastFrame) {
+    partes.push('zoom in, zoom out, dolly in, push in, camera pull back, focal length change, shot size change, reframing, whip pan, orbiting camera, handheld shake');
+  }
+  partes.push('cut to another shot, scene change, new character entering the frame, jump cut');
+  return partes.join(', ');
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1788,13 +1909,24 @@ const WEATHER_PROMPTS = {
   viento:    'strong wind moving through the scene — hair and clothes flowing, leaves and particles dancing in the air, dynamic movement',
 };
 // Returns the English suffix for current hora/clima selection ('' when auto)
-function getEnvSuffix() {
+// The weather the user picks is real weather, but it belongs to the sky. This
+// used to be appended to all 45 images of an episode without asking whether the
+// scene has a roof, so "rain falling in silver curtains, wet reflective surfaces,
+// puddles" arrived as MANDATORY inside a corridor — and the video only animated
+// the rain the image already had. Indoors the weather now stays where it can be
+// seen from: the windows and the doorway.
+function getEnvSuffix(s) {
   const hora  = state.universe?.hora  || 'auto';
   const clima = state.universe?.clima || 'auto';
   const parts = [];
   if (HOUR_PROMPTS[hora])     parts.push(HOUR_PROMPTS[hora]);
   if (WEATHER_PROMPTS[clima]) parts.push(WEATHER_PROMPTS[clima]);
-  return parts.length ? ' MANDATORY lighting/weather: ' + parts.join('. ') + '.' : '';
+  if (!parts.length) return '';
+  const bajoTecho = s && espacioDeEscena(s) === 'interior';
+  return ' MANDATORY lighting/weather: ' + parts.join('. ') + '.'
+    + (bajoTecho
+      ? ' INTERIOR SHOT — this weather is OUTSIDE only: visible through windows and open doorways, never inside the room. No rain, snow, fog or wind indoors; indoor floors, furniture, hair and clothing stay dry. The outside weather may tint the light coming in and wet the glass, nothing more.'
+      : '');
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -2699,7 +2831,7 @@ Un cambio de ángulo de cámara NO es un beat. Si lo único que cambiaría entre
 - LA POSICIÓN AVANZA: si el texto dice que el personaje se mueve (entra, cruza, se agacha, sale, llega a otra parte del lugar), el prompt de ese beat lo muestra YA en la nueva posición con la acción completada — ej.: beat "gira el pomo y entra" → el prompt lo muestra DENTRO de la habitación con la puerta abierta detrás de él viendo lo que hay, NO tocando la puerta otra vez.
 - CONTINUIDAD OBLIGATORIA entre los planos de una escena: MISMO escenario asignado, MISMA ropa y peinado de cada personaje, MISMA iluminación y clima. Lo que SÍ cambia: la acción (avanza), la posición de los personajes en el espacio, el estado de los objetos según el texto, y el ÁNGULO de cámara — los encuadres deben ser claramente distintos entre sí, y el ángulo se elige al servicio de cada beat (no uses una plantilla fija).
 - CONTINUIDAD ENTRE ESCENAS: el primer prompt de cada escena CONTINÚA desde donde quedó el último prompt de la escena anterior — las 45 imágenes del episodio son UNA secuencia visual continua de la misma historia, no ilustraciones sueltas. Si la escena anterior terminó en un lugar y esta empieza en otro, el prompt 1 muestra la llegada/transición natural.
-- INTEGRACIÓN FÍSICA: el personaje está DENTRO del espacio — interactuando con muebles y objetos, con sombras e iluminación coherentes con el lugar. NUNCA debe verse como un personaje pegado sobre un fondo.
+- INTEGRACIÓN FÍSICA: el personaje está DENTRO del espacio — apoyado, sentado o de pie sobre algo que ESE lugar ya tiene, con sombras e iluminación coherentes. NUNCA debe verse como un personaje pegado sobre un fondo. Para lograrlo usá el mobiliario que la descripción del escenario ya menciona; no inventes un mueble nuevo solo para tener con qué interactuar.
 - CÁMARA LIBRE EN EL LUGAR: a lo largo del episodio mostrá el MISMO lugar desde posiciones y ángulos DIFERENTES (desde la puerta, desde la ventana, ángulo bajo, over-shoulder, rincones distintos) — no repitas siempre el mismo encuadre del escenario.
 - VESTIMENTA FIEL AL MUNDO: la ropa de cada personaje conserva el material y la CONDICIÓN de su ficha (basta, desteñida, con parches si es pobre) — nunca la embellezcas ni la conviertas en ropa elegante que la historia no justifica.
 
@@ -2712,6 +2844,14 @@ Cada plano se convierte en un clip de video de 8 segundos que ARRANCA en su prop
 - Si el plano es contemplativo, el movimiento puede ser mínimo (respiración, parpadeo, pelo con el viento, luz que cambia) — eso es correcto, no lo fuerces.
 
 CAMPO "escenario": asigná a cada escena el id EXACTO del escenario del universo donde ocurre (de la lista provista). Si el fragmento ocurre en un lugar que NO está en la lista, dejá "escenario" como "" (vacío) y describí ese lugar nuevo con detalle DENTRO de los 3 prompts — NUNCA asignes un escenario incorrecto solo por llenar el campo, porque su descripción anclaría un fondo equivocado.
+
+⚠️ INVENTARIO CERRADO DEL LUGAR (dirección de arte — esto se revisa):
+La descripción del escenario asignado NO es decoración: es el inventario de lo que existe ahí. Solo podés nombrar muebles, mobiliario fijo y objetos grandes que esa descripción mencione, o que cualquiera daría por sentados en ESE tipo de lugar concreto.
+- ANTES de escribir cada prompt, preguntate objeto por objeto: "¿esto existe en ESTE lugar?". Un pasillo tiene casilleros, ventanas, puertas de aula, tablones, bancos contra la pared, escaleras — NO tiene pupitres, ni camas, ni mesas puestas, ni tazas de té apoyadas. Una azotea no tiene sofás. Una cocina no tiene pizarrones.
+- Si la acción que narra el texto necesita un mueble que ese lugar NO tiene, NO lo agregues: reescribí la acción con lo que sí hay (apoyada en la pared, sentada en el alféizar, en cuclillas junto a los casilleros, de pie con la libreta en la mano).
+- Si la acción es IMPOSIBLE sin ese mueble, entonces el escenario está mal asignado: buscá en la lista el lugar correcto, y si no está, dejá "escenario" vacío y describí el lugar nuevo entero dentro del prompt. Nunca dejes el id de un lugar y le metas dentro los muebles de otro.
+- Los objetos PEQUEÑOS que un personaje trae encima (un teléfono, una carta, una partitura doblada, un estuche) sí pueden aparecer en cualquier lugar: viajan con él. Lo que no viaja es el mueble que los sostiene.
+- El clima también es del lugar: si es un interior, la lluvia y la nieve se ven POR la ventana o la puerta abierta, nunca dentro. Nada cae del cielo bajo un techo.
 
 REGLAS DE CADA PROMPT:
 - SIEMPRE en INGLÉS
@@ -2792,6 +2932,11 @@ Responde SOLO JSON válido sin markdown`;
         const chunk = scenesNoImg.slice(i, i + 5);
         setProg(70 + Math.round((i / scenesNoImg.length) * 25), `Paso 5/5: Descripciones visuales ${Math.min(i + 5, scenesNoImg.length)}/15...`);
         const done = await generateImagePromptsBatch(chunk, prevContext);
+        // The art director reviews what the DP just wrote, before it reaches the
+        // state. One text call per chunk of 5 scenes, and it never blocks: if the
+        // review fails, the shots go through unrevised.
+        const { correcciones } = await revisarPlanos(done);
+        if (correcciones.length) console.log('Puesta en escena corregida:', aplicarCorrecciones(done, correcciones).motivos);
         scenes.push(...done);
         // Chain continuity into the next chunk: last scene's narration,
         // assigned scenario and closing prompt
@@ -2961,6 +3106,8 @@ async function renderScenarios() {
     <div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:8px">
       <p style="font-size:11px;color:var(--text-dim);margin:0 0 8px;line-height:1.4">¿Fondos inconsistentes entre escenas del mismo lugar? Vinculá cada escena a su escenario — así todas reciben la misma descripción del sitio. Después regenerá las imágenes de esas escenas.</p>
       <button class="btn-sec" onclick="relinkScenesToScenarios()">🔗 Vincular escenas de este episodio a estos escenarios</button>
+      <p style="font-size:11px;color:var(--text-dim);margin:14px 0 8px;line-height:1.4">¿Un plano muestra muebles que no pueden estar en ese lugar (un pupitre en un pasillo) o lluvia dentro de un interior? El director de arte repasa los prompts ya escritos y corrige SÓLO los que estén mal. No borra ninguna imagen.</p>
+      <button class="btn-sec" onclick="supervisarEpisodio()">🎬 Revisar la puesta en escena de este episodio</button>
     </div>`;
 }
 
@@ -3087,6 +3234,197 @@ async function assignScenariosToScenes() {
     return true;
   } catch { return false; }
 }
+
+// ════════════════════════════════════════════════════════════════
+// EQUIPO: DIRECTOR DE ARTE / SCRIPT
+//
+// The only step in the chain that LOOKS at what was written instead of writing
+// it. It is the first place where the two pieces buildSceneEnvContext() blindly
+// glues together are seen side by side: the shot's prompt and the description of
+// the scenario that will be pasted behind it. That is where a desk in a corridor
+// becomes visible. It returns ONLY the shots that must change.
+//
+// It generalises where a rule list cannot: it does not follow an inventory of
+// forbidden objects, it reasons about the pair (prompt, place) — so it catches
+// the failure nobody anticipated, in any universe.
+// ════════════════════════════════════════════════════════════════
+const SUPERVISOR_SYS = `Eres el DIRECTOR DE ARTE de este anime y hacés también de script. Tu ÚNICO trabajo es revisar la PUESTA EN ESCENA de prompts YA ESCRITOS por el director de fotografía. No escribís historia, no cambiás el encuadre, no cambiás la acción dramática, no cambiás la ropa ni el peinado, no cambiás la luz.
+
+CÓMO SE USA LO QUE REVISÁS: cada prompt se manda al generador de imagen con la DESCRIPCIÓN DEL ESCENARIO ASIGNADO PEGADA DETRÁS, palabra por palabra. Si el prompt y esa descripción describen sitios distintos, el generador dibuja LOS DOS MEZCLADOS y la imagen sale rota (un pupitre con taza de té en medio de un pasillo). Ese es el fallo que tenés que cazar.
+
+LO QUE BUSCÁS, EN ESTE ORDEN:
+1. ATREZZO IMPOSIBLE (lo más importante): listá TODOS los muebles y objetos grandes que nombra el prompt — pupitre, escritorio, silla, cama, sofá, mesa, mostrador, taza apoyada en una superficie, lámpara. Para CADA UNO preguntate: ¿está en la descripción del escenario asignado, o es obviamente propio de ese tipo de sitio? La descripción es un INVENTARIO CERRADO: ahí sólo existe lo que menciona, más lo que un lugar así tiene obligatoriamente en la vida real. Un pupitre, una cama o una taza humeante sobre una mesa en un PASILLO, una ESCALERA, una CALLE o una AZOTEA = FALLO.
+   Un lugar de PASO (pasillo, escalera, calle, andén, vestíbulo) no tiene dónde sentarse a una mesa: ahí la gente está de pie, caminando, apoyada en la pared o en una barandilla, o sentada en un escalón.
+2. CLIMA DENTRO: si el escenario es un interior, la lluvia, la nieve y la niebla sólo pueden verse a través de ventanas o puertas. Lluvia, charcos o suelo mojado DENTRO del encuadre = FALLO.
+3. LUGAR EQUIVOCADO: si el lugar que describe el prompt es el correcto según la narración y el id asignado es el que está mal, NO toques el prompt: devolvé sólo el "escenario" corregido.
+
+⚠️ EL MOVIMIENTO VA PEGADO A LA IMAGEN. Cada plano tiene además un MOVIMIENTO (en inglés) que describe qué se anima en su clip de video y en qué estado TERMINA, y ese estado final tiene que ser exactamente la imagen del plano SIGUIENTE. Por eso, si corregís el prompt de un plano:
+- Revisá el movimiento de ESE plano: si mencionaba el mueble que quitaste ("lowers the phone onto the desk"), corregilo con la acción equivalente que el lugar sí permite ("lowers the phone to her side"). Devolvelo en "movimiento".
+- Revisá el movimiento del plano ANTERIOR de la misma escena: terminaba en la imagen que acabás de cambiar, así que si ya no encaja, corregilo también y devolvelo como otra entrada con su propio "slot".
+- Si el movimiento sigue siendo válido tal cual, NO lo devuelvas.
+
+CÓMO CORREGÍS — MÍNIMA INTERVENCIÓN:
+- Si el plano es correcto, NO lo toques y NO lo devuelvas. Devolver de más es un error tan grave como no corregir: cada cambio innecesario cuesta una imagen.
+- Si tiene atrezzo imposible, reescribí SOLO ese trozo: quitá el mueble u objeto que no va y sustituílo por la acción equivalente que ese lugar SÍ permite, conservando palabra por palabra TODO lo demás (el arranque de estilo, el "Scene with [nombre]:", la ropa, el pelo, el ángulo de cámara, la iluminación y la emoción del personaje).
+  Ejemplo: en un pasillo, "sits at a small pressed-wood desk by a rain-streaked window, looking down at a cracked smartphone" → "stands leaning against the corridor wall beside a rain-streaked window, looking down at a cracked smartphone".
+- El prompt corregido sigue EN INGLÉS y empieza EXACTAMENTE igual que el original.
+- NUNCA agregues personajes, NUNCA agregues objetos que la narración no menciona, NUNCA "mejores" la redacción.
+- "motivo": en español, una frase corta y concreta ("pupitre y taza de té en un pasillo").
+Responde SOLO JSON válido sin markdown.`;
+
+async function revisarPlanos(scenesSubset) {
+  const u = state.universe || {};
+  const escenarios = Array.isArray(u.escenarios) ? u.escenarios : [];
+  const conPrompt = (scenesSubset || []).filter(s => s && s.imagePromptA);
+  // Nothing to compare against is not a failed review: there is simply no work.
+  if (!escenarios.length || !conPrompt.length) return { ok: true, correcciones: [] };
+
+  const listText = escenarios.map(e => `${e.id} = "${e.name}": ${e.desc}`).join('\n');
+  const charRef = (state.characters || []).map(c => `- ${c.name}: ${c.appearance}`).join('\n');
+  const bloques = conPrompt.map(s => {
+    const esc = escenarios.find(e => e.id === s.escenario);
+    // The motion goes in too: correcting a shot's image without its motion
+    // silently breaks the hand-off rule (shot N's clip has to end on shot N+1's
+    // still), and the motion is where the removed furniture is usually named.
+    const planos = ['A','B','C'].filter(sl => s['imagePrompt' + sl])
+      .map(sl => `  Plano ${sl}: ${s['imagePrompt' + sl]}`
+                + (s['videoPrompt' + sl] ? `\n  Movimiento ${sl}: ${s['videoPrompt' + sl]}` : '')).join('\n');
+    return `Escena ${s.num} — escenario asignado: ${s.escenario || '(ninguno)'}${esc ? ` = "${esc.name}"` : ''}\n  Narración: ${s.narration || ''}\n${planos}`;
+  }).join('\n\n');
+
+  const prompt = `ESCENARIOS DEL UNIVERSO (ésta es la descripción REAL que se pegará detrás de cada prompt):\n${listText}\n\nFICHAS DE PERSONAJES:\n${charRef}\n\nPLANOS YA ESCRITOS — revisalos:\n\n${bloques}\n\nDevuelve SOLO: {"correcciones":[{"num":1,"slot":"A","prompt":"prompt corregido completo en inglés","movimiento":"movimiento corregido en inglés","escenario":"loc3","motivo":"pupitre y taza de té en un pasillo"}]}\nIncluí "prompt" SÓLO si cambia el texto del plano, "movimiento" SÓLO si cambia el movimiento de ese plano, y "escenario" SÓLO si cambia el id de la escena. Lista vacía si todo está bien.`;
+
+  // `ok` is the point. An empty list has two very different meanings — "I read
+  // the five shots and they are fine" and "I never got to read them" — and
+  // collapsing them into `[]` let the button report a clean bill of health on a
+  // review that never ran, right before the user spends money on images.
+  // Same 4 attempts and same escalating backoff as its sibling calls, because
+  // this one runs last in the burst and is the most exposed to a 429.
+  for (let intento = 0; intento < 4; intento++) {
+    try {
+      const parsed = safeParseJSON(await callGemini(prompt, SUPERVISOR_SYS));
+      return { ok: true, correcciones: Array.isArray(parsed.correcciones) ? parsed.correcciones : [] };
+    } catch(e) {
+      const isRL = /429|exhaust|quota|rate/i.test(e.message || '');
+      if (intento < 3) await new Promise(r => setTimeout(r, (isRL ? [20, 45, 75][intento] : 4) * 1000));
+    }
+  }
+  return { ok: false, correcciones: [] }; // never blocks the chain, but says so
+}
+
+// Applies the corrections onto an array of scenes and returns the reasons, for
+// the user to read. It never deletes an image that was already generated: which
+// ones to redo is the user's call, because THAT is what costs money.
+function aplicarCorrecciones(scenesSubset, correcciones) {
+  const validIds = new Set((state.universe?.escenarios || []).map(e => e.id));
+  const motivos = [];
+  const tocados = [];   // {num, slot} — para saber qué material queda obsoleto
+  for (const c of (correcciones || [])) {
+    const s = (scenesSubset || []).find(x => x && x.num === c.num);
+    if (!s) continue;
+    const slot = ['A','B','C'].includes(c.slot) ? c.slot : null;
+    if (slot && typeof c.prompt === 'string' && c.prompt.trim().length > 40 && s['imagePrompt' + slot]) {
+      s['imagePrompt' + slot] = c.prompt.trim();
+      motivos.push(`Escena ${c.num}${slot}: ${c.motivo || 'corregido'}`);
+      tocados.push({ num: c.num, slot });
+    }
+    // The motion only moves when the shot already had one: this never invents a
+    // motion for a shot the director chose to leave still.
+    if (slot && typeof c.movimiento === 'string' && c.movimiento.trim().length > 15 && s['videoPrompt' + slot]) {
+      s['videoPrompt' + slot] = c.movimiento.trim();
+      motivos.push(`Escena ${c.num}${slot}: movimiento reajustado al plano corregido`);
+    }
+    if (typeof c.escenario === 'string' && validIds.has(c.escenario) && c.escenario !== s.escenario) {
+      s.escenario = c.escenario;
+      motivos.push(`Escena ${c.num}: escenario → ${c.escenario} (${c.motivo || ''})`);
+    }
+  }
+  return { motivos, tocados };
+}
+
+// Which shots' images and clips stopped matching after a correction.
+//
+// A clip does not only depend on its own still: it is generated ending on the
+// NEXT shot's image (the hand-off that makes the cut invisible). So rewriting
+// shot B's prompt quietly invalidates the clip of shot A, which the user has
+// already paid for. Telling them to "regenerate the scenes in this list" without
+// naming that clip leaves them with a cut that lands on a frame no longer there.
+function materialObsoleto(tocados) {
+  const imagenes = [], clips = [];
+  for (const { num, slot } of tocados) {
+    const s = (state.scenes || []).find(x => x.num === num);
+    if (!s) continue;
+    const slots = ['A','B','C'].filter(sl => s['imagePrompt' + sl]);
+    const i = slots.indexOf(slot);
+    const n = sl => `${num}-${sl === 'A' ? 1 : sl === 'B' ? 2 : 3}`;
+    imagenes.push(n(slot));
+    clips.push(n(slot));                                   // su propio primer fotograma cambió
+    if (i > 0) clips.push(n(slots[i - 1]));                // el clip anterior terminaba en esta imagen
+  }
+  const uniq = a => [...new Set(a)].sort();
+  return { imagenes: uniq(imagenes), clips: uniq(clips) };
+}
+
+// Runs the art director over the episode ALREADY saved: it rewrites only the
+// shots whose props cannot exist in their location, touches no image and no clip,
+// and works from a phone with no console. This is what repairs an anime that is
+// half made — a change to the director's rules only reaches future episodes.
+window.supervisarEpisodio = async function() {
+  const scenes = (state.scenes || []).filter(s => s.imagePromptA);
+  if (!scenes.length) { showToast('Este episodio todavía no tiene prompts', 'error'); return; }
+  if (!((state.universe?.escenarios || []).length)) { showToast('Extraé primero los escenarios', 'error'); return; }
+  // It rewrites prompts in place, and those are the same fields the ✏️ Prompt
+  // editor writes to. There is no undo anywhere in the app, so an episode with
+  // hand-tuned prompts deserves a warning before a model rewrites them.
+  if (!confirm(
+      'El director de arte va a reescribir los prompts que estén mal puestos en escena.\n\n' +
+      'Se cambia SOLO el texto de los planos con el fallo. Las imágenes y los clips que ya generaste no se borran.\n\n' +
+      'Si editaste algún prompt a mano, esa edición puede quedar reescrita y no hay deshacer.\n\n¿Seguir?')) return;
+
+  showToast('El director de arte está revisando los planos...', 'success');
+  const motivos = [], tocados = [];
+  let lotes = 0, fallidos = 0;
+  for (let i = 0; i < scenes.length; i += 5) {
+    const lote = scenes.slice(i, i + 5);
+    lotes++;
+    const { ok, correcciones } = await revisarPlanos(lote);
+    if (!ok) { fallidos++; continue; }
+    if (correcciones.length) {
+      const r = aplicarCorrecciones(lote, correcciones);
+      motivos.push(...r.motivos);
+      tocados.push(...r.tocados);
+    }
+  }
+
+  // "Nothing found" and "could not look" are not the same answer, and saying the
+  // first when the second happened sends the user off to spend money on images
+  // that are still wrong.
+  if (fallidos === lotes) {
+    showToast('No se pudo revisar (posible límite de peticiones). Esperá un momento y reintentá.', 'error');
+    return;
+  }
+  const aviso = fallidos ? `\n\n⚠️ ${fallidos} de ${lotes} bloques no se pudieron revisar (posible límite de peticiones): volvé a pulsar el botón para repasarlos.` : '';
+  if (!motivos.length) {
+    showToast(fallidos ? `Revisados ${lotes - fallidos}/${lotes} bloques, sin fallos. Reintentá para el resto.` : 'Sin fallos de puesta en escena — no se cambió nada',
+              fallidos ? 'error' : 'success');
+    return;
+  }
+
+  const obsoleto = materialObsoleto(tocados);
+  state.episodes[state.currentEpisode] = state.scenes;
+  saveState();
+  await renderScenes();
+  const lista = (t, arr) => arr.length
+    ? `<p style="font-size:12px;margin:0 0 6px;line-height:1.5"><strong>${t}</strong><br>${arr.join(' · ')}</p>` : '';
+  openModal(`
+    <h3>🎬 ${motivos.length} correcciones de puesta en escena</h3>
+    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:12px;font-size:12px;white-space:pre-wrap;line-height:1.5;margin-bottom:12px">${motivos.join('\n')}${aviso}</div>
+    ${lista('Imágenes a regenerar (su prompt cambió):', obsoleto.imagenes)}
+    ${lista('Videos a regenerar (empiezan o terminan en una imagen que cambió):', obsoleto.clips)}
+    <p style="font-size:12px;color:var(--text-dim);margin:8px 0 12px;line-height:1.5">Nada se ha borrado: decidís vos qué rehacer. Un clip termina en la imagen del plano siguiente, así que si esa imagen cambió, el clip anterior también hay que rehacerlo o el corte queda roto.</p>
+    <button class="btn" onclick="closeModal()">Entendido</button>
+  `);
+};
 
 // Manual extraction — for episodes generated before this system existed.
 // Uses the current episode's scene narrations as the story source.
@@ -3390,12 +3728,20 @@ window.saveAndRegenAll = async function(sceneId) {
 // model anchors the background to the exact same location every time.
 function buildSceneEnvContext(s) {
   const u = state.universe || {};
-  let envText = getEnvSuffix();
+  let envText = getEnvSuffix(s);
   const esc = (u.escenarios || []).find(e => e.id === s.escenario);
-  if (esc) {
-    envText = ` LOCATION — same place throughout the episode, anchored by this description: ${esc.desc || esc.name}. Render this location from whatever camera angle and viewpoint THIS shot needs (do NOT repeat the same framing every time); the character is physically INSIDE this space, integrated with its furniture, lighting and shadows.` + envText;
-  }
+  if (esc) envText = anclaDeEscenario(esc) + envText;
   return { envText };
+}
+
+// The location anchor, appended BEHIND the shot prompt before it goes to the
+// image model. Both were arriving as mandatory at once, which is how a desk from
+// a classroom prompt and a corridor description ended up drawn on top of each
+// other. The anchor now says which of the two wins on furniture.
+function anclaDeEscenario(esc) {
+  return ` LOCATION — same place throughout the episode, anchored by this description: ${esc.desc || esc.name}.`
+    + ` Render this location from whatever camera angle and viewpoint THIS shot needs (do NOT repeat the same framing every time); the character is physically INSIDE this space, integrated with its furniture, lighting and shadows.`
+    + ` FURNITURE COMES FROM THIS LOCATION: draw only the furniture and fixtures this description supports. If the shot text above names a piece of furniture this place would not have, leave it out and keep the place intact — the location wins.`;
 }
 
 // Continuity chain: find the previous generated image to use as visual reference.
@@ -3634,7 +3980,8 @@ window.generateSceneVideo = async function(sceneId, slot = 'A') {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        prompt: buildVideoPrompt(s, slot),
+        prompt: buildVideoPrompt(s, slot, { hasLastFrame: !!lastFrame }),
+        negativePrompt: buildVideoNegative(s, slot, { hasLastFrame: !!lastFrame }),
         imageA: imgData || null,
         lastFrame: lastFrame || null,
         durationSeconds: segundos,
@@ -3759,12 +4106,13 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
     return [...matched.values()];
   }
 
-  const envSuffixNow = getEnvSuffix();
+  // Per scene, not hoisted: the weather clause now depends on whether THAT
+  // scene has a roof over it.
   function envForScene(s) {
     const u = state.universe || {};
     const esc = (u.escenarios || []).find(e => e.id === s.escenario);
-    let envText = envSuffixNow;
-    if (esc) envText = ` LOCATION — same place throughout the episode, anchored by this description: ${esc.desc || esc.name}. Render this location from whatever camera angle and viewpoint THIS shot needs (do NOT repeat the same framing every time); the character is physically INSIDE this space, integrated with its furniture, lighting and shadows.` + envText;
+    let envText = getEnvSuffix(s);
+    if (esc) envText = anclaDeEscenario(esc) + envText;
     return { envText };
   }
 
@@ -4078,7 +4426,8 @@ RULES:
       const imageSys = `Eres el director de fotografía de este anime. Para cada escena decidí CUÁNTOS PLANOS necesita (1, 2 o 3) y escribí sus prompts en inglés, basados en la narración ya escrita — no inventás historia nueva.
 ⚠️ CUÁNTOS PLANOS: contá los beats visuales REALES (cambia la posición de alguien, el estado de un objeto, quién está presente o el lugar). Una conversación estática o una sola acción continua = 1 PLANO. Un cambio de ángulo NO es un beat. PROHIBIDO rellenar: si dos planos no se verían claramente distintos, devolvé uno solo.
 Cuando hay más de uno son momentos consecutivos que cubren TODO lo que el texto narra, en orden. Todos los planos de una escena: MISMO lugar, MISMA ropa/peinado de cada personaje; solo cambia la acción que avanza y el ángulo de cámara. También asigna el campo "escenario" con el id exacto del escenario del universo donde ocurre la escena — si el lugar no está en la lista, deja "escenario" como "" y describe ese lugar dentro de los prompts (nunca asignes un escenario incorrecto).
-REGLAS: SIEMPRE en inglés. Cada prompt empieza con "${ANIME_STYLE_LEAD_IN} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello con material y condición fieles a su ficha y a la economía del mundo (sin embellecer). Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. Si 2+ personajes están presentes en la escena, TODOS aparecen: el prompt 1 los muestra juntos; los prompts 2-3 pueden enfocar a uno pero los demás siguen visibles. Cuando el texto se enfoca en un personaje, el protagonista y los demás ya presentes SIGUEN en el lugar — inclúyelos por nombre salvo que la narración diga que salieron. Entre escenas consecutivas en el mismo escenario los personajes permanecen presentes salvo que la narración los saque. Los planos de cada escena son momentos consecutivos que cubren TODO el fragmento en orden — nunca dos versiones del mismo instante; cada prompt muestra SOLO lo visible en su momento (nada revelado después puede verse antes) y si el texto dice que el personaje entra o se mueve, ese prompt YA lo muestra en la nueva posición. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.${repairEcchi ? `
+REGLAS: SIEMPRE en inglés. Cada prompt empieza con "${ANIME_STYLE_LEAD_IN} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello con material y condición fieles a su ficha y a la economía del mundo (sin embellecer). Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. Si 2+ personajes están presentes en la escena, TODOS aparecen: el prompt 1 los muestra juntos; los prompts 2-3 pueden enfocar a uno pero los demás siguen visibles. Cuando el texto se enfoca en un personaje, el protagonista y los demás ya presentes SIGUEN en el lugar — inclúyelos por nombre salvo que la narración diga que salieron. Entre escenas consecutivas en el mismo escenario los personajes permanecen presentes salvo que la narración los saque. Los planos de cada escena son momentos consecutivos que cubren TODO el fragmento en orden — nunca dos versiones del mismo instante; cada prompt muestra SOLO lo visible en su momento (nada revelado después puede verse antes) y si el texto dice que el personaje entra o se mueve, ese prompt YA lo muestra en la nueva posición. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.
+⚠️ INVENTARIO CERRADO DEL LUGAR: la descripción del escenario asignado es el inventario de lo que existe ahí. Solo podés nombrar muebles y objetos grandes que esa descripción mencione o que ese tipo de sitio tenga de verdad. Un pasillo, una escalera, una calle o una azotea NO tienen pupitres, camas, mesas puestas ni tazas apoyadas: ahí la gente está de pie, caminando, apoyada en la pared o sentada en un escalón. Si la acción necesita un mueble que ese lugar no tiene, reescribí la acción con lo que sí hay; si es imposible, el escenario está mal asignado (corregí el id o dejalo vacío y describí el lugar entero). Los objetos pequeños que el personaje trae encima sí pueden aparecer donde sea. Si el lugar es interior, la lluvia y la nieve se ven POR la ventana, nunca dentro.${repairEcchi ? `
 ECCHI ACTIVO — LENGUAJE VISUAL: TODOS los personajes son ADULTOS (18 en adelante, cada uno con su edad adulta según su rol), en contextos adultos acordes al género — jamás uniformes escolares ni aulas, nada que sugiera menores. Usa lenguaje de cámara ecchi cuando la escena lo permita: "low angle shot revealing her thighs", "form-fitting dress emphasizing her shape", "wet shirt clinging to her figure", "hourglass silhouette", "long slender legs", "curvy figure" — sensual y sugerente, sin desnudez explícita.` : ''}
 Responde SOLO JSON válido sin markdown`;
 
@@ -4245,7 +4594,13 @@ function bibleVisualBrief() {
   const b = state.universe?.bible;
   if (!b?.direccionVisual) return '';
   const motifs = Array.isArray(b.motivosRecurrentes) ? b.motivosRecurrentes : [];
-  return `\n\nDIRECCIÓN VISUAL DE LA SERIE (del director creativo — aplicala en TODOS los prompts): ${b.direccionVisual}${motifs.length ? `\nMotivos visuales recurrentes: ${motifs.join(' · ')}` : ''}`;
+  // The motifs used to arrive under the header "aplicala en TODOS los prompts"
+  // and with no softener — while the bible defines a motif as "objeto, gesto o
+  // encuadre". They are PROPS. Obeyed literally in every shot, a steaming cup and
+  // a sheet of music force a table to hold them, and that table gets drawn even
+  // in a corridor. The writer's copy of the bible always had the softener
+  // "(hacelos aparecer con naturalidad)"; the art side did not.
+  return `\n\nDIRECCIÓN VISUAL DE LA SERIE (del director creativo — aplicala en TODOS los prompts): ${b.direccionVisual}${motifs.length ? `\nMotivos visuales recurrentes: ${motifs.join(' · ')} — NO son obligatorios en cada plano: aparecen solo donde el lugar y la acción los admiten de forma natural. Un motivo NUNCA justifica meter en la escena un mueble u objeto que ese escenario no tiene.` : ''}`;
 }
 
 // ─── 2. EPISODE DIRECTION ───

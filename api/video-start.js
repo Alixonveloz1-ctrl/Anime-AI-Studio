@@ -40,7 +40,7 @@ module.exports = async function handler(req, res) {
   if (begin(req, res)) return;
 
   try {
-    const { prompt, imageA, imageB, lastFrame, durationSeconds,
+    const { prompt, negativePrompt, imageA, imageB, lastFrame, durationSeconds,
             aspectRatio = '9:16', generateAudio = false, veoModel } = req.body;
     if (!prompt) return res.status(400).json({ error: 'prompt requerido' });
 
@@ -60,12 +60,18 @@ module.exports = async function handler(req, res) {
     // ending, which is what makes consecutive clips cut together cleanly.
     const finalData = (lastFrame || '').replace(/\s/g, '');
 
+    // negativePrompt belongs to `parameters`, not to the instance. It carries
+    // more weight than it looks: Veo 3.x always runs its own prompt rewriter and
+    // it cannot be turned off, so the positive prompt reaches the generator
+    // already reworded by another model. The negative prompt is applied after
+    // that rewrite — it is the one constraint the rewriter cannot water down.
     const parameters = {
       aspectRatio: (aspectRatio === '16:9') ? '16:9' : '9:16',
       sampleCount: 1,
       durationSeconds: duracionValida(MODEL_ID, durationSeconds),
       generateAudio: generateAudio === true,
       personGeneration: 'allow_adult',
+      ...(negativePrompt ? { negativePrompt: String(negativePrompt).slice(0, 1000) } : {}),
       storageUri: `gs://${bucket}/${cfg.prefix}/veo/`,
     };
     const instancia = {

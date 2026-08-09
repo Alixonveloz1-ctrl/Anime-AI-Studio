@@ -41,9 +41,33 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 1. Genera la música del episodio (una pista por acto)
 1. Ensambla el video final (MP4) o exporta el ZIP con todas las piezas
 
-## Director creativo
+## El equipo
 
-Cada proyecto lo dirige un director creativo especializado en anime, que trabaja en tres niveles:
+Cada miembro existe porque **atrapa un fallo concreto**, no por el título. Un
+título más grandilocuente en el prompt no cambia ni un token de la salida; lo que
+la cambia es que alguien distinto *revise* lo escrito.
+
+|Miembro|Qué hace|Qué error evita|
+|-------|--------|---------------|
+|**Director creativo**|Biblia de serie, nota de cada capítulo, dirección musical|Capítulos de plantilla|
+|**Director de fotografía**|Cuántos planos, qué muestra cada uno, el movimiento|Imágenes de relleno, saltos entre planos|
+|**Director de arte / script**|Lee los prompts ya escritos y los contrasta con el escenario y la narración|Atrezzo imposible, clima dentro de un interior|
+
+El tercero es el que generaliza: no sigue una lista de objetos prohibidos, razona
+sobre el par (prompt, lugar), así que caza también el fallo que nadie anticipó —
+en cualquier universo, sin tocar código. Corre solo al escribir cada bloque de 5
+escenas, y a mano con **"🎬 Revisar la puesta en escena"** en la pantalla de
+Universo, para repasar un episodio ya escrito.
+
+Cuesta una llamada de texto por cada 5 escenas. Cero imágenes, cero video.
+
+Cuando corrige un plano no borra nada: dice qué imágenes y qué **clips** quedaron
+obsoletos y deja que decidas. Los clips importan porque uno termina en la imagen
+del plano siguiente — si esa imagen cambia, el clip anterior también hay que
+rehacerlo o el corte queda roto. Si no consigue revisar (límite de peticiones),
+lo dice: nunca reporta "sin fallos" sobre algo que no llegó a mirar.
+
+### Los tres niveles del director creativo
 
 1. **Biblia de serie** — se escribe al crear el universo: dirección visual (paleta y luz concretas), identidad musical, regla de ritmo, motivos recurrentes, reglas de oro y arco de temporada. Se inyecta en todos los prompts posteriores.
 2. **Nota de capítulo** — antes de escribir cada episodio: qué debe lograr en el arco, curva emocional, imagen clave y qué queda abierto.
@@ -136,6 +160,31 @@ que es precisamente el fotograma de enganche, así que la unión sobrevive igual
 Por eso el empate al elegir la duración lo gana la **menor**: al reajustar la
 velocidad, quedarse corto o pasarse cuesta lo mismo en imagen, y Veo cobra por
 segundo generado.
+
+### Dónde vive el clima
+
+Veo trata la lluvia como una capa de partículas a pantalla completa: si la ve en
+el primer fotograma, la extiende a todo el plano — y metía lluvia dentro de un
+pasillo. Tres cosas lo causaban a la vez, y las tres están corregidas:
+
+- El prompt de video **no decía dónde ocurre el plano**. Cuando el director
+  escribe el movimiento, solo se mandaba ese movimiento, así que la palabra
+  "pasillo" no aparecía por ningún lado y Veo deducía la geografía de los píxeles.
+- El estilo pedía `wet-surface reflections` en el 100% de los clips. Bajo techo
+  eso es literalmente pedir que se moje el suelo. Se quita solo en la ruta de
+  video; las imágenes conservan ese brillo.
+- El clima elegido en el selector se aplicaba como MANDATORY a las 45 imágenes
+  del episodio sin preguntar si la escena tiene techo.
+
+Ahora cada escena sabe si está bajo techo (a partir de su escenario), el clima se
+declara **al otro lado del cristal**, y en interiores se añade una regla dura. Y
+se usa el **prompt negativo** de Veo, que antes no se usaba: es la única
+restricción que el reescritor interno de Veo 3.x no puede diluir, y va redactado
+como Google exige — una lista de cosas ("indoor rain"), nunca una orden ("no rain").
+
+Por el mismo motivo se arregló la deriva de cámara: la regla de encuadre le pedía
+"usa ángulos over-shoulder" a un clip cuyo ángulo ya viene fijado por el primer
+fotograma, así que la única forma de obedecer era mover la cámara.
 
 No todos los modelos de Veo aceptan fotograma final, y la documentación pública
 no coincide consigo misma sobre cuáles sí. Así que no se adivina: se pide con
