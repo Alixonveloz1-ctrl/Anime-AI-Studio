@@ -1727,6 +1727,27 @@ async function cargarVoces() {
 
 let HAY_CHIRP = true;
 
+// Google normally reports the gender of each voice and that is what gets used.
+// This table only fills the gap when the API answers UNSPECIFIED, so the menu
+// never degenerates into one undivided list — which is the whole point of
+// splitting it. The API always wins over this.
+const GENERO_POR_NOMBRE = {
+  achernar:'female', aoede:'female', autonoe:'female', callirrhoe:'female',
+  despina:'female', erinome:'female', gacrux:'female', kore:'female',
+  laomedeia:'female', leda:'female', pulcherrima:'female', sulafat:'female',
+  vindemiatrix:'female', zephyr:'female',
+  achird:'male', algenib:'male', algieba:'male', alnilam:'male', charon:'male',
+  enceladus:'male', fenrir:'male', iapetus:'male', orus:'male', puck:'male',
+  rasalgethi:'male', sadachbia:'male', sadaltager:'male', schedar:'male',
+  umbriel:'male', zubenelgenubi:'male',
+};
+
+function generoDeVoz(v) {
+  const g = String(v.genero || '').toLowerCase();
+  if (g === 'male' || g === 'female') return g;
+  return GENERO_POR_NOMBRE[String(v.etiqueta || '').toLowerCase()] || null;
+}
+
 function pintarVocesDelIdioma() {
   const selLang = document.getElementById('voiceLang');
   const selVoz  = document.getElementById('voiceSelect');
@@ -1735,8 +1756,22 @@ function pintarVocesDelIdioma() {
   const lang = selLang.value;
   const previo = selVoz.value;
   const dellang = VOCES_DISPONIBLES.filter(v => v.lang === lang);
-  const etiqueta = v => `${v.etiqueta}${v.genero === 'male' ? ' — masculina' : v.genero === 'female' ? ' — femenina' : ''}`;
-  selVoz.innerHTML = dellang.map(v => `<option value="gcp_${v.name}">${etiqueta(v)}</option>`).join('');
+
+  // Split by gender. A single mixed list means reading all thirty names to find
+  // the male ones; with two groups you go straight to the half you want.
+  const grupo = v => generoDeVoz(v) || 'otra';
+  const bloques = [
+    ['male',   '👨 Masculinas'],
+    ['female', '👩 Femeninas'],
+    ['otra',   '❔ Sin clasificar'],
+  ];
+  selVoz.innerHTML = bloques.map(([g, titulo]) => {
+    const vs = dellang.filter(v => grupo(v) === g).sort((a, b) => a.etiqueta.localeCompare(b.etiqueta));
+    if (!vs.length) return '';
+    return `<optgroup label="${titulo} (${vs.length})">`
+      + vs.map(v => `<option value="gcp_${v.name}">${v.etiqueta}</option>`).join('')
+      + '</optgroup>';
+  }).join('');
   // Keep the chosen personality when switching language: "Charon" in es-US and
   // "Charon" in es-ES are the same voice reading another language.
   const mismaPersona = previo && VOCES_DISPONIBLES.find(v => `gcp_${v.name}` === previo);

@@ -181,6 +181,12 @@ los idiomas que tenga. Una lista escrita a mano es lo que hizo que la app
 ofreciera `Perseus`, que no existe, y sólo cuatro voces Chirp cuando el proyecto
 tiene muchas más. Cuando Google añada voces, aparecen solas.
 
+El menú viene **separado por género** — masculinas y femeninas en grupos aparte,
+alfabéticas dentro de cada uno — para no tener que leer treinta nombres buscando
+la mitad que interesa. El género lo dice Google; sólo cuando la API responde
+"sin especificar" se completa con una tabla por nombre, y una voz que ni así se
+pueda clasificar aparece igual, en su propio grupo, en vez de desaparecer.
+
 El selector de idioma sale de las voces disponibles, y al cambiarlo se conserva
 la personalidad elegida si esa misma voz existe en el idioma nuevo.
 
