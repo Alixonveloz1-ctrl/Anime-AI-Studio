@@ -65,7 +65,7 @@ async function callGeminiAtUrl(url, parts, projectId, token, aspectRatio) {
   return { ok: r.ok, shouldRotate: shouldRotate && !isNoAccess, isNoAccess, isSafetyBlock, status: r.status, data: d };
 }
 
-async function callGemini(model, prompt, characterRefs, projectId, token, isEcchi = false, aspectRatio = '9:16', continuityRef = null) {
+async function callGemini(model, prompt, characterRefs, projectId, token, isEcchi = false, aspectRatio = '9:16', continuityRef = null, styleSpec = '', sinCortes = false, segundosEntre = 8) {
   let cleanPrompt = prompt;
   for (const [pattern, replacement] of BLOCKED_WORDS) {
     cleanPrompt = cleanPrompt.replace(pattern, replacement);
@@ -74,15 +74,38 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
   const parts = [];
   const aspectStyle = aspectRatio === '16:9' ? '16:9 horizontal widescreen' : '9:16 vertical';
 
-  // Global art-style contract — FIRST part so it frames everything that follows
-  parts.push({ text: `ART STYLE (non-negotiable, applies to the ENTIRE image and every character in it): high-budget cinematic 2D anime film, reference-tier MAPPA / Ufotable / top-tier cinematic donghua. Fine variable-weight linework, soft gradient cel-shading, large detailed anime eyes with specular highlights, richly detailed environment, filmic lighting. STRICTLY FORBIDDEN: western cartoon, webtoon-flat style, chibi, thick uniform outlines, flat 2-tone shading, 3D render, CGI, Disney/Pixar look, semi-realistic painted faces.` });
+  // Global art-style contract — FIRST part so it frames everything that follows.
+  //
+  // Sale del estilo que eligió el usuario. Antes estaba escrito aquí a mano y
+  // pedía "large detailed anime eyes", que es lo CONTRARIO de lo que pide el
+  // estilo realista ("ojos de tamaño humano normal"). Como iba en la primera
+  // parte, enmarcaba todo lo demás: elegir Realista no servía de nada, el
+  // servidor lo desmentía antes de que el prompt llegara a hablar.
+  const estilo = (typeof styleSpec === 'string' && styleSpec.trim().length > 40)
+    ? styleSpec.trim()
+    : 'high-budget cinematic 2D anime film, reference-tier MAPPA / Ufotable / top-tier cinematic donghua. Fine variable-weight linework, soft gradient cel-shading, large detailed anime eyes with specular highlights, richly detailed environment, filmic lighting. STRICTLY FORBIDDEN: western cartoon, webtoon-flat style, chibi, thick uniform outlines, flat 2-tone shading, 3D render, CGI, Disney/Pixar look, semi-realistic painted faces.';
+  parts.push({ text: `ART STYLE (non-negotiable, applies to the ENTIRE image and every character in it): ${estilo}` });
 
   // Continuity reference (the previous generated shot) goes FIRST after the
   // style contract — it anchors location, lighting and wardrobe; character
   // refs follow so they stay closest to the scene prompt.
   if (continuityRef && continuityRef.img) {
     parts.push({ inlineData: { mimeType: continuityRef.mimeType || 'image/jpeg', data: continuityRef.img } });
-    parts.push({ text: `↑ PREVIOUS SHOT (continuity reference): the immediately preceding moment of this story. Keep consistent with it ONLY: the identity of the location (same architecture, palette, time of day), the lighting mood, and each character's clothing and hairstyle. This new image is a LATER moment — the action has ADVANCED since this reference: characters may have moved through the space (a door opened, someone stepped inside, knelt down, walked to another part of the room), object states may have changed, and new story elements described in the scene text may now be visible. Compose the NEW shot exactly as the scene text describes, from a clearly DIFFERENT camera angle and framing — NEVER re-render this reference's composition, never output a near-copy of it, never freeze the story at its moment. If the scene text contradicts this reference (a door now open, a character now on the floor), the scene text ALWAYS wins.` });
+    // Dos continuidades distintas, y confundirlas rompe el resultado.
+    //
+    // EPISODIO: entre plano y plano HAY UN CORTE, así que el encuadre nuevo
+    // debe ser claramente otro; repetir la composición se ve como una imagen
+    // congelada.
+    //
+    // CORTO: NO hay corte. Los dos fotogramas son los extremos de una misma
+    // toma de ocho segundos, y Veo tiene que poder llegar de uno al otro
+    // moviendo la cámara. Pedir "un ángulo claramente distinto" ahí es pedirle
+    // que salte de un encuadre a otro sin cortar: eso es exactamente lo que le
+    // hace deformar caras y inventar en el medio.
+    const avanceComun = `Keep consistent with it ONLY: the identity of the location (same architecture, palette, time of day), the lighting mood, and each character's clothing and hairstyle. This new image is a LATER moment — the action has ADVANCED since this reference: characters may have moved through the space, object states may have changed, and new story elements described in the scene text may now be visible. If the scene text contradicts this reference (a door now open, a character now on the floor), the scene text ALWAYS wins.`;
+    parts.push({ text: sinCortes
+      ? `↑ PREVIOUS KEYFRAME (same unbroken take): this is the SAME CONTINUOUS SHOT exactly ${segundosEntre} seconds earlier. There is NO CUT between that image and this one — the camera never stopped rolling. ${avanceComun} Frame this new image as the SAME camera would see it after ${segundosEntre} seconds of CONTINUOUS movement: the camera may push in, pull back, pan, tilt or track, and the characters move within the space — but it stays the same take. Do NOT jump to a new camera setup, do NOT reverse the angle, do NOT cut to a different part of the location. The change in framing must be one a moving camera could physically produce in ${segundosEntre} seconds, and the change in the characters must be one a body could physically perform in ${segundosEntre} seconds. Equally, do NOT output a near-copy: ${segundosEntre} seconds have genuinely passed and it must show.`
+      : `↑ PREVIOUS SHOT (continuity reference): the immediately preceding moment of this story. ${avanceComun} Compose the NEW shot exactly as the scene text describes, from a clearly DIFFERENT camera angle and framing — NEVER re-render this reference's composition, never output a near-copy of it, never freeze the story at its moment.` });
   }
 
   if (characterRefs && characterRefs.length > 0) {
@@ -102,9 +125,9 @@ MANDATORY RULES:
 2. Draw EVERY character named in the scene — if two or three are named, ALL of them must appear in the image. Do not add extra people beyond those mentioned.
 3. Each character appears EXACTLY ONCE — never duplicate.
 4. Match EACH character to THEIR reference image. Do not swap faces or designs.
-5. Female characters: long hair (shoulder-length or longer), soft anime features, clean skin.
+5. Draw each character's hair exactly as their reference and description say — never lengthen, shorten or restyle it to fit a convention.
 6. Faces must be clear, well-defined, anatomically correct — no blur, no distortion.
-7. Style: ${aspectStyle} high-budget cinematic 2D anime film (MAPPA / Ufotable / top-tier donghua tier) — fine variable-weight linework, soft gradient cel-shading, richly detailed background, filmic lighting. STRICTLY FORBIDDEN: western cartoon, webtoon-flat, chibi, thick uniform outlines, flat 2-tone shading, 3D render, CGI, Disney/Pixar, semi-realistic painted faces.
+7. Style: ${aspectStyle}. ${estilo}
 8. Characters INTEGRATED into the environment at true real-world scale — feet grounded with contact shadows, natural headroom below the ceiling, matching the room's perspective and light. Never oversized, never floating, never pasted over the background.${ecchiRules}
 
 Scene to illustrate:
@@ -219,7 +242,8 @@ module.exports = async function handler(req, res) {
     // NO fallback: the selected model is the one used. If it fails, the error
     // says so — silently substituting another model would hand back images the
     // user did not ask for.
-    const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true, aspectRatio, continuityRef);
+    const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true,
+      aspectRatio, continuityRef, body.styleSpec || '', body.sinCortes === true, Number(body.segundosEntre) || 8);
     return res.status(200).json(result);
   } catch(e) {
     return fail(res, e);

@@ -1787,6 +1787,15 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
     model: model === 'auto' ? null : model,
     isEcchi,
     aspectRatio,
+    // El servidor pone su contrato de estilo en la PRIMERA parte del mensaje,
+    // que enmarca todo lo demás. Si no se lo mandamos, usa uno fijo que pide
+    // "ojos grandes de anime" — y entonces elegir el estilo realista no sirve
+    // de nada, porque el servidor lo desmiente antes de empezar.
+    styleSpec,
+    // En el corto NO hay cortes entre imagen e imagen: son los dos extremos de
+    // una misma toma. El servidor lo necesita para no pedir un ángulo nuevo.
+    sinCortes: opts.sinCortes === true,
+    segundosEntre: opts.segundosEntre || undefined,
   };
 
   const bodyStr = JSON.stringify(bodyObj);
@@ -6947,6 +6956,12 @@ async function generarImagenesCorto() {
           continuityRef: previa || undefined,
           aspectRatio: c.ratio,
           estilo: c.estilo,
+          // Aquí no hay corte: la imagen k+1 es la MISMA toma ocho segundos
+          // después. Sin esto el servidor pide "un ángulo claramente distinto",
+          // que es lo correcto entre planos de un episodio y lo peor posible
+          // aquí: Veo tendría que saltar de un encuadre a otro sin cortar.
+          sinCortes: true,
+          segundosEntre: CORTO_SEG_POR_CLIP,
         });
         await dbSet(cortoImgKey(k), img);
         hechas++;
