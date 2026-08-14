@@ -886,6 +886,69 @@ const ANIME_STYLE_LEAD_IN = 'Cinematic 2D anime key visual, fine detailed linewo
 // (`leadIn`, la usa el director al escribir los prompts, para no pagar mil
 // palabras por escena).
 // ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// VOZ NARRATIVA — la decide el director, no el código.
+//
+// Estaba clavada: "TERCERA PERSONA omnisciente, protagonista siempre nombrado,
+// tiempo pasado". Eso descarta de entrada la voz que más funciona en los
+// resúmenes de manhua que revientan en YouTube, que es primera persona EN
+// PRESENTE, con el protagonista contando lo que le pasa mientras le pasa, y el
+// otro lado de la historia en tercera.
+//
+// El presente no es un capricho de estilo: "Tomo una lupa y distingo a una
+// joven" mete al espectador dentro del momento; "Tomó una lupa y distinguió a
+// una joven" lo deja mirando un recuerdo.
+// ════════════════════════════════════════════════════════════════
+const MODOS_NARRATIVOS = {
+  primera_presente: {
+    nombre: 'Primera persona, presente',
+    regla: 'PRIMERA PERSONA EN PRESENTE para el protagonista ("compro", "miro", "no puedo quedarme mirando"). '
+      + 'Cuenta lo que le pasa MIENTRAS le pasa, nunca como recuerdo. Su voz interior es seca e irónica y comenta lo que ve '
+      + '("ochocientos bien gastados", "el nivel de detalle es increíble"). '
+      + 'Si la historia tiene un SEGUNDO frente —otro personaje, otro mundo, el bando contrario— ése se cuenta en TERCERA '
+      + 'PERSONA y también en presente, y el salto se marca con una frase corta de bisagra ("Mientras tanto...", '
+      + '"De vuelta en mi escritorio...", "En otro lugar..."). Ese vaivén entre los dos lados ES el motor del relato.',
+  },
+  tercera_presente: {
+    nombre: 'Tercera persona, presente',
+    regla: 'TERCERA PERSONA EN PRESENTE, con el protagonista siempre por su nombre ("Lin Yan cruza el patio"). '
+      + 'Todo ocurre delante del espectador, ahora mismo — nunca como algo que ya pasó.',
+  },
+  tercera_pasado: {
+    nombre: 'Tercera persona, pasado',
+    regla: 'TERCERA PERSONA omnisciente en pasado inmediato, con el protagonista siempre por su nombre '
+      + '("Lin Yan cruzó el patio"). Nunca "yo".',
+  },
+  segunda: {
+    nombre: 'Segunda persona ("tú")',
+    regla: 'SEGUNDA PERSONA EN PRESENTE: el espectador ES el protagonista ("abres la caja", "no puedes apartar la vista"). '
+      + 'Sostenela sin salirte ni una frase — en cuanto aparece un "él" para el protagonista, se rompe.',
+  },
+};
+const MODO_NARRATIVO_POR_DEFECTO = 'tercera_pasado';
+
+function modoNarrativo(id) {
+  return MODOS_NARRATIVOS[id] || MODOS_NARRATIVOS[MODO_NARRATIVO_POR_DEFECTO];
+}
+// El texto que se le mete a quien escribe.
+function reglaNarrativa(id) { return modoNarrativo(id).regla; }
+// Versión corta para el que parte la historia y para las reparaciones: ahí no
+// hace falta la explicación, sólo que no cambie de voz a mitad.
+function formaNarrativa(id) {
+  return `en la MISMA voz del texto original (${modoNarrativo(id).nombre.toLowerCase()})`;
+}
+// El registro de la muestra: frases cortas, presente, y lo cotidiano volviéndose
+// enorme al otro lado. Vale para episodios y para cortos.
+const REGISTRO_MANHUA = `REGISTRO (el de los resúmenes de manhua que funcionan):
+- FRASES CORTAS Y SECAS. Sujeto, verbo, hecho. "El suelo tiembla. Ella lo mira fijamente." Nada de subordinadas largas.
+- El diálogo entra SIN comillas ni guiones, pegado a la narración, como una frase más.
+- CONTRASTE DE ESCALA: lo que para un lado es trivial, para el otro es divino y se nombra en serio por ambos. Unos palillos
+  son lanzas caídas del cielo; una pila de botón es un lago de rayos; un pollo frito es un fénix. El protagonista no se
+  asombra de lo suyo — se asombra el otro lado, y ahí está la gracia. Nadie trata esto como un chiste.
+- REVELACIONES ENCADENADAS: cada poco, algo que el espectador creía se da vuelta. Quién es en realidad, a quién debe qué,
+  por qué lo persiguen.
+- Nada de párrafos contemplativos ni de adjetivos emocionales: la emoción sale de lo que PASA.`;
+
 const ESTILOS_ANIME = {
   cinematografico: {
     nombre: 'Cinematográfico moderno',
@@ -3006,9 +3069,9 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     const storyHasSystem = hasPowerSystem(genero, subgenres);
     const storyHasHumiliation = allowsHumiliationArc(genero, subgenres, demo);
     const genreTone = (comedyMode
-      ? (GENRE_TONE[genero] || 'Third person, protagonist always named. Specific details. Let situations create impact, not emotional adjectives.')
+      ? (GENRE_TONE[genero] || 'Specific details. Let situations create impact, not emotional adjectives.')
         + (storyHasSystem ? SYSTEM_COMEDY_LAYER : '')
-      : (GENRE_TONE_FIEL[genero] || 'Faithful to the selected genre: third person with the protagonist always named, specific concrete details, let events — not empty adjectives — create the impact.'))
+      : (GENRE_TONE_FIEL[genero] || 'Faithful to the selected genre: specific concrete details, let events — not empty adjectives — create the impact.'))
       + (storyHasHumiliation ? HUMILLACION_LAYER : '');
 
     const SCENE_ENDING = {
@@ -3103,7 +3166,12 @@ QUE LO COMENTEN (los últimos segundos deciden si escriben o si sólo miran): 1)
 ${isGrounded ? `MODO COTIDIANO ACTIVO: día a día real y específico, CERO fantasmas, CERO poderes — ${comedyMode ? 'el humor' : 'el interés'} viene de situaciones reales.` : `MODO NARRATIVO ACTIVO: la emoción viene de los hechos, no de adjetivos. "Kenji dispara y falla. El monstruo está a diez metros." No "el terror lo paraliza".`}
 ${!allowsSuper && !allowsSuper2 ? `⚠️ RESTRICCIÓN: sin elementos sobrenaturales para el género ${genero} — ni magia, ni poderes, ni sistemas, ni fenómenos inexplicables. Todo lo que ocurre tiene una causa del mundo real.` : ''}
 
-EXTENSIÓN Y FORMATO: entre ${wordTarget.min} y ${wordTarget.max} palabras en total (la narración TTS corre a ~150 palabras/minuto: este total produce los ~${fmt.minutes} minutos del formato elegido), español, TERCERA PERSONA omnisciente (el protagonista SIEMPRE por su nombre — nunca "yo"), tiempo pasado inmediato. Un solo bloque de texto continuo — esta llamada NO genera imágenes ni divide en escenas todavía, eso es un paso separado.
+VOZ NARRATIVA (la decidió el director — sostenela sin cambiar ni una frase):
+${reglaNarrativa(state.universe?.bible?.narrativa)}
+
+${REGISTRO_MANHUA}
+
+EXTENSIÓN Y FORMATO: entre ${wordTarget.min} y ${wordTarget.max} palabras en total (la narración TTS corre a ~150 palabras/minuto: este total produce los ~${fmt.minutes} minutos del formato elegido), español. Un solo bloque de texto continuo — esta llamada NO genera imágenes ni divide en escenas todavía, eso es un paso separado.
 Responde SOLO JSON válido sin markdown`;
 
     // Split ecchi rules: narration guidance goes with the narration call,
@@ -3317,7 +3385,7 @@ Nombres reales y coherentes con el setting. Responde SOLO JSON válido sin markd
     const charRefShort = state.characters.map(c => c.name).join(', ');
 
     // N escenas × 3 imágenes por escena, según el formato elegido
-    const narrationShape = `{"id":"s1","num":1,"title":"título corto","narration":"~48-55 palabras tomadas de la historia original en tercera persona (protagonista nombrado), cortadas en un punto natural — no reescribas ni le agregues un gancho artificial, solo extraé el fragmento que corresponde."}`;
+    const narrationShape = `{"id":"s1","num":1,"title":"título corto","narration":"~48-55 palabras tomadas TAL CUAL de la historia original, cortadas en un punto natural — no reescribas ni le agregues un gancho artificial, solo extraé el fragmento que corresponde."}`;
 
     // ─── STEP: write the episode as continuous prose — no per-scene checklist,
     // so nothing (money amounts, character beats, reactions) gets mechanically
@@ -3407,7 +3475,7 @@ Devolvé SOLO: {"story":"el texto de esta parte, en un solo bloque continuo"}`;
     // across calls) — it only restructures text that already exists in
     // front of it, the same safe pattern the image-prompt call already used. ───
     const splitSysPrompt = `Sos un editor que divide una historia YA TERMINADA en exactamente ${fmt.scenes} fragmentos secuenciales para un formato de video. NO agregues historia nueva, NO reescribas el contenido ni el estilo — dividí el texto ya escrito en ${fmt.scenes} cortes naturales, preservando el orden y el contenido original. Podés ajustar levemente las palabras justo en los puntos de corte para que cada fragmento se lea bien de forma independiente, pero el contenido, los eventos y el estilo son los del autor original — vos solo cortás.
-Cada fragmento: ~48-55 palabras en español, tercera persona (protagonista siempre por su nombre).
+Cada fragmento: ~48-55 palabras en español, ${formaNarrativa(state.universe?.bible?.narrativa)} — no cambies la voz ni la persona.
 ⚠️ REGLA DE CORTE ABSOLUTA: cada fragmento DEBE empezar al inicio de una oración y DEBE terminar con puntuación final (. ! ? …). JAMÁS cortes a mitad de una oración — cada fragmento se convierte en un audio expresivo INDEPENDIENTE, y si una oración queda partida entre dos fragmentos la voz cambia de tono a mitad de la frase y se rompe la continuidad auditiva. Preferí un fragmento de 44 o de 60 palabras antes que cortar una oración por la mitad. Antes de devolver, verificá que los ${fmt.scenes} fragmentos terminen en . ! ? o …
 Cada fragmento necesita un "title" corto (3-6 palabras). No te preocupes por el campo "act": lo asigna la app según la posición.
 CRÍTICO: el campo se llama "narration" (sin tilde).
@@ -5200,11 +5268,11 @@ RULES:
       const act = actForIndex(startNum - 1, repairTotal);
 
       const lastGoodRef = lastGood ? `\nEscena anterior (${lastGood.num}): "${lastGood.narration}"` : '';
-      const sceneExample = `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"EXACTAMENTE 48-55 palabras en tercera persona (protagonista nombrado)"}`;
+      const sceneExample = `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"EXACTAMENTE 48-55 palabras, ${formaNarrativa(state.universe?.bible?.narrativa)}"}`;
       // The repair used to receive only the universe blurb, so repaired scenes
       // lost the genre/subgenre rules the rest of the episode was written with.
       const repairGenreCtx = `${GENRE_PROMPTS[u.genero] || ''}\n\n${getSubgenreText(repairSubgenres, u.genero)}\n\n${SUBGENRE_FIDELITY_CONTRACT}`;
-      const prompt = `${ctx}\n\n${repairGenreCtx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: ${repairTotal} escenas.\nCada escena DEBE tener narration (EXACTAMENTE 48-55 palabras, tercera persona con el protagonista nombrado, diálogo directo intercalado, ritmo rápido: 2-3 eventos distintos por escena, ambientación mínima).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
+      const prompt = `${ctx}\n\n${repairGenreCtx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: ${repairTotal} escenas.\nCada escena DEBE tener narration (EXACTAMENTE 48-55 palabras, ${formaNarrativa(state.universe?.bible?.narrativa)}, diálogo directo intercalado, ritmo rápido: 2-3 eventos distintos por escena, ambientación mínima).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
 
       let newNarrations = [];
       for (let attempt = 0; attempt < 3 && newNarrations.length < count; attempt++) {
@@ -5382,6 +5450,7 @@ Escribe la BIBLIA DE DIRECCIÓN de esta serie. Es el documento que seguirán tod
 Devuelve JSON:
 {
   "direccionVisual": "Cómo se ve esta serie y solo esta serie: paleta concreta (3-4 colores nombrados), tratamiento de luz, lenguaje de cámara recurrente, textura. 3-4 frases ejecutables.",
+  "narrativa": "La VOZ del relato. Elegí UNA: primera_presente | tercera_presente | tercera_pasado | segunda. Elegí primera_presente si hay un protagonista con voz interior propia o dos frentes que se alternan (es la que mejor funciona en resúmenes de manhua). Sólo el identificador, sin explicar.",
   "identidadMusical": "El COLOR de fondo de la serie: familia instrumental, textura y tempo. Es un colchón que suena POR DEBAJO de una narración, no una pieza de concierto — así que nada de melodías ni de instrumentos solistas llevando un tema. 2-3 frases.",
   "ritmo": "Regla de ritmo propia de esta serie dentro del género: dónde acelera, dónde respira, cómo entra y sale de cada capítulo. 2-3 frases.",
   "arcoTemporada": ["Capítulo 1: qué establece y con qué queda abierto", "Capítulo 2: ...", "Capítulo 3: ...", "Capítulo 4: ...", "Capítulo 5: ..."],
@@ -6815,7 +6884,8 @@ function alternarPlanos(kfs) {
   return kfs;
 }
 
-function cortoSystemPrompt(genero) {
+function cortoSystemPrompt(genero, narrativa) {
+  const voz = reglaNarrativa(narrativa);
   return `Sos guionista de MANHUA/DONGHUA animado, narrado en español. Escribís lo que revienta en
 Facebook y YouTube: épico, desmedido, con vueltas de tuerca que no se ven venir.
 
@@ -6849,9 +6919,14 @@ uno al siguiente, sin cortar. El keyframe donde termina un clip es donde empieza
 - CADA KEYFRAME ES UNA IMAGEN FIJA dibujable sin leer el guion: quién, dónde, qué postura exacta, qué
   mira, qué sostiene, qué luz.
 
-LA NARRACIÓN va por encima, tercera persona con el protagonista SIEMPRE nombrado. Cada tramo son unas
-${CORTO_PALABRAS_POR_CLIP} palabras — tiene que durar exactamente lo que dura su clip. La PRIMERA
-ORACIÓN empieza por una persona con nombre haciendo algo: prohibido abrir con clima, luz o paisaje.
+LA NARRACIÓN va por encima. Cada tramo son unas ${CORTO_PALABRAS_POR_CLIP} palabras — tiene que durar
+exactamente lo que dura su clip. La PRIMERA ORACIÓN empieza por una PERSONA haciendo algo: prohibido
+abrir con clima, luz o paisaje.
+
+VOZ NARRATIVA (se te dice cuál en el encargo — sostenela sin cambiar ni una frase):
+${voz}
+
+${REGISTRO_MANHUA}
 
 GÉNERO: ${genero}. El género decide QUÉ pasa; estas reglas deciden cómo se cuenta y cómo se rueda.
 
@@ -6882,7 +6957,9 @@ async function escribirCorto() {
 
   btn.disabled = true;
   prog.style.display = 'block';
-  const sys = cortoSystemPrompt(genero);
+  // La voz la decide el director en la base, así que la base se pide con el
+  // sistema por defecto y el resto del corto ya se escribe con la voz elegida.
+  let sys = cortoSystemPrompt(genero);
 
   try {
     // ─── 1. La base: quién, dónde y con qué cara ───
@@ -6900,11 +6977,13 @@ Devolvé SOLO:
  "hora": "momento del día en que arranca",
  "look": "identidad visual del corto en 2 frases: paleta de 3 colores nombrados y tratamiento de luz. Nada de argumento.",
  "personajes": [{"nombre":"...","descripcion":"edad, pelo, ojos, ropa concreta y reconocible — lo que hay que dibujar igual 39 veces"}],
+ "narrativa": "La VOZ del corto. Elegí UNA: primera_presente | tercera_presente | tercera_pasado | segunda. Elegí primera_presente si hay un protagonista con voz interior propia o dos frentes que se alternan. Sólo el identificador.",
  "arco": "en 3 frases: cómo abre, qué se rompe en el medio, cómo cierra"
 }
 Máximo 3 personajes: cada personaje más es una cara que se puede ir a la deriva.`, sys));
 
     if (!base?.titulo) throw new Error('El guionista no devolvió una base utilizable');
+    sys = cortoSystemPrompt(genero, base.narrativa);
 
     // ─── 2. Los tramos y los keyframes, por bloques ───
     const tramos = [];
@@ -6941,7 +7020,7 @@ ${desde + cuantos >= n ? 'Estos son los ÚLTIMOS tramos: el corto CIERRA aquí, 
 Devolvé SOLO:
 {${primero ? `\n "keyframe1": "la imagen fija con la que abre: quién, dónde, postura, qué mira, qué luz",` : ''}
  "tramos": [
-   {"narracion": "~${CORTO_PALABRAS_POR_CLIP} palabras en español, tercera persona",
+   {"narracion": "~${CORTO_PALABRAS_POR_CLIP} palabras en español, en la voz narrativa fijada arriba",
     "movimiento": "qué se mueve durante estos ${CORTO_SEG_POR_CLIP} segundos, en inglés: movimiento CONTINUO de cámara Y de personaje",
     "plano": "uno de: general | medio | cerca | escorzo | detalle — NUNCA el mismo que el tramo anterior",
     "corte": "true SÓLO si este tramo empieza en OTRO SITIO o en otro momento (hay un corte de montaje antes). false si sigue la misma toma.",
@@ -6996,6 +7075,7 @@ escorzo. El cambio de distancia de cámara ES el movimiento del clip.`;
       ...base,
       genero, ratio,
       estilo: estiloDelCorto(),
+      narrativa: base.narrativa || MODO_NARRATIVO_POR_DEFECTO,
       idea,
       clips: n,
       tramos: tramos.slice(0, n),
@@ -7416,6 +7496,7 @@ async function renderCorto() {
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">${c.logline || ''}</div>
       <div class="field"><div class="field-label">Lugar</div>${c.lugar || ''} · ${c.hora || ''}</div>
       <div class="field"><div class="field-label">Look</div>${c.look || ''}</div>
+      <div class="field"><div class="field-label">Voz</div>${modoNarrativo(c.narrativa).nombre}</div>
       <div class="field"><div class="field-label">Estilo de animación</div>
         ${ESTILOS_ANIME[c.estilo || ESTILO_POR_DEFECTO]?.nombre || '—'}
         ${(c.estilo || ESTILO_POR_DEFECTO) !== estiloDelCorto() ? `
