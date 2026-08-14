@@ -496,7 +496,11 @@
         <option value="gemini-3-pro-image">👑 Nano Banana Pro — caro, solo emergencias</option>
       </select>
 
-      <label>Modelo de video (Veo)</label>
+      <label>Estilo de animación</label>
+      <select id="estiloAnime"></select>
+      <p id="estiloNota" style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.5"></p>
+
+      <label style="margin-top:12px">Modelo de video (Veo)</label>
       <select id="veoModelSelect">
         <option value="veo-3.1-lite-generate-001">⚡ Veo 3.1 Lite — el más económico</option>
         <option value="veo-3.1-fast-generate-001">🌟 Veo 3.1 Fast — equilibrado</option>
@@ -855,6 +859,121 @@ const ANIME_VISUAL_STYLE_CORE = 'high-budget cinematic 2D anime film quality, re
 const ANIME_STYLE_LEAD_IN = 'Cinematic 2D anime key visual, fine detailed linework, soft gradient cel-shading, richly detailed background,';
 
 // ════════════════════════════════════════════════════════════════
+// ESTILOS DE ANIMACIÓN — todos anime 2D, distinta escuela de dibujo.
+//
+// Lo que cambia entre uno y otro NO es el género ni la historia: es cómo se
+// dibuja. Y lo que más se nota es la ANATOMÍA, porque el anime por defecto
+// deforma: ojos que ocupan un tercio de la cara, mentón en punta, y cuerpos de
+// cinco cabezas de alto cuando una persona real mide siete y media. Si querés
+// gente con forma de gente, no basta con no pedir "chibi": hay que pedir la
+// proporción real con números, porque el modelo tira al promedio de su
+// entrenamiento y ese promedio es de ojos grandes.
+//
+// Cada estilo trae su versión larga (`core`, va en cada imagen) y una corta
+// (`leadIn`, la usa el director al escribir los prompts, para no pagar mil
+// palabras por escena).
+// ════════════════════════════════════════════════════════════════
+const ESTILOS_ANIME = {
+  cinematografico: {
+    nombre: 'Cinematográfico moderno',
+    leadIn: ANIME_STYLE_LEAD_IN,
+    core: ANIME_VISUAL_STYLE_CORE,
+  },
+
+  realista: {
+    nombre: 'Realista — proporciones humanas',
+    leadIn: 'Realistic-proportion seinen anime illustration, natural human anatomy, restrained eye size, detailed rendering,',
+    core: 'High-budget seinen anime with REALISTIC HUMAN PROPORTIONS, in the tradition of Vinland Saga, Monster, Pluto and Vagabond. '
+      + 'ANATOMY IS THE POINT — draw people shaped like real people: '
+      + 'figures are 7 to 7.5 head-heights tall (never 5 or 6); '
+      + 'eyes are NORMAL HUMAN SIZE and spacing, with visible eyelid thickness, lash line and tear duct — the iris does NOT dominate the eye and the eye does NOT dominate the face; '
+      + 'a real nose with a bridge, a tip and visible nostrils (never a dot or a line); '
+      + 'a defined jaw, cheekbones, brow ridge, philtrum and a chin of normal width — never a sharp pointed chin; '
+      + 'adult shoulder-to-hip ratio, correctly sized hands and feet, real muscle and fat over real bone; '
+      + 'hair with weight and volume that obeys gravity, not gravity-defying spikes; '
+      + 'faces show age honestly — skin texture, lines, tired eyes, stubble where it belongs. '
+      + 'Fine variable-weight linework with restrained, deliberate strokes. Muted naturalistic palette with subtle cel-shading, '
+      + 'soft gradient transitions and real ambient occlusion. Detailed painterly environments with accurate materials and perspective. '
+      + 'Naturalistic motivated lighting, filmic grade, quiet contrast. '
+      + 'FORBIDDEN: chibi, moe, oversized sparkling eyes, tiny pointed chin, 5-head-tall bodies, doll faces, flat single-tone shading, '
+      + 'thick uniform outlines, webtoon-flat look, 3D render, CGI, photorealistic skin, video game graphics, western cartoon, Disney/Pixar.',
+  },
+
+  donghua: {
+    nombre: 'Donghua / cultivación',
+    leadIn: 'Hand-drawn 2D donghua key visual, flowing robes, ink-wash background, elegant linework,',
+    core: 'Hand-drawn 2D Chinese donghua adapted from a manhua, cinematic production values. Elegant slightly elongated figures with '
+      + 'graceful posture; flowing layered robes and sashes with real cloth weight and secondary motion. Sharp, confident, tapering '
+      + 'linework. Backgrounds carry ink-wash influence — mist, mountains, tiled roofs, receding atmospheric layers. Palette built on '
+      + 'jade, ink black, vermilion and gold, with luminous qi effects as soft light rather than plastic glow. Faces are refined and '
+      + 'anatomically grounded, eyes almond-shaped and detailed, never round and oversized. '
+      + 'FORBIDDEN: 3D CGI donghua look, plastic shading, video game cutscene aesthetic, chibi, western cartoon, photorealistic skin.',
+  },
+
+  clasico90: {
+    nombre: 'Clásico 90s (celuloide)',
+    leadIn: '1990s hand-painted cel anime, film grain, gouache background, warm analog palette,',
+    core: 'Authentic 1990s hand-painted cel animation, the look of anime shot on 35mm before digital compositing. Hand-painted gouache '
+      + 'backgrounds with visible brushwork. Characters in flat two-tone cel paint with hard-edged shadow shapes — NOT soft digital '
+      + 'gradients. Slightly thicker, ink-brush linework with natural weight variation. Muted, warm, slightly faded analog palette with '
+      + 'gentle film grain, faint halation around light sources, and the subtle softness of an optical print. Grounded, mature character '
+      + 'designs with restrained eye size, in the tradition of that era. '
+      + 'FORBIDDEN: modern digital gradients, glossy highlights, 3D render, CGI, photorealistic skin, moe/chibi designs, western cartoon.',
+  },
+
+  suave: {
+    nombre: 'Suave y luminoso',
+    leadIn: 'Soft warm slice-of-life anime, delicate linework, pastel light, richly detailed everyday background,',
+    core: 'Soft, warm, luminous 2D anime in the tradition of Kyoto Animation. Delicate thin linework, gentle cel-shading with soft '
+      + 'gradient falloff, and pastel-leaning naturalistic colour. Abundant real-world environmental detail — clutter on shelves, worn '
+      + 'fabric, plants, condensation — all drawn with affection. Light is the subject: golden-hour spill, bounce light, soft bloom, '
+      + 'lens flare used sparingly, dust motes in sunbeams. Faces are gentle and expressive with anatomically grounded features and '
+      + 'moderate eye size. '
+      + 'FORBIDDEN: harsh contrast, grimdark palette, chibi, flat single-tone shading, thick block outlines, 3D render, CGI, '
+      + 'photorealistic skin, western cartoon.',
+  },
+
+  oscuro: {
+    nombre: 'Oscuro / noir',
+    leadIn: 'High-contrast dark anime, heavy shadow, limited palette, hard rim light,',
+    core: 'High-contrast dark 2D anime with a noir sensibility. Heavy graphic shadow shapes and crushed blacks where large areas of the '
+      + 'frame fall to darkness, cut by a single hard light source. Severely limited palette — two or three colours plus black, with one '
+      + 'saturated accent. Sharp, angular, deliberate linework. Faces are grounded and adult with restrained eye size, lit from below or '
+      + 'from the side so half stays in shadow. Grain and atmospheric haze. Backgrounds detailed but swallowed by darkness at the edges. '
+      + 'FORBIDDEN: flat even lighting, pastel palette, cute/moe designs, chibi, 3D render, CGI, photorealistic skin, western cartoon.',
+  },
+};
+
+// Esto NO se deja a que cada estilo se acuerde de escribirlo. Es la única regla
+// común a todos —dibujado a mano, nunca 3D— y va añadida por código a los seis,
+// así que un estilo nuevo la hereda sin que nadie tenga que recordarla.
+const NO_ES_3D = ' STRICTLY 2D hand-drawn animation. FORBIDDEN: 3D render, CGI, photorealistic skin, '
+  + 'video game graphics, western cartoon, Disney/Pixar, motion capture, live action.';
+for (const e of Object.values(ESTILOS_ANIME)) e.core += NO_ES_3D;
+
+const ESTILO_POR_DEFECTO = 'cinematografico';
+
+function estiloElegido() {
+  const v = document.getElementById('estiloAnime')?.value;
+  return ESTILOS_ANIME[v] ? v : ESTILO_POR_DEFECTO;
+}
+// `forzado` deja pedir un estilo concreto: el corto guarda con cuál se escribió
+// y sigue generando con ÉSE aunque después se cambie el selector — cambiar de
+// estilo a mitad de una cadena de 39 imágenes la parte por el medio.
+function estiloCore(forzado) {
+  return (ESTILOS_ANIME[forzado] || ESTILOS_ANIME[estiloElegido()]).core;
+}
+function estiloLeadIn(forzado) {
+  return (ESTILOS_ANIME[forzado] || ESTILOS_ANIME[estiloElegido()]).leadIn;
+}
+// "wet-surface reflections" se escribió para dar brillo a las IMÁGENES. Dentro
+// de un prompt de video se lee como una orden de mojar el suelo — y así llegó
+// la lluvia a un pasillo interior. Se quita sólo en la ruta de video.
+function estiloParaVideo(forzado) {
+  return estiloCore(forzado).replace('wet-surface reflections, ', '');
+}
+
+// ════════════════════════════════════════════════════════════════
 // COMPANION QUIRK POOL — fixes a bug where the companion character
 // was ALWAYS "hungry": every prompt that mentioned the companion's
 // trait listed the same 2-3 examples ("hungry, filming, complaining")
@@ -991,7 +1110,7 @@ function buildVideoPrompt(s, slot = 'A', opts = {}) {
   // order to wet the floor — indoors, next to a still with rain on the window. The
   // rain inside the corridor was not only the model hallucinating: we were asking
   // for it. Dropped on the video path only; the images keep the style intact.
-  const estiloVideo = ANIME_VISUAL_STYLE_CORE.replace('wet-surface reflections, ', '');
+  const estiloVideo = estiloParaVideo();
   const animeStyle = `STYLE — ABSOLUTELY MANDATORY: This clip must look like a moving frame of a ${estiloVideo} Animation quality reference: ${studio}${demoRef}. Target: a hand-painted, richly detailed 2D anime film frame — nothing simplified, nothing plastic-3D.`;
 
   // With a director-written motion the clip has an explicit destination, so the
@@ -1621,7 +1740,7 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
   const model = forceModel || (modelSel ? modelSel.value : 'auto');
   const isEcchi = (state.universe?.subgenres || []).some(s => ['ecchi','harem','harem_inverso'].includes(s));
 
-  const styleSpec = ANIME_VISUAL_STYLE_CORE;
+  const styleSpec = estiloCore(opts.estilo);
   const fullBleed = ' FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side. The artwork must extend completely to all four edges of the image.';
   const sceneIntegration = ' ALL characters named in this prompt are visible in the frame, actively in the scene, NOT posing, NOT looking at camera. Side angle or 3/4 view. Characters drawn at true real-world scale inside the environment — feet grounded with contact shadows, natural headroom, matching the perspective and lighting of the scene; never oversized or pasted over the background.';
   const noLookSuffix = opts.charSheet ? (' ' + styleSpec + fullBleed) : (' ' + styleSpec + sceneIntegration + fullBleed);
@@ -2008,7 +2127,7 @@ function pintarVocesDelIdioma() {
 // (con qué modelo generás, con qué voz narrás), no contenido de un anime.
 // ════════════════════════════════════════════════════════════════
 const AJUSTES_KEY = 'ajustes_estudio';
-const CAMPOS_AJUSTE = ['imageModelSelect', 'veoModelSelect', 'aspectRatio',
+const CAMPOS_AJUSTE = ['imageModelSelect', 'veoModelSelect', 'estiloAnime', 'aspectRatio',
                        'voiceLang', 'voiceSelect', 'voiceSpeed', 'voiceVolumen',
                        'assemblyUseClips', 'assemblyUseMusic', 'assemblyMusicVol'];
 
@@ -2037,7 +2156,32 @@ function aplicarAjuste(id, valor) {
   return true;
 }
 
+// Una línea por estilo, para saber qué se está eligiendo sin generar una imagen
+// de prueba. Van pegadas a lo que se VE, no a nombres de estudios.
+const ESTILO_NOTA = {
+  cinematografico: 'Anime de película moderno: línea fina, sombras suaves, ojos grandes pero con cara. Lo que has usado hasta ahora.',
+  realista:        'Gente con forma de gente: <strong>siete cabezas y media de alto</strong>, ojos de tamaño normal, nariz con puente, mandíbula. Caras adultas que aparentan su edad. Es el más cercano a un seinen serio.',
+  donghua:         'Manhua animado: figuras esbeltas, túnicas con vuelo, fondos de tinta y niebla, paleta de jade y bermellón. Dibujado en 2D, no el donghua 3D.',
+  clasico90:       'Anime de los 90 en celuloide: fondos pintados a mano, sombras duras de dos tonos, grano de película y color un poco desvaído.',
+  suave:           'Cálido y luminoso: línea delicada, luz dorada, mucho detalle cotidiano. Para historias sin violencia.',
+  oscuro:          'Contraste alto: negros aplastados, una sola fuente de luz dura, tres colores como mucho. La mitad de la cara en sombra.',
+};
+
+function pintarNotaDeEstilo() {
+  const el = document.getElementById('estiloNota');
+  if (el) el.innerHTML = ESTILO_NOTA[estiloElegido()] || '';
+}
+
+function llenarEstilos() {
+  const sel = document.getElementById('estiloAnime');
+  if (!sel || sel.options.length) return;
+  sel.innerHTML = Object.entries(ESTILOS_ANIME)
+    .map(([k, v]) => `<option value="${k}">${v.nombre}</option>`).join('');
+  sel.addEventListener('change', pintarNotaDeEstilo);
+}
+
 function restaurarAjustes() {
+  llenarEstilos();
   const datos = ajustesGuardados();
   for (const id of CAMPOS_AJUSTE) aplicarAjuste(id, datos[id]);
   // Las etiquetas de los deslizadores no se actualizan solas al cambiar .value.
@@ -2058,6 +2202,7 @@ function restaurarAjustes() {
   document.getElementById('assemblyMusicChip')
     ?.classList.toggle('selected', document.getElementById('assemblyUseMusic')?.checked === true);
   sincronizarCajaDeMusica();
+  pintarNotaDeEstilo();
   for (const id of CAMPOS_AJUSTE) {
     document.getElementById(id)?.addEventListener('change', guardarAjustes);
   }
@@ -3388,7 +3533,7 @@ La descripción del escenario asignado NO es decoración: es el inventario de lo
 
 REGLAS DE CADA PROMPT:
 - SIEMPRE en INGLÉS
-- SIEMPRE empezar con: "${ANIME_STYLE_LEAD_IN}"
+- SIEMPRE empezar con: "${estiloLeadIn()}"
 - Luego "Scene with [nombre exacto]:" seguido de la descripción visual
 - Personajes HUMANOS: SIEMPRE incluir ropa específica según su ficha + color y estilo de cabello (idénticos en los 3 prompts de la escena)
 - Personajes NO-HUMANOS (animal/criatura/objeto poseído): describir su apariencia física real (especie, pelaje/textura, color, tamaño) — JAMÁS inventarle ropa humana salvo que su ficha la mencione explícitamente
@@ -4826,7 +4971,7 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
   const cleanPrompt = String(prompt || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim() + (env.envText || '') + ' ' + ANIME_VISUAL_STYLE_CORE + ' ALL characters named in this prompt are visible in the frame, actively in the scene, NOT looking at camera. FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side. Characters drawn at true real-world scale inside the environment — feet grounded with contact shadows, natural headroom, matching the perspective and lighting of the scene; never oversized or pasted over the background.';
+    .trim() + (env.envText || '') + ' ' + estiloCore() + ' ALL characters named in this prompt are visible in the frame, actively in the scene, NOT looking at camera. FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side. Characters drawn at true real-world scale inside the environment — feet grounded with contact shadows, natural headroom, matching the perspective and lighting of the scene; never oversized or pasted over the background.';
 
   const isEcchi = (state.universe?.subgenres || []).some(s => ['ecchi','harem','harem_inverso'].includes(s));
 
@@ -5064,7 +5209,7 @@ RULES:
       const imageSys = `Eres el director de fotografía de este anime. Para cada escena decidí CUÁNTOS PLANOS necesita (1, 2 o 3) y escribí sus prompts en inglés, basados en la narración ya escrita — no inventás historia nueva.
 ⚠️ CUÁNTOS PLANOS: contá los beats visuales REALES (cambia la posición de alguien, el estado de un objeto, quién está presente o el lugar). Una conversación estática o una sola acción continua = 1 PLANO. Un cambio de ángulo NO es un beat. PROHIBIDO rellenar: si dos planos no se verían claramente distintos, devolvé uno solo.
 Cuando hay más de uno son momentos consecutivos que cubren TODO lo que el texto narra, en orden. Todos los planos de una escena: MISMO lugar, MISMA ropa/peinado de cada personaje; solo cambia la acción que avanza y el ángulo de cámara. También asigna el campo "escenario" con el id exacto del escenario del universo donde ocurre la escena — si el lugar no está en la lista, deja "escenario" como "" y describe ese lugar dentro de los prompts (nunca asignes un escenario incorrecto).
-REGLAS: SIEMPRE en inglés. Cada prompt empieza con "${ANIME_STYLE_LEAD_IN} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello con material y condición fieles a su ficha y a la economía del mundo (sin embellecer). Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. Si 2+ personajes están presentes en la escena, TODOS aparecen: el prompt 1 los muestra juntos; los prompts 2-3 pueden enfocar a uno pero los demás siguen visibles. Cuando el texto se enfoca en un personaje, el protagonista y los demás ya presentes SIGUEN en el lugar — inclúyelos por nombre salvo que la narración diga que salieron. Entre escenas consecutivas en el mismo escenario los personajes permanecen presentes salvo que la narración los saque. Los planos de cada escena son momentos consecutivos que cubren TODO el fragmento en orden — nunca dos versiones del mismo instante; cada prompt muestra SOLO lo visible en su momento (nada revelado después puede verse antes) y si el texto dice que el personaje entra o se mueve, ese prompt YA lo muestra en la nueva posición. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.
+REGLAS: SIEMPRE en inglés. Cada prompt empieza con "${estiloLeadIn()} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello con material y condición fieles a su ficha y a la economía del mundo (sin embellecer). Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. Si 2+ personajes están presentes en la escena, TODOS aparecen: el prompt 1 los muestra juntos; los prompts 2-3 pueden enfocar a uno pero los demás siguen visibles. Cuando el texto se enfoca en un personaje, el protagonista y los demás ya presentes SIGUEN en el lugar — inclúyelos por nombre salvo que la narración diga que salieron. Entre escenas consecutivas en el mismo escenario los personajes permanecen presentes salvo que la narración los saque. Los planos de cada escena son momentos consecutivos que cubren TODO el fragmento en orden — nunca dos versiones del mismo instante; cada prompt muestra SOLO lo visible en su momento (nada revelado después puede verse antes) y si el texto dice que el personaje entra o se mueve, ese prompt YA lo muestra en la nueva posición. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.
 ⚠️ INVENTARIO CERRADO DEL LUGAR: la descripción del escenario asignado es el inventario de lo que existe ahí. Solo podés nombrar muebles y objetos grandes que esa descripción mencione o que ese tipo de sitio tenga de verdad. Un pasillo, una escalera, una calle o una azotea NO tienen pupitres, camas, mesas puestas ni tazas apoyadas: ahí la gente está de pie, caminando, apoyada en la pared o sentada en un escalón. Si la acción necesita un mueble que ese lugar no tiene, reescribí la acción con lo que sí hay; si es imposible, el escenario está mal asignado (corregí el id o dejalo vacío y describí el lugar entero). Los objetos pequeños que el personaje trae encima sí pueden aparecer donde sea. Si el lugar es interior, la lluvia y la nieve se ven POR la ventana, nunca dentro.${repairEcchi ? `
 ECCHI ACTIVO — LENGUAJE VISUAL: TODOS los personajes son ADULTOS (18 en adelante, cada uno con su edad adulta según su rol), en contextos adultos acordes al género — jamás uniformes escolares ni aulas, nada que sugiera menores. Usa lenguaje de cámara ecchi cuando la escena lo permita: "low angle shot revealing her thighs", "form-fitting dress emphasizing her shape", "wet shirt clinging to her figure", "hourglass silhouette", "long slender legs", "curvy figure" — sensual y sugerente, sin desnudez explícita.` : ''}
 Responde SOLO JSON válido sin markdown`;
@@ -6744,6 +6889,7 @@ Exactamente ${cuantos} objetos en "tramos". Cada "keyframe" tiene que poder dibu
     state.corto = {
       ...base,
       genero, ratio,
+      estilo: estiloElegido(),
       idea,
       clips: n,
       tramos: tramos.slice(0, n),
@@ -6768,7 +6914,7 @@ Exactamente ${cuantos} objetos en "tramos". Cada "keyframe" tiene que poder dibu
 function cortoImagePrompt(k) {
   const c = cortoActual();
   const fichas = (c.personajes || []).map(p => `${p.nombre} (${p.descripcion})`).join('. ');
-  return `${ANIME_STYLE_LEAD_IN} ${c.keyframes[k]}
+  return `${estiloLeadIn(c.estilo)} ${c.keyframes[k]}
 
 LUGAR (el mismo en todo el corto): ${c.lugar}. ${c.hora}.
 PERSONAJES — dibujalos idénticos a su descripción, siempre: ${fichas}
@@ -6800,6 +6946,7 @@ async function generarImagenesCorto() {
         const img = await generateImage(cortoImagePrompt(k), await refsDePersonajes(), null, {
           continuityRef: previa || undefined,
           aspectRatio: c.ratio,
+          estilo: c.estilo,
         });
         await dbSet(cortoImgKey(k), img);
         hechas++;
@@ -6924,7 +7071,7 @@ window.generarUnClipDelCorto = async function(k) {
 function cortoVideoPrompt(k) {
   const c = cortoActual();
   const t = c.tramos[k];
-  const estilo = ANIME_VISUAL_STYLE_CORE.replace('wet-surface reflections, ', '');
+  const estilo = estiloParaVideo(c.estilo);
   return `Hand-drawn 2D anime, ${CORTO_SEG_POR_CLIP} seconds, ONE CONTINUOUS UNBROKEN SHOT.
 
 INTERPOLATION: the first frame and the last frame are both given. Animate the movement BETWEEN them
@@ -7141,6 +7288,16 @@ async function renderCorto() {
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">${c.logline || ''}</div>
       <div class="field"><div class="field-label">Lugar</div>${c.lugar || ''} · ${c.hora || ''}</div>
       <div class="field"><div class="field-label">Look</div>${c.look || ''}</div>
+      <div class="field"><div class="field-label">Estilo de animación</div>
+        ${ESTILOS_ANIME[c.estilo || ESTILO_POR_DEFECTO]?.nombre || '—'}
+        ${(c.estilo || ESTILO_POR_DEFECTO) !== estiloElegido() ? `
+          <div style="margin-top:6px;font-size:11px;color:#ffd28a">
+            El selector está ahora en <strong>${ESTILOS_ANIME[estiloElegido()].nombre}</strong>. Este corto sigue
+            generando con el suyo — cambiarlo a mitad partiría la cadena por el medio.
+            <button class="btn-sec" style="margin-top:6px;font-size:11px;padding:4px 8px"
+              onclick="cambiarEstiloDelCorto()">Pasar este corto a ${ESTILOS_ANIME[estiloElegido()].nombre}</button>
+          </div>` : ''}
+      </div>
       <div style="font-size:12px;margin-top:8px">
         🖼️ ${hechas}/${total + 1} imágenes · 🎬 ${clips}/${total} clips · 🎙️ ${voces}/${total} narraciones
       </div>
@@ -7171,6 +7328,27 @@ async function renderCorto() {
            onclick="reintentarClipCorto(${k}, this)">🎬 Generar este clip</button>`}
     </div>`).join('');
 }
+
+// Cambiar el estilo de un corto a medias no es un ajuste, es rehacerlo: las
+// imágenes ya generadas son de la escuela vieja y la cadena se nota en el punto
+// exacto donde cambia. Se avisa con el número delante.
+window.cambiarEstiloDelCorto = async function() {
+  const c = cortoActual();
+  if (!c) return;
+  const nuevo = estiloElegido();
+  const material = await materialDelCorto();
+  if (material.img || material.vid) {
+    if (!confirm(
+      `Pasar el corto a "${ESTILOS_ANIME[nuevo].nombre}" obliga a rehacer `
+      + `${material.img} imágenes y ${material.vid} clips: los que ya están se dibujaron con el estilo anterior `
+      + `y se vería el salto. Se borran ahora. ¿Seguir?`)) return;
+    for (let k = 0; k <= c.clips; k++) { await dbDel(cortoImgKey(k)); await dbDel(cortoVidKey(k)); }
+  }
+  c.estilo = nuevo;
+  saveState();
+  renderCorto();
+  showToast(`Corto en estilo ${ESTILOS_ANIME[nuevo].nombre}`, 'success');
+};
 
 window.reintentarClipCorto = async function(k, btn) {
   const original = btn.innerHTML;
