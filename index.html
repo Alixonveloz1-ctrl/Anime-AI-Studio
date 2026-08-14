@@ -886,6 +886,33 @@ const ANIME_STYLE_LEAD_IN = 'Cinematic 2D anime key visual, fine detailed linewo
 // (`leadIn`, la usa el director al escribir los prompts, para no pagar mil
 // palabras por escena).
 // ════════════════════════════════════════════════════════════════
+// Los tamaños de plano son DATO, no una esperanza. Dos keyframes seguidos con
+// el mismo tamaño salen casi idénticos —el modelo se agarra a la imagen de
+// referencia— y entonces Veo tiene ocho segundos vacíos que rellena inventando:
+// así fue como un hombre sentado se convirtió en un reptil. Alternando el
+// tamaño, el clip TIENE un trabajo que hacer: acercarse, alejarse, rodear.
+const PLANOS_CORTO = [
+  { id: 'general',  en: 'WIDE SHOT — the whole place visible, characters full-body and small in frame' },
+  { id: 'medio',    en: 'MEDIUM SHOT — characters from the knees or waist up, the room still readable behind' },
+  { id: 'cerca',    en: 'CLOSE SHOT — head and shoulders filling much of the frame, background thrown out of focus' },
+  { id: 'escorzo',  en: 'OVER-THE-SHOULDER — camera behind one character, looking past them at the other' },
+  { id: 'detalle',  en: 'INSERT / DETAIL — a hand, an object, a face fragment filling the frame' },
+];
+const planoEn = id => (PLANOS_CORTO.find(p => p.id === id) || PLANOS_CORTO[0]).en;
+
+// Dos seguidos nunca pueden repetir tamaño. Lo arregla el código, no el prompt.
+function alternarPlanos(kfs) {
+  for (let k = 1; k < kfs.length; k++) {
+    if (kfs[k].plano !== kfs[k - 1].plano) continue;
+    const i = PLANOS_CORTO.findIndex(p => p.id === kfs[k].plano);
+    kfs[k].plano = PLANOS_CORTO[(i + 1 + k) % PLANOS_CORTO.length].id;
+    if (kfs[k].plano === kfs[k - 1].plano) {
+      kfs[k].plano = PLANOS_CORTO[(i + 2 + k) % PLANOS_CORTO.length].id;
+    }
+  }
+  return kfs;
+}
+
 // ════════════════════════════════════════════════════════════════
 // VOZ NARRATIVA — la decide el director, no el código.
 //
@@ -2589,6 +2616,25 @@ function allowsHumiliationArc(genero, subgenres = [], demo = '') {
       || (subgenres || []).some(s => FACESLAP_SUBGENRES.includes(s));
 }
 
+// ── ESCALADA ÉPICA: el motor de los manhua ──
+// "Historias épicas y absurdas como en los manhua" es lo que se pide, pero no
+// cabe en todos los géneros: metido en un slice of life o en una romcom
+// destruye lo que el usuario eligió, que es el bug que esta aplicación lleva
+// toda su vida evitando. Va como CAPA, encendida donde el género la pide.
+const GENEROS_SIN_ESCALADA = ['slice_of_life', 'romcom', 'deportes'];
+function permiteEscalada(genero, demo) {
+  if (isAllAges(demo)) return false;              // público infantil, nunca
+  return !GENEROS_SIN_ESCALADA.includes(genero);
+}
+
+const ESCALADA_LAYER = `
+CAPA DE ESCALADA (el género la pide): LA APUESTA SUBE SIEMPRE. Lo que parecía el problema resulta ser
+la parte pequeña; quien parecía menor resulta ser quien decide. Cada poco, una REVELACIÓN da vuelta
+algo que el espectador creía: una identidad oculta, una deuda que era otra cosa, un poder que no
+encajaba. La escala puede ser desmedida y se juega EN SERIO — nadie la trata como un chiste, y el
+contraste entre lo enorme y lo cotidiano es parte del efecto. Prohibido que un tramo entero sea dos
+personas conversando sin que nada cambie.`;
+
 const HUMILLACION_LAYER = `
 CAPA DE HUMILLACIÓN Y REVANCHA (la selección del usuario SÍ la pide): la injusticia es PÚBLICA y con testigos que tienen nombre — no basta con que el protagonista lo pase mal en privado. Quien humilla sube la apuesta con actos concretos y visibles; el protagonista aguanta por un motivo material que el espectador entiende (una deuda, alguien a quien protege, una prueba que todavía no tiene); y el desquite llega con algo que TODOS los testigos ven: un papel, una cifra, un objeto, un nombre dicho en voz alta. Quien humilló reacciona EN PANTALLA — su cara, su frase, su silencio. Prohibido narrar la revancha en resumen, prohibido que la justicia llegue fuera de escena y prohibido el salvador externo: el vuelco lo produce algo que el protagonista hizo o supo antes y que el espectador ya vio.`;
 
@@ -3068,11 +3114,13 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     // only when this story genuinely has a power/stat system.
     const storyHasSystem = hasPowerSystem(genero, subgenres);
     const storyHasHumiliation = allowsHumiliationArc(genero, subgenres, demo);
+    const storyHasEscalada = permiteEscalada(genero, demo);
     const genreTone = (comedyMode
       ? (GENRE_TONE[genero] || 'Specific details. Let situations create impact, not emotional adjectives.')
         + (storyHasSystem ? SYSTEM_COMEDY_LAYER : '')
       : (GENRE_TONE_FIEL[genero] || 'Faithful to the selected genre: specific concrete details, let events — not empty adjectives — create the impact.'))
-      + (storyHasHumiliation ? HUMILLACION_LAYER : '');
+      + (storyHasHumiliation ? HUMILLACION_LAYER : '')
+      + (storyHasEscalada ? ESCALADA_LAYER : '');
 
     const SCENE_ENDING = {
       accion:       'Each scene ends with an exciting moment, a power move, or a clash that makes you want to see the next second.',
@@ -3663,10 +3711,20 @@ Responde SOLO JSON válido sin markdown`;
     function aplicarPlanos(s, p) {
       const [a, b, c] = p?.prompts || [];
       const [ma, mb, mc] = p?.movimientos || [];
+      // Los planos de una escena se encadenan igual que los keyframes de un
+      // corto: el clip del plano 1 termina en la imagen del plano 2. Si los dos
+      // son del mismo tamaño salen casi iguales y el video, sin nada que
+      // animar, deforma caras. El director los asigna y esto los obliga a
+      // alternar — no basta con pedírselo.
+      const kf = alternarPlanos((p?.tamanos || []).map(t => ({ plano: String(t || '').trim().toLowerCase() })));
+      const tam = i => (PLANOS_CORTO.some(x => x.id === kf[i]?.plano)
+        ? kf[i].plano
+        : ['general', 'cerca', 'escorzo'][i]);
       return {
         ...s,
         escenario: p?.escenario || '',
         imagePromptA: a || '', imagePromptB: b || '', imagePromptC: c || '',
+        tamanoA: a ? tam(0) : '', tamanoB: b ? tam(1) : '', tamanoC: c ? tam(2) : '',
         videoPromptA: ma || '', videoPromptB: mb || '', videoPromptC: mc || '',
       };
     }
@@ -3675,7 +3733,9 @@ Responde SOLO JSON válido sin markdown`;
       const scenesText = scenesForPrompt.map(s =>
         `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`
       ).join('\n\n');
-      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTINUIDAD — ASÍ TERMINÓ LA ESCENA ANTERIOR A ESTE BLOQUE (el prompt 1 de la primera escena de abajo continúa desde aquí):\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena, genera el campo "escenario" + TRES prompts secuenciales con continuidad:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"prompts":["Scene with..."],"movimientos":["slow motion description in English, ending state"]},...]} con exactamente ${scenesForPrompt.length} objetos, uno por cada número de escena de arriba. "planos" es cuántos necesita ESA escena (1, 2 o 3); "prompts" y "movimientos" llevan exactamente esa cantidad cada uno.`;
+      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTINUIDAD — ASÍ TERMINÓ LA ESCENA ANTERIOR A ESTE BLOQUE (el prompt 1 de la primera escena de abajo continúa desde aquí):\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena, genera el campo "escenario" + TRES prompts secuenciales con continuidad:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"prompts":["Scene with..."],"tamanos":["general"],"movimientos":["slow motion description in English, ending state"]},...]} con exactamente ${scenesForPrompt.length} objetos, uno por cada número de escena de arriba. "planos" es cuántos necesita ESA escena (1, 2 o 3); "prompts", "tamanos" y "movimientos" llevan exactamente esa cantidad cada uno.
+
+⚠️ "tamanos" ES EL TAMAÑO DE CADA PLANO: general | medio | cerca | escorzo | detalle. Dentro de una escena NUNCA repitas el mismo dos veces seguidas. El clip de video que une dos planos parte del primero y termina en el segundo: si los dos son del mismo tamaño, las dos imágenes salen casi idénticas, el video se queda sin nada que animar y acaba deformando caras e inventando cosas. El cambio de distancia de cámara ES el movimiento del plano.`;
 
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
@@ -4569,14 +4629,24 @@ async function getContinuityRef(s, slot) {
 window.generateSceneImageAB = async function(sceneId, slot) {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
-  const prompt = s['imagePrompt' + slot] || s.imagePromptA || s.imagePromptEN || s.narration;
-  if (!prompt) { showToast(`Escena ${s.num}: sin prompt ${slot}`, 'error'); return; }
+  const base = s['imagePrompt' + slot] || s.imagePromptA || s.imagePromptEN || s.narration;
+  if (!base) { showToast(`Escena ${s.num}: sin prompt ${slot}`, 'error'); return; }
+  // El tamaño de plano va delante, como en el corto: es lo que impide que el
+  // plano 1 y el 2 de una misma escena salgan casi idénticos y que el clip que
+  // los une se quede sin nada que animar.
+  const tam = s['tamano' + slot];
+  const prompt = tam ? `${planoEn(tam)}. ${base}` : base;
   showToast(`Generando imagen ${slot} escena ${s.num}...`, 'success');
   try {
     // Only pass refs for characters mentioned in THIS prompt
     const refs = await getRefsForPrompt(prompt);
     const env = buildSceneEnvContext(s);
     env.continuityRef = await getContinuityRef(s, slot);
+    const previo = { B: 'tamanoA', C: 'tamanoB' }[slot];
+    if (env.continuityRef && tam) {
+      env.planoPrevio = previo && s[previo] ? planoEn(s[previo]) : '';
+      env.planoNuevo = planoEn(tam);
+    }
     let imgB64 = null, lastErr = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
@@ -5093,6 +5163,8 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
       prompt: cleanPrompt,
       characterRefs: (preCompressedRefs && preCompressedRefs.length) ? preCompressedRefs : null,
       continuityRef: contRef,
+      planoPrevio: env.planoPrevio || undefined,
+      planoNuevo: env.planoNuevo || undefined,
       model: model === 'auto' ? null : model,
       isEcchi,
       aspectRatio,
@@ -6856,33 +6928,6 @@ function actualizarCostoCorto() {
 // bloque recibe el ÚLTIMO keyframe del anterior, que es lo que hace que la
 // cadena no se rompa en la costura entre bloques.
 const CORTO_BLOQUE = 10;
-
-// Los tamaños de plano son DATO, no una esperanza. Dos keyframes seguidos con
-// el mismo tamaño salen casi idénticos —el modelo se agarra a la imagen de
-// referencia— y entonces Veo tiene ocho segundos vacíos que rellena inventando:
-// así fue como un hombre sentado se convirtió en un reptil. Alternando el
-// tamaño, el clip TIENE un trabajo que hacer: acercarse, alejarse, rodear.
-const PLANOS_CORTO = [
-  { id: 'general',  en: 'WIDE SHOT — the whole place visible, characters full-body and small in frame' },
-  { id: 'medio',    en: 'MEDIUM SHOT — characters from the knees or waist up, the room still readable behind' },
-  { id: 'cerca',    en: 'CLOSE SHOT — head and shoulders filling much of the frame, background thrown out of focus' },
-  { id: 'escorzo',  en: 'OVER-THE-SHOULDER — camera behind one character, looking past them at the other' },
-  { id: 'detalle',  en: 'INSERT / DETAIL — a hand, an object, a face fragment filling the frame' },
-];
-const planoEn = id => (PLANOS_CORTO.find(p => p.id === id) || PLANOS_CORTO[0]).en;
-
-// Dos seguidos nunca pueden repetir tamaño. Lo arregla el código, no el prompt.
-function alternarPlanos(kfs) {
-  for (let k = 1; k < kfs.length; k++) {
-    if (kfs[k].plano !== kfs[k - 1].plano) continue;
-    const i = PLANOS_CORTO.findIndex(p => p.id === kfs[k].plano);
-    kfs[k].plano = PLANOS_CORTO[(i + 1 + k) % PLANOS_CORTO.length].id;
-    if (kfs[k].plano === kfs[k - 1].plano) {
-      kfs[k].plano = PLANOS_CORTO[(i + 2 + k) % PLANOS_CORTO.length].id;
-    }
-  }
-  return kfs;
-}
 
 function cortoSystemPrompt(genero, narrativa) {
   const voz = reglaNarrativa(narrativa);
