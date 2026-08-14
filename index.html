@@ -598,12 +598,73 @@
     </div>
   </div>
 
+  <!-- ───────── CORTOS PANEL ───────── -->
+  <div class="panel" id="panel-corto">
+    <div class="card" style="margin-bottom:14px">
+      <h2>🎥 Corto cinematográfico</h2>
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 12px;line-height:1.5">
+        Cinco minutos en una sola cadena, sin cortes. <strong>39 imágenes y 38 clips</strong>: cada clip
+        empieza en una imagen y termina en la siguiente, y esa misma imagen abre el clip de después.
+        Ningún salto entre plano y plano — el último fotograma de uno ES el primero del siguiente.
+      </p>
+
+      <label>Formato</label>
+      <select id="cortoRatio">
+        <option value="16:9">🖥️ 16:9 Horizontal — YouTube / Facebook</option>
+        <option value="9:16">📱 9:16 Vertical — Reels / TikTok</option>
+      </select>
+
+      <label style="margin-top:12px">Duración</label>
+      <select id="cortoDuracion">
+        <option value="38">5 minutos — 38 clips · 39 imágenes</option>
+        <option value="23">3 minutos — 23 clips · 24 imágenes</option>
+        <option value="15">2 minutos — 15 clips · 16 imágenes</option>
+        <option value="8">1 minuto — 8 clips · 9 imágenes</option>
+      </select>
+      <p id="cortoCosto" style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.5"></p>
+
+      <label style="margin-top:12px">La idea</label>
+      <textarea id="cortoIdea" rows="3" placeholder="Un cobrador de deudas llega a una aldea a quedarse con la casa de una anciana, y descubre que la anciana lo crió."></textarea>
+
+      <label style="margin-top:10px">Género</label>
+      <select id="cortoGenero"></select>
+
+      <div id="cortoProgress" style="display:none;margin-top:12px">
+        <div class="progress-text" id="cortoProgressText">Iniciando...</div>
+        <div class="progress"><div class="progress-bar" id="cortoProgressBar" style="width:0%"></div></div>
+      </div>
+
+      <button class="btn" id="btnEscribirCorto" style="margin-top:12px">✍️ Escribir el corto</button>
+      <div id="cortoResumen" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card" id="cortoProduccion" style="display:none;margin-bottom:14px">
+      <h2>🎬 Producción</h2>
+      <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;line-height:1.5">
+        En este orden: las imágenes se encadenan una a una (cada una mira a la anterior), después los
+        clips, y al final la voz. Si algo se corta, se retoma donde quedó.
+      </p>
+      <div class="btn-row">
+        <button class="btn-sec" id="btnCortoImagenes">🖼️ Imágenes</button>
+        <button class="btn-sec" id="btnCortoVideos">🎬 Clips</button>
+      </div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn-sec" id="btnCortoVoz">🎙️ Narración</button>
+        <button class="btn-sec" id="btnCortoMontar">🎞️ Montar</button>
+      </div>
+      <div id="cortoMontajeResult" style="margin-top:12px"></div>
+    </div>
+
+    <div id="cortoTramos"></div>
+  </div>
+
 </div>
 
 <nav class="nav">
   <button class="nav-tab active" data-panel="universo"><span class="icon">🌌</span><span>Universo</span></button>
   <button class="nav-tab" data-panel="personajes"><span class="icon">👥</span><span>Personajes</span></button>
   <button class="nav-tab" data-panel="episodio"><span class="icon">🎬</span><span>Episodio</span></button>
+  <button class="nav-tab" data-panel="corto"><span class="icon">🎥</span><span>Corto</span></button>
   <button class="nav-tab" data-panel="exportar"><span class="icon">📤</span><span>Exportar</span></button>
 </nav>
 
@@ -1595,7 +1656,10 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
     if (rawC.length > 100) contRef = { img: await compressBase64Image(rawC, 768, 0.85), mimeType: 'image/jpeg' };
   }
 
-  const aspectRatio = document.getElementById('aspectRatio')?.value || '9:16';
+  // El corto tiene su propio formato, aparte del de los episodios: se puede
+  // estar produciendo un episodio vertical y un corto horizontal a la vez.
+  const aspectRatio = opts.aspectRatio
+    || document.getElementById('aspectRatio')?.value || '9:16';
 
   const bodyObj = {
     prompt: cleanPrompt,
@@ -6477,6 +6541,675 @@ document.getElementById('btnExportZip').addEventListener('click', async () => {
   }
 });
 
+
+// ════════════════════════════════════════════════════════════════
+// CORTO CINEMATOGRÁFICO — una sola cadena, sin cortes.
+//
+// La diferencia con un episodio no es la duración: es que aquí NO HAY CORTES.
+// Un episodio son escenas independientes, cada una con sus planos; un corto es
+// una cadena única de N+1 imágenes en la que el clip k va de la imagen k a la
+// k+1, y el clip k+1 arranca EXACTAMENTE en la imagen donde terminó el
+// anterior. El último fotograma de un clip es el primero del siguiente, así que
+// no hay unión que se pueda notar: no existe.
+//
+// Dos cosas sostienen eso:
+//   1. Las imágenes se generan ENCADENADAS — cada una mira a la anterior — para
+//      que el personaje, la ropa, la luz y el estilo no se vayan a la deriva.
+//   2. Cada clip se pide con fotograma inicial Y final, que es lo que Veo llama
+//      interpolación: no inventa a dónde llegar, se lo damos.
+//
+// A 8 s por clip y 150 palabras por minuto de narración, cada tramo lleva unas
+// 20 palabras. Ese número no es decorativo: es lo que hace que la voz dure lo
+// que dura la imagen.
+// ════════════════════════════════════════════════════════════════
+
+const CORTO_SEG_POR_CLIP = 8;
+const CORTO_PALABRAS_POR_CLIP = Math.round(CORTO_SEG_POR_CLIP * 150 / 60);   // 20
+
+// El prefijo NO puede ser `ci_`: es el de las fichas de personaje
+// (charImgKey), y un personaje con id "001" pisaría el keyframe 1.
+const cortoImgKey = n => `kimg_${state.projectId}_${String(n).padStart(3, '0')}`;
+const cortoVidKey = n => `kvid_${state.projectId}_${String(n).padStart(3, '0')}`;
+const cortoAudKey = n => `kaud_${state.projectId}_${String(n).padStart(3, '0')}`;
+
+function cortoActual()  { return state.corto || null; }
+function nClips()       { return Number(document.getElementById('cortoDuracion')?.value) || 38; }
+
+// El coste sale de la tabla de precios de Veo sin audio a 720p, que es como
+// genera esta aplicación. Se enseña ANTES de generar nada: 38 clips en el
+// modelo caro son sesenta dólares, y eso hay que verlo antes, no después.
+const CORTO_PRECIO_POR_SEG = {
+  'veo-3.1-lite-generate-001': 0.03,
+  'veo-3.1-fast-generate-001': 0.08,
+  'veo-3.1-generate-001':      0.20,
+};
+
+function actualizarCostoCorto() {
+  const el = document.getElementById('cortoCosto');
+  if (!el) return;
+  const n = nClips();
+  const modelo = document.getElementById('veoModelSelect')?.value || 'veo-3.1-lite-generate-001';
+  const precio = CORTO_PRECIO_POR_SEG[modelo];
+  const nombre = (document.getElementById('veoModelSelect')?.selectedOptions[0]?.textContent || '')
+    .replace(/^[^\w]+/, '').split('—')[0].trim();
+  const seg = n * CORTO_SEG_POR_CLIP;
+  el.innerHTML = precio
+    ? `${n} clips de ${CORTO_SEG_POR_CLIP} s = ${seg} s de video. Con <strong>${nombre}</strong> son unos `
+      + `<strong>$${(seg * precio).toFixed(2)}</strong> en video, más ${n + 1} imágenes. `
+      + `El modelo se elige en la pestaña Episodio.`
+    : `${n} clips de ${CORTO_SEG_POR_CLIP} s = ${seg} s de video, más ${n + 1} imágenes.`;
+}
+
+// ─── El guion ───
+// Se escribe por bloques y no de una vez: pedir 39 momentos y 38 tramos en una
+// sola respuesta desborda la llamada y el modelo empieza a repetirse. Cada
+// bloque recibe el ÚLTIMO keyframe del anterior, que es lo que hace que la
+// cadena no se rompa en la costura entre bloques.
+const CORTO_BLOQUE = 10;
+
+function cortoSystemPrompt(genero) {
+  return `Sos guionista y director de un CORTO DE ANIME 2D narrado en español, para redes.
+
+CÓMO SE VA A RODAR — esto manda sobre todo lo demás:
+El corto es UNA SOLA CADENA CONTINUA, sin cortes de montaje. Se dibujan N+1 momentos fijos
+(keyframes) y cada clip de ${CORTO_SEG_POR_CLIP} segundos ANIMA EL PASO de un keyframe al siguiente.
+El keyframe donde termina un clip es exactamente donde empieza el próximo.
+
+De ahí salen tres reglas que no se negocian:
+- ENTRE UN KEYFRAME Y EL SIGUIENTE PASAN ${CORTO_SEG_POR_CLIP} SEGUNDOS REALES, y la cámara NO CORTA.
+  Lo que cambia entre los dos tiene que poder ocurrir en ocho segundos, con la cámara moviéndose de
+  forma continua: alguien cruza una habitación, se agacha, saca algo, gira la cabeza, la cámara se
+  acerca. NO puede cambiar el lugar, ni la hora, ni saltar a otro personaje que estaba en otra parte.
+- SI HACE FALTA CAMBIAR DE SITIO, se cambia ANDANDO: un keyframe en la puerta, el siguiente ya fuera.
+  El traslado se ve.
+- CADA KEYFRAME ES UNA IMAGEN FIJA que alguien tiene que poder dibujar sin haber leído el guion:
+  quién está, dónde, en qué postura exacta, qué mira, qué sostiene, qué luz hay.
+
+GÉNERO: ${genero}. El género decide QUÉ pasa; estas reglas deciden CÓMO se rueda.
+
+LA NARRACIÓN va por encima, en tercera persona con el protagonista SIEMPRE nombrado. Cada tramo son
+unas ${CORTO_PALABRAS_POR_CLIP} palabras — ni más ni menos, porque tiene que durar exactamente lo que
+dura su clip. Frases cortas, hechos concretos, cero lirismo. La PRIMERA ORACIÓN del corto empieza por
+una persona con nombre haciendo algo: prohibido abrir con clima, luz, hora del día o paisaje.
+
+ESTILO VISUAL: anime 2D dibujado, 100%. Nunca 3D, nunca CGI, nunca fotorrealista.
+
+Respondé SIEMPRE en JSON válido, sin markdown.`;
+}
+
+async function escribirCorto() {
+  const btn  = document.getElementById('btnEscribirCorto');
+  const prog = document.getElementById('cortoProgress');
+  const bar  = document.getElementById('cortoProgressBar');
+  const txt  = document.getElementById('cortoProgressText');
+  const setP = (p, m) => { bar.style.width = p + '%'; txt.textContent = m; };
+
+  const idea = document.getElementById('cortoIdea')?.value.trim();
+  if (!idea) { showToast('Escribe la idea del corto', 'error'); return; }
+
+  const n = nClips();
+  const genero = document.getElementById('cortoGenero')?.value || 'drama';
+  const ratio  = document.getElementById('cortoRatio')?.value || '16:9';
+
+  if (cortoActual()?.tramos?.length) {
+    const material = await materialDelCorto();
+    if (material.total && !confirm(
+      `Reescribir el corto borra ${material.total} archivos ya generados `
+      + `(${material.img} imágenes, ${material.vid} clips, ${material.aud} narraciones). ¿Seguir?`)) return;
+    if (material.total) await borrarMaterialDelCorto();
+  }
+
+  btn.disabled = true;
+  prog.style.display = 'block';
+  const sys = cortoSystemPrompt(genero);
+
+  try {
+    // ─── 1. La base: quién, dónde y con qué cara ───
+    setP(5, 'Buscando la historia...');
+    const base = safeParseJSON(await callGemini(
+      `IDEA DEL USUARIO (es CANON, no la cambies): ${idea}
+
+Escribí la base de un corto de ${n * CORTO_SEG_POR_CLIP} segundos.
+
+Devolvé SOLO:
+{
+ "titulo": "título corto y concreto, en la voz del conflicto",
+ "logline": "una frase: quién quiere qué y qué se lo impide",
+ "lugar": "UN solo lugar y sus alrededores inmediatos, donde cabe todo el corto sin teletransportarse. Concreto.",
+ "hora": "momento del día, uno solo — el corto entero pasa casi seguido",
+ "look": "identidad visual del corto en 2 frases: paleta de 3 colores nombrados y tratamiento de luz. Nada de argumento.",
+ "personajes": [{"nombre":"...","descripcion":"edad, pelo, ojos, ropa concreta y reconocible — lo que hay que dibujar igual 39 veces"}],
+ "arco": "en 3 frases: cómo abre, qué se rompe en el medio, cómo cierra"
+}
+Máximo 3 personajes: cada personaje más es una cara que se puede ir a la deriva.`, sys));
+
+    if (!base?.titulo) throw new Error('El guionista no devolvió una base utilizable');
+
+    // ─── 2. Los tramos y los keyframes, por bloques ───
+    const tramos = [];
+    const keyframes = [];
+    const fichas = (base.personajes || []).map(p => `${p.nombre}: ${p.descripcion}`).join('\n');
+
+    for (let desde = 0; desde < n; desde += CORTO_BLOQUE) {
+      const cuantos = Math.min(CORTO_BLOQUE, n - desde);
+      const primero = desde === 0;
+      setP(10 + Math.round((desde / n) * 55), `Escribiendo tramos ${desde + 1}-${desde + cuantos} de ${n}...`);
+
+      const contexto = primero ? '' : `
+YA ESCRITO — los últimos tramos, para continuar sin repetir:
+${tramos.slice(-3).map((t, i) => `Tramo ${tramos.length - 2 + i}: ${t.narracion}`).join('\n')}
+
+⚠️ EL KEYFRAME ${keyframes.length} YA EXISTE Y ES ESTE — tu primer tramo ARRANCA aquí, exactamente aquí:
+${keyframes[keyframes.length - 1]}
+`;
+
+      const pedido = `TÍTULO: ${base.titulo}
+LOGLINE: ${base.logline}
+LUGAR: ${base.lugar}
+HORA: ${base.hora}
+ARCO COMPLETO: ${base.arco}
+PERSONAJES:
+${fichas}
+${contexto}
+Escribí los tramos ${desde + 1} a ${desde + cuantos} de ${n} en total.
+${primero
+  ? `Devolvé TAMBIÉN el keyframe 1: la imagen con la que abre el corto.`
+  : `El keyframe de partida ya está dado arriba: NO lo repitas.`}
+${desde + cuantos >= n ? 'Estos son los ÚLTIMOS tramos: el corto CIERRA aquí, con una imagen final que se sostenga sola.' : 'NO cierres la historia: estos tramos van por el medio.'}
+
+Devolvé SOLO:
+{${primero ? `\n "keyframe1": "la imagen fija con la que abre: quién, dónde, postura, qué mira, qué luz",` : ''}
+ "tramos": [
+   {"narracion": "~${CORTO_PALABRAS_POR_CLIP} palabras en español, tercera persona",
+    "movimiento": "qué se mueve durante estos ${CORTO_SEG_POR_CLIP} segundos, en inglés, describiendo un movimiento CONTINUO de cámara y personaje",
+    "keyframe": "la imagen fija en la que TERMINA este tramo: quién, dónde, postura exacta, qué mira, qué sostiene, qué luz. En español."}
+ ]
+}
+Exactamente ${cuantos} objetos en "tramos". Cada "keyframe" tiene que poder dibujarse sin leer nada más.`;
+
+      const bloque = safeParseJSON(await callGemini(pedido, sys));
+      if (primero && bloque?.keyframe1) keyframes.push(String(bloque.keyframe1));
+      for (const t of (bloque?.tramos || [])) {
+        if (!t?.narracion || !t?.keyframe) continue;
+        tramos.push({ narracion: String(t.narracion).trim(), movimiento: String(t.movimiento || '').trim() });
+        keyframes.push(String(t.keyframe).trim());
+      }
+    }
+
+    if (tramos.length < n) {
+      throw new Error(`El guionista devolvió ${tramos.length} tramos de ${n}. Intentá de nuevo.`);
+    }
+
+    setP(90, 'Guardando...');
+    state.corto = {
+      ...base,
+      genero, ratio,
+      idea,
+      clips: n,
+      tramos: tramos.slice(0, n),
+      keyframes: keyframes.slice(0, n + 1),
+    };
+    saveState();
+    renderCorto();
+    setP(100, 'Listo');
+    showToast(`Corto escrito: ${n} tramos, ${n + 1} imágenes`, 'success');
+  } catch (e) {
+    openErrorModal('No se pudo escribir el corto', e.message);
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { prog.style.display = 'none'; }, 2000);
+  }
+}
+
+// ─── El prompt de cada imagen ───
+// El look y las fichas van en TODAS, no sólo en la primera: la imagen 30 tiene
+// que salir con el mismo pelo y la misma ropa que la 1, y la referencia visual
+// sola no basta cuando se han encadenado treinta saltos.
+function cortoImagePrompt(k) {
+  const c = cortoActual();
+  const fichas = (c.personajes || []).map(p => `${p.nombre} (${p.descripcion})`).join('. ');
+  return `${ANIME_STYLE_LEAD_IN} ${c.keyframes[k]}
+
+LUGAR (el mismo en todo el corto): ${c.lugar}. ${c.hora}.
+PERSONAJES — dibujalos idénticos a su descripción, siempre: ${fichas}
+IDENTIDAD VISUAL DEL CORTO: ${c.look}`;
+}
+
+// ─── Las 39 imágenes, encadenadas ───
+async function generarImagenesCorto() {
+  const c = cortoActual();
+  if (!c) return;
+  const btn = document.getElementById('btnCortoImagenes');
+  const prog = document.getElementById('cortoProgress');
+  const bar = document.getElementById('cortoProgressBar');
+  const txt = document.getElementById('cortoProgressText');
+  btn.disabled = true; prog.style.display = 'block';
+
+  const total = c.keyframes.length;
+  let hechas = 0, fallos = 0;
+  try {
+    for (let k = 0; k < total; k++) {
+      if (await dbGet(cortoImgKey(k))) { hechas++; continue; }   // ya estaba: se retoma
+      bar.style.width = Math.round((k / total) * 100) + '%';
+      txt.textContent = `Imagen ${k + 1}/${total}...`;
+
+      // La ANTERIOR es la referencia: así el estilo, la ropa y la luz no derivan.
+      // Sin esto, para la imagen 20 el personaje ya es otro.
+      const previa = k > 0 ? await dbGet(cortoImgKey(k - 1)) : null;
+      try {
+        const img = await generateImage(cortoImagePrompt(k), await refsDePersonajes(), null, {
+          continuityRef: previa || undefined,
+          aspectRatio: c.ratio,
+        });
+        await dbSet(cortoImgKey(k), img);
+        hechas++;
+        renderCorto();
+      } catch (e) {
+        console.warn(`Imagen ${k} falló:`, e.message);
+        fallos++;
+      }
+    }
+    showToast(fallos ? `${hechas}/${total} imágenes — ${fallos} fallaron, dale otra vez` : `${total} imágenes listas`,
+              fallos ? 'error' : 'success');
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { prog.style.display = 'none'; }, 1500);
+    renderCorto();
+  }
+}
+
+// Las fichas de personaje del proyecto sirven si el corto usa los mismos
+// nombres; si no, la cadena de imágenes se sostiene sola.
+async function refsDePersonajes() {
+  const c = cortoActual();
+  if (!c) return null;
+  const nombres = (c.personajes || []).map(p => String(p.nombre || '').toLowerCase());
+  const refs = [];
+  for (const ch of (state.characters || [])) {
+    if (refs.length >= 2) break;   // dos como mucho: la tercera engorda el envío
+    if (!nombres.includes(String(ch.name || '').toLowerCase())) continue;
+    const img = await dbGet(charImgKey(ch.id));
+    if (img) refs.push({ name: ch.name, role: ch.role || '', img });
+  }
+  return refs.length ? refs : null;
+}
+
+// ─── Los clips: imagen k → imagen k+1 ───
+async function generarVideosCorto() {
+  const c = cortoActual();
+  if (!c) return;
+  const btn = document.getElementById('btnCortoVideos');
+  const prog = document.getElementById('cortoProgress');
+  const bar = document.getElementById('cortoProgressBar');
+  const txt = document.getElementById('cortoProgressText');
+  btn.disabled = true; prog.style.display = 'block';
+
+  const total = c.tramos.length;
+  let hechos = 0, fallos = 0;
+  try {
+    for (let k = 0; k < total; k++) {
+      if (await dbGet(cortoVidKey(k))) { hechos++; continue; }
+      bar.style.width = Math.round((k / total) * 100) + '%';
+      txt.textContent = `Clip ${k + 1}/${total}...`;
+      try {
+        await generarUnClipDelCorto(k);
+        hechos++;
+        renderCorto();
+      } catch (e) {
+        console.warn(`Clip ${k} falló:`, e.message);
+        fallos++;
+        txt.textContent = `Clip ${k + 1} falló: ${e.message.slice(0, 60)}`;
+      }
+    }
+    showToast(fallos ? `${hechos}/${total} clips — ${fallos} fallaron, dale otra vez` : `${total} clips listos`,
+              fallos ? 'error' : 'success');
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { prog.style.display = 'none'; }, 1500);
+    renderCorto();
+  }
+}
+
+window.generarUnClipDelCorto = async function(k) {
+  const c = cortoActual();
+  const inicioB64 = await dbGet(cortoImgKey(k));
+  const finalB64  = await dbGet(cortoImgKey(k + 1));
+  if (!inicioB64) throw new Error(`falta la imagen ${k + 1}`);
+  if (!finalB64)  throw new Error(`falta la imagen ${k + 2}, que es donde tiene que terminar`);
+
+  const inicial = await prepararFotograma(inicioB64);
+  const final   = await prepararFotograma(finalB64);
+
+  const cuerpo = JSON.stringify({
+    prompt: cortoVideoPrompt(k),
+    negativePrompt: cortoVideoNegative(),
+    imageA: inicial.data,
+    imageMimeType: inicial.mimeType,
+    lastFrame: final.data,
+    lastFrameMimeType: final.mimeType,
+    durationSeconds: CORTO_SEG_POR_CLIP,
+    aspectRatio: c.ratio,
+    generateAudio: false,
+    veoModel: document.getElementById('veoModelSelect')?.value || undefined,
+  });
+  if (cuerpo.length > MAX_CUERPO) {
+    throw new Error(`las dos imágenes pesan ${(cuerpo.length / 1048576).toFixed(1)} MB y el límite es 4 MB`);
+  }
+
+  const res = await fetch('/api/video-start', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: cuerpo,
+  });
+  const data = await res.json().catch(() => ({ error: `respuesta ilegible (${res.status})` }));
+  if (!res.ok || data.error) throw new Error(data.error || `video-start ${res.status}`);
+
+  for (let i = 0; i < 120; i++) {
+    await new Promise(r => setTimeout(r, 5000));
+    const r = await fetch('/api/video-status', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operationName: data.operationName, projectId: data.projectId, model: data.model }),
+    });
+    const st = await r.json().catch(() => ({ error: 'estado ilegible' }));
+    if (st.error) throw new Error(st.error);
+    if (st.done) {
+      if (!st.publicUrl) throw new Error('Veo terminó sin devolver video');
+      await dbSet(cortoVidKey(k), st.publicUrl);
+      return st.publicUrl;
+    }
+  }
+  throw new Error('Veo tardó demasiado');
+};
+
+// El encargo del clip. Lo que Veo tiene que entender es que NO es un plano
+// nuevo: es la continuación de uno que ya venía rodando.
+function cortoVideoPrompt(k) {
+  const c = cortoActual();
+  const t = c.tramos[k];
+  const estilo = ANIME_VISUAL_STYLE_CORE.replace('wet-surface reflections, ', '');
+  return `Hand-drawn 2D anime, ${CORTO_SEG_POR_CLIP} seconds, ONE CONTINUOUS UNBROKEN SHOT.
+
+INTERPOLATION: the first frame and the last frame are both given. Animate the movement BETWEEN them
+and land exactly on the final frame. Do NOT cut, do NOT change location, do NOT introduce a new shot.
+
+WHAT MOVES: ${t.movimiento || 'natural continuous motion between the two frames'}
+
+${k > 0 ? 'This shot CONTINUES a take already in progress — the camera was already moving when this clip starts. No establishing beat, no reset.\n' : ''}
+STYLE: ${estilo}`;
+}
+
+function cortoVideoNegative() {
+  // Lista de sustantivos, nunca de órdenes: Google documenta que un negativo
+  // escrito como orden ("no cortes") mete la palabra en el resultado.
+  return 'cut, shot change, scene transition, jump cut, fade, dissolve, camera reset, '
+    + 'new location, different room, teleport, character swap, morphing faces, '
+    + '3D render, CGI, photorealistic skin, live action, video game graphics, western cartoon, '
+    + 'Pixar, Disney, motion capture, text, watermark, subtitles, letterbox bars';
+}
+
+// ─── Narración ───
+async function generarVozCorto() {
+  const c = cortoActual();
+  if (!c) return;
+  const btn = document.getElementById('btnCortoVoz');
+  const prog = document.getElementById('cortoProgress');
+  const bar = document.getElementById('cortoProgressBar');
+  const txt = document.getElementById('cortoProgressText');
+  btn.disabled = true; prog.style.display = 'block';
+
+  const voz = document.getElementById('voiceSelect')?.value;
+  const total = c.tramos.length;
+  let hechas = 0, fallos = 0;
+  try {
+    for (let k = 0; k < total; k++) {
+      if (await dbGet(cortoAudKey(k))) { hechas++; continue; }
+      bar.style.width = Math.round((k / total) * 100) + '%';
+      txt.textContent = `Narración ${k + 1}/${total}...`;
+      try {
+        const r = await generateAudio(c.tramos[k].narracion, voz, 'act1');
+        await dbSet(cortoAudKey(k), `${r.mimeType || 'audio/wav'}|${r.audioData}`);
+        hechas++;
+      } catch (e) {
+        console.warn(`Narración ${k} falló:`, e.message);
+        fallos++;
+      }
+    }
+    showToast(fallos ? `${hechas}/${total} narraciones — ${fallos} fallaron` : `${total} narraciones listas`,
+              fallos ? 'error' : 'success');
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { prog.style.display = 'none'; }, 1500);
+    renderCorto();
+  }
+}
+
+// ─── Montaje ───
+// Reutiliza el montador de los episodios: un corto es, para ffmpeg, una lista de
+// tramos con un clip cada uno. La diferencia está arriba, en cómo se generaron.
+async function montarCorto() {
+  const c = cortoActual();
+  if (!c) return;
+  const btn  = document.getElementById('btnCortoMontar');
+  const out  = document.getElementById('cortoMontajeResult');
+  const prog = document.getElementById('cortoProgress');
+  const bar  = document.getElementById('cortoProgressBar');
+  const txt  = document.getElementById('cortoProgressText');
+  const setP = (p, m) => { bar.style.width = p + '%'; txt.textContent = m; };
+
+  btn.disabled = true; prog.style.display = 'block'; out.innerHTML = '';
+  try {
+    const info = await (await fetch('/api/assemble')).json();
+    const carpetaProy = carpetaProyecto();
+    const carpeta  = `${info.prefix || 'anime-studio'}/proyectos/${carpetaProy}/corto`;
+    const material = `${carpeta}/material`;
+
+    const uploads = [], descargas = [], guion = [];
+    // Los campos son los que lee uploadAssets: b64 y mime, no data/contentType.
+    const add = (nombre, b64, mime) => {
+      uploads.push({ path: `${material}/${nombre}`, b64, mime });
+      descargas.push({ origen: `${material}/${nombre}`, destino: nombre });
+    };
+
+    setP(5, 'Reuniendo el material...');
+    let sinAudio = 0;
+    for (let k = 0; k < c.tramos.length; k++) {
+      const nn = String(k).padStart(3, '0');
+      const entrada = { planos: [] };
+
+      const aud = await dbGet(cortoAudKey(k));
+      if (aud) {
+        const sep = aud.indexOf('|');
+        add(`narr_${nn}.wav`, sep > 0 ? aud.slice(sep + 1) : aud, 'audio/wav');
+        entrada.audio = `narr_${nn}.wav`;
+      } else sinAudio++;
+
+      // El clip vive en el bucket: se referencia, no se vuelve a subir desde el móvil.
+      const url = await dbGet(cortoVidKey(k));
+      const m = url && /storage\.googleapis\.com\/([^/]+)\/([^?]+)/.exec(url);
+      if (m) {
+        descargas.push({ origen: decodeURIComponent(m[2]), destino: `clip_${nn}.mp4` });
+        entrada.planos.push({ clip: `clip_${nn}.mp4` });
+      } else {
+        const img = await dbGet(cortoImgKey(k));
+        if (img) { add(`img_${nn}.png`, img, 'image/png'); entrada.planos.push({ image: `img_${nn}.png` }); }
+      }
+      if (!entrada.planos.length) entrada.planos.push({});
+      guion.push(entrada);
+    }
+    if (sinAudio === c.tramos.length) throw new Error('Ningún tramo tiene narración generada');
+    if (sinAudio) showToast(`${sinAudio} tramos sin narración — se rellenan con 2 s`, 'error');
+
+    setP(15, 'Subiendo...');
+    await uploadAssets(uploads, (d, t) => setP(15 + Math.round((d / t) * 45), `Subiendo ${d}/${t}...`));
+
+    setP(62, 'Lanzando el montador...');
+    const vertical = c.ratio !== '16:9';
+    const manifest = {
+      carpeta: carpetaProy,
+      episodio: 99,                       // el corto va a su propia carpeta
+      hoja: { titulo: c.titulo || '', corto: true, tramos: guion.length, vertical },
+      script: buildMontarScript(guion, { vertical, hasMusic: false, episodio: 99 }),
+      descargas,
+    };
+    const startRes = await fetch('/api/assemble', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ manifest }),
+    });
+    const start = await startRes.json();
+    if (!startRes.ok || start.error) throw new Error(start.error + (start.detail ? `\n${start.detail}` : ''));
+
+    let last = null;
+    for (let i = 0; i < 720; i++) {
+      await new Promise(r => setTimeout(r, 5000));
+      setP(65 + Math.min(Math.round(i / 6), 30), `Montando... (${Math.round(i * 5 / 60)} min)`);
+      const r = await fetch('/api/assemble', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operationName: start.operationName, episodio: 99, carpeta: carpetaProy }),
+      });
+      last = await r.json();
+      if (!r.ok) throw new Error(last.error || `Estado ${r.status}`);
+      if (last.done) break;
+    }
+    if (!last?.done) throw new Error('El montaje no terminó a tiempo');
+    if (last.error) throw new Error(last.error);
+
+    setP(100, 'Listo');
+    state.lastAssembly = start.salida;
+    saveState();
+    out.innerHTML = `
+      <div style="background:rgba(100,220,100,0.08);border:1px solid rgba(100,220,100,0.3);border-radius:10px;padding:12px">
+        <div style="font-weight:600;margin-bottom:8px">✅ Corto montado</div>
+        <div style="font-size:12px;color:var(--text-dim);word-break:break-all;margin-bottom:8px">${start.salida}</div>
+        <div class="btn-row">
+          <button class="btn-sec" onclick="verMontaje('cortoMontajeResult')">▶️ Ver</button>
+          <button class="btn-sec" onclick="descargarMontaje()">⬇️ Descargar MP4</button>
+        </div>
+      </div>`;
+    verMontaje('cortoMontajeResult');
+    showToast('Corto montado 🎥', 'success');
+  } catch (e) {
+    openErrorModal('Error al montar el corto', e.message);
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { prog.style.display = 'none'; }, 2500);
+  }
+}
+
+// ─── Borrado del material al reescribir ───
+async function materialDelCorto() {
+  const c = cortoActual();
+  if (!c) return { total: 0, img: 0, vid: 0, aud: 0 };
+  let img = 0, vid = 0, aud = 0;
+  for (let k = 0; k <= (c.clips || 0); k++) {
+    if (await dbGet(cortoImgKey(k))) img++;
+    if (k < (c.clips || 0)) {
+      if (await dbGet(cortoVidKey(k))) vid++;
+      if (await dbGet(cortoAudKey(k))) aud++;
+    }
+  }
+  return { total: img + vid + aud, img, vid, aud };
+}
+
+async function borrarMaterialDelCorto() {
+  const c = cortoActual();
+  if (!c) return;
+  for (let k = 0; k <= (c.clips || 0); k++) {
+    await dbDel(cortoImgKey(k));
+    await dbDel(cortoVidKey(k));
+    await dbDel(cortoAudKey(k));
+  }
+}
+
+// ─── Pintado ───
+async function renderCorto() {
+  const c = cortoActual();
+  const resumen = document.getElementById('cortoResumen');
+  const prod    = document.getElementById('cortoProduccion');
+  const lista   = document.getElementById('cortoTramos');
+  if (!resumen || !lista) return;
+
+  if (!c) { resumen.innerHTML = ''; lista.innerHTML = ''; if (prod) prod.style.display = 'none'; return; }
+  if (prod) prod.style.display = 'block';
+
+  const total = c.tramos.length;
+  const imgs = [], vids = [], auds = [];
+  for (let k = 0; k <= total; k++) imgs.push(await dbGet(cortoImgKey(k)));
+  for (let k = 0; k < total; k++) { vids.push(await dbGet(cortoVidKey(k))); auds.push(await dbGet(cortoAudKey(k))); }
+  const hechas = imgs.filter(Boolean).length, clips = vids.filter(Boolean).length, voces = auds.filter(Boolean).length;
+
+  resumen.innerHTML = `
+    <div class="universe-display">
+      <h4 style="font-size:15px;margin:0 0 4px">${c.titulo || 'Corto'}</h4>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">${c.logline || ''}</div>
+      <div class="field"><div class="field-label">Lugar</div>${c.lugar || ''} · ${c.hora || ''}</div>
+      <div class="field"><div class="field-label">Look</div>${c.look || ''}</div>
+      <div style="font-size:12px;margin-top:8px">
+        🖼️ ${hechas}/${total + 1} imágenes · 🎬 ${clips}/${total} clips · 🎙️ ${voces}/${total} narraciones
+      </div>
+    </div>`;
+
+  const cssRatio = c.ratio === '16:9' ? '16/9' : '9/16';
+  lista.innerHTML = c.tramos.map((t, k) => `
+    <div class="scene-card">
+      <div class="scene-header">
+        <div class="scene-num">Tramo ${k + 1}</div>
+        <div style="font-size:11px;color:var(--text-dim)">imagen ${k + 1} → ${k + 2}${auds[k] ? ' · 🎙️' : ''}</div>
+      </div>
+      <div style="font-size:13px;line-height:1.5;margin:6px 0">${t.narracion}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${[k, k + 1].map(i => `
+          <div>
+            <div class="scene-img" style="aspect-ratio:${cssRatio};overflow:hidden;margin-bottom:2px;${imgs[i] ? 'cursor:zoom-in' : ''}">
+              ${imgs[i]
+                ? `<img src="data:image/png;base64,${imgs[i]}" style="width:100%;height:100%;object-fit:contain;display:block;background:#000">`
+                : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim)">Imagen ${i + 1}</div>`}
+            </div>
+            <div style="font-size:9px;color:var(--text-dim);text-align:center">${i === k ? 'empieza' : 'termina'} · ${i + 1}</div>
+          </div>`).join('')}
+      </div>
+      ${vids[k] ? `
+        <video src="${vids[k]}" controls playsinline style="width:100%;margin-top:6px;border-radius:8px;background:#000"></video>`
+      : `<button class="btn-sec" style="margin-top:6px;width:100%;font-size:11px"
+           onclick="reintentarClipCorto(${k}, this)">🎬 Generar este clip</button>`}
+    </div>`).join('');
+}
+
+window.reintentarClipCorto = async function(k, btn) {
+  const original = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Generando...';
+  try {
+    await generarUnClipDelCorto(k);
+    renderCorto();
+  } catch (e) {
+    btn.disabled = false; btn.innerHTML = original;
+    openErrorModal(`Clip ${k + 1}`, e.message);
+  }
+};
+
+// ─── Cableado ───
+function inicializarCorto() {
+  const sel = document.getElementById('cortoGenero');
+  const origen = document.getElementById('generoSelect');
+  if (sel && origen && !sel.options.length) sel.innerHTML = origen.innerHTML;
+
+  document.getElementById('btnEscribirCorto')?.addEventListener('click', escribirCorto);
+  document.getElementById('btnCortoImagenes')?.addEventListener('click', generarImagenesCorto);
+  document.getElementById('btnCortoVideos')?.addEventListener('click', generarVideosCorto);
+  document.getElementById('btnCortoVoz')?.addEventListener('click', generarVozCorto);
+  document.getElementById('btnCortoMontar')?.addEventListener('click', montarCorto);
+  document.getElementById('cortoDuracion')?.addEventListener('change', actualizarCostoCorto);
+  document.getElementById('veoModelSelect')?.addEventListener('change', actualizarCostoCorto);
+
+  // Lo que ya se escribió manda sobre los selectores.
+  const c = cortoActual();
+  if (c) {
+    const r = document.getElementById('cortoRatio'); if (r && c.ratio) r.value = c.ratio;
+    const d = document.getElementById('cortoDuracion'); if (d && c.clips) d.value = String(c.clips);
+    const g = document.getElementById('cortoGenero'); if (g && c.genero) g.value = c.genero;
+    const i = document.getElementById('cortoIdea'); if (i && c.idea) i.value = c.idea;
+  }
+  actualizarCostoCorto();
+  renderCorto();
+}
+
 // ════════════════════════════════════════════════════════════════
 // NAV TABS
 // ════════════════════════════════════════════════════════════════
@@ -6518,6 +7251,7 @@ function renderAll() {
   cargarVoces();
   renderAll();
   mostrarUltimoMontaje();
+  inicializarCorto();
 })();
 
 </script>
