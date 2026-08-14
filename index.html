@@ -1369,6 +1369,10 @@ function saveState() {
     episodes: state.episodes,
     currentEpisode: state.currentEpisode || 1,
     episodeDirection: state.episodeDirection || {},
+    // El corto NO se guardaba. Al recargar desaparecía el guion entero —había
+    // que volver a pagarlo— y, peor, sus imágenes seguían en la base sin dueño:
+    // el corto siguiente se las encontraba puestas y las enseñaba como suyas.
+    corto: state.corto || null,
   };
   localStorage.setItem(`proj_${state.projectId}`, JSON.stringify(data));
   const i = projects.findIndex(p => p.id === state.projectId);
@@ -1376,13 +1380,14 @@ function saveState() {
 }
 function loadStateFor(pid) {
   const raw = localStorage.getItem(`proj_${pid}`);
-  state = { projectId: pid, universe: null, characters: [], episodes: { 1: [] }, currentEpisode: 1, scenes: [], episodeDirection: {} };
+  state = { projectId: pid, universe: null, characters: [], episodes: { 1: [] }, currentEpisode: 1, scenes: [], episodeDirection: {}, corto: null };
   if (!raw) return;
   try {
     const d = JSON.parse(raw);
     state.universe   = d.universe;
     state.characters = d.characters || [];
     state.episodeDirection = d.episodeDirection || {};
+    state.corto      = d.corto || null;
     if (d.episodes) {
       // New multi-episode format
       state.episodes      = d.episodes;
@@ -1402,7 +1407,7 @@ async function newProject() {
   const pid = 'p' + Date.now();
   projects.push({ id: pid, name: 'Nuevo proyecto', updated: Date.now() });
   saveProjects();
-  state = { projectId: pid, universe: null, characters: [], scenes: [], episodeDirection: {} };
+  state = { projectId: pid, universe: null, characters: [], scenes: [], episodeDirection: {}, corto: null };
   saveState();
   renderAll();
 }
@@ -6891,9 +6896,21 @@ const CORTO_PALABRAS_POR_CLIP = Math.round(CORTO_SEG_POR_CLIP * 150 / 60);   // 
 
 // El prefijo NO puede ser `ci_`: es el de las fichas de personaje
 // (charImgKey), y un personaje con id "001" pisaría el keyframe 1.
-const cortoImgKey = n => `kimg_${state.projectId}_${String(n).padStart(3, '0')}`;
-const cortoVidKey = n => `kvid_${state.projectId}_${String(n).padStart(3, '0')}`;
-const cortoAudKey = n => `kaud_${state.projectId}_${String(n).padStart(3, '0')}`;
+//
+// Y CADA CORTO TIENE SU PROPIO ESPACIO. Antes todos los cortos de un proyecto
+// compartían las mismas claves —kimg_<proyecto>_000, _001...— así que un corto
+// nuevo leía los mismos casilleros donde el anterior había dejado sus imágenes,
+// y salían las de la historia vieja debajo del texto nuevo. Había una limpieza
+// al reescribir, pero confiar en una limpieza es frágil: basta que falle una
+// vez, o que el corto viejo estuviera a medias, para que quede contaminado.
+// Con un espacio propio por corto eso no puede pasar aunque la limpieza falle.
+const cortoNS = () => state.corto?.id ? `${state.projectId}_${state.corto.id}` : state.projectId;
+const cortoImgKey = n => `kimg_${cortoNS()}_${String(n).padStart(3, '0')}`;
+const cortoVidKey = n => `kvid_${cortoNS()}_${String(n).padStart(3, '0')}`;
+const cortoAudKey = n => `kaud_${cortoNS()}_${String(n).padStart(3, '0')}`;
+// Los cortos escritos antes de esto no tienen id, y su material vive sin el
+// segmento extra: cortoNS() lo devuelve igual, así que se encuentra y se borra.
+const nuevoIdCorto = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
 
 function cortoActual()  { return state.corto || null; }
 function nClips()       { return Number(document.getElementById('cortoDuracion')?.value) || 38; }
@@ -6992,13 +7009,14 @@ async function escribirCorto() {
   const genero = document.getElementById('cortoGenero')?.value || 'drama';
   const ratio  = document.getElementById('cortoRatio')?.value || '16:9';
 
-  if (cortoActual()?.tramos?.length) {
-    const material = await materialDelCorto();
-    if (material.total && !confirm(
-      `Reescribir el corto borra ${material.total} archivos ya generados `
-      + `(${material.img} imágenes, ${material.vid} clips, ${material.aud} narraciones). ¿Seguir?`)) return;
-    if (material.total) await borrarMaterialDelCorto();
-  }
+  // Sin condiciones: se mire como se mire, un corto nuevo empieza limpio. Antes
+  // esto colgaba de que el corto anterior tuviera tramos, y un corto a medias
+  // dejaba sus imágenes puestas para el siguiente.
+  const material = await materialDelCorto('proyecto');
+  if (material.total && !confirm(
+    `Escribir un corto nuevo borra ${material.total} archivos del anterior `
+    + `(${material.img} imágenes, ${material.vid} clips, ${material.aud} narraciones). ¿Seguir?`)) return;
+  await borrarMaterialDelCorto('proyecto');
 
   btn.disabled = true;
   prog.style.display = 'block';
@@ -7118,6 +7136,7 @@ escorzo. El cambio de distancia de cámara ES el movimiento del clip.`;
     setP(90, 'Guardando...');
     state.corto = {
       ...base,
+      id: nuevoIdCorto(),          // su propio espacio: nada de antes lo alcanza
       genero, ratio,
       estilo: estiloDelCorto(),
       narrativa: base.narrativa || MODO_NARRATIVO_POR_DEFECTO,
@@ -7491,31 +7510,39 @@ async function montarCorto() {
   }
 }
 
-// ─── Borrado del material al reescribir ───
-async function materialDelCorto() {
-  const c = cortoActual();
-  if (!c) return { total: 0, img: 0, vid: 0, aud: 0 };
-  let img = 0, vid = 0, aud = 0;
-  const nImg = (c.keyframes || []).length;
-  for (let k = 0; k < nImg; k++) {
-    if (await dbGet(cortoImgKey(k))) img++;
-  }
-  for (let k = 0; k < (c.clips || 0); k++) {
-    if (await dbGet(cortoVidKey(k))) vid++;
-    if (await dbGet(cortoAudKey(k))) aud++;
-  }
-  return { total: img + vid + aud, img, vid, aud };
+// ─── Cuenta y borrado del material ───
+// Los dos por PREFIJO, nunca contando. Contar obliga a acertar cuántas imágenes
+// había, y cuando la cuenta se queda corta —un corto a medias, uno escrito con
+// otra versión— sobrevive material que el corto siguiente se encuentra puesto y
+// enseña como suyo. Además la cuenta que se le anuncia al usuario sale de las
+// mismas claves que se van a borrar, así que el número nunca miente.
+const PREFIJOS_CORTO = { img: 'kimg_', vid: 'kvid_', aud: 'kaud_' };
+
+// ámbito 'corto' = sólo este corto. 'proyecto' = todos los del proyecto,
+// incluidos los que se escribieron antes de que cada corto tuviera su espacio.
+// El guion final del prefijo importa: sin él, el proyecto "p1" se llevaría por
+// delante el material de "p12".
+function prefijosCorto(ambito, tipos = ['img', 'vid', 'aud']) {
+  const base = ambito === 'proyecto' ? `${state.projectId}_` : `${cortoNS()}_`;
+  return tipos.map(t => PREFIJOS_CORTO[t] + base);
 }
 
-async function borrarMaterialDelCorto() {
-  const c = cortoActual();
-  if (!c) return;
-  const n = Math.max((c.keyframes || []).length, (c.clips || 0) + 1);
-  for (let k = 0; k < n; k++) {
-    await dbDel(cortoImgKey(k));
-    await dbDel(cortoVidKey(k));
-    await dbDel(cortoAudKey(k));
-  }
+async function clavesDelCorto(ambito, tipos) {
+  if (!state.projectId) return [];
+  const pre = prefijosCorto(ambito, tipos);
+  return (await dbKeys()).filter(k => pre.some(p => String(k).startsWith(p)));
+}
+
+async function materialDelCorto(ambito = 'corto') {
+  const c = { img: 0, vid: 0, aud: 0 };
+  for (const t of Object.keys(c)) c[t] = (await clavesDelCorto(ambito, [t])).length;
+  return { ...c, total: c.img + c.vid + c.aud };
+}
+
+async function borrarMaterialDelCorto(ambito = 'corto', tipos) {
+  let borradas = 0;
+  for (const k of await clavesDelCorto(ambito, tipos)) { await dbDel(k); borradas++; }
+  return borradas;
 }
 
 // ─── Pintado ───
@@ -7596,8 +7623,8 @@ window.cambiarEstiloDelCorto = async function() {
       `Pasar el corto a "${ESTILOS_ANIME[nuevo].nombre}" obliga a rehacer `
       + `${material.img} imágenes y ${material.vid} clips: los que ya están se dibujaron con el estilo anterior `
       + `y se vería el salto. Se borran ahora. ¿Seguir?`)) return;
-    const n = Math.max((c.keyframes || []).length, c.clips + 1);
-    for (let k = 0; k < n; k++) { await dbDel(cortoImgKey(k)); await dbDel(cortoVidKey(k)); }
+    // Imágenes y clips sí; la narración no depende del estilo y rehacerla se paga.
+    await borrarMaterialDelCorto('corto', ['img', 'vid']);
   }
   c.estilo = nuevo;
   saveState();
@@ -7693,6 +7720,7 @@ function renderAll() {
   renderUniverse();
   renderCharacters();
   renderScenes();
+  renderCorto();          // asíncrona: se deja correr, nadie espera al panel
 }
 
 // ════════════════════════════════════════════════════════════════
