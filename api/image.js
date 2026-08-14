@@ -65,7 +65,7 @@ async function callGeminiAtUrl(url, parts, projectId, token, aspectRatio) {
   return { ok: r.ok, shouldRotate: shouldRotate && !isNoAccess, isNoAccess, isSafetyBlock, status: r.status, data: d };
 }
 
-async function callGemini(model, prompt, characterRefs, projectId, token, isEcchi = false, aspectRatio = '9:16', continuityRef = null, styleSpec = '', sinCortes = false, segundosEntre = 8) {
+async function callGemini(model, prompt, characterRefs, projectId, token, isEcchi = false, aspectRatio = '9:16', continuityRef = null, styleSpec = '', sinCortes = false, segundosEntre = 8, planoPrevio = '', planoNuevo = '') {
   let cleanPrompt = prompt;
   for (const [pattern, replacement] of BLOCKED_WORDS) {
     cleanPrompt = cleanPrompt.replace(pattern, replacement);
@@ -104,37 +104,43 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
     // hace deformar caras y inventar en el medio.
     const avanceComun = `Keep consistent with it ONLY: the identity of the location (same architecture, palette, time of day), the lighting mood, and each character's clothing and hairstyle. This new image is a LATER moment — the action has ADVANCED since this reference: characters may have moved through the space, object states may have changed, and new story elements described in the scene text may now be visible. If the scene text contradicts this reference (a door now open, a character now on the floor), the scene text ALWAYS wins.`;
     parts.push({ text: sinCortes
-      ? `↑ PREVIOUS KEYFRAME (same unbroken take): this is the SAME CONTINUOUS SHOT exactly ${segundosEntre} seconds earlier. There is NO CUT between that image and this one — the camera never stopped rolling. ${avanceComun} Frame this new image as the SAME camera would see it after ${segundosEntre} seconds of CONTINUOUS movement: the camera may push in, pull back, pan, tilt or track, and the characters move within the space — but it stays the same take. Do NOT jump to a new camera setup, do NOT reverse the angle, do NOT cut to a different part of the location. The change in framing must be one a moving camera could physically produce in ${segundosEntre} seconds, and the change in the characters must be one a body could physically perform in ${segundosEntre} seconds. Equally, do NOT output a near-copy: ${segundosEntre} seconds have genuinely passed and it must show.`
+      ? `PREVIOUS KEYFRAME above (same unbroken take): this is the SAME CONTINUOUS SHOT exactly ${segundosEntre} seconds earlier. There is NO CUT between that image and this one - the camera never stopped rolling. ${avanceComun}
+
+⚠️ THE SHOT SIZE CHANGES, AND THAT IS THE POINT.${planoPrevio ? ` That reference is a ${planoPrevio}.` : ''}${planoNuevo ? ` THIS new image is a ${planoNuevo}.` : ''} Over those ${segundosEntre} seconds the camera MOVED - it pushed in, pulled back, tracked around or craned - so the composition of this image MUST be clearly and obviously different from the reference: different distance to the subject, different angle, different amount of the room in frame.
+
+What stays identical: the place, the light, the characters' faces, hair and clothes. What MUST change: how close the camera is, where it looks from, and what the characters are doing. If the two images look alike, the eight-second clip between them has nothing to animate and the video generator will fill the gap by warping faces and inventing things that are not in the story. A near-copy is the single worst outcome here - worse than a change that is too big.`
       : `↑ PREVIOUS SHOT (continuity reference): the immediately preceding moment of this story. ${avanceComun} Compose the NEW shot exactly as the scene text describes, from a clearly DIFFERENT camera angle and framing — NEVER re-render this reference's composition, never output a near-copy of it, never freeze the story at its moment.` });
   }
 
+  // Las fichas de personaje, si las hay.
   if (characterRefs && characterRefs.length > 0) {
     for (const ref of characterRefs) {
       parts.push({ inlineData: { mimeType: ref.mimeType || 'image/png', data: ref.img } });
-      parts.push({ text: `↑ CHARACTER REFERENCE: This is ${ref.name}. Match this character's IDENTITY exactly — same face shape, same hair color and style, same eye color, same outfit design — AND render ${ref.name} in the SAME 2D anime art style as this reference: same linework quality, same cel-shading, same anime eye rendering. The ONLY things you must NOT copy are the pose, framing, size and white background: redraw ${ref.name} at the body pose, camera angle and SCALE that THIS scene requires — correctly proportioned against the furniture and environment, feet grounded, sharing the scene's perspective, lighting and shadows. Do NOT mix up characters.` });
+      parts.push({ text: `CHARACTER REFERENCE above: this is ${ref.name}. Match this character's IDENTITY exactly - same face shape, same hair colour and style, same eye colour, same outfit design - and render them in the SAME 2D anime art style as the reference. The ONLY things you must NOT copy are the pose, framing, size and plain background: redraw ${ref.name} at the body pose, camera angle and SCALE that THIS shot requires, correctly proportioned against the environment, feet grounded, sharing the scene's perspective and lighting. Do NOT mix up characters.` });
     }
-    const namesList = characterRefs.map(r => r.name).join(', ');
-    const ecchiRules = isEcchi ? `
-- This is an ecchi/fan-service anime scene. ALL characters are ADULTS (18 or older, each with clearly adult faces and bodies), in adult settings fitting the story's genre. NEVER draw school uniforms, classrooms, pleated school skirts, or anything that implies schoolchildren or minors.
-- Draw it with appropriate suggestive visual elements: flattering angles, form-fitting clothing, blushing expressions, suggestive poses.
-- Female characters should be attractive adult women with feminine proportions.` : '';
-    parts.push({ text: `Character references provided: ${namesList}.
+  }
 
-MANDATORY RULES:
-1. NO text, NO letters, NO watermarks, NO captions, NO subtitles anywhere in the image.
-2. Draw EVERY character named in the scene — if two or three are named, ALL of them must appear in the image. Do not add extra people beyond those mentioned.
-3. Each character appears EXACTLY ONCE — never duplicate.
-4. Match EACH character to THEIR reference image. Do not swap faces or designs.
-5. Draw each character's hair exactly as their reference and description say — never lengthen, shorten or restyle it to fit a convention.
-6. Faces must be clear, well-defined, anatomically correct — no blur, no distortion.
-7. Style: ${aspectStyle}. ${estilo}
-8. Characters INTEGRATED into the environment at true real-world scale — feet grounded with contact shadows, natural headroom below the ceiling, matching the room's perspective and light. Never oversized, never floating, never pasted over the background.${ecchiRules}
+  // UNA sola rama para las reglas. Antes habia dos: una para cuando habia fichas
+  // de personaje y otra para cuando no, y la segunda traia su PROPIO contrato de
+  // estilo escrito a mano. El corto no manda fichas, asi que caia siempre en esa
+  // segunda rama: el estilo que elegia el usuario no se aplicaba nunca ahi, y la
+  // regla de "nada de texto" era una clausula suelta en medio de un parrafo.
+  const namesList = (characterRefs || []).map(r => r.name).join(', ');
+  const ecchiRules = isEcchi ? `
+- This is an ecchi/fan-service anime scene. ALL characters are ADULTS (18 or older), in adult settings fitting the story's genre. NEVER draw school uniforms, classrooms, or anything implying minors.
+- Draw it with appropriate suggestive visual elements: flattering angles, form-fitting clothing, blushing expressions, suggestive poses.` : '';
+  parts.push({ text: `${namesList ? `Character references provided: ${namesList}.\n\n` : ''}MANDATORY RULES:
+1. ABSOLUTELY NO TEXT. No letters, no words, no numbers, no watermarks, no captions, no subtitles, no readable signage, no speech bubbles, no logos, no signature. This is a single frame of animation, not a page of a comic. Any writing at all is a failed image.
+2. Draw EVERY character named in the scene - if two or three are named, ALL appear. Do not add extra people beyond those mentioned.
+3. Each character appears EXACTLY ONCE - never duplicate a character in the frame.${namesList ? `
+4. Match EACH character to THEIR reference image. Do not swap faces or designs.` : ''}
+5. Draw each character's hair exactly as described - never lengthen, shorten or restyle it to fit a convention.
+6. Faces clear, well-defined and anatomically correct. No blur, no melted features, no extra limbs, no extra fingers.
+7. Format and style: ${aspectStyle}. ${estilo}
+8. Characters INTEGRATED into the environment at true real-world scale - feet grounded with contact shadows, natural headroom, sharing the perspective and light of the place. Never oversized, never floating, never pasted over the background.${ecchiRules}
 
 Scene to illustrate:
 ${cleanPrompt}` });
-  } else {
-    parts.push({ text: `${aspectStyle} high-budget cinematic 2D anime film illustration (MAPPA / Ufotable / top-tier donghua tier) — fine variable-weight linework, soft gradient cel-shading, richly detailed background. STRICTLY FORBIDDEN: western cartoon, webtoon-flat, chibi, thick uniform outlines, 3D render, CGI, Disney/Pixar, semi-realistic painted faces. NO text, NO watermarks, NO letters anywhere. ALL characters named in the scene are visible, at true human scale relative to the environment, feet grounded, integrated into the scene's perspective and lighting. ${cleanPrompt}` });
-  }
 
   // ─── Resolve model → correct endpoint (IMAGE_MODEL_LOCATIONS-aware) ───
   const location = imageModelLocation(model);
@@ -243,7 +249,8 @@ module.exports = async function handler(req, res) {
     // says so — silently substituting another model would hand back images the
     // user did not ask for.
     const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true,
-      aspectRatio, continuityRef, body.styleSpec || '', body.sinCortes === true, Number(body.segundosEntre) || 8);
+      aspectRatio, continuityRef, body.styleSpec || '', body.sinCortes === true, Number(body.segundosEntre) || 8,
+      String(body.planoPrevio || ''), String(body.planoNuevo || ''));
     return res.status(200).json(result);
   } catch(e) {
     return fail(res, e);

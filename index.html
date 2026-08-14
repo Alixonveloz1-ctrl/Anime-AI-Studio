@@ -633,6 +633,19 @@
       <label style="margin-top:10px">Género</label>
       <select id="cortoGenero"></select>
 
+      <label style="margin-top:12px">Estilo de animación</label>
+      <select id="cortoEstilo"></select>
+      <p id="cortoEstiloNota" style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.5"></p>
+
+      <label style="margin-top:12px">Modelo de imagen</label>
+      <select id="cortoImageModel"></select>
+
+      <label style="margin-top:12px">Modelo de video (Veo)</label>
+      <select id="cortoVeoModel"></select>
+
+      <label style="margin-top:12px">Narrador</label>
+      <select id="cortoVoz"></select>
+
       <div id="cortoProgress" style="display:none;margin-top:12px">
         <div class="progress-text" id="cortoProgressText">Iniciando...</div>
         <div class="progress"><div class="progress-bar" id="cortoProgressBar" style="width:0%"></div></div>
@@ -1796,6 +1809,8 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
     // una misma toma. El servidor lo necesita para no pedir un ángulo nuevo.
     sinCortes: opts.sinCortes === true,
     segundosEntre: opts.segundosEntre || undefined,
+    planoPrevio: opts.planoPrevio || undefined,
+    planoNuevo: opts.planoNuevo || undefined,
   };
 
   const bodyStr = JSON.stringify(bodyObj);
@@ -2117,6 +2132,17 @@ function pintarVocesDelIdioma() {
     || (dellang.find(v => v.etiqueta === 'Charon') && `gcp_${dellang.find(v => v.etiqueta === 'Charon').name}`)
     || selVoz.options[0]?.value;
   if (quiero) selVoz.value = quiero;
+  // La lista de voces llega de la red DESPUÉS de arrancar, así que el selector
+  // del corto se rellena aquí: al inicializarse sólo existía el hueco.
+  const selCorto = document.getElementById('cortoVoz');
+  if (selCorto) {
+    const previoCorto = selCorto.value;
+    selCorto.innerHTML = selVoz.innerHTML;
+    const guardadoCorto = ajustesGuardados().cortoVoz;
+    for (const v of [previoCorto, guardadoCorto, quiero]) {
+      if (v && [...selCorto.options].some(o => o.value === v)) { selCorto.value = v; break; }
+    }
+  }
   guardarAjustes();
   // The count has to match what the menu is showing, which is one language.
   if (nota) nota.innerHTML = HAY_CHIRP
@@ -2138,7 +2164,9 @@ function pintarVocesDelIdioma() {
 const AJUSTES_KEY = 'ajustes_estudio';
 const CAMPOS_AJUSTE = ['imageModelSelect', 'veoModelSelect', 'estiloAnime', 'aspectRatio',
                        'voiceLang', 'voiceSelect', 'voiceSpeed', 'voiceVolumen',
-                       'assemblyUseClips', 'assemblyUseMusic', 'assemblyMusicVol'];
+                       'assemblyUseClips', 'assemblyUseMusic', 'assemblyMusicVol',
+                       'cortoRatio', 'cortoDuracion', 'cortoGenero', 'cortoEstilo',
+                       'cortoImageModel', 'cortoVeoModel', 'cortoVoz'];
 
 function guardarAjustes() {
   const datos = {};
@@ -6742,15 +6770,14 @@ function actualizarCostoCorto() {
   const el = document.getElementById('cortoCosto');
   if (!el) return;
   const n = nClips();
-  const modelo = document.getElementById('veoModelSelect')?.value || 'veo-3.1-lite-generate-001';
+  const modelo = document.getElementById('cortoVeoModel')?.value || 'veo-3.1-lite-generate-001';
   const precio = CORTO_PRECIO_POR_SEG[modelo];
-  const nombre = (document.getElementById('veoModelSelect')?.selectedOptions[0]?.textContent || '')
+  const nombre = (document.getElementById('cortoVeoModel')?.selectedOptions[0]?.textContent || '')
     .replace(/^[^\w]+/, '').split('—')[0].trim();
   const seg = n * CORTO_SEG_POR_CLIP;
   el.innerHTML = precio
     ? `${n} clips de ${CORTO_SEG_POR_CLIP} s = ${seg} s de video. Con <strong>${nombre}</strong> son unos `
-      + `<strong>$${(seg * precio).toFixed(2)}</strong> en video, más ${n + 1} imágenes. `
-      + `El modelo se elige en la pestaña Episodio.`
+      + `<strong>$${(seg * precio).toFixed(2)}</strong> en video, más ${n + 1} imágenes.`
     : `${n} clips de ${CORTO_SEG_POR_CLIP} s = ${seg} s de video, más ${n + 1} imágenes.`;
 }
 
@@ -6761,32 +6788,72 @@ function actualizarCostoCorto() {
 // cadena no se rompa en la costura entre bloques.
 const CORTO_BLOQUE = 10;
 
+// Los tamaños de plano son DATO, no una esperanza. Dos keyframes seguidos con
+// el mismo tamaño salen casi idénticos —el modelo se agarra a la imagen de
+// referencia— y entonces Veo tiene ocho segundos vacíos que rellena inventando:
+// así fue como un hombre sentado se convirtió en un reptil. Alternando el
+// tamaño, el clip TIENE un trabajo que hacer: acercarse, alejarse, rodear.
+const PLANOS_CORTO = [
+  { id: 'general',  en: 'WIDE SHOT — the whole place visible, characters full-body and small in frame' },
+  { id: 'medio',    en: 'MEDIUM SHOT — characters from the knees or waist up, the room still readable behind' },
+  { id: 'cerca',    en: 'CLOSE SHOT — head and shoulders filling much of the frame, background thrown out of focus' },
+  { id: 'escorzo',  en: 'OVER-THE-SHOULDER — camera behind one character, looking past them at the other' },
+  { id: 'detalle',  en: 'INSERT / DETAIL — a hand, an object, a face fragment filling the frame' },
+];
+const planoEn = id => (PLANOS_CORTO.find(p => p.id === id) || PLANOS_CORTO[0]).en;
+
+// Dos seguidos nunca pueden repetir tamaño. Lo arregla el código, no el prompt.
+function alternarPlanos(kfs) {
+  for (let k = 1; k < kfs.length; k++) {
+    if (kfs[k].plano !== kfs[k - 1].plano) continue;
+    const i = PLANOS_CORTO.findIndex(p => p.id === kfs[k].plano);
+    kfs[k].plano = PLANOS_CORTO[(i + 1 + k) % PLANOS_CORTO.length].id;
+    if (kfs[k].plano === kfs[k - 1].plano) {
+      kfs[k].plano = PLANOS_CORTO[(i + 2 + k) % PLANOS_CORTO.length].id;
+    }
+  }
+  return kfs;
+}
+
 function cortoSystemPrompt(genero) {
-  return `Sos guionista y director de un CORTO DE ANIME 2D narrado en español, para redes.
+  return `Sos guionista de MANHUA/DONGHUA animado, narrado en español. Escribís lo que revienta en
+Facebook y YouTube: épico, desmedido, con vueltas de tuerca que no se ven venir.
 
-CÓMO SE VA A RODAR — esto manda sobre todo lo demás:
-El corto es UNA SOLA CADENA CONTINUA, sin cortes de montaje. Se dibujan N+1 momentos fijos
-(keyframes) y cada clip de ${CORTO_SEG_POR_CLIP} segundos ANIMA EL PASO de un keyframe al siguiente.
-El keyframe donde termina un clip es exactamente donde empieza el próximo.
+EL TONO — esto es lo que separa un corto que se ve de uno que se cierra a los diez segundos:
+- LA APUESTA SUBE SIEMPRE. Lo que parecía el problema resulta ser la parte pequeña. El cobrador de
+  deudas resulta ser el nieto del fundador de la secta; la anciana de la casa de té movió un dedo y
+  paró un ejército. Nada se queda donde empezó.
+- REVELACIONES, no conversaciones. Cada veinte o treinta segundos algo que el espectador NO SABÍA
+  cambia lo que creía: una identidad oculta, una deuda que era otra cosa, un poder que no encajaba.
+- ABSURDO CON CONVICCIÓN. La escala es desmedida y nadie la trata como un chiste: un golpe parte una
+  montaña y el personaje se queja de que se le manchó la manga. Eso es manhua, no una comedia.
+- HUMILLACIÓN Y REVANCHA, en público y con testigos que tienen nombre. Quien desprecia al
+  protagonista se entera EN PANTALLA, y se le ve la cara.
+- Frases cortas y golpes secos. Nada de descripciones bonitas, nada de personajes reflexionando.
 
-De ahí salen tres reglas que no se negocian:
-- ENTRE UN KEYFRAME Y EL SIGUIENTE PASAN ${CORTO_SEG_POR_CLIP} SEGUNDOS REALES, y la cámara NO CORTA.
-  Lo que cambia entre los dos tiene que poder ocurrir en ocho segundos, con la cámara moviéndose de
-  forma continua: alguien cruza una habitación, se agacha, saca algo, gira la cabeza, la cámara se
-  acerca. NO puede cambiar el lugar, ni la hora, ni saltar a otro personaje que estaba en otra parte.
-- SI HACE FALTA CAMBIAR DE SITIO, se cambia ANDANDO: un keyframe en la puerta, el siguiente ya fuera.
-  El traslado se ve.
-- CADA KEYFRAME ES UNA IMAGEN FIJA que alguien tiene que poder dibujar sin haber leído el guion:
-  quién está, dónde, en qué postura exacta, qué mira, qué sostiene, qué luz hay.
+PROHIBIDO: que el corto sea "dos personas hablando en un sitio". Si tu historia se puede resumir como
+"alguien llega a un local y conversa", está mal escrita — reescribila hasta que algo estalle.
 
-GÉNERO: ${genero}. El género decide QUÉ pasa; estas reglas deciden CÓMO se rueda.
+CÓMO SE RUEDA — manda sobre todo lo demás:
+Se dibujan momentos fijos (keyframes) y cada clip de ${CORTO_SEG_POR_CLIP} segundos ANIMA EL PASO de
+uno al siguiente, sin cortar. El keyframe donde termina un clip es donde empieza el próximo.
 
-LA NARRACIÓN va por encima, en tercera persona con el protagonista SIEMPRE nombrado. Cada tramo son
-unas ${CORTO_PALABRAS_POR_CLIP} palabras — ni más ni menos, porque tiene que durar exactamente lo que
-dura su clip. Frases cortas, hechos concretos, cero lirismo. La PRIMERA ORACIÓN del corto empieza por
-una persona con nombre haciendo algo: prohibido abrir con clima, luz, hora del día o paisaje.
+- ENTRE DOS KEYFRAMES PASAN ${CORTO_SEG_POR_CLIP} SEGUNDOS y la cámara NO CORTA dentro de una
+  secuencia. Lo que cambie tiene que poder ocurrir en ocho segundos: alguien cruza, se levanta, saca
+  algo, la cámara se acerca o rodea.
+- ⚠️ PERO TIENEN QUE VERSE DISTINTOS. Dos keyframes casi iguales arruinan el clip: el generador de
+  video se queda sin nada que animar y empieza a deformar caras e inventar cosas. En CADA tramo tiene
+  que cambiar algo GRANDE y visible: la distancia de la cámara, quién está en cuadro, la postura del
+  cuerpo, o el estado de un objeto. Si al leer dos keyframes seguidos te imaginas casi el mismo
+  dibujo, están mal.
+- CADA KEYFRAME ES UNA IMAGEN FIJA dibujable sin leer el guion: quién, dónde, qué postura exacta, qué
+  mira, qué sostiene, qué luz.
 
-ESTILO VISUAL: anime 2D dibujado, 100%. Nunca 3D, nunca CGI, nunca fotorrealista.
+LA NARRACIÓN va por encima, tercera persona con el protagonista SIEMPRE nombrado. Cada tramo son unas
+${CORTO_PALABRAS_POR_CLIP} palabras — tiene que durar exactamente lo que dura su clip. La PRIMERA
+ORACIÓN empieza por una persona con nombre haciendo algo: prohibido abrir con clima, luz o paisaje.
+
+GÉNERO: ${genero}. El género decide QUÉ pasa; estas reglas deciden cómo se cuenta y cómo se rueda.
 
 Respondé SIEMPRE en JSON válido, sin markdown.`;
 }
@@ -6829,8 +6896,8 @@ Devolvé SOLO:
 {
  "titulo": "título corto y concreto, en la voz del conflicto",
  "logline": "una frase: quién quiere qué y qué se lo impide",
- "lugar": "UN solo lugar y sus alrededores inmediatos, donde cabe todo el corto sin teletransportarse. Concreto.",
- "hora": "momento del día, uno solo — el corto entero pasa casi seguido",
+ "lugares": ["3 a 5 sitios por los que pasa la historia, en orden. El primero es donde abre. Concretos y distintos entre sí — NO metas todo el corto en un solo local: eso mata la historia y aburre a los diez segundos"],
+ "hora": "momento del día en que arranca",
  "look": "identidad visual del corto en 2 frases: paleta de 3 colores nombrados y tratamiento de luz. Nada de argumento.",
  "personajes": [{"nombre":"...","descripcion":"edad, pelo, ojos, ropa concreta y reconocible — lo que hay que dibujar igual 39 veces"}],
  "arco": "en 3 frases: cómo abre, qué se rompe en el medio, cómo cierra"
@@ -6859,8 +6926,8 @@ ${keyframes[keyframes.length - 1]}
 
       const pedido = `TÍTULO: ${base.titulo}
 LOGLINE: ${base.logline}
-LUGAR: ${base.lugar}
-HORA: ${base.hora}
+LUGARES POR LOS QUE PASA, EN ORDEN: ${(base.lugares || [base.lugar]).filter(Boolean).join(' -> ')}
+HORA DE ARRANQUE: ${base.hora}
 ARCO COMPLETO: ${base.arco}
 PERSONAJES:
 ${fichas}
@@ -6875,18 +6942,48 @@ Devolvé SOLO:
 {${primero ? `\n "keyframe1": "la imagen fija con la que abre: quién, dónde, postura, qué mira, qué luz",` : ''}
  "tramos": [
    {"narracion": "~${CORTO_PALABRAS_POR_CLIP} palabras en español, tercera persona",
-    "movimiento": "qué se mueve durante estos ${CORTO_SEG_POR_CLIP} segundos, en inglés, describiendo un movimiento CONTINUO de cámara y personaje",
+    "movimiento": "qué se mueve durante estos ${CORTO_SEG_POR_CLIP} segundos, en inglés: movimiento CONTINUO de cámara Y de personaje",
+    "plano": "uno de: general | medio | cerca | escorzo | detalle — NUNCA el mismo que el tramo anterior",
+    "corte": "true SÓLO si este tramo empieza en OTRO SITIO o en otro momento (hay un corte de montaje antes). false si sigue la misma toma.",
+    "keyframeEntrada": "SÓLO si corte es true: la imagen fija con la que ABRE el sitio nuevo. Si corte es false, dejalo vacío.",
     "keyframe": "la imagen fija en la que TERMINA este tramo: quién, dónde, postura exacta, qué mira, qué sostiene, qué luz. En español."}
  ]
 }
-Exactamente ${cuantos} objetos en "tramos". Cada "keyframe" tiene que poder dibujarse sin leer nada más.`;
+Exactamente ${cuantos} objetos en "tramos". Cada "keyframe" tiene que poder dibujarse sin leer nada más.
+
+⚠️ USÁ "corte" PARA CAMBIAR DE SITIO. Dentro de una toma no se puede saltar de un local a otro, pero
+un corto SÍ cambia de escenario: cuando la historia se mueve a otro lugar, marcá corte=true y escribí
+el "keyframeEntrada" del sitio nuevo. Lo normal es cortar cada 4 a 6 tramos — un corto entero metido
+en un solo local aburre y desperdicia la historia.
+
+⚠️ EL "plano" ES OBLIGATORIO Y TIENE QUE IR CAMBIANDO. Si dos keyframes seguidos comparten tamaño de
+plano, las dos imágenes salen casi idénticas y el clip que las une se rompe: el generador se queda sin
+nada que animar y deforma las caras. Alterná de verdad — un general, luego un primer plano, luego un
+escorzo. El cambio de distancia de cámara ES el movimiento del clip.`;
 
       const bloque = safeParseJSON(await callGemini(pedido, sys));
-      if (primero && bloque?.keyframe1) keyframes.push(String(bloque.keyframe1));
+      const nuevoKf = (desc, plano) => {
+        const pl = String(plano || '').trim().toLowerCase();
+        keyframes.push({ desc: String(desc).trim(), plano: PLANOS_CORTO.some(p => p.id === pl) ? pl : 'medio' });
+        return keyframes.length - 1;
+      };
+      if (primero && bloque?.keyframe1) nuevoKf(bloque.keyframe1, 'general');
       for (const t of (bloque?.tramos || [])) {
         if (!t?.narracion || !t?.keyframe) continue;
-        tramos.push({ narracion: String(t.narracion).trim(), movimiento: String(t.movimiento || '').trim() });
-        keyframes.push(String(t.keyframe).trim());
+        // Un corte es un SITIO NUEVO: el tramo no puede salir de la imagen donde
+        // terminó el anterior, porque esa imagen está en otro lado. Se le da su
+        // propia imagen de entrada. Sin esto, "varios lugares" y "una sola toma"
+        // se contradicen y el guionista acaba metiendo el corto entero en un
+        // local para que le cuadre.
+        const corta = (t.corte === true || String(t.corte) === 'true')
+          && !!String(t.keyframeEntrada || '').trim() && keyframes.length > 0;
+        const kIn = corta ? nuevoKf(t.keyframeEntrada, 'general') : keyframes.length - 1;
+        const kOut = nuevoKf(t.keyframe, t.plano);
+        tramos.push({
+          narracion: String(t.narracion).trim(),
+          movimiento: String(t.movimiento || '').trim(),
+          corte: corta, kIn, kOut,
+        });
       }
     }
 
@@ -6898,11 +6995,13 @@ Exactamente ${cuantos} objetos en "tramos". Cada "keyframe" tiene que poder dibu
     state.corto = {
       ...base,
       genero, ratio,
-      estilo: estiloElegido(),
+      estilo: estiloDelCorto(),
       idea,
       clips: n,
       tramos: tramos.slice(0, n),
-      keyframes: keyframes.slice(0, n + 1),
+      // El guionista repite tamaño de plano aunque se le pida que no. Aquí deja
+      // de ser opcional: si dos seguidos coinciden, el código cambia el segundo.
+      keyframes: alternarPlanos(keyframes),
     };
     saveState();
     renderCorto();
@@ -6923,7 +7022,8 @@ Exactamente ${cuantos} objetos en "tramos". Cada "keyframe" tiene que poder dibu
 function cortoImagePrompt(k) {
   const c = cortoActual();
   const fichas = (c.personajes || []).map(p => `${p.nombre} (${p.descripcion})`).join('. ');
-  return `${estiloLeadIn(c.estilo)} ${c.keyframes[k]}
+  const kf = c.keyframes[k];
+  return `${estiloLeadIn(c.estilo)} ${planoEn(kf.plano)}. ${kf.desc}
 
 LUGAR (el mismo en todo el corto): ${c.lugar}. ${c.hora}.
 PERSONAJES — dibujalos idénticos a su descripción, siempre: ${fichas}
@@ -6942,6 +7042,10 @@ async function generarImagenesCorto() {
 
   const total = c.keyframes.length;
   let hechas = 0, fallos = 0;
+  // Qué imagen es la anterior EN LA MISMA TOMA. Después de un corte no hay
+  // anterior: encadenar ahí arrastraría el sitio viejo al sitio nuevo.
+  const arranques = new Set((c.tramos || []).filter(t => t.corte).map(t => t.kIn));
+  arranques.add(0);
   try {
     for (let k = 0; k < total; k++) {
       if (await dbGet(cortoImgKey(k))) { hechas++; continue; }   // ya estaba: se retoma
@@ -6950,9 +7054,9 @@ async function generarImagenesCorto() {
 
       // La ANTERIOR es la referencia: así el estilo, la ropa y la luz no derivan.
       // Sin esto, para la imagen 20 el personaje ya es otro.
-      const previa = k > 0 ? await dbGet(cortoImgKey(k - 1)) : null;
+      const previa = arranques.has(k) ? null : await dbGet(cortoImgKey(k - 1));
       try {
-        const img = await generateImage(cortoImagePrompt(k), await refsDePersonajes(), null, {
+        const img = await generateImage(cortoImagePrompt(k), await refsDePersonajes(), modeloImgCorto(), {
           continuityRef: previa || undefined,
           aspectRatio: c.ratio,
           estilo: c.estilo,
@@ -6962,6 +7066,10 @@ async function generarImagenesCorto() {
           // aquí: Veo tendría que saltar de un encuadre a otro sin cortar.
           sinCortes: true,
           segundosEntre: CORTO_SEG_POR_CLIP,
+          // De qué tamaño de plano viene y a cuál va: es lo que obliga a que la
+          // imagen nueva NO sea una copia de la anterior.
+          planoPrevio: arranques.has(k) ? '' : planoEn(c.keyframes[k - 1].plano),
+          planoNuevo: planoEn(c.keyframes[k].plano),
         });
         await dbSet(cortoImgKey(k), img);
         hechas++;
@@ -7034,10 +7142,13 @@ async function generarVideosCorto() {
 
 window.generarUnClipDelCorto = async function(k) {
   const c = cortoActual();
-  const inicioB64 = await dbGet(cortoImgKey(k));
-  const finalB64  = await dbGet(cortoImgKey(k + 1));
-  if (!inicioB64) throw new Error(`falta la imagen ${k + 1}`);
-  if (!finalB64)  throw new Error(`falta la imagen ${k + 2}, que es donde tiene que terminar`);
+  const t = c.tramos[k] || {};
+  const iIn  = Number.isInteger(t.kIn)  ? t.kIn  : k;
+  const iOut = Number.isInteger(t.kOut) ? t.kOut : k + 1;
+  const inicioB64 = await dbGet(cortoImgKey(iIn));
+  const finalB64  = await dbGet(cortoImgKey(iOut));
+  if (!inicioB64) throw new Error(`falta la imagen ${iIn + 1}`);
+  if (!finalB64)  throw new Error(`falta la imagen ${iOut + 1}, que es donde tiene que terminar`);
 
   const inicial = await prepararFotograma(inicioB64);
   const final   = await prepararFotograma(finalB64);
@@ -7052,7 +7163,7 @@ window.generarUnClipDelCorto = async function(k) {
     durationSeconds: CORTO_SEG_POR_CLIP,
     aspectRatio: c.ratio,
     generateAudio: false,
-    veoModel: document.getElementById('veoModelSelect')?.value || undefined,
+    veoModel: modeloVeoCorto(),
   });
   if (cuerpo.length > MAX_CUERPO) {
     throw new Error(`las dos imágenes pesan ${(cuerpo.length / 1048576).toFixed(1)} MB y el límite es 4 MB`);
@@ -7117,7 +7228,7 @@ async function generarVozCorto() {
   const txt = document.getElementById('cortoProgressText');
   btn.disabled = true; prog.style.display = 'block';
 
-  const voz = document.getElementById('voiceSelect')?.value;
+  const voz = vozDelCorto();
   const total = c.tramos.length;
   let hechas = 0, fallos = 0;
   try {
@@ -7260,12 +7371,13 @@ async function materialDelCorto() {
   const c = cortoActual();
   if (!c) return { total: 0, img: 0, vid: 0, aud: 0 };
   let img = 0, vid = 0, aud = 0;
-  for (let k = 0; k <= (c.clips || 0); k++) {
+  const nImg = (c.keyframes || []).length;
+  for (let k = 0; k < nImg; k++) {
     if (await dbGet(cortoImgKey(k))) img++;
-    if (k < (c.clips || 0)) {
-      if (await dbGet(cortoVidKey(k))) vid++;
-      if (await dbGet(cortoAudKey(k))) aud++;
-    }
+  }
+  for (let k = 0; k < (c.clips || 0); k++) {
+    if (await dbGet(cortoVidKey(k))) vid++;
+    if (await dbGet(cortoAudKey(k))) aud++;
   }
   return { total: img + vid + aud, img, vid, aud };
 }
@@ -7273,7 +7385,8 @@ async function materialDelCorto() {
 async function borrarMaterialDelCorto() {
   const c = cortoActual();
   if (!c) return;
-  for (let k = 0; k <= (c.clips || 0); k++) {
+  const n = Math.max((c.keyframes || []).length, (c.clips || 0) + 1);
+  for (let k = 0; k < n; k++) {
     await dbDel(cortoImgKey(k));
     await dbDel(cortoVidKey(k));
     await dbDel(cortoAudKey(k));
@@ -7293,7 +7406,7 @@ async function renderCorto() {
 
   const total = c.tramos.length;
   const imgs = [], vids = [], auds = [];
-  for (let k = 0; k <= total; k++) imgs.push(await dbGet(cortoImgKey(k)));
+  for (let k = 0; k < c.keyframes.length; k++) imgs.push(await dbGet(cortoImgKey(k)));
   for (let k = 0; k < total; k++) { vids.push(await dbGet(cortoVidKey(k))); auds.push(await dbGet(cortoAudKey(k))); }
   const hechas = imgs.filter(Boolean).length, clips = vids.filter(Boolean).length, voces = auds.filter(Boolean).length;
 
@@ -7305,16 +7418,16 @@ async function renderCorto() {
       <div class="field"><div class="field-label">Look</div>${c.look || ''}</div>
       <div class="field"><div class="field-label">Estilo de animación</div>
         ${ESTILOS_ANIME[c.estilo || ESTILO_POR_DEFECTO]?.nombre || '—'}
-        ${(c.estilo || ESTILO_POR_DEFECTO) !== estiloElegido() ? `
+        ${(c.estilo || ESTILO_POR_DEFECTO) !== estiloDelCorto() ? `
           <div style="margin-top:6px;font-size:11px;color:#ffd28a">
-            El selector está ahora en <strong>${ESTILOS_ANIME[estiloElegido()].nombre}</strong>. Este corto sigue
+            El selector está ahora en <strong>${ESTILOS_ANIME[estiloDelCorto()].nombre}</strong>. Este corto sigue
             generando con el suyo — cambiarlo a mitad partiría la cadena por el medio.
             <button class="btn-sec" style="margin-top:6px;font-size:11px;padding:4px 8px"
-              onclick="cambiarEstiloDelCorto()">Pasar este corto a ${ESTILOS_ANIME[estiloElegido()].nombre}</button>
+              onclick="cambiarEstiloDelCorto()">Pasar este corto a ${ESTILOS_ANIME[estiloDelCorto()].nombre}</button>
           </div>` : ''}
       </div>
       <div style="font-size:12px;margin-top:8px">
-        🖼️ ${hechas}/${total + 1} imágenes · 🎬 ${clips}/${total} clips · 🎙️ ${voces}/${total} narraciones
+        🖼️ ${hechas}/${c.keyframes.length} imágenes · 🎬 ${clips}/${total} clips · 🎙️ ${voces}/${total} narraciones
       </div>
     </div>`;
 
@@ -7323,18 +7436,18 @@ async function renderCorto() {
     <div class="scene-card">
       <div class="scene-header">
         <div class="scene-num">Tramo ${k + 1}</div>
-        <div style="font-size:11px;color:var(--text-dim)">imagen ${k + 1} → ${k + 2}${auds[k] ? ' · 🎙️' : ''}</div>
+        <div style="font-size:11px;color:var(--text-dim)">${t.corte ? '✂️ corte · ' : ''}imagen ${(t.kIn ?? k) + 1} → ${(t.kOut ?? k + 1) + 1}${auds[k] ? ' · 🎙️' : ''}</div>
       </div>
       <div style="font-size:13px;line-height:1.5;margin:6px 0">${t.narracion}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        ${[k, k + 1].map(i => `
+        ${[t.kIn ?? k, t.kOut ?? (k + 1)].map(i => `
           <div>
             <div class="scene-img" style="aspect-ratio:${cssRatio};overflow:hidden;margin-bottom:2px;${imgs[i] ? 'cursor:zoom-in' : ''}">
               ${imgs[i]
                 ? `<img src="data:image/png;base64,${imgs[i]}" style="width:100%;height:100%;object-fit:contain;display:block;background:#000">`
                 : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim)">Imagen ${i + 1}</div>`}
             </div>
-            <div style="font-size:9px;color:var(--text-dim);text-align:center">${i === k ? 'empieza' : 'termina'} · ${i + 1}</div>
+            <div style="font-size:9px;color:var(--text-dim);text-align:center">${i === (t.kIn ?? k) ? 'empieza' : 'termina'} · ${i + 1} · ${c.keyframes[i]?.plano || ''}</div>
           </div>`).join('')}
       </div>
       ${vids[k] ? `
@@ -7350,14 +7463,15 @@ async function renderCorto() {
 window.cambiarEstiloDelCorto = async function() {
   const c = cortoActual();
   if (!c) return;
-  const nuevo = estiloElegido();
+  const nuevo = estiloDelCorto();
   const material = await materialDelCorto();
   if (material.img || material.vid) {
     if (!confirm(
       `Pasar el corto a "${ESTILOS_ANIME[nuevo].nombre}" obliga a rehacer `
       + `${material.img} imágenes y ${material.vid} clips: los que ya están se dibujaron con el estilo anterior `
       + `y se vería el salto. Se borran ahora. ¿Seguir?`)) return;
-    for (let k = 0; k <= c.clips; k++) { await dbDel(cortoImgKey(k)); await dbDel(cortoVidKey(k)); }
+    const n = Math.max((c.keyframes || []).length, c.clips + 1);
+    for (let k = 0; k < n; k++) { await dbDel(cortoImgKey(k)); await dbDel(cortoVidKey(k)); }
   }
   c.estilo = nuevo;
   saveState();
@@ -7378,10 +7492,36 @@ window.reintentarClipCorto = async function(k, btn) {
 };
 
 // ─── Cableado ───
+// Los selectores del corto son PROPIOS: se puede tener un episodio vertical en
+// Nano Banana y un corto horizontal en otro modelo a la vez. Las listas se
+// copian de las del episodio para no mantener dos catálogos.
+function clonarOpciones(destinoId, origenId) {
+  const d = document.getElementById(destinoId), o = document.getElementById(origenId);
+  if (d && o && !d.options.length) d.innerHTML = o.innerHTML;
+}
+
+function pintarNotaEstiloCorto() {
+  const el = document.getElementById('cortoEstiloNota');
+  const v = document.getElementById('cortoEstilo')?.value;
+  if (el) el.innerHTML = ESTILO_NOTA[v] || '';
+}
+
+// Lo que el corto usa sale de SUS selectores, no de los del episodio.
+function estiloDelCorto()  { return document.getElementById('cortoEstilo')?.value || estiloElegido(); }
+function modeloImgCorto()  { return document.getElementById('cortoImageModel')?.value || null; }
+function modeloVeoCorto()  { return document.getElementById('cortoVeoModel')?.value || undefined; }
+function vozDelCorto()     { return document.getElementById('cortoVoz')?.value
+                                 || document.getElementById('voiceSelect')?.value; }
+
 function inicializarCorto() {
-  const sel = document.getElementById('cortoGenero');
-  const origen = document.getElementById('generoSelect');
-  if (sel && origen && !sel.options.length) sel.innerHTML = origen.innerHTML;
+  clonarOpciones('cortoGenero', 'generoSelect');
+  clonarOpciones('cortoEstilo', 'estiloAnime');
+  clonarOpciones('cortoImageModel', 'imageModelSelect');
+  clonarOpciones('cortoVeoModel', 'veoModelSelect');
+  clonarOpciones('cortoVoz', 'voiceSelect');
+  document.getElementById('cortoEstilo')?.addEventListener('change', pintarNotaEstiloCorto);
+  document.getElementById('cortoVeoModel')?.addEventListener('change', actualizarCostoCorto);
+  pintarNotaEstiloCorto();
 
   document.getElementById('btnEscribirCorto')?.addEventListener('click', escribirCorto);
   document.getElementById('btnCortoImagenes')?.addEventListener('click', generarImagenesCorto);
@@ -7398,7 +7538,15 @@ function inicializarCorto() {
     const d = document.getElementById('cortoDuracion'); if (d && c.clips) d.value = String(c.clips);
     const g = document.getElementById('cortoGenero'); if (g && c.genero) g.value = c.genero;
     const i = document.getElementById('cortoIdea'); if (i && c.idea) i.value = c.idea;
+    aplicarAjuste('cortoEstilo', c.estilo);
+    pintarNotaEstiloCorto();
   }
+  for (const id of ['cortoRatio','cortoDuracion','cortoGenero','cortoEstilo',
+                    'cortoImageModel','cortoVeoModel','cortoVoz']) {
+    aplicarAjuste(id, ajustesGuardados()[id]);
+    document.getElementById(id)?.addEventListener('change', guardarAjustes);
+  }
+  pintarNotaEstiloCorto();
   actualizarCostoCorto();
   renderCorto();
 }
