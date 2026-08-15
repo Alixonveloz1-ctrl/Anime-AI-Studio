@@ -548,6 +548,9 @@
       <div id="bulkProgress" style="display:none;margin-top:10px">
         <div class="progress-text" id="bulkText">...</div>
         <div class="progress"><div class="progress-bar" id="bulkBar" style="width:0%"></div></div>
+        <button class="btn-sec" id="btnDetenerTanda" style="margin-top:8px;width:100%;font-size:12px;border-color:rgba(255,120,120,0.45);color:#ff9d9d">
+          ⏹️ Detener
+        </button>
       </div>
 
       <div id="scenesList" style="margin-top:14px"></div>
@@ -2048,8 +2051,16 @@ async function compressBase64Image(base64, maxDim = 768, quality = 0.85) {
 // la mitad y haya que relanzarla a mano viendo cuáles faltan. Lo correcto es
 // esperar y volver a intentarlo. Esto estaba resuelto para los episodios y NO
 // para el corto, que es la sección donde más seguidas se piden.
+// Un BLOQUEO no es un límite de cuota, y confundirlos sale caro: reintentar una
+// imagen bloqueada la vuelve a bloquear ocho veces, y cada intento gasta cuota
+// de verdad. Se mira primero si es bloqueo, y sólo si no lo es se mira cuota.
+function esBloqueo(e) {
+  return /bloquead|blocked|safety|prohibited|recitation/i.test(String(e?.message || ''));
+}
 function esLimiteDeCuota(e) {
-  return /429|exhaust|quota|resource|rate.?limit/i.test(String(e?.message || ''));
+  if (esBloqueo(e)) return false;
+  // "resource" a secas casaba con cualquier mensaje que llevara esa palabra.
+  return /\b429\b|resource_exhausted|exhausted|quota|rate.?limit|sin capacidad/i.test(String(e?.message || ''));
 }
 const ESPERAS_DE_CUOTA = [60, 120, 180, 240, 300];   // segundos, en escalera
 
@@ -2064,7 +2075,12 @@ async function conEsperaDeCuota(fn, aviso) {
       if (!esLimiteDeCuota(e) || intento >= ESPERAS_DE_CUOTA.length - 1) throw e;
       const s = ESPERAS_DE_CUOTA[intento];
       aviso?.(s, intento + 1, ESPERAS_DE_CUOTA.length);
-      await new Promise(r => setTimeout(r, s * 1000));
+      // La espera puede ser de cinco minutos: si se pulsa Detener, se corta ahí
+      // mismo en vez de quedarse el usuario mirando una barra parada.
+      for (let t = 0; t < s * 10; t++) {
+        if (tanda.detener) throw e;
+        await new Promise(r => setTimeout(r, 100));
+      }
     }
   }
 }
@@ -2093,6 +2109,29 @@ El filtro de Google rechazó esta imagen y ya se reintentó dos veces suavizando
 • Si la escena es de baño o de cambiarse, cambiá el momento: justo antes o justo después.
 Podés editar el prompt de esta escena con el botón ✏️ Prompt y volver a darle.`;
 }
+
+// ─── Una tanda a la vez, y con freno ───
+// Recargar la página NO cancela lo que ya salió: una petición aceptada por el
+// servidor sigue corriendo aunque el navegador se desconecte, y sigue gastando
+// cuota. Lo que sí se puede es no MANDAR más, y no dejar que se solapen dos
+// tandas: dos series a la vez duplican el gasto por minuto y agotan la cuota en
+// la mitad de tiempo.
+const tanda = { enCurso: false, detener: false };
+
+function empezarTanda() {
+  if (tanda.enCurso) { showToast('Ya hay una generación en marcha', 'error'); return false; }
+  tanda.enCurso = true; tanda.detener = false;
+  const b = document.getElementById('btnDetenerTanda');
+  if (b) { b.disabled = false; b.style.display = 'block'; b.innerHTML = '⏹️ Detener'; }
+  return true;
+}
+function terminarTanda() { tanda.enCurso = false; tanda.detener = false; }
+document.addEventListener('click', (e) => {
+  if (e.target?.id !== 'btnDetenerTanda') return;
+  tanda.detener = true;
+  e.target.disabled = true;
+  e.target.innerHTML = '⏹️ Deteniendo — se para al acabar la imagen en curso';
+});
 
 async function generateImage(prompt, characterRefs = null, forceModel = null, opts = {}) {
   const modelSel = document.getElementById('imageModelSelect');
@@ -5358,6 +5397,7 @@ window.generateAllVideos = async function() {
 // ════════════════════════════════════════════════════════════════
 document.getElementById('btnAllImages').addEventListener('click', async () => {
   if (!state.scenes.length) { showToast('Genera escenas primero', 'error'); return; }
+  if (!empezarTanda()) return;
   const btn = document.getElementById('btnAllImages');
   btn.disabled = true;
   const bp = document.getElementById('bulkProgress'); bp.style.display = 'block';
@@ -5413,50 +5453,51 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   }
 
   const total = queue.length;
-  let completed = 0, failed = 0, failedIds = [];
+  let completed = 0, failed = 0, failedIds = [], detenida = false;
 
   // Sequential — one image at a time, UI updates immediately after each one
   for (let i = 0; i < queue.length; i++) {
     const { s, ab, prompt, desdeNarracion, tam } = queue[i];
+    if (tanda.detener) { detenida = true; break; }
     bb.style.width = Math.round((i / total) * 100) + '%';
     bt.textContent = `Imagen ${i + 1}/${total} — Escena ${s.num} (${ab === 'A' ? '1' : ab === 'B' ? '2' : '3'}/3)...`;
 
-    let success = false, attempt = 0;
-    while (!success && attempt < 8) {
-      try {
+    let success = false;
+    try {
+      // La MISMA escalera de espera que el resto de la app, en vez de una copia
+      // con otros tiempos. Y sólo espera por cuota: una imagen bloqueada se
+      // vuelve a bloquear igual, y cada reintento gasta cuota de verdad.
+      const imgB64 = await conEsperaDeCuota(async () => {
         const contRef = await getContinuityRef(s, ab);
         const previo = { B: 'tamanoA', C: 'tamanoB' }[ab];
-        const imgB64 = await generateImageRaw(prompt + anclaDeEscena(prompt, s), refsDeEscena(prompt, s), {
+        return generateImageRaw(prompt + anclaDeEscena(prompt, s), refsDeEscena(prompt, s), {
           ...envForScene(s), continuityRef: contRef, desdeNarracion,
           planoPrevio: (contRef && tam && previo && s[previo]) ? planoEn(s[previo]) : '',
           planoNuevo: (contRef && tam) ? planoEn(tam) : '',
         });
-        await dbSet(sceneImgKeyBy(s.id, ab), imgB64);
-        success = true; completed++;
-        renderScenes(); // update UI immediately so user sees each image appear
-      } catch(e) {
-        attempt++;
-        const isRL = e.message.includes('429') || e.message.toLowerCase().includes('exhausted') || e.message.toLowerCase().includes('resource');
-        if (isRL) {
-          const w = [30,45,60,90,120,180,240,300][Math.min(attempt-1,7)];
-          bt.textContent = `⏳ Rate limit — esperando ${w}s (intento ${attempt}/8)...`;
-          await new Promise(r => setTimeout(r, w * 1000));
-        } else if (e.message.toLowerCase().includes('block') || e.message.toLowerCase().includes('safety')) {
-          bt.textContent = `⚠️ Escena ${s.num} (${ab}) bloqueada, continuando...`;
-          await new Promise(r => setTimeout(r, 2000)); break;
-        } else {
-          await new Promise(r => setTimeout(r, 5000));
-        }
-      }
+      }, (seg, n, de) => { bt.textContent = `⏳ Cuota agotada — esperando ${seg}s (${n}/${de})...`; });
+      await dbSet(sceneImgKeyBy(s.id, ab), imgB64);
+      success = true; completed++;
+      renderScenes(); // update UI immediately so user sees each image appear
+    } catch(e) {
+      if (esBloqueo(e)) bt.textContent = `⚠️ Escena ${s.num} (${ab}) bloqueada, sigo con la siguiente`;
+      else bt.textContent = `⚠️ Escena ${s.num} (${ab}): ${String(e.message).slice(0, 70)}`;
+      await new Promise(r => setTimeout(r, 1200));
     }
     if (!success) { failed++; failedIds.push(`${s.num}${ab}`); }
   }
 
   bb.style.width = '100%';
-  bt.textContent = failed === 0
-    ? `✅ ${completed}/${total} imágenes completadas`
-    : `⚠️ ${completed}/${total} — fallaron: ${failedIds.join(', ')}`;
-  if (failed > 0) showToast(`${failed} imágenes fallaron — dale de nuevo al botón`, 'error');
+  terminarTanda();   // pase lo que pase, el guardia se suelta
+  const freno = document.getElementById('btnDetenerTanda');
+  if (freno) freno.style.display = 'none';
+  bt.textContent = detenida
+    ? `⏹️ Detenida — ${completed}/${total} hechas. Al darle otra vez retoma donde quedó`
+    : failed === 0
+      ? `✅ ${completed}/${total} imágenes completadas`
+      : `⚠️ ${completed}/${total} — fallaron: ${failedIds.join(', ')}`;
+  if (detenida) showToast(`Detenida en ${completed}/${total}`, 'error');
+  else if (failed > 0) showToast(`${failed} imágenes fallaron — dale de nuevo al botón`, 'error');
   else showToast('¡Todas las imágenes generadas!', 'success');
   renderScenes();
   btn.disabled = false;
@@ -7559,6 +7600,7 @@ async function generarUnaImagenDelCorto(k, aviso) {
 async function generarImagenesCorto() {
   const c = cortoActual();
   if (!c) return;
+  if (!empezarTanda()) return;      // compite por la MISMA cuota que el episodio
   const btn = document.getElementById('btnCortoImagenes');
   const prog = document.getElementById('cortoProgress');
   const bar = document.getElementById('cortoProgressBar');
@@ -7581,6 +7623,7 @@ async function generarImagenesCorto() {
     // Una detrás de otra, nunca en paralelo: cada imagen necesita la anterior, y
     // pedirlas de golpe además dispara el límite de cuota.
     for (let k = 0; k < total; k++) {
+      if (tanda.detener) { txt.textContent = `⏹️ Detenida en la imagen ${k + 1}`; break; }
       if (await dbGet(cortoImgKey(k))) { hechas++; continue; }   // ya estaba: se retoma
       bar.style.width = Math.round((k / total) * 100) + '%';
       txt.textContent = `Imagen ${k + 1}/${total}...`;
@@ -7611,6 +7654,7 @@ async function generarImagenesCorto() {
       showToast(`${total} imágenes listas`, 'success');
     }
   } finally {
+    terminarTanda();
     btn.disabled = false;
     setTimeout(() => { prog.style.display = 'none'; }, 1500);
     renderCorto();

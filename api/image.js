@@ -141,7 +141,8 @@ ${cleanPrompt}` });
     const img = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.mimeType?.startsWith('image/'));
     if (img) return { imageData: img.inlineData.data.replace(/\s/g,''), model, region: 'global' };
     const fr = data.candidates?.[0]?.finishReason || 'UNKNOWN';
-    return { error: `bloqueado [${fr}]`, bloqueado: true };
+    const rat = data.candidates?.[0]?.safetyRatings?.filter(x => x.blocked)?.map(x => x.category.replace('HARM_CATEGORY_',''))?.join(', ');
+    return { error: `bloqueado [${fr}]${rat ? ' — ' + rat : ''}`, bloqueado: true };
   }
 
   // Regional model: rotate through the configured regions for capacity
@@ -159,7 +160,7 @@ ${cleanPrompt}` });
     if (isNoAccess) return { error: data.error?.message || `Sin acceso a ${model}` };
 
     if (shouldRotate) {
-      lastError = `${region}: ${data.error?.message?.slice(0,60) || 'no capacity'}`;
+      lastError = `${region}: ${data.error?.message?.slice(0,300) || 'sin capacidad'}`;
       continue;
     }
     if (isSafetyBlock) {
@@ -173,14 +174,24 @@ ${cleanPrompt}` });
     if (img) return { imageData: img.inlineData.data.replace(/\s/g,''), model, region };
     const cand = data.candidates?.[0];
     const finishReason = cand?.finishReason || 'UNKNOWN';
-    if (finishReason === 'SAFETY' || finishReason === 'RECITATION') {
+    // Una respuesta SIN imagen no es falta de capacidad: es un rechazo. Aquí
+    // sólo se reconocían SAFETY y RECITATION, y para imágenes Gemini devuelve
+    // IMAGE_SAFETY y PROHIBITED_CONTENT — que se colaban hasta el final del
+    // bucle y salían como "429 — sin capacidad". El usuario veía "cuota
+    // excedida" en el primer intento de una imagen que en realidad estaba
+    // bloqueada, y el cliente, al leer 429, se ponía a reintentar ocho veces
+    // con esperas de hasta cinco minutos. Rotar de región tampoco arregla un
+    // rechazo: el filtro es el mismo en todas.
+    if (finishReason !== 'STOP' && finishReason !== 'MAX_TOKENS') {
       const safety = cand?.safetyRatings?.filter(s => s.blocked)?.map(s => s.category.replace('HARM_CATEGORY_',''))?.join(', ');
       return { error: `bloqueado [${finishReason}]${safety ? ' — ' + safety : ''}`, bloqueado: true };
     }
     lastError = `${region}: respuesta vacía [${finishReason}]`;
     continue;
   }
-  return { error: `429 — sin capacidad en ninguna región. ${lastError}` };
+  // Sin recortar: el mensaje de Google dice QUÉ cuota se agotó y cada cuánto se
+  // repone, y cortarlo a sesenta caracteres se llevaba justo esa parte.
+  return { error: `Sin capacidad en ninguna región (${regions.join(', ')}). ${lastError}`, sinCapacidad: true };
 }
 
 
