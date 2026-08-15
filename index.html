@@ -658,8 +658,10 @@
     <div class="card" id="cortoProduccion" style="display:none;margin-bottom:14px">
       <h2>🎬 Producción</h2>
       <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;line-height:1.5">
-        En este orden: las imágenes se encadenan una a una (cada una mira a la anterior), después los
-        clips, y al final la voz. Si algo se corta, se retoma donde quedó.
+        En este orden: las imágenes se encadenan <strong>una a una</strong> (cada una mira a la anterior),
+        después los clips, y al final la voz. Nunca en paralelo — y si Google devuelve el límite de cuota,
+        se espera y se reintenta en vez de darlo por fallado. Si algo se corta, se retoma donde quedó.
+        Abajo, cada imagen, cada clip y cada narración tienen su propio botón para rehacer sólo ese.
       </p>
       <div class="btn-row">
         <button class="btn-sec" id="btnCortoImagenes">🖼️ Imágenes</button>
@@ -975,6 +977,28 @@ const REGISTRO_MANHUA = `REGISTRO (el de los resúmenes de manhua que funcionan)
 - REVELACIONES ENCADENADAS: cada poco, algo que el espectador creía se da vuelta. Quién es en realidad, a quién debe qué,
   por qué lo persiguen.
 - Nada de párrafos contemplativos ni de adjetivos emocionales: la emoción sale de lo que PASA.`;
+
+// El generador de imagen no entiende que era una manera de hablar: dibuja lo
+// que lee. Un guion decía que a la chica se le ponían los ojos rojos sólo de
+// imaginar lo que costaba el banquete, y salió una chica lanzando rayos láser
+// rojos por los ojos. La narración TIENE que hablar en figurado —es lo que la
+// hace buena—; la descripción visual no puede, y la traducción de una a otra es
+// trabajo del director, no del dibujante.
+const LITERALIDAD = `⚠️ LA DESCRIPCIÓN VISUAL ES LITERAL. LA NARRACIÓN PUEDE SER FIGURADA; LA IMAGEN NO.
+El generador de imagen dibuja EXACTAMENTE lo que lee y no sabe que era una manera de hablar.
+Antes de escribir cada descripción visual, traducí toda expresión hecha al hecho físico que hay debajo:
+- "se le pusieron los ojos rojos" (de envidia, de rabia) → los ojos muy abiertos, la mandíbula apretada,
+  el cuerpo inclinado hacia lo que mira. NUNCA ojos que brillan, ni rojos, ni rayos saliéndole de los ojos.
+- "se le heló la sangre" → los hombros rígidos, la mano detenida a medio camino, la cara sin color.
+- "se le rompió el corazón" → la mirada baja, la boca floja, las manos quietas sobre las rodillas.
+- "estalló de risa" → la boca abierta y el cuerpo doblado hacia adelante. No hay ninguna explosión.
+- "lo fulminó con la mirada" → los ojos fijos y la barbilla baja. No cae ningún rayo.
+- "se le cayó el alma a los pies" → los brazos sueltos y la espalda encorvada. No hay ningún alma en el suelo.
+PRUEBA: si a la frase le podés poner "como si" delante y sigue significando lo mismo, es una figura y NO
+se dibuja. Se dibuja lo que le pasa a la CARA, al CUERPO y a las MANOS.
+Esto NO recorta la fantasía: si en esta historia el personaje de verdad lanza fuego, parte una montaña o
+se le encienden los ojos porque así ocurre en ese mundo, se dibuja tal cual y con todo el aparato. Lo
+único prohibido es convertir una EMOCIÓN en un efecto especial.`;
 
 const ESTILOS_ANIME = {
   cinematografico: {
@@ -1841,6 +1865,33 @@ async function compressBase64Image(base64, maxDim = 768, quality = 0.85) {
     img.onerror = () => resolve(cleanB64);
     img.src = 'data:image/png;base64,' + cleanB64;
   });
+}
+
+// ─── El límite de peticiones por minuto no es un fallo: es una espera ───
+// Google devuelve 429 cuando se le piden imágenes más rápido de lo que su cuota
+// permite. Tratarlo como un error hace que una tanda de 39 imágenes se caiga por
+// la mitad y haya que relanzarla a mano viendo cuáles faltan. Lo correcto es
+// esperar y volver a intentarlo. Esto estaba resuelto para los episodios y NO
+// para el corto, que es la sección donde más seguidas se piden.
+function esLimiteDeCuota(e) {
+  return /429|exhaust|quota|resource|rate.?limit/i.test(String(e?.message || ''));
+}
+const ESPERAS_DE_CUOTA = [60, 120, 180, 240, 300];   // segundos, en escalera
+
+// Reintenta SÓLO ante el límite de cuota. Cualquier otro error sale a la primera:
+// esperar cinco minutos por un prompt bloqueado no lo desbloquea.
+async function conEsperaDeCuota(fn, aviso) {
+  for (let intento = 0; ; intento++) {
+    try {
+      return await fn();
+    } catch (e) {
+      // El último intento no espera: no hay nada después que aprovechara la espera.
+      if (!esLimiteDeCuota(e) || intento >= ESPERAS_DE_CUOTA.length - 1) throw e;
+      const s = ESPERAS_DE_CUOTA[intento];
+      aviso?.(s, intento + 1, ESPERAS_DE_CUOTA.length);
+      await new Promise(r => setTimeout(r, s * 1000));
+    }
+  }
 }
 
 async function generateImage(prompt, characterRefs = null, forceModel = null, opts = {}) {
@@ -3703,7 +3754,12 @@ REGLAS DE CADA PROMPT:
 - PERMANENCIA ENTRE ESCENAS: si escenas consecutivas ocurren en el MISMO escenario y la narración no dice que alguien se fue, los MISMOS personajes siguen presentes en todas — NUNCA alternes mostrando a uno por escena.
 - ESCALA Y PROPORCIÓN: proporción humana correcta del personaje respecto a muebles y espacio — un adulto de pie tendría espacio libre sobre la cabeza (el techo NO justo encima). Mantené el tamaño real del escenario; no comprimas el espacio ni encajones al personaje.\n- CRÍTICO: el personaje NUNCA mira a la cámara. Describe la acción que está haciendo según la narración. Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"
 - PROHIBIDO en los prompts: naked, nude, explicit, sexual, genitals, nipples
-- NO texto, NO letras, NO marcas de agua${genreExtraImage}${bibleVisualBrief()}
+- NO texto, NO letras, NO marcas de agua
+
+${LITERALIDAD}
+Acá eso se traduce en algo muy concreto: la narración de la escena ya está escrita y puede estar llena
+de figuras. Tu trabajo es convertirla en lo que una cámara vería. Ninguna expresión hecha de la
+narración puede pasar tal cual a un prompt.${genreExtraImage}${bibleVisualBrief()}
 Responde SOLO JSON válido sin markdown`;
 
     // Universe scenario list for prompt assignment
@@ -4652,22 +4708,9 @@ window.generateSceneImageAB = async function(sceneId, slot) {
       env.planoPrevio = previo && s[previo] ? planoEn(s[previo]) : '';
       env.planoNuevo = planoEn(tam);
     }
-    let imgB64 = null, lastErr = null;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      try {
-        imgB64 = await generateImage(prompt, refs, null, env);
-        break;
-      } catch(e) {
-        lastErr = e;
-        const isRL = e.message.includes('429') || e.message.toLowerCase().includes('exhausted') || e.message.toLowerCase().includes('resource');
-        if (isRL) {
-          const w = [60,120,180,240,300][Math.min(attempt,4)];
-          showToast(`⏳ Rate limit — esperando ${w}s...`, 'error');
-          await new Promise(r => setTimeout(r, w * 1000));
-        } else throw e;
-      }
-    }
-    if (!imgB64) throw lastErr;
+    const imgB64 = await conEsperaDeCuota(
+      () => generateImage(prompt, refs, null, env),
+      (seg, n, de) => showToast(`⏳ Límite de cuota — esperando ${seg}s (${n}/${de})...`, 'error'));
     await dbSet(sceneImgKeyBy(s.id, slot), imgB64);
     renderScenes();
     showToast(`Imagen ${slot} escena ${s.num} lista`, 'success');
@@ -6990,6 +7033,11 @@ ${voz}
 
 ${REGISTRO_MANHUA}
 
+${LITERALIDAD}
+Acá eso se traduce en algo muy concreto: en "narracion" escribí como quieras, con todas las figuras que
+hagan falta. En "keyframe" y "keyframeEntrada" escribí SÓLO lo que una cámara puesta en ese sitio
+grabaría. Son campos distintos porque hacen trabajos distintos.
+
 GÉNERO: ${genero}. El género decide QUÉ pasa; estas reglas deciden cómo se cuenta y cómo se rueda.
 
 Respondé SIEMPRE en JSON válido, sin markdown.`;
@@ -7174,6 +7222,44 @@ PERSONAJES — dibujalos idénticos a su descripción, siempre: ${fichas}
 IDENTIDAD VISUAL DEL CORTO: ${c.look}`;
 }
 
+// Qué imágenes ABREN una toma. Después de un corte no hay imagen anterior:
+// encadenar ahí arrastraría el sitio viejo al sitio nuevo.
+function arranquesDeToma(c) {
+  const s = new Set((c?.tramos || []).filter(t => t.corte).map(t => t.kIn));
+  s.add(0);
+  return s;
+}
+
+// UNA imagen del corto. La usan el botón de esa imagen y la tanda entera: si
+// fueran dos caminos distintos, rehacer una a mano no daría lo mismo que
+// generarla en la tanda, y ahí es donde aparecen los saltos de estilo.
+async function generarUnaImagenDelCorto(k, aviso) {
+  const c = cortoActual();
+  const arranques = arranquesDeToma(c);
+  // La ANTERIOR es la referencia: así el estilo, la ropa y la luz no derivan.
+  // Sin esto, para la imagen 20 el personaje ya es otro.
+  const previa = arranques.has(k) ? null : await dbGet(cortoImgKey(k - 1));
+  const refs = await refsDePersonajes();
+  const img = await conEsperaDeCuota(() =>
+    generateImage(cortoImagePrompt(k), refs, modeloImgCorto(), {
+      continuityRef: previa || undefined,
+      aspectRatio: c.ratio,
+      estilo: c.estilo,
+      // Aquí no hay corte: la imagen k+1 es la MISMA toma ocho segundos
+      // después. Sin esto el servidor pide "un ángulo claramente distinto",
+      // que es lo correcto entre planos de un episodio y lo peor posible
+      // aquí: Veo tendría que saltar de un encuadre a otro sin cortar.
+      sinCortes: true,
+      segundosEntre: CORTO_SEG_POR_CLIP,
+      // De qué tamaño de plano viene y a cuál va: es lo que obliga a que la
+      // imagen nueva NO sea una copia de la anterior.
+      planoPrevio: arranques.has(k) ? '' : planoEn(c.keyframes[k - 1].plano),
+      planoNuevo: planoEn(c.keyframes[k].plano),
+    }), aviso);
+  await dbSet(cortoImgKey(k), img);
+  return img;
+}
+
 // ─── Las 39 imágenes, encadenadas ───
 async function generarImagenesCorto() {
   const c = cortoActual();
@@ -7185,46 +7271,50 @@ async function generarImagenesCorto() {
   btn.disabled = true; prog.style.display = 'block';
 
   const total = c.keyframes.length;
-  let hechas = 0, fallos = 0;
-  // Qué imagen es la anterior EN LA MISMA TOMA. Después de un corte no hay
-  // anterior: encadenar ahí arrastraría el sitio viejo al sitio nuevo.
-  const arranques = new Set((c.tramos || []).filter(t => t.corte).map(t => t.kIn));
-  arranques.add(0);
+  const arranques = arranquesDeToma(c);
+  // Si una imagen falla, las siguientes DE SU MISMA TOMA saldrían sin referencia
+  // —el personaje cambiaría de cara a mitad de la toma— así que no se generan:
+  // se salta al próximo corte, que sí puede arrancar de cero. Antes se seguía
+  // adelante y la cadena quedaba rota sin avisar, pagando cada imagen igual.
+  const proximoArranque = (k) => {
+    for (let j = k + 1; j < total; j++) if (arranques.has(j)) return j;
+    return total;
+  };
+
+  let hechas = 0, fallos = 0, saltadas = 0;
   try {
+    // Una detrás de otra, nunca en paralelo: cada imagen necesita la anterior, y
+    // pedirlas de golpe además dispara el límite de cuota.
     for (let k = 0; k < total; k++) {
       if (await dbGet(cortoImgKey(k))) { hechas++; continue; }   // ya estaba: se retoma
       bar.style.width = Math.round((k / total) * 100) + '%';
       txt.textContent = `Imagen ${k + 1}/${total}...`;
-
-      // La ANTERIOR es la referencia: así el estilo, la ropa y la luz no derivan.
-      // Sin esto, para la imagen 20 el personaje ya es otro.
-      const previa = arranques.has(k) ? null : await dbGet(cortoImgKey(k - 1));
       try {
-        const img = await generateImage(cortoImagePrompt(k), await refsDePersonajes(), modeloImgCorto(), {
-          continuityRef: previa || undefined,
-          aspectRatio: c.ratio,
-          estilo: c.estilo,
-          // Aquí no hay corte: la imagen k+1 es la MISMA toma ocho segundos
-          // después. Sin esto el servidor pide "un ángulo claramente distinto",
-          // que es lo correcto entre planos de un episodio y lo peor posible
-          // aquí: Veo tendría que saltar de un encuadre a otro sin cortar.
-          sinCortes: true,
-          segundosEntre: CORTO_SEG_POR_CLIP,
-          // De qué tamaño de plano viene y a cuál va: es lo que obliga a que la
-          // imagen nueva NO sea una copia de la anterior.
-          planoPrevio: arranques.has(k) ? '' : planoEn(c.keyframes[k - 1].plano),
-          planoNuevo: planoEn(c.keyframes[k].plano),
+        await generarUnaImagenDelCorto(k, (seg, n, de) => {
+          txt.textContent = `⏳ Imagen ${k + 1}/${total} — límite de cuota, esperando ${seg}s (${n}/${de})...`;
         });
-        await dbSet(cortoImgKey(k), img);
         hechas++;
-        renderCorto();
+        await renderCorto();
       } catch (e) {
         console.warn(`Imagen ${k} falló:`, e.message);
         fallos++;
+        const salto = proximoArranque(k);
+        saltadas += salto - k - 1;
+        if (salto >= total) {
+          txt.textContent = `Imagen ${k + 1} falló: ${String(e.message).slice(0, 60)}`;
+          break;
+        }
+        txt.textContent = `Imagen ${k + 1} falló — sigo en el corte (imagen ${salto + 1})`;
+        k = salto - 1;
       }
     }
-    showToast(fallos ? `${hechas}/${total} imágenes — ${fallos} fallaron, dale otra vez` : `${total} imágenes listas`,
-              fallos ? 'error' : 'success');
+    if (fallos) {
+      showToast(`${hechas}/${total} imágenes · ${fallos} fallaron`
+        + (saltadas ? ` y ${saltadas} se saltaron por depender de ellas` : '')
+        + ' — dale otra vez y retoma donde quedó', 'error');
+    } else {
+      showToast(`${total} imágenes listas`, 'success');
+    }
   } finally {
     btn.disabled = false;
     setTimeout(() => { prog.style.display = 'none'; }, 1500);
@@ -7248,6 +7338,24 @@ async function refsDePersonajes() {
   return refs.length ? refs : null;
 }
 
+// ─── Qué clip se quedó viejo ───
+// Un clip va de una imagen a otra. Si después de generarlo se rehace cualquiera
+// de las dos, el clip sigue en pantalla pero ya no lleva a donde lleva la nueva:
+// al montar se ve el salto. Cada imagen lleva su número de versión y el clip
+// guarda con cuáles se hizo, así el desfase se ve en vez de descubrirse al final.
+const versionKf = (c, i) => Number(c?.keyframes?.[i]?.v || 0);
+function extremosDelTramo(c, k) {
+  const t = c?.tramos?.[k] || {};
+  return [Number.isInteger(t.kIn) ? t.kIn : k, Number.isInteger(t.kOut) ? t.kOut : k + 1];
+}
+function firmaDelClip(c, k) {
+  const [iIn, iOut] = extremosDelTramo(c, k);
+  return `${versionKf(c, iIn)}.${versionKf(c, iOut)}`;
+}
+// Sin firma guardada es un clip de antes de esto: no se marca como viejo, porque
+// no hay forma de saber si lo es y una alarma falsa cuesta una generación.
+const clipDesfasado = (c, k) => !!c?.tramos?.[k]?.firma && c.tramos[k].firma !== firmaDelClip(c, k);
+
 // ─── Los clips: imagen k → imagen k+1 ───
 async function generarVideosCorto() {
   const c = cortoActual();
@@ -7261,14 +7369,18 @@ async function generarVideosCorto() {
   const total = c.tramos.length;
   let hechos = 0, fallos = 0;
   try {
+    // Uno detrás de otro, y rehaciendo también los que se quedaron viejos porque
+    // se rehizo una de sus imágenes: dejarlos pasar es enterarse en el montaje.
     for (let k = 0; k < total; k++) {
-      if (await dbGet(cortoVidKey(k))) { hechos++; continue; }
+      if (await dbGet(cortoVidKey(k)) && !clipDesfasado(c, k)) { hechos++; continue; }
       bar.style.width = Math.round((k / total) * 100) + '%';
-      txt.textContent = `Clip ${k + 1}/${total}...`;
+      txt.textContent = `Clip ${k + 1}/${total}${clipDesfasado(c, k) ? ' (rehaciendo: cambió su imagen)' : ''}...`;
       try {
-        await generarUnClipDelCorto(k);
+        await generarUnClipDelCorto(k, (seg, n, de) => {
+          txt.textContent = `⏳ Clip ${k + 1}/${total} — límite de cuota, esperando ${seg}s (${n}/${de})...`;
+        });
         hechos++;
-        renderCorto();
+        await renderCorto();
       } catch (e) {
         console.warn(`Clip ${k} falló:`, e.message);
         fallos++;
@@ -7284,11 +7396,10 @@ async function generarVideosCorto() {
   }
 }
 
-window.generarUnClipDelCorto = async function(k) {
+window.generarUnClipDelCorto = async function(k, aviso) {
   const c = cortoActual();
   const t = c.tramos[k] || {};
-  const iIn  = Number.isInteger(t.kIn)  ? t.kIn  : k;
-  const iOut = Number.isInteger(t.kOut) ? t.kOut : k + 1;
+  const [iIn, iOut] = extremosDelTramo(c, k);
   const inicioB64 = await dbGet(cortoImgKey(iIn));
   const finalB64  = await dbGet(cortoImgKey(iOut));
   if (!inicioB64) throw new Error(`falta la imagen ${iIn + 1}`);
@@ -7313,11 +7424,14 @@ window.generarUnClipDelCorto = async function(k) {
     throw new Error(`las dos imágenes pesan ${(cuerpo.length / 1048576).toFixed(1)} MB y el límite es 4 MB`);
   }
 
-  const res = await fetch('/api/video-start', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: cuerpo,
-  });
-  const data = await res.json().catch(() => ({ error: `respuesta ilegible (${res.status})` }));
-  if (!res.ok || data.error) throw new Error(data.error || `video-start ${res.status}`);
+  const data = await conEsperaDeCuota(async () => {
+    const res = await fetch('/api/video-start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: cuerpo,
+    });
+    const d = await res.json().catch(() => ({ error: `respuesta ilegible (${res.status})` }));
+    if (!res.ok || d.error) throw new Error(d.error || `video-start ${res.status}`);
+    return d;
+  }, aviso);
 
   for (let i = 0; i < 120; i++) {
     await new Promise(r => setTimeout(r, 5000));
@@ -7330,6 +7444,10 @@ window.generarUnClipDelCorto = async function(k) {
     if (st.done) {
       if (!st.publicUrl) throw new Error('Veo terminó sin devolver video');
       await dbSet(cortoVidKey(k), st.publicUrl);
+      // Con qué versión de sus dos imágenes se hizo. Si alguna se rehace, el
+      // clip queda marcado como viejo en vez de pasar por bueno.
+      t.firma = firmaDelClip(c, k);
+      saveState();
       return st.publicUrl;
     }
   }
@@ -7363,6 +7481,14 @@ function cortoVideoNegative() {
 }
 
 // ─── Narración ───
+// UNA narración, compartida por el botón de cada tramo y por la tanda entera.
+async function generarUnaVozDelCorto(k, aviso) {
+  const c = cortoActual();
+  const r = await conEsperaDeCuota(
+    () => generateAudio(c.tramos[k].narracion, vozDelCorto(), 'act1'), aviso);
+  await dbSet(cortoAudKey(k), `${r.mimeType || 'audio/wav'}|${r.audioData}`);
+}
+
 async function generarVozCorto() {
   const c = cortoActual();
   if (!c) return;
@@ -7372,7 +7498,6 @@ async function generarVozCorto() {
   const txt = document.getElementById('cortoProgressText');
   btn.disabled = true; prog.style.display = 'block';
 
-  const voz = vozDelCorto();
   const total = c.tramos.length;
   let hechas = 0, fallos = 0;
   try {
@@ -7381,8 +7506,9 @@ async function generarVozCorto() {
       bar.style.width = Math.round((k / total) * 100) + '%';
       txt.textContent = `Narración ${k + 1}/${total}...`;
       try {
-        const r = await generateAudio(c.tramos[k].narracion, voz, 'act1');
-        await dbSet(cortoAudKey(k), `${r.mimeType || 'audio/wav'}|${r.audioData}`);
+        await generarUnaVozDelCorto(k, (seg, n, de) => {
+          txt.textContent = `⏳ Narración ${k + 1}/${total} — límite de cuota, esperando ${seg}s (${n}/${de})...`;
+        });
         hechas++;
       } catch (e) {
         console.warn(`Narración ${k} falló:`, e.message);
@@ -7410,6 +7536,16 @@ async function montarCorto() {
   const bar  = document.getElementById('cortoProgressBar');
   const txt  = document.getElementById('cortoProgressText');
   const setP = (p, m) => { bar.style.width = p + '%'; txt.textContent = m; };
+
+  // Un clip hecho con una imagen que después se rehizo no termina donde
+  // empieza el siguiente: al montar se ve el salto. Mejor avisar antes de
+  // pagar el montaje que descubrirlo viendo el MP4.
+  const viejos = c.tramos.map((_, k) => k).filter(k => clipDesfasado(c, k));
+  if (viejos.length && !confirm(
+    `${viejos.length} clip${viejos.length > 1 ? 's' : ''} (${viejos.slice(0, 6).map(k => k + 1).join(', ')}`
+    + `${viejos.length > 6 ? '…' : ''}) se ${viejos.length > 1 ? 'hicieron' : 'hizo'} con imágenes que después `
+    + `rehiciste, así que ya no encajan con las de al lado y se verá el salto. `
+    + `Rehacelos con el botón de Clips y volvé. ¿Montar igual?`)) return;
 
   btn.disabled = true; prog.style.display = 'block'; out.innerHTML = '';
   try {
@@ -7585,30 +7721,98 @@ async function renderCorto() {
     </div>`;
 
   const cssRatio = c.ratio === '16:9' ? '16/9' : '9/16';
-  lista.innerHTML = c.tramos.map((t, k) => `
+  const pad = n => String(n).padStart(2, '0');
+  lista.innerHTML = c.tramos.map((t, k) => {
+    const [iIn, iOut] = extremosDelTramo(c, k);
+    const viejo = clipDesfasado(c, k);
+    // Cada imagen y cada clip con su propio botón, igual que en los episodios:
+    // cuando una sale mal se rehace esa y sólo esa, sin relanzar la tanda.
+    const celda = (i, papel) => `
+      <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+        <div class="scene-img" style="aspect-ratio:${cssRatio};overflow:hidden;margin-bottom:0;${imgs[i] ? 'cursor:zoom-in' : ''}"${
+          imgs[i] ? ` onclick="abrirImagenCorto(${i})"` : ''}>
+          ${imgs[i]
+            ? `<img src="data:image/png;base64,${imgs[i]}" style="width:100%;height:100%;object-fit:contain;display:block;background:#000">`
+            : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim)">Imagen ${i + 1}</div>`}
+        </div>
+        <div style="font-size:9px;color:var(--text-dim);text-align:center">${papel} · ${i + 1} · ${c.keyframes[i]?.plano || ''}</div>
+        <button class="btn-sec" style="font-size:10px;padding:3px 4px;min-width:0"
+          onclick="regenerarImagenCorto(${i}, this)"
+          title="${imgs[i] ? 'Rehacer' : 'Generar'} la imagen ${i + 1}">${imgs[i] ? '🔄' : '🖼️'} ${i + 1}</button>
+      </div>`;
+    return `
     <div class="scene-card">
       <div class="scene-header">
         <div class="scene-num">Tramo ${k + 1}</div>
-        <div style="font-size:11px;color:var(--text-dim)">${t.corte ? '✂️ corte · ' : ''}imagen ${(t.kIn ?? k) + 1} → ${(t.kOut ?? k + 1) + 1}${auds[k] ? ' · 🎙️' : ''}</div>
+        <div style="font-size:11px;color:var(--text-dim)">${t.corte ? '✂️ corte · ' : ''}imagen ${iIn + 1} → ${iOut + 1}${auds[k] ? ' · 🎙️' : ''}</div>
       </div>
       <div style="font-size:13px;line-height:1.5;margin:6px 0">${t.narracion}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        ${[t.kIn ?? k, t.kOut ?? (k + 1)].map(i => `
-          <div>
-            <div class="scene-img" style="aspect-ratio:${cssRatio};overflow:hidden;margin-bottom:2px;${imgs[i] ? 'cursor:zoom-in' : ''}">
-              ${imgs[i]
-                ? `<img src="data:image/png;base64,${imgs[i]}" style="width:100%;height:100%;object-fit:contain;display:block;background:#000">`
-                : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim)">Imagen ${i + 1}</div>`}
-            </div>
-            <div style="font-size:9px;color:var(--text-dim);text-align:center">${i === (t.kIn ?? k) ? 'empieza' : 'termina'} · ${i + 1} · ${c.keyframes[i]?.plano || ''}</div>
-          </div>`).join('')}
+        ${celda(iIn, 'empieza')}${celda(iOut, 'termina')}
       </div>
+      ${viejo ? `
+        <div style="margin-top:6px;font-size:11px;color:#ffd28a;line-height:1.4">
+          ⚠️ Este clip se hizo con una imagen que después rehiciste: ya no termina donde termina la nueva.
+          Rehacelo o al montar se verá el salto.
+        </div>` : ''}
       ${vids[k] ? `
-        <video src="${vids[k]}" controls playsinline style="width:100%;margin-top:6px;border-radius:8px;background:#000"></video>`
+        <video src="${vids[k]}" controls playsinline style="width:100%;margin-top:6px;border-radius:8px;background:#000"></video>
+        <div class="btn-row" style="margin-top:6px">
+          <button class="btn-sec" style="font-size:11px${viejo ? ';border-color:rgba(255,180,80,0.55);color:#ffd28a' : ''}"
+            onclick="reintentarClipCorto(${k}, this)">🔄 Rehacer clip</button>
+          <button class="btn-sec" style="font-size:11px;border-color:rgba(0,229,255,0.4);color:var(--accent2)"
+            onclick="downloadVideo('${vids[k]}','corto_tramo_${pad(k + 1)}.mp4')">⬇️ MP4</button>
+        </div>`
       : `<button class="btn-sec" style="margin-top:6px;width:100%;font-size:11px"
            onclick="reintentarClipCorto(${k}, this)">🎬 Generar este clip</button>`}
-    </div>`).join('');
+      <button class="btn-sec" style="margin-top:6px;width:100%;font-size:11px"
+        onclick="regenerarVozCorto(${k}, this)">${auds[k] ? '🔄 Rehacer narración' : '🎙️ Generar narración'}</button>
+    </div>`;
+  }).join('');
 }
+
+// Ver una imagen del corto en grande. En un móvil, una miniatura de dos
+// centímetros no alcanza para decidir si una imagen salió mal.
+window.abrirImagenCorto = async function(k) {
+  const c = cortoActual();
+  await openImageByKey(cortoImgKey(k), `Corto · imagen ${k + 1}${c?.keyframes?.[k]?.plano ? ` · ${c.keyframes[k].plano}` : ''}`);
+};
+
+// Rehacer UNA imagen. Si ya había una, sube su versión: los clips que la usaban
+// quedan marcados como viejos en vez de seguir en pantalla como si valieran.
+window.regenerarImagenCorto = async function(k, btn) {
+  const c = cortoActual();
+  if (!c?.keyframes?.[k]) return;
+  const habia = !!(await dbGet(cortoImgKey(k)));
+  const original = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>'; }
+  try {
+    await generarUnaImagenDelCorto(k, (seg, n, de) => {
+      if (btn) btn.innerHTML = `⏳ ${seg}s (${n}/${de})`;
+    });
+    if (habia) { c.keyframes[k].v = versionKf(c, k) + 1; saveState(); }
+    await renderCorto();
+    showToast(`Imagen ${k + 1} lista`, 'success');
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = original; }
+    openErrorModal(`Imagen ${k + 1} del corto`, e.message);
+  }
+};
+
+window.regenerarVozCorto = async function(k, btn) {
+  const original = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Narrando...'; }
+  try {
+    await generarUnaVozDelCorto(k, (seg, n, de) => {
+      if (btn) btn.innerHTML = `⏳ ${seg}s (${n}/${de})`;
+    });
+    await renderCorto();
+    showToast(`Narración ${k + 1} lista`, 'success');
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = original; }
+    openErrorModal(`Narración ${k + 1} del corto`, e.message);
+  }
+};
 
 // Cambiar el estilo de un corto a medias no es un ajuste, es rehacerlo: las
 // imágenes ya generadas son de la escuela vieja y la cadena se nota en el punto
@@ -7633,13 +7837,16 @@ window.cambiarEstiloDelCorto = async function() {
 };
 
 window.reintentarClipCorto = async function(k, btn) {
-  const original = btn.innerHTML;
-  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Generando...';
+  const original = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Generando...'; }
   try {
-    await generarUnClipDelCorto(k);
-    renderCorto();
+    await generarUnClipDelCorto(k, (seg, n, de) => {
+      if (btn) btn.innerHTML = `⏳ ${seg}s (${n}/${de})`;
+    });
+    await renderCorto();
+    showToast(`Clip ${k + 1} listo`, 'success');
   } catch (e) {
-    btn.disabled = false; btn.innerHTML = original;
+    if (btn) { btn.disabled = false; btn.innerHTML = original; }
     openErrorModal(`Clip ${k + 1}`, e.message);
   }
 };

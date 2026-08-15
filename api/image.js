@@ -137,7 +137,8 @@ What stays identical: the place, the light, the characters' faces, hair and clot
 5. Draw each character's hair exactly as described - never lengthen, shorten or restyle it to fit a convention.
 6. Faces clear, well-defined and anatomically correct. No blur, no melted features, no extra limbs, no extra fingers.
 7. Format and style: ${aspectStyle}. ${estilo}
-8. Characters INTEGRATED into the environment at true real-world scale - feet grounded with contact shadows, natural headroom, sharing the perspective and light of the place. Never oversized, never floating, never pasted over the background.${ecchiRules}
+8. Characters INTEGRATED into the environment at true real-world scale - feet grounded with contact shadows, natural headroom, sharing the perspective and light of the place. Never oversized, never floating, never pasted over the background.
+9. LITERAL STAGING ONLY. Draw what a camera standing in that room would record. If any phrase reads as a figure of speech about a feeling - eyes turning red with envy, blood running cold, a heart breaking, fire in someone's gaze, jaw hitting the floor - draw the ordinary physical reality behind it: an expression, a posture, a held breath, a hand stopped halfway. NEVER turn an emotion into a special effect: no glowing or coloured eyes, no beams, no energy, no floating symbols, no transformation for a feeling. Genuine supernatural events stay fully allowed when the description states them as things that physically happen in this world - the ban is on metaphors, not on magic.${ecchiRules}
 
 Scene to illustrate:
 ${cleanPrompt}` });
