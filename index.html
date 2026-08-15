@@ -2032,6 +2032,31 @@ async function conEsperaDeCuota(fn, aviso) {
   }
 }
 
+// El servidor, cuando una imagen se bloquea, la vuelve a pedir con el texto
+// suavizado. Eso NO se hace a espaldas del usuario: si la imagen salió en un
+// escalón de rescate, se dice, porque significa que lo que se dibujó no es
+// exactamente lo que él escribió.
+function avisarRescate(data) {
+  if (!data || !data.rescate) return;
+  showToast(data.rescate >= 2
+    ? '⚠️ Bloqueada: salió quitando el registro sugerente del prompt'
+    : '⚠️ Bloqueada: salió suavizando la descripción de la ropa', 'error');
+}
+
+// Un bloqueo tiene arreglo y merece decir cuál. Un error de cuota o de acceso,
+// no: mezclarlos en el mismo mensaje es lo que hace que no se entienda nada.
+function explicarErrorDeImagen(e) {
+  const m = String(e?.message || '');
+  if (!/bloquead/i.test(m)) return m;
+  return `${m}
+
+El filtro de Google rechazó esta imagen y ya se reintentó dos veces suavizando el texto por dentro. Lo que suele destrabarla:
+• Contá la ropa por su CAÍDA y su tela, no por lo que deja ver ("la gasa se pega al hombro" pasa; "revela la silueta de sus pechos" no).
+• Quitá del prompt las palabras de anatomía y de ropa interior: la sugerencia sale de la postura, el encuadre y la luz.
+• Si la escena es de baño o de cambiarse, cambiá el momento: justo antes o justo después.
+Podés editar el prompt de esta escena con el botón ✏️ Prompt y volver a darle.`;
+}
+
 async function generateImage(prompt, characterRefs = null, forceModel = null, opts = {}) {
   const modelSel = document.getElementById('imageModelSelect');
   const model = forceModel || (modelSel ? modelSel.value : 'auto');
@@ -2131,6 +2156,7 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
     throw new Error(data.error || `Image proxy ${res.status}`);
   }
   if (!data.imageData) throw new Error('Imagen: respuesta sin datos');
+  avisarRescate(data);
   return data.imageData;
 }
 
@@ -3897,6 +3923,12 @@ REGLAS DE CADA PROMPT:
 - ESCALA Y PROPORCIÓN: proporción humana correcta del personaje respecto a muebles y espacio — un adulto de pie tendría espacio libre sobre la cabeza (el techo NO justo encima). Mantené el tamaño real del escenario; no comprimas el espacio ni encajones al personaje.\n- CRÍTICO: el personaje NUNCA mira a la cámara. Describe la acción que está haciendo según la narración. Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"
 - PROHIBIDO en los prompts: naked, nude, explicit, sexual, genitals, nipples
 - NO texto, NO letras, NO marcas de agua
+- ⚠️ CÓMO SE ESCRIBE LA ROPA (esto decide si la imagen se genera o el filtro la rechaza y te quedas sin plano):
+  describí la prenda por su TELA, su CAÍDA y su CORTE, nunca por lo que deja ver del cuerpo. "La gasa mojada
+  se pega al hombro y cuelga pesada" se dibuja; "revela la silueta de sus pechos y el encaje de su ropa
+  interior" lo rechaza el filtro y esa escena se queda en negro. La carga de una imagen sale de la POSTURA,
+  el ENCUADRE y la LUZ — de una mano que se detiene, de una mirada apartada, de un contraluz — no de nombrar
+  partes del cuerpo ni prendas íntimas. Es la misma escena contada de la forma que sí se puede dibujar.
 
 ${LITERALIDAD}
 Acá eso se traduce en algo muy concreto: la narración de la escena ya está escrita y puede estar llena
@@ -4100,7 +4132,7 @@ window.generateCharImage = async function(charId) {
     renderCharacters();
     showToast('Imagen generada', 'success');
   } catch(e) {
-    openErrorModal('Error imagen personaje', e.message);
+    openErrorModal('Error imagen personaje', explicarErrorDeImagen(e));
   }
 };
 
@@ -4857,7 +4889,7 @@ window.generateSceneImageAB = async function(sceneId, slot) {
     renderScenes();
     showToast(`Imagen ${slot} escena ${s.num} lista`, 'success');
   } catch(e) {
-    openErrorModal(`Error imagen ${slot} escena ${s.num}`, e.message);
+    openErrorModal(`Error imagen ${slot} escena ${s.num}`, explicarErrorDeImagen(e));
   }
 };
 
@@ -4881,8 +4913,43 @@ async function getAllCharacterRefs() {
   return refs;
 }
 
-// Returns ONLY refs for characters whose name appears in the prompt
-// This prevents Gemini from confusing characters
+// A QUIÉN se le manda su ficha con la imagen.
+//
+// Sólo a los personajes que el prompt NOMBRA. El servidor tiene la orden de
+// "hacer coincidir CADA personaje con SU ficha", así que mandar la ficha de
+// alguien que no sale en la escena no es un apaño de más: es pedirle que dibuje
+// a otra persona. El camino de "Todas las Imágenes" tenía un por-si-acaso que,
+// cuando no reconocía ningún nombre en el prompt, mandaba la ficha del PRIMER
+// personaje del reparto. Por eso salía siempre la misma cara en escenas que no
+// eran suyas. Ese por-si-acaso ya no está: sin nombre reconocido no va ninguna
+// ficha, y la escena se dibuja de la descripción, que es lo correcto.
+//
+// Y el reconocimiento por cabecera estaba muerto sin que se notara: buscaba
+// /^scene with .*:/ anclado al PRINCIPIO, y desde que el tamaño de plano va
+// delante ("WIDE SHOT — ... . Scene with Kenji: ...") no casaba nunca.
+function seleccionarRefs(prompt, fichas) {
+  if (!prompt || !fichas?.length) return [];
+  const bajo = String(prompt).toLowerCase();
+  // Las partes de menos de tres letras se descartan: "Yu" casaría con medio texto.
+  const partes = f => String(f.name).toLowerCase().split(/\s+/).filter(p => p.length >= 3);
+  const elegidas = new Map();
+
+  // 1. La cabecera "Scene with X and Y:" es la lista que escribió el director.
+  //    Manda sobre el resto del texto: un nombre suelto en el cuerpo puede ser
+  //    un retrato colgado en la pared, no alguien que esté en la escena.
+  const cabecera = prompt.match(/scene with ([^:]{1,150}):/i);
+  if (cabecera) {
+    const seccion = cabecera[1].toLowerCase();
+    for (const f of fichas) if (partes(f).some(p => seccion.includes(p))) elegidas.set(f.name, f);
+  }
+  // 2. Sin cabecera utilizable, se busca el nombre en todo el prompt.
+  if (!elegidas.size) {
+    for (const f of fichas) if (partes(f).some(p => bajo.includes(p))) elegidas.set(f.name, f);
+  }
+  // El propio servidor pide tres personajes por imagen como máximo.
+  return [...elegidas.values()].slice(0, 3);
+}
+
 async function getRefsForPrompt(prompt) {
   if (!state.characters.length || !prompt) return [];
 
@@ -4895,31 +4962,8 @@ async function getRefsForPrompt(prompt) {
   }
   if (!charImgs.length) return [];
 
-  const promptLower = prompt.toLowerCase();
-  const matched = new Map(); // use Map to avoid duplicates
-
-  // Strategy 1: parse "Scene with X and Y:" prefix — most reliable
-  const sceneWithMatch = prompt.match(/^scene with ([^:]+):/i);
-  if (sceneWithMatch) {
-    const nameSection = sceneWithMatch[1].toLowerCase();
-    for (const c of charImgs) {
-      const parts = c.name.toLowerCase().split(/\s+/).filter(p => p.length >= 3);
-      if (parts.some(p => nameSection.includes(p))) matched.set(c.name, c);
-    }
-  }
-
-  // Strategy 2: search full prompt for any character name
-  for (const c of charImgs) {
-    if (matched.has(c.name)) continue;
-    const parts = c.name.toLowerCase().split(/\s+/).filter(p => p.length >= 3);
-    if (parts.some(p => promptLower.includes(p))) matched.set(c.name, c);
-  }
-
-  // Strategy 3: protagonist fallback — if nobody matched, protagonist is almost certainly there
-  if (!matched.size && charImgs[0]) matched.set(charImgs[0].name, charImgs[0]);
-
-  const result = [...matched.values()];
-  console.log(`Refs "${prompt.slice(0,60)}": [${result.map(r=>r.name).join(', ')}]`);
+  const result = seleccionarRefs(prompt, charImgs);
+  console.log(`Refs "${String(prompt).slice(0,60)}": [${result.map(r=>r.name).join(', ')}]`);
   return result;
 }
 
@@ -5222,37 +5266,12 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   }
   console.log('Refs cacheadas:', Object.keys(cachedRefMap).join(', '));
 
-  // Filter refs for a specific prompt using same 3-strategy logic as getRefsForPrompt
-  function getRefsFromCache(prompt) {
-    if (!prompt) return Object.values(cachedRefMap).slice(0, 1);
-    const promptLower = prompt.toLowerCase();
-    const matched = new Map();
-
-    // Strategy 1: parse "Scene with X and Y:" prefix
-    const sceneWithMatch = prompt.match(/^scene with ([^:]+):/i);
-    if (sceneWithMatch) {
-      const nameSection = sceneWithMatch[1].toLowerCase();
-      for (const [key, r] of Object.entries(cachedRefMap)) {
-        const parts = r.name.toLowerCase().split(/\s+/).filter(p => p.length >= 3);
-        if (parts.some(p => nameSection.includes(p))) matched.set(key, r);
-      }
-    }
-
-    // Strategy 2: search full prompt
-    for (const [key, r] of Object.entries(cachedRefMap)) {
-      if (matched.has(key)) continue;
-      const parts = r.name.toLowerCase().split(/\s+/).filter(p => p.length >= 3);
-      if (parts.some(p => promptLower.includes(p))) matched.set(key, r);
-    }
-
-    // Strategy 3: protagonist fallback
-    if (!matched.size) {
-      const first = Object.values(cachedRefMap)[0];
-      if (first) matched.set(first.name, first);
-    }
-
-    return [...matched.values()];
-  }
+  // La MISMA selección que usa el botón de una sola imagen. Eran dos copias con
+  // reglas distintas —la de la tanda mandaba la ficha del primer personaje
+  // cuando no reconocía a nadie— así que rehacer una imagen a mano daba una cara
+  // y generarla en la tanda daba otra.
+  const fichasCache = Object.values(cachedRefMap);
+  const getRefsFromCache = (prompt) => seleccionarRefs(prompt, fichasCache);
 
   // Per scene, not hoisted: the weather clause now depends on whether THAT
   // scene has a roof over it.
@@ -5358,6 +5377,9 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
       model: model === 'auto' ? null : model,
       isEcchi,
       aspectRatio,
+      // Sin esto el servidor usa su contrato fijo, que pide "ojos grandes de
+      // anime" y desmiente al estilo elegido antes de que el prompt hable.
+      styleSpec: estiloCore(),
     };
     const res = await fetch('/api/image', {
       method: 'POST',
@@ -5365,7 +5387,7 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
       body: JSON.stringify(bodyObj),
     });
     const data = await res.json();
-    if (res.ok && !data.error && data.imageData) return data.imageData;
+    if (res.ok && !data.error && data.imageData) { avisarRescate(data); return data.imageData; }
 
     // If Gemini rejects the reference image itself, retry without refs
     const isRefError = data.error && (
@@ -5387,11 +5409,13 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
       model: model === 'auto' ? null : model,
       isEcchi,
       aspectRatio,
+      styleSpec: estiloCore(),
     }),
   });
   const data2 = await res2.json();
   if (!res2.ok || data2.error) throw new Error(data2.error || `Image proxy ${res2.status}`);
   if (!data2.imageData) throw new Error('Imagen: respuesta sin datos');
+  avisarRescate(data2);
   return data2.imageData;
 }
 
@@ -7940,7 +7964,7 @@ window.regenerarImagenCorto = async function(k, btn) {
     showToast(`Imagen ${k + 1} lista`, 'success');
   } catch (e) {
     if (btn) { btn.disabled = false; btn.innerHTML = original; }
-    openErrorModal(`Imagen ${k + 1} del corto`, e.message);
+    openErrorModal(`Imagen ${k + 1} del corto`, explicarErrorDeImagen(e));
   }
 };
 
