@@ -3,6 +3,9 @@
 // Starts async video generation and returns operationName for polling
 // ════════════════════════════════════════════════════════════════
 const { cfg, auth, vertexUrl, begin, fail } = require('./_lib/gcp');
+// Veo tiene el MISMO filtro que el generador de imagen y el prompt le llegaba
+// sin tocar. Un clip bloqueado cuesta bastante más que una imagen bloqueada.
+const { limpiarPrompt } = require('./_lib/texto');
 
 // Durations each Veo model accepts. Asking for a length the model does not
 // support is rejected, and asking for more seconds than the shot needs is worse:
@@ -48,6 +51,10 @@ module.exports = async function handler(req, res) {
     // declaring the wrong type is how a valid image gets rejected.
     const tipo = t => (t === 'image/jpeg' || t === 'image/png') ? t : 'image/png';
     if (!prompt) return res.status(400).json({ error: 'prompt requerido' });
+    // El prompt de video se limpia igual que el de imagen. `desdeNarracion` lo
+    // marca el cliente cuando el director no escribió movimiento y hay que tirar
+    // del texto de la escena, que no está escrito para ser un prompt.
+    const promptLimpio = limpiarPrompt(prompt, { desdeNarracion: req.body.desdeNarracion === true });
 
     const MODEL_ID = (veoModel || cfg.veoModel).trim();
     const bucket = cfg.bucket;
@@ -80,7 +87,7 @@ module.exports = async function handler(req, res) {
       storageUri: `gs://${bucket}/${cfg.prefix}/veo/`,
     };
     const instancia = {
-      prompt,
+      prompt: promptLimpio,
       ...(imageData ? { image: { bytesBase64Encoded: imageData, mimeType: tipo(imageMimeType) } } : {}),
     };
 

@@ -1000,6 +1000,34 @@ Esto NO recorta la fantasía: si en esta historia el personaje de verdad lanza f
 se le encienden los ojos porque así ocurre en ese mundo, se dibuja tal cual y con todo el aparato. Lo
 único prohibido es convertir una EMOCIÓN en un efecto especial.`;
 
+// El prompt de imagen NO es la narración. Es la orden de un plano.
+//
+// A la narración nadie la filtra: se escribe todo lo explícita que el género
+// pida. Al generador de imagen y al de video SÍ los filtra Google, y lo que
+// dispara el filtro es el TEXTO que le llega, no la escena que se cuenta. Mis
+// reglas hacían justo lo contrario de lo que hay que hacer: le ORDENABAN al
+// director repetir la ropa de cada personaje en los tres prompts de cada
+// escena, cuando la ficha del personaje ya viaja con la imagen y ya la lleva
+// puesta. Decir otra vez que la bata es translúcida no dibuja nada nuevo — sólo
+// pone en el texto la frase que hace saltar el filtro, y esa escena se queda en
+// negro.
+const PROMPT_ES_UN_PLANO = `⚠️ EL PROMPT DE IMAGEN NO ES LA NARRACIÓN: ES LA ORDEN DE UN PLANO.
+La narración puede ser todo lo explícita que el género pida — a ella no la filtra nadie. Al generador de
+imagen SÍ, y lo que dispara su filtro es el TEXTO del prompt. Un prompt bloqueado no es una imagen
+suavizada: es una imagen que NO EXISTE. Por eso el prompt lleva sólo esto: QUIÉN está, DÓNDE, QUÉ HACE,
+DESDE DÓNDE se mira y QUÉ LUZ hay.
+- LA FICHA DEL PERSONAJE VIAJA CON LA IMAGEN y ya trae su cara, su pelo y su ropa dibujadas. Repetir en el
+  prompt cómo es esa ropa no añade absolutamente nada a lo que se va a dibujar. Nombrá al personaje y,
+  si hace falta distinguirlo, la prenda por su color o su tela en dos palabras: "la bata de gasa gris".
+- NUNCA describas una prenda por lo que deja ver del cuerpo. Eso no es información visual —la prenda ya
+  está dibujada— es sólo la frase que bloquea el plano. La carga de una imagen sale de la POSTURA, el
+  ENCUADRE y la LUZ: una mano que se detiene, una mirada apartada, un contraluz.
+- Sólo se describe lo que CAMBIA respecto de la ficha: que ahora está mojada, rota, manchada o quitada.
+- VIOLENCIA, exactamente igual. El plano se cuenta por sus CONSECUENCIAS y su encuadre —la mano que suelta
+  el cuchillo, la mancha que crece en el suelo, la cara del que está mirando— no por el detalle del daño.
+  Un prompt que insiste en la herida se bloquea y te quedás sin plano. El mismo momento contado por lo que
+  se ve alrededor sí se dibuja, y da más miedo.`;
+
 // ════════════════════════════════════════════════════════════════
 // NOMBRES
 // ════════════════════════════════════════════════════════════════
@@ -1334,6 +1362,13 @@ function espacioDeEscena(s) {
   return veredicto(cuenta(texto, SET_INTERIOR) - cuenta(texto, SET_EXTERIOR));
 }
 
+// Sin movimiento escrito por el director se tira de la narración, que no está
+// escrita para ser un prompt. El servidor lo necesita saber para enfriarla antes
+// de mandársela a Veo.
+function videoDesdeNarracion(s, slot = 'A') {
+  return !s['videoPrompt' + slot] && !s['imagePrompt' + slot] && !s.imagePromptA;
+}
+
 function buildVideoPrompt(s, slot = 'A', opts = {}) {
   // The director writes the motion for each shot knowing which shot follows, so
   // a clip ends where the next one's still image begins. Without that the model
@@ -1353,6 +1388,7 @@ function buildVideoPrompt(s, slot = 'A', opts = {}) {
   const base = movimiento
     ? recortar(movimiento, 700)
     : recortar(s['imagePrompt' + slot] || s.imagePromptA || s.narration || '', 300);
+
   // Read the genre from the SAVED universe, not from the form. The selects are
   // only the creation form: after a reload or a project switch they still show
   // their defaults, so this used to reference the wrong studio (accion/shonen)
@@ -2120,6 +2156,7 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
     segundosEntre: opts.segundosEntre || undefined,
     planoPrevio: opts.planoPrevio || undefined,
     planoNuevo: opts.planoNuevo || undefined,
+    desdeNarracion: opts.desdeNarracion === true,
   };
 
   const bodyStr = JSON.stringify(bodyObj);
@@ -3912,7 +3949,9 @@ REGLAS DE CADA PROMPT:
 - SIEMPRE en INGLÉS
 - SIEMPRE empezar con: "${estiloLeadIn()}"
 - Luego "Scene with [nombre exacto]:" seguido de la descripción visual
-- Personajes HUMANOS: SIEMPRE incluir ropa específica según su ficha + color y estilo de cabello (idénticos en los 3 prompts de la escena)
+- Personajes HUMANOS: nombralos y, si hace falta distinguirlos, la ropa en DOS PALABRAS por su color o su
+  tela, igual en los 3 prompts de la escena. Nada más: la ficha del personaje viaja con la imagen y ya trae
+  la ropa y el pelo dibujados. Describirlos otra vez no cambia el dibujo y sí puede bloquear el plano.
 - Personajes NO-HUMANOS (animal/criatura/objeto poseído): describir su apariencia física real (especie, pelaje/textura, color, tamaño) — JAMÁS inventarle ropa humana salvo que su ficha la mencione explícitamente
 - NUNCA decir solo "the protagonist" o "a man" — SIEMPRE el nombre real
 - Si 2+ personajes en la escena: "Scene with [nombre1] and [nombre2]:" y describir apariencia de cada uno
@@ -3923,12 +3962,8 @@ REGLAS DE CADA PROMPT:
 - ESCALA Y PROPORCIÓN: proporción humana correcta del personaje respecto a muebles y espacio — un adulto de pie tendría espacio libre sobre la cabeza (el techo NO justo encima). Mantené el tamaño real del escenario; no comprimas el espacio ni encajones al personaje.\n- CRÍTICO: el personaje NUNCA mira a la cámara. Describe la acción que está haciendo según la narración. Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"
 - PROHIBIDO en los prompts: naked, nude, explicit, sexual, genitals, nipples
 - NO texto, NO letras, NO marcas de agua
-- ⚠️ CÓMO SE ESCRIBE LA ROPA (esto decide si la imagen se genera o el filtro la rechaza y te quedas sin plano):
-  describí la prenda por su TELA, su CAÍDA y su CORTE, nunca por lo que deja ver del cuerpo. "La gasa mojada
-  se pega al hombro y cuelga pesada" se dibuja; "revela la silueta de sus pechos y el encaje de su ropa
-  interior" lo rechaza el filtro y esa escena se queda en negro. La carga de una imagen sale de la POSTURA,
-  el ENCUADRE y la LUZ — de una mano que se detiene, de una mirada apartada, de un contraluz — no de nombrar
-  partes del cuerpo ni prendas íntimas. Es la misma escena contada de la forma que sí se puede dibujar.
+
+${PROMPT_ES_UN_PLANO}
 
 ${LITERALIDAD}
 Acá eso se traduce en algo muy concreto: la narración de la escena ya está escrita y puede estar llena
@@ -4866,6 +4901,9 @@ window.generateSceneImageAB = async function(sceneId, slot) {
   if (!s) return;
   const base = s['imagePrompt' + slot] || s.imagePromptA || s.imagePromptEN || s.narration;
   if (!base) { showToast(`Escena ${s.num}: sin prompt ${slot}`, 'error'); return; }
+  // Si lo único que hay es la narración, el servidor tiene que saberlo: no está
+  // escrita para ser un prompt y entra enfriada, o el filtro la rechaza siempre.
+  const desdeNarracion = !s['imagePrompt' + slot] && !s.imagePromptA && !s.imagePromptEN;
   // El tamaño de plano va delante, como en el corto: es lo que impide que el
   // plano 1 y el 2 de una misma escena salgan casi idénticos y que el clip que
   // los une se quede sin nada que animar.
@@ -4876,6 +4914,7 @@ window.generateSceneImageAB = async function(sceneId, slot) {
     // Only pass refs for characters mentioned in THIS prompt
     const refs = await getRefsForPrompt(prompt);
     const env = buildSceneEnvContext(s);
+    env.desdeNarracion = desdeNarracion;
     env.continuityRef = await getContinuityRef(s, slot);
     const previo = { B: 'tamanoA', C: 'tamanoB' }[slot];
     if (env.continuityRef && tam) {
@@ -5155,6 +5194,7 @@ window.generateSceneVideo = async function(sceneId, slot = 'A') {
     const aspectRatio = document.getElementById('aspectRatio')?.value || '9:16';
     const cuerpo = JSON.stringify({
       prompt: buildVideoPrompt(s, slot, { hasLastFrame: !!final }),
+      desdeNarracion: videoDesdeNarracion(s, slot),
       negativePrompt: buildVideoNegative(s, slot, { hasLastFrame: !!final }),
       imageA: inicial ? inicial.data : null,
       imageMimeType: inicial ? inicial.mimeType : undefined,
@@ -5290,8 +5330,9 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
     for (const slot of ['A','B','C']) {
       const prompt = s['imagePrompt' + slot] || (slot === 'A' ? (s.imagePromptEN || s.narration) : '');
       if (!prompt) continue;
+      const desdeNarracion = !s['imagePrompt' + slot] && !s.imagePromptEN;
       const existing = await dbGet(sceneImgKeyBy(s.id, slot));
-      if (!existing) queue.push({ s, ab: slot, prompt });
+      if (!existing) queue.push({ s, ab: slot, prompt, desdeNarracion });
     }
   }
 
@@ -5300,7 +5341,7 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
 
   // Sequential — one image at a time, UI updates immediately after each one
   for (let i = 0; i < queue.length; i++) {
-    const { s, ab, prompt } = queue[i];
+    const { s, ab, prompt, desdeNarracion } = queue[i];
     bb.style.width = Math.round((i / total) * 100) + '%';
     bt.textContent = `Imagen ${i + 1}/${total} — Escena ${s.num} (${ab === 'A' ? '1' : ab === 'B' ? '2' : '3'}/3)...`;
 
@@ -5308,7 +5349,7 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
     while (!success && attempt < 8) {
       try {
         const contRef = await getContinuityRef(s, ab);
-        const imgB64 = await generateImageRaw(prompt, getRefsFromCache(prompt), { ...envForScene(s), continuityRef: contRef });
+        const imgB64 = await generateImageRaw(prompt, getRefsFromCache(prompt), { ...envForScene(s), continuityRef: contRef, desdeNarracion });
         await dbSet(sceneImgKeyBy(s.id, ab), imgB64);
         success = true; completed++;
         renderScenes(); // update UI immediately so user sees each image appear
@@ -5380,6 +5421,7 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
       // Sin esto el servidor usa su contrato fijo, que pide "ojos grandes de
       // anime" y desmiente al estilo elegido antes de que el prompt hable.
       styleSpec: estiloCore(),
+      desdeNarracion: env.desdeNarracion === true,
     };
     const res = await fetch('/api/image', {
       method: 'POST',
@@ -5410,6 +5452,7 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
       isEcchi,
       aspectRatio,
       styleSpec: estiloCore(),
+      desdeNarracion: env.desdeNarracion === true,
     }),
   });
   const data2 = await res2.json();
@@ -7203,6 +7246,8 @@ ${LITERALIDAD}
 Acá eso se traduce en algo muy concreto: en "narracion" escribí como quieras, con todas las figuras que
 hagan falta. En "keyframe" y "keyframeEntrada" escribí SÓLO lo que una cámara puesta en ese sitio
 grabaría. Son campos distintos porque hacen trabajos distintos.
+
+${PROMPT_ES_UN_PLANO}
 
 GÉNERO: ${genero}. El género decide QUÉ pasa; estas reglas deciden cómo se cuenta y cómo se rueda.
 
