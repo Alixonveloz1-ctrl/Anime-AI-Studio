@@ -1016,9 +1016,10 @@ La narración puede ser todo lo explícita que el género pida — a ella no la 
 imagen SÍ, y lo que dispara su filtro es el TEXTO del prompt. Un prompt bloqueado no es una imagen
 suavizada: es una imagen que NO EXISTE. Por eso el prompt lleva sólo esto: QUIÉN está, DÓNDE, QUÉ HACE,
 DESDE DÓNDE se mira y QUÉ LUZ hay.
-- LA FICHA DEL PERSONAJE VIAJA CON LA IMAGEN y ya trae su cara, su pelo y su ropa dibujadas. Repetir en el
-  prompt cómo es esa ropa no añade absolutamente nada a lo que se va a dibujar. Nombrá al personaje y,
-  si hace falta distinguirlo, la prenda por su color o su tela en dos palabras: "la bata de gasa gris".
+- LA FICHA DEL PERSONAJE VIAJA CON LA IMAGEN y ya trae su cara, su pelo y su ropa dibujadas. Aun así,
+  nombrá SIEMPRE su especie y sus rasgos no humanos, su pelo y su prenda: cuesta media frase y es el único
+  seguro contra que el personaje cambie de raza o de ropa entre un plano y el siguiente. Lo que sobra es
+  DETALLAR la prenda — "la bata de gasa gris" basta, y no hace falta explicar qué se ve a través de ella.
 - NUNCA describas una prenda por lo que deja ver del cuerpo. Eso no es información visual —la prenda ya
   está dibujada— es sólo la frase que bloquea el plano. La carga de una imagen sale de la POSTURA, el
   ENCUADRE y la LUZ: una mano que se detiene, una mirada apartada, un contraluz.
@@ -3949,9 +3950,13 @@ REGLAS DE CADA PROMPT:
 - SIEMPRE en INGLÉS
 - SIEMPRE empezar con: "${estiloLeadIn()}"
 - Luego "Scene with [nombre exacto]:" seguido de la descripción visual
-- Personajes HUMANOS: nombralos y, si hace falta distinguirlos, la ropa en DOS PALABRAS por su color o su
-  tela, igual en los 3 prompts de la escena. Nada más: la ficha del personaje viaja con la imagen y ya trae
-  la ropa y el pelo dibujados. Describirlos otra vez no cambia el dibujo y sí puede bloquear el plano.
+- ⚠️ IDENTIDAD, EN LOS TRES PROMPTS Y SIEMPRE IGUAL: el nombre real + lo que hace reconocible a ese personaje
+  de un vistazo. Y lo PRIMERO de todo, su ESPECIE Y SUS RASGOS NO HUMANOS si los tiene: orejas puntiagudas de
+  elfo, cuernos, cola, colmillos, color de piel. Después el color y el largo del pelo, y la prenda por su
+  nombre y su color. Esto NO es decoración ni relleno: es lo único que impide que el mismo personaje salga
+  elfa en la escena 1 y humana en la escena 2. Media frase basta, pero tiene que estar en los tres.
+- Lo que NO se escribe nunca es lo que la ropa deja ver del cuerpo. La PRENDA sí, con su tela y su color; lo
+  de debajo no — eso no dibuja nada nuevo y es lo que hace que el filtro tire el plano entero.
 - Personajes NO-HUMANOS (animal/criatura/objeto poseído): describir su apariencia física real (especie, pelaje/textura, color, tamaño) — JAMÁS inventarle ropa humana salvo que su ficha la mencione explícitamente
 - NUNCA decir solo "the protagonist" o "a man" — SIEMPRE el nombre real
 - Si 2+ personajes en la escena: "Scene with [nombre1] and [nombre2]:" y describir apariencia de cada uno
@@ -4908,11 +4913,15 @@ window.generateSceneImageAB = async function(sceneId, slot) {
   // plano 1 y el 2 de una misma escena salgan casi idénticos y que el clip que
   // los une se quede sin nada que animar.
   const tam = s['tamano' + slot];
-  const prompt = tam ? `${planoEn(tam)}. ${base}` : base;
+  const conPlano = tam ? `${planoEn(tam)}. ${base}` : base;
   showToast(`Generando imagen ${slot} escena ${s.num}...`, 'success');
   try {
-    // Only pass refs for characters mentioned in THIS prompt
-    const refs = await getRefsForPrompt(prompt);
+    // Quién sale, su ficha dibujada si la tiene, y su descripción si no.
+    const { refs, ancla, sinFicha } = await repartoDeLaEscena(conPlano, s);
+    if (sinFicha.length) {
+      showToast(`${sinFicha.join(', ')} sin ficha generada: se dibuja del texto`, 'error');
+    }
+    const prompt = conPlano + ancla;
     const env = buildSceneEnvContext(s);
     env.desdeNarracion = desdeNarracion;
     env.continuityRef = await getContinuityRef(s, slot);
@@ -4987,6 +4996,65 @@ function seleccionarRefs(prompt, fichas) {
   }
   // El propio servidor pide tres personajes por imagen como máximo.
   return [...elegidas.values()].slice(0, 3);
+}
+
+// QUIÉN sale en esta escena. Reconocer el nombre en el prompt no basta, y
+// quitar el último recurso fue un error mío con consecuencias inmediatas: una
+// narración EN PRIMERA PERSONA no nombra nunca al protagonista —dice "yo"— así
+// que no casaba nadie, no se mandaba ninguna ficha, y el generador se inventaba
+// a la protagonista de cero en cada plano. Por eso salía elfa en una imagen y
+// humana en la siguiente.
+function personajesDeLaEscena(prompt, escena) {
+  const reparto = (state.characters || []).filter(c => c.name && String(c.name).trim().length >= 2);
+  if (!reparto.length) return [];
+
+  // 1. El prompt: es lo que el director escribió para ESTE plano.
+  let hallados = seleccionarRefs(prompt, reparto);
+  if (hallados.length) return hallados;
+
+  // 2. La narración de la escena. El prompt puede decir "la joven" y la
+  //    narración decir el nombre; sigue siendo información de esta escena.
+  if (escena?.narration) {
+    hallados = seleccionarRefs('· ' + escena.narration, reparto);
+    if (hallados.length) return hallados;
+  }
+
+  // 3. Último recurso: el protagonista. En una historia de un solo protagonista
+  //    —y sobre todo en primera persona— es quien está en el plano casi siempre.
+  //    Adivinar quién es sale MUCHO mejor que no mandar nada: sin ficha el
+  //    modelo cambia de persona entre un plano y el siguiente.
+  const prota = reparto.find(c => /protagonist/i.test(String(c.role || ''))) || reparto[0];
+  return prota ? [prota] : [];
+}
+
+// La ficha manda sobre el prompt. Cuando el personaje TIENE imagen de
+// referencia, la imagen ya es el ancla y repetir su ropa en el texto sólo
+// arriesga el filtro. Cuando NO la tiene, el texto es lo único que impide que
+// una elfa salga humana, así que va — y va marcado como no negociable.
+function anclaDeFicha(personajes) {
+  const sinFicha = (personajes || []).filter(c => !c.tieneImagen);
+  if (!sinFicha.length) return '';
+  return '\n\nCHARACTER SHEET — non-negotiable, overrides any other description here. Species and non-human '
+    + 'features (pointed ears, horns, tail, skin colour), hair colour and length, and clothing are EXACTLY '
+    + 'as written below, identical in every image:\n'
+    + sinFicha.map(c => `• ${c.name}${c.role ? ` (${c.role})` : ''}: `
+        + String(c.appearance || '').replace(/\s+/g, ' ').trim().slice(0, 220)).join('\n');
+}
+
+// Los personajes de la escena, ya resueltos: quién sale, quién tiene ficha
+// dibujada y qué texto hay que añadir por los que no la tienen.
+async function repartoDeLaEscena(prompt, escena) {
+  const elegidos = personajesDeLaEscena(prompt, escena);
+  const conEstado = [];
+  for (const c of elegidos) {
+    const img = await dbGet(charImgKey(c.id));
+    conEstado.push({ ...c, tieneImagen: !!img, img });
+  }
+  return {
+    refs: conEstado.filter(c => c.tieneImagen).map(c => ({ name: c.name, role: c.role || '', img: c.img })),
+    ancla: anclaDeFicha(conEstado),
+    sinFicha: conEstado.filter(c => !c.tieneImagen).map(c => c.name),
+  };
 }
 
 async function getRefsForPrompt(prompt) {
@@ -5310,8 +5378,14 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   // reglas distintas —la de la tanda mandaba la ficha del primer personaje
   // cuando no reconocía a nadie— así que rehacer una imagen a mano daba una cara
   // y generarla en la tanda daba otra.
-  const fichasCache = Object.values(cachedRefMap);
-  const getRefsFromCache = (prompt) => seleccionarRefs(prompt, fichasCache);
+  // La MISMA resolución de reparto que el botón de una imagen: el prompt, si no
+  // la narración, y si no el protagonista. Y la misma ficha en texto para quien
+  // no tenga imagen de referencia.
+  const conImagen = (c) => !!cachedRefMap[String(c.name).toLowerCase()];
+  const refsDeEscena = (prompt, s) => personajesDeLaEscena(prompt, s)
+    .map(c => cachedRefMap[String(c.name).toLowerCase()]).filter(Boolean);
+  const anclaDeEscena = (prompt, s) => anclaDeFicha(
+    personajesDeLaEscena(prompt, s).map(c => ({ ...c, tieneImagen: conImagen(c) })));
 
   // Per scene, not hoisted: the weather clause now depends on whether THAT
   // scene has a roof over it.
@@ -5328,11 +5402,13 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   for (const s of state.scenes) {
     if (!s.imagePromptA && !s.narration) continue;
     for (const slot of ['A','B','C']) {
-      const prompt = s['imagePrompt' + slot] || (slot === 'A' ? (s.imagePromptEN || s.narration) : '');
-      if (!prompt) continue;
+      const base = s['imagePrompt' + slot] || (slot === 'A' ? (s.imagePromptEN || s.narration) : '');
+      if (!base) continue;
       const desdeNarracion = !s['imagePrompt' + slot] && !s.imagePromptEN;
+      const tam = s['tamano' + slot];
+      const prompt = tam ? `${planoEn(tam)}. ${base}` : base;
       const existing = await dbGet(sceneImgKeyBy(s.id, slot));
-      if (!existing) queue.push({ s, ab: slot, prompt, desdeNarracion });
+      if (!existing) queue.push({ s, ab: slot, prompt, desdeNarracion, tam });
     }
   }
 
@@ -5341,7 +5417,7 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
 
   // Sequential — one image at a time, UI updates immediately after each one
   for (let i = 0; i < queue.length; i++) {
-    const { s, ab, prompt, desdeNarracion } = queue[i];
+    const { s, ab, prompt, desdeNarracion, tam } = queue[i];
     bb.style.width = Math.round((i / total) * 100) + '%';
     bt.textContent = `Imagen ${i + 1}/${total} — Escena ${s.num} (${ab === 'A' ? '1' : ab === 'B' ? '2' : '3'}/3)...`;
 
@@ -5349,7 +5425,12 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
     while (!success && attempt < 8) {
       try {
         const contRef = await getContinuityRef(s, ab);
-        const imgB64 = await generateImageRaw(prompt, getRefsFromCache(prompt), { ...envForScene(s), continuityRef: contRef, desdeNarracion });
+        const previo = { B: 'tamanoA', C: 'tamanoB' }[ab];
+        const imgB64 = await generateImageRaw(prompt + anclaDeEscena(prompt, s), refsDeEscena(prompt, s), {
+          ...envForScene(s), continuityRef: contRef, desdeNarracion,
+          planoPrevio: (contRef && tam && previo && s[previo]) ? planoEn(s[previo]) : '',
+          planoNuevo: (contRef && tam) ? planoEn(tam) : '',
+        });
         await dbSet(sceneImgKeyBy(s.id, ab), imgB64);
         success = true; completed++;
         renderScenes(); // update UI immediately so user sees each image appear
