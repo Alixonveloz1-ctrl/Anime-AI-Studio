@@ -425,12 +425,12 @@
       </select>
 
       <label style="margin-top:12px">Instrucciones para este episodio <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
-      <textarea id="episodeInstructions" placeholder="Ej: Kenji contrató una universitaria de medio tiempo. El episodio termina con una lluvia inesperada..." style="height:70px;resize:vertical"></textarea>
+      <textarea id="episodeInstructions" placeholder="Ej: El protagonista contrató una universitaria de medio tiempo. El episodio termina con una lluvia inesperada..." style="height:70px;resize:vertical"></textarea>
 
       <div id="newCharsSection" style="display:none;margin-top:12px;padding:10px;background:rgba(100,220,100,0.06);border:1px solid rgba(100,220,100,0.2);border-radius:8px">
         <label style="color:#64dc64;margin-bottom:4px">👤 Personajes nuevos en este episodio <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
         <p style="font-size:11px;color:var(--text-dim);margin:0 0 6px">Describe los personajes que entran por primera vez. El sistema generará su ficha visual y los agregará a la historia.</p>
-        <textarea id="newCharsInput" placeholder="Ej: Una rival llamada Yuki, 19 años, cabello blanco largo, ojos violeta, uniforme de médica estudiante, personalidad fría pero con un secreto que involucra al protagonista." style="height:70px;resize:vertical;border-color:rgba(100,220,100,0.3)"></textarea>
+        <textarea id="newCharsInput" placeholder="Ej: Una rival llamada Mizuki, 19 años, cabello blanco largo, ojos violeta, uniforme de médica estudiante, personalidad fría pero con un secreto que involucra al protagonista." style="height:70px;resize:vertical;border-color:rgba(100,220,100,0.3)"></textarea>
       </div>
 
       <div id="epProgress" style="display:none;margin-top:12px">
@@ -940,13 +940,13 @@ const MODOS_NARRATIVOS = {
   },
   tercera_presente: {
     nombre: 'Tercera persona, presente',
-    regla: 'TERCERA PERSONA EN PRESENTE, con el protagonista siempre por su nombre ("Lin Yan cruza el patio"). '
+    regla: 'TERCERA PERSONA EN PRESENTE, con el protagonista siempre por su nombre ("[NOMBRE] cruza el patio"). '
       + 'Todo ocurre delante del espectador, ahora mismo — nunca como algo que ya pasó.',
   },
   tercera_pasado: {
     nombre: 'Tercera persona, pasado',
     regla: 'TERCERA PERSONA omnisciente en pasado inmediato, con el protagonista siempre por su nombre '
-      + '("Lin Yan cruzó el patio"). Nunca "yo".',
+      + '("[NOMBRE] cruzó el patio"). Nunca "yo".',
   },
   segunda: {
     nombre: 'Segunda persona ("tú")',
@@ -999,6 +999,144 @@ se dibuja. Se dibuja lo que le pasa a la CARA, al CUERPO y a las MANOS.
 Esto NO recorta la fantasía: si en esta historia el personaje de verdad lanza fuego, parte una montaña o
 se le encienden los ojos porque así ocurre en ese mundo, se dibuja tal cual y con todo el aparato. Lo
 único prohibido es convertir una EMOCIÓN en un efecto especial.`;
+
+// ════════════════════════════════════════════════════════════════
+// NOMBRES
+// ════════════════════════════════════════════════════════════════
+// El prompt del universo llevaba esta línea escrita por mí:
+//   "Nombres reales (japoneses: Hiro, Yuki, Rin, Kaito, Mei / chinos: Lin Yan,
+//    Chen Wu, Wang, Liu, Zhang)"
+// Un ejemplo dentro de un prompt no se lee como ejemplo: se lee como la
+// respuesta. Por eso salía Kaito en todo lo japonés y Lin Yan en todo lo chino,
+// historia tras historia. Y pedirle "variedad" a un modelo no arregla nada:
+// vuelve al puñado de nombres que vio un millón de veces. Lo que sí funciona es
+// darle un REPERTORIO DISTINTO en cada llamada y prohibirle los que ya usó.
+const NOMBRES = {
+  china: {
+    etiqueta: 'chinos',
+    apellidos: ['Wang','Li','Zhang','Liu','Chen','Yang','Huang','Zhao','Wu','Zhou','Xu','Sun','Ma','Zhu','Hu',
+      'Guo','He','Lin','Gao','Luo','Zheng','Liang','Xie','Song','Tang','Deng','Feng','Han','Cao','Zeng','Peng',
+      'Xiao','Cai','Pan','Tian','Dong','Yuan','Ye','Jiang','Du','Su','Wei','Cheng','Lu','Ding','Shen','Ren',
+      'Yao','Fu','Zhong','Cui','Tan','Liao','Fan','Jin','Shi','Dai','Jia','Xia','Qiu','Fang','Hou','Zou','Xiong',
+      'Meng','Qin','Bai','Yan','Xue','Yin','Duan','Lei','Long','Tao','Gu','Mao','Hao','Gong','Shao','Wan','Qian',
+      'Mo','Kong','Xiang','Chang','Miao','Ni','Ge','Qi','Kang','Ruan','Zhan','Tong','Pei','Ji','Lian','Bian'],
+    // Los de dos sílabas son de casa antigua: en wuxia y cultivación son los que
+    // llevan las sectas, los clanes y los villanos con linaje.
+    compuestos: ['Ouyang','Situ','Zhuge','Murong','Nangong','Dongfang','Shangguan','Huangfu','Xiahou','Sima',
+      'Duanmu','Gongsun','Linghu','Yuwen','Baili','Wanyan','Helian','Chunyu','Zhongli','Taishi'],
+    nombres: ['Wei','Jing','Yun','Feng','Hao','Xuan','Zhi','Ming','Bo','Kai','Lei','Tian','Han','Jun','Qiang',
+      'Peng','Sheng','Rui','Kun','Cheng','Ning','Shan','Ling','Rou','Xin','Fang','Yue','Qing','Lan','Zhu','Hua',
+      'Ying','Xia','Jie','Ting','Wen','Ruo','Xi','Zhen','Bing','Die','Yi','Nuo','Qian','Shu','Ci','Chuan','Ze',
+      'Lang','Yao','Miao','Heng','Ang','Shuo','Zhuo','Yin','Su','Tao','Mu','Sen',
+      'Zichen','Haoran','Yuxuan','Zihan','Yiran','Jingyi','Xinyi','Ziyi','Yuhan','Shuyi','Wanqing','Ruoxi',
+      'Mingzhe','Tianyu','Zhiyuan','Chenxi','Yunhe','Qingyu','Shaoqing','Wuji','Changge','Bingyan','Zhaolin',
+      'Muyang','Xingchen','Jiaming','Peiwen','Lianhua','Yanran','Suyin','Hongyu','Zhirou','Jinghong','Feiyan',
+      'Cangyue','Linlang','Yueru','Qingge','Shuangyu'],
+  },
+  japon: {
+    etiqueta: 'japoneses',
+    apellidos: ['Sato','Suzuki','Takahashi','Tanaka','Ito','Watanabe','Yamamoto','Nakamura','Kobayashi','Kato',
+      'Yoshida','Yamada','Sasaki','Yamaguchi','Matsumoto','Inoue','Kimura','Hayashi','Shimizu','Saito','Yamazaki',
+      'Mori','Abe','Ikeda','Hashimoto','Ishikawa','Yamashita','Ogawa','Ishii','Hasegawa','Goto','Okada','Kondo',
+      'Maeda','Fujita','Endo','Aoki','Sakamoto','Murakami','Ota','Kaneko','Fujii','Fukuda','Nishimura','Miura',
+      'Takeuchi','Nakajima','Okamoto','Matsuda','Harada','Nakano','Ono','Tamura','Takeda','Wada','Ishida','Uchida',
+      'Sugiyama','Masuda','Kojima','Chiba','Kudo','Miyazaki','Noguchi','Matsui','Sano','Hirano','Sugawara','Ueda',
+      'Kikuchi','Kawasaki','Iwasaki','Sakurai','Kubo','Kinoshita','Nomura','Matsuo','Nagai','Tachibana','Kirishima',
+      'Amamiya','Shirogane','Kagurazaka','Himura','Arisawa','Fujiwara','Konno','Serizawa','Todo','Katagiri',
+      'Mizushima','Onodera','Yagami','Kurosawa','Shinomiya','Asakura','Hoshino','Natsume','Kitagawa','Minamoto'],
+    nombres: ['Sota','Yuto','Haruki','Riku','Asahi','Itsuki','Hinata','Minato','Yamato','Takeru','Souma','Kyo',
+      'Ryo','Jin','Shin','Tetsu','Goro','Kenzo','Masaru','Osamu','Noboru','Tsutomu','Isamu','Nobu','Daiki','Kenta',
+      'Shohei','Naoki','Tatsuya','Kazuma','Yuma','Kosuke','Shinji','Toru','Makoto','Satoshi','Hideo','Kenshin',
+      'Shou','Arata','Kaoru','Susumu','Tsuyoshi','Yohei','Junpei','Keisuke','Ryota','Seiji','Takumi','Fumio',
+      'Genji','Hayato','Ibuki','Kanade','Masato','Nobuyuki','Reiji','Shigeru','Tomoya','Yasushi',
+      'Hana','Aoi','Yui','Mio','Ichika','Akari','Tsumugi','Koharu','Hiyori','Natsuki','Kaede','Shion','Nagi',
+      'Towa','Emi','Chiyo','Fumiko','Haruka','Kanna','Mizuki','Nanami','Saki','Tamaki','Wakana','Yoriko','Ayaka',
+      'Chinatsu','Erika','Honoka','Izumi','Kotoha','Mahiro','Nozomi','Riko','Sumire','Tsubaki','Yuzuki','Asuka',
+      'Kiyomi','Michiko','Setsuna','Suzume','Umi','Yayoi'],
+  },
+  corea: {
+    etiqueta: 'coreanos',
+    apellidos: ['Kim','Lee','Park','Choi','Jung','Kang','Cho','Yoon','Jang','Lim','Han','Oh','Seo','Shin','Kwon',
+      'Hwang','Ahn','Song','Ryu','Hong','Jeon','Ko','Moon','Son','Yang','Bae','Baek','Heo','Nam','Sim','Ha',
+      'Kwak','Sung','Cha','Joo','Woo','Min','Chae','Won','Chun','Bang','Pyo','No','Gu'],
+    nombres: ['Jihun','Minjun','Seojun','Doyoon','Haeun','Jiwoo','Seoyeon','Yerin','Hyunwoo','Junseo','Taeyang',
+      'Eunwoo','Sangmin','Hyeon','Dohyun','Jaehyun','Sunwoo','Yejun','Chaewon','Nayeon','Sohee','Hyejin','Minseo',
+      'Jiyoon','Areum','Boram','Dain','Eunbi','Garam','Haneul','Jinwoo','Kyungsoo','Miran','Narae','Suho','Woojin','Yoojin'],
+  },
+};
+
+// Los que salían siempre. No están en ningún repertorio y se piden prohibidos de
+// entrada, para que la PRIMERA historia después de esto tampoco los traiga.
+const NOMBRES_QUEMADOS = ['Lin Yan','Kaito','Kenji','Akira','Hiroshi','Takeshi','Yuki','Sakura','Haruto','Ayame',
+  'Mei','Rin','Hiro','Ren','Sora','Yuna','Hana Mei','Chen Wu','Ye Chen','Han Li','Lin Feng','Xiao Yan','Jiang Chen',
+  'Ye Fan','Li Wei','Zhang Wei','Wang Lei','Xiao Yu','Kazuki','Ryuu','Shirou','Ichiro','Mei Lin','Li Mei'];
+
+// Barajado propio: sacar N al azar de una lista. Sin esto el "repertorio" sería
+// siempre el mismo trozo del principio y no habríamos arreglado nada.
+function muestraDe(lista, n) {
+  const c = [...lista];
+  for (let i = c.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [c[i], c[j]] = [c[j], c[i]];
+  }
+  return c.slice(0, n);
+}
+
+// De dónde son los nombres. El género manda, y el concepto del usuario puede
+// desmentirlo: si escribe "secta" o "cultivación" en un género de acción, la
+// historia es china aunque el desplegable no lo diga.
+function culturaDeNombres(genero, concepto = '') {
+  const t = String(concepto || '');
+  if (/manhwa|corea|coreano/i.test(t)) return 'corea';
+  if (/secta|cultivo|cultivaci[óo]n|inmortal|dinast[íi]a|wuxia|xianxia|manhua|donghua|chin[ao]|jade|qi\b/i.test(t)) return 'china';
+  return genero === 'donghua' ? 'china' : 'japon';
+}
+
+// Los nombres ya gastados se recuerdan ENTRE proyectos, no sólo dentro de uno:
+// la queja no era que se repitieran en una historia, era que la historia número
+// veinte volvía a llamarse igual que la primera.
+const NOMBRES_USADOS_KEY = 'nombres_usados';
+const MAX_NOMBRES_USADOS = 150;
+
+function nombresUsados() {
+  try { const v = JSON.parse(localStorage.getItem(NOMBRES_USADOS_KEY) || '[]'); return Array.isArray(v) ? v : []; }
+  catch (_) { return []; }
+}
+
+function recordarNombres(lista) {
+  const limpio = (lista || []).map(n => String(n || '').trim()).filter(Boolean);
+  if (!limpio.length) return;
+  const vistos = new Set(), out = [];
+  for (const n of [...limpio, ...nombresUsados()]) {
+    const k = n.toLowerCase();
+    if (!vistos.has(k)) { vistos.add(k); out.push(n); }
+  }
+  try { localStorage.setItem(NOMBRES_USADOS_KEY, JSON.stringify(out.slice(0, MAX_NOMBRES_USADOS))); } catch (_) {}
+}
+
+// El encargo de nombres que va en cada generación. `ademas` son nombres que hay
+// que prohibir sólo esta vez (el elenco que ya existe en este proyecto).
+function briefDeNombres(genero, concepto = '', ademas = []) {
+  const p = NOMBRES[culturaDeNombres(genero, concepto)];
+  const apellidos = muestraDe([...p.apellidos, ...(p.compuestos || [])], 16);
+  const nombres = muestraDe(p.nombres, 24);
+  const prohibidos = [];
+  const vistos = new Set();
+  for (const n of [...ademas, ...nombresUsados(), ...NOMBRES_QUEMADOS]) {
+    const k = String(n || '').trim().toLowerCase();
+    if (k && !vistos.has(k)) { vistos.add(k); prohibidos.push(String(n).trim()); }
+  }
+  return `NOMBRES DE LOS PERSONAJES (esto no es una sugerencia):
+- Nombres ${p.etiqueta} REALES. Nada inventado de fantasía genérica: ni Aethernam, ni Kael, ni Zythara.
+- REPERTORIO DE ESTA HISTORIA — elegí de aquí y combiná libremente.
+  Apellidos: ${apellidos.join(', ')}.
+  Nombres de pila: ${nombres.join(', ')}.
+  Este repertorio CAMBIA en cada historia. Está aquí justamente para que dos historias no se llamen igual.
+- PROHIBIDOS (ya usados o gastados de tanto verlos): ${prohibidos.slice(0, 70).join(', ')}.
+- Dos personajes NO comparten apellido salvo que sean familia, y entonces la historia lo dice.
+- Si el concepto sitúa la historia en otro sitio (Corea, Europa, un pueblo real), usá nombres de ahí:
+  el repertorio es para cuando el sitio no lo decide, no para contradecir la historia.`;
+}
 
 const ESTILOS_ANIME = {
   cinematografico: {
@@ -1702,7 +1840,7 @@ MODO SLICE OF LIFE — CAPA SOBRE UN GÉNERO CON ELEMENTOS EXTRAORDINARIOS:
 - Lo que cambia es el FOCO: las escenas se centran en la vida cotidiana DENTRO de ese mundo — comer, dormir, trabajar, mantener el equipo, convivir, hacer trámites, descansar entre eventos grandes.
 - Los conflictos son domésticos pero propios del mundo: se acabó el reactivo, hay una gotera en el taller del mecha, el espíritu del vecino hace ruido, la cuota de la secta vence mañana.
 - PROHIBIDO: catástrofes mundiales y batallas épicas como eje del episodio — lo extraordinario está presente y es normal, no es el espectáculo.
-- Ejemplos BUENOS: "Lin Yan gastó tres piedras espirituales en arreglar el techo. Le quedaban cinco."`
+- Ejemplos BUENOS: "[NOMBRE] gastó tres piedras espirituales en arreglar el techo. Le quedaban cinco."`
       : `
 
 MODO SLICE OF LIFE — REGLAS DE CONTENIDO (OBLIGATORIAS):
@@ -2802,8 +2940,7 @@ document.getElementById('btnGenerarUniverso').addEventListener('click', async ()
     const allAgesUni = isAllAges(demo);
     const system = `Eres un guionista de anime/manhua viral para Facebook Reels.
 REGLAS ABSOLUTAS:
-- Nombres reales (japoneses: Hiro, Yuki, Rin, Kaito, Mei / chinos: Lin Yan, Chen Wu, Wang, Liu, Zhang).
-- NUNCA nombres inventados genéricos (nada de Aethernam, Kael, Zythara).
+${briefDeNombres(genero, concepto)}
 ${comedyMode
   ? `- Fiel al género y a los subgéneros SELECCIONADOS: la comedia nace de las situaciones y personajes propios del género elegido y de la premisa; puede haber una figura de autoridad que sufre las consecuencias si encaja con la historia — no la fuerces si el concepto del usuario sugiere algo distinto.
 - El "hook" y el "conflicto" DEBEN reflejar la comedia absurda del género, no drama épico.
@@ -3254,7 +3391,7 @@ ESTILO NARRATIVO VIRAL (obligatorio para TODOS los géneros — el género decid
 - PREGUNTAS RETÓRICAS dosificadas (máximo 1-2 por tramo) al espectador o entre personajes ("¿Una semana? Le bastaron dos días.").
 - MINI-CLÍMAX CONSTANTES: cada 2-3 escenas un golpe de giro propio del género (venganza: humillación → bofetada de karma; misterio: pista → vuelco; romance: acercamiento → interrupción; terror: falsa calma → golpe; comedia: plan → desastre absurdo). NO un solo clímax al final.
 - Ritmo de avance permanente: cada frase mueve la historia; nada de párrafos contemplativos. Esto aplica incluso a géneros de ritmo tradicionalmente lento (slice of life, drama, terror): el QUÉ es del género, el ritmo Reel no se negocia.
-- AMBIENTACIÓN SIN FRASE PROPIA, NUNCA: un lugar nuevo se nombra en 6 palabras o menos DENTRO de una oración cuyo sujeto es un personaje y cuyo verbo es una acción ("Lin Yan cruzó el patio de la casa Wei"). Jamás en oración propia, jamás antes de que el personaje entre en el cuadro — la imagen ya muestra el lugar y el espectador la está viendo mientras te escucha. PROHIBIDO gastar frases en clima, luz, temperatura, olores, polvo o texturas ("el aire helado", "la luz entraba por las rendijas"). ÚNICA excepción: que ese detalle CAUSE un evento de la trama, y entonces se escribe como causa dentro de una acción ("el barro le tragó la sandalia"), nunca como estampa. Esa excepción NO EXISTE en la primera oración del episodio ni en la primera oración de un tramo: ahí arranca la persona, siempre.
+- AMBIENTACIÓN SIN FRASE PROPIA, NUNCA: un lugar nuevo se nombra en 6 palabras o menos DENTRO de una oración cuyo sujeto es un personaje y cuyo verbo es una acción ("[NOMBRE] cruzó el patio de la casa [APELLIDO]"). Jamás en oración propia, jamás antes de que el personaje entre en el cuadro — la imagen ya muestra el lugar y el espectador la está viendo mientras te escucha. PROHIBIDO gastar frases en clima, luz, temperatura, olores, polvo o texturas ("el aire helado", "la luz entraba por las rendijas"). ÚNICA excepción: que ese detalle CAUSE un evento de la trama, y entonces se escribe como causa dentro de una acción ("el barro le tragó la sandalia"), nunca como estampa. Esa excepción NO EXISTE en la primera oración del episodio ni en la primera oración de un tramo: ahí arranca la persona, siempre.
 - DENSIDAD Y ORDEN DE CADA TRAMO: este texto se corta después en ${fmt.scenes} fragmentos consecutivos de ~${WORDS_PER_SCENE} palabras, y CADA fragmento se convierte en un video suelto con su propia imagen y su propia voz. Escribí como si cada ~${WORDS_PER_SCENE} palabras empezara un video nuevo que tiene que retener solo: el tramo ABRE con lo más fuerte que tenga dentro (una acción, una voz entrando en frío, una cifra, una revelación) y lo explicativo, lo que ata cabos y lo descriptivo va SIEMPRE después, nunca en su primera oración. Dentro de cada tramo pasan 2-3 cosas DISTINTAS y visualizables (acción → reacción → consecuencia), nunca un solo momento estirado. Al menos UNO DE CADA TRES tramos abre con diálogo.
 
 ⚠️ NADA se convierte en tic mecánico repetido en cada párrafo — ni ${comedyMode ? 'el dinero/recompensa, ni ' : ''}una reacción fija de un personaje, ni una frase tipo. ${comedyMode ? 'Si el protagonista calcula una recompensa, que pase con variación real a lo largo de la historia — no lo repitas después de cada incidente como si fuera una casilla que hay que marcar.' : 'Cualquier recurso narrativo debe variar de forma real a lo largo de la historia — nada de repetir la misma fórmula en cada tramo.'}
@@ -3267,7 +3404,7 @@ ${u.conceptoOriginal ? `🎯 EL CONCEPTO DEFINE EL SETTING: el concepto semilla 
 
 CIERRE: ${sceneEnding} — terminá con un CLIFFHANGER seco y concreto hacia el episodio ${epNum + 1} — una amenaza visible, una llegada, una frase cortada; no una reflexión.${allAges ? '' : `
 QUE LO COMENTEN (los últimos segundos deciden si escriben o si sólo miran): 1) la ÚLTIMA LÍNEA del episodio la DICE un personaje en voz alta —una amenaza, una condición, una cifra, un plazo—, nunca el narrador. 2) El protagonista hace por lo menos UNA cosa que se puede criticar con razón, y el antagonista dice en voz alta UN motivo que se entiende aunque lo que haga siga estando mal: si al bando contrario no le diste ni una línea con la que alguien podría estar de acuerdo, escribiste un sermón y nadie discute. 3) Queda una decisión a punto de tomarse que una parte del público aprobaría y otra condenaría, y el episodio corta ANTES de que la tome — mostrala y cortá, SIN VEREDICTO: si el episodio dice quién tiene razón, el comentario ya está escrito y nadie lo escribe. Todo esto se mide en cosas concretas (cuánto dinero, cuántos días, quién se queda con qué, quién cuida a quién), nunca en abstracciones.`}
-${isGrounded ? `MODO COTIDIANO ACTIVO: día a día real y específico, CERO fantasmas, CERO poderes — ${comedyMode ? 'el humor' : 'el interés'} viene de situaciones reales.` : `MODO NARRATIVO ACTIVO: la emoción viene de los hechos, no de adjetivos. "Kenji dispara y falla. El monstruo está a diez metros." No "el terror lo paraliza".`}
+${isGrounded ? `MODO COTIDIANO ACTIVO: día a día real y específico, CERO fantasmas, CERO poderes — ${comedyMode ? 'el humor' : 'el interés'} viene de situaciones reales.` : `MODO NARRATIVO ACTIVO: la emoción viene de los hechos, no de adjetivos. "[NOMBRE] dispara y falla. El monstruo está a diez metros." No "el terror lo paraliza".`}
 ${!allowsSuper && !allowsSuper2 ? `⚠️ RESTRICCIÓN: sin elementos sobrenaturales para el género ${genero} — ni magia, ni poderes, ni sistemas, ni fenómenos inexplicables. Todo lo que ocurre tiene una causa del mundo real.` : ''}
 
 VOZ NARRATIVA (la decidió el director — sostenela sin cambiar ni una frase):
@@ -3416,7 +3553,9 @@ ${allAges
 ${u.conceptoOriginal ? `🎯 EL SETTING LO DEFINE EL CONCEPTO SEMILLA: el mundo, época y nivel tecnológico de los personajes deben coincidir con lo que describe el concepto semilla del usuario (canon), no con la estética típica del género. Si el concepto es contemporáneo/realista, los personajes son gente normal de hoy — sin reinos, magia, ni tecnología futurista que el concepto no mencione.\n` : ''}IMPORTANTE: si el concepto de la historia indica EXPLÍCITAMENTE que un personaje concreto (normalmente el protagonista) es un animal, criatura u objeto habitado por una consciencia humana, DEBES crear ese personaje igualmente y con el mismo detalle que los demás — nunca lo omitas ni lo humanices por defecto. Pero SOLO ese personaje específico: no inventes otros personajes no-humanos que el concepto no menciona. Si el concepto no dice nada sobre naturaleza no-humana, TODOS los personajes son humanos normales.
 ⚠️ FIDELIDAD DE NOMBRES: si el usuario proporcionó un concepto semilla con nombres de personajes específicos, ESOS SON LOS NOMBRES CORRECTOS Y OBLIGATORIOS — no los cambies, no los "mejores", no inventes alternativas. Úsalos exactamente como fueron escritos.
 ${comedyMode ? `🔒 SI incluyes un COMPAÑERO en el reparto — IGNORA CUALQUIER OTRO EJEMPLO MENCIONADO ARRIBA sobre su rasgo: su rasgo cómico fijo debe ser EXACTAMENTE este, ni hambre ni ningún otro salvo que coincida: "${getCompanionQuirk()}". Este rasgo va reflejado claramente en su campo "personality". NO uses hambre/comida como rasgo salvo que sea textualmente el asignado arriba. Si decides que esta historia NO necesita un compañero, simplemente no crees ese rol — no pasa nada.` : ''}
-Nombres reales y coherentes con el setting (japoneses, chinos u occidentales según corresponda) SOLO para personajes que el usuario no haya nombrado ya. Responde SOLO JSON válido sin markdown.`;
+${briefDeNombres(genero, u.conceptoOriginal || '')}
+Esto vale SOLO para los personajes que el usuario no haya nombrado ya: los suyos se respetan tal cual.
+Responde SOLO JSON válido sin markdown.`;
 
       const charPrompt = `${ctx}\n\n${charRules}\n\nCrea ${numChars} personajes únicos que pertenezcan al género "${genero}" y encajen con el concepto exacto de la historia (incluyendo protagonistas no-humanos si el concepto lo indica)${isEcchi ? '. Tono ecchi para los personajes humanos femeninos' : ''}. Devuelve SOLO:
 {"characters":[{"id":"c1","name":"nombre","role":"protagonista o rol (indica su naturaleza si no es humano)","gender":"female o male","age":"edad numérica (18+)","appearance":"descripción visual ${isEcchi ? 'atractiva y sugerente para humanos (figura, ropa que enfatiza); fiel a la especie/naturaleza si no es humano' : 'neutra y descriptiva; fiel a la especie/naturaleza si no es humano'}","personality":"2 frases","backstory":"2 frases"}]}`;
@@ -3434,6 +3573,7 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
         }
       }
       state.characters = parsedChars.characters || [];
+      recordarNombres(state.characters.map(ch => ch.name));
       saveState();
       renderCharacters();
       setProg(20, `✅ ${state.characters.length} personajes — Paso 2/5: Escribiendo historia...`);
@@ -3448,7 +3588,8 @@ Nombres reales y coherentes con el setting (japoneses, chinos u occidentales seg
           const newCharSys = `${charDesignerHeader}
 Los personajes NUEVOS deben integrarse con el elenco ya existente y ser fieles al género "${genero}" y a sus subgéneros.${comedyMode ? `\nEl COMPAÑERO ya existente de esta historia tiene el rasgo fijo "${getCompanionQuirk()}" — no le asignes uno nuevo ni distinto si aparece en la lista de personajes existentes.` : ''}
 ${isEcchi ? 'ECCHI/HAREM ACTIVO: los personajes nuevos humanos son adultos (18+), cada uno con su propia edad adulta según su rol, con apariencia atractiva y sugerente estilo ecchi anime. Jamás colegiales ni uniformes escolares.' : ''}${allAges ? 'PÚBLICO INFANTIL (Kodomomuke): personajes apropiados para una historia infantil, sin contenido romántico ni sugerente.' : ''}
-Nombres reales y coherentes con el setting. Responde SOLO JSON válido sin markdown.`;
+${briefDeNombres(genero, state.universe?.conceptoOriginal || '', state.characters.map(ch => ch.name))}
+Responde SOLO JSON válido sin markdown.`;
           const newCharRaw = await callGemini(newCharPrompt, newCharSys);
           const newChars = safeParseJSON(newCharRaw).characters || [];
           if (newChars.length) {
@@ -3456,6 +3597,7 @@ Nombres reales y coherentes con el setting. Responde SOLO JSON válido sin markd
             const ts = Date.now();
             newChars.forEach((ch, i) => { ch.id = `c_new_ep${epNum}_${i}_${ts}`; });
             state.characters = [...state.characters, ...newChars];
+            recordarNombres(newChars.map(ch => ch.name));
             saveState();
             renderCharacters();
 
@@ -3725,7 +3867,7 @@ Un cambio de ángulo de cámara NO es un beat. Si lo único que cambiaría entre
 ⚠️ DECISIÓN 3 — EL MOVIMIENTO DE CADA PLANO (campo "movimientos", uno por plano, EN INGLÉS):
 Cada plano se convierte en un clip de video de 8 segundos que ARRANCA en su propia imagen. Por eso lo único que hay que controlar es DÓNDE TERMINA.
 - Escribí el movimiento como: qué se mueve, cuánto, y en qué estado QUEDA al final del clip.
-- ⚠️ REGLA DE ENGANCHE: el estado final del plano N debe ser EXACTAMENTE la imagen del plano N+1. Si el plano 2 muestra a Mei ya sentada, el movimiento del plano 1 termina con Mei sentándose — no con ella cruzando la habitación, ni de vuelta de pie. Mirá el prompt del plano siguiente antes de escribir el final de este.
+- ⚠️ REGLA DE ENGANCHE: el estado final del plano N debe ser EXACTAMENTE la imagen del plano N+1. Si el plano 2 muestra al personaje ya sentado, el movimiento del plano 1 termina con él sentándose — no con ella cruzando la habitación, ni de vuelta de pie. Mirá el prompt del plano siguiente antes de escribir el final de este.
 - El ÚLTIMO plano de la escena no engancha con nada: cierra con un movimiento que se aquieta.
 - MOVIMIENTO CONTENIDO: 8 segundos dan para un gesto, no para una secuencia. Respiración, un giro de cabeza, dar dos pasos, servir una taza, una deriva lenta de cámara. PROHIBIDO: que entren personajes nuevos, cambios de plano dentro del clip, saltos de lugar, acciones que el texto no narra.
 - Si el plano es contemplativo, el movimiento puede ser mínimo (respiración, parpadeo, pelo con el viento, luz que cambia) — eso es correcto, no lo fuerces.
@@ -3747,7 +3889,7 @@ REGLAS DE CADA PROMPT:
 - Personajes HUMANOS: SIEMPRE incluir ropa específica según su ficha + color y estilo de cabello (idénticos en los 3 prompts de la escena)
 - Personajes NO-HUMANOS (animal/criatura/objeto poseído): describir su apariencia física real (especie, pelaje/textura, color, tamaño) — JAMÁS inventarle ropa humana salvo que su ficha la mencione explícitamente
 - NUNCA decir solo "the protagonist" o "a man" — SIEMPRE el nombre real
-- Si 2+ personajes en la escena: "Scene with Kenji and Ayame:" y describir apariencia de cada uno
+- Si 2+ personajes en la escena: "Scene with [nombre1] and [nombre2]:" y describir apariencia de cada uno
 - Máximo 3 personajes por imagen
 - TODOS LOS PRESENTES APARECEN: si la narración tiene 2+ personajes presentes en el lugar, el primer plano (amplio) los muestra a TODOS juntos interactuando; los siguientes pueden acercarse a uno, pero los demás siguen visibles en el encuadre o en segundo plano. Un personaje presente NUNCA desaparece del lugar entre los planos de la misma escena.
 - PRESENCIA CONTINUA: cuando un fragmento se enfoca en las acciones o diálogos de UN personaje, el protagonista y cualquier otro personaje ya presentes en el lugar SIGUEN AHÍ — inclúyelos por su nombre en los prompts, salvo que la narración diga explícitamente que salieron.
@@ -7091,9 +7233,12 @@ Devolvé SOLO:
  "narrativa": "La VOZ del corto. Elegí UNA: primera_presente | tercera_presente | tercera_pasado | segunda. Elegí primera_presente si hay un protagonista con voz interior propia o dos frentes que se alternan. Sólo el identificador.",
  "arco": "en 3 frases: cómo abre, qué se rompe en el medio, cómo cierra"
 }
-Máximo 3 personajes: cada personaje más es una cara que se puede ir a la deriva.`, sys));
+Máximo 3 personajes: cada personaje más es una cara que se puede ir a la deriva.
+
+${briefDeNombres(genero, idea)}`, sys));
 
     if (!base?.titulo) throw new Error('El guionista no devolvió una base utilizable');
+    recordarNombres((base.personajes || []).map(p => p.nombre));
     sys = cortoSystemPrompt(genero, base.narrativa);
 
     // ─── 2. Los tramos y los keyframes, por bloques ───
