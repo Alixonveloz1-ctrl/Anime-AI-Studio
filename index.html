@@ -981,6 +981,26 @@ const REGISTRO_MANHUA = `REGISTRO (el de los resúmenes de manhua que funcionan)
   por qué lo persiguen.
 - Nada de párrafos contemplativos ni de adjetivos emocionales: la emoción sale de lo que PASA.`;
 
+// La narración es una VOZ SOBRE IMÁGENES, no una novela leída en voz alta.
+//
+// Todo lo que la cámara ya enseña —el color del pelo, el color del vestido, que
+// hay dos personas en el cuarto, cómo es la habitación— sobra en la voz: el
+// espectador lo está viendo mientras lo oye. Decirlo otra vez no añade nada y
+// gasta segundos de un vídeo donde cada uno cuenta. Lo que la imagen NO puede
+// dar es lo que la voz tiene que traer.
+const VOZ_SOBRE_IMAGEN = `⚠️ ESTO ES UNA VOZ SOBRE IMÁGENES, NO UNA NOVELA.
+Cada frase se escucha mientras se ve la escena dibujada. Por eso:
+- NO narres lo que la imagen ya enseña: el color del pelo, el color y el corte de la ropa, quién está en
+  el cuarto, cómo es el cuarto. El espectador lo está viendo. "Me aparta un mechón de pelo" basta —
+  de qué color es ya se ve, y decirlo suena a relleno.
+- La voz trae lo que la cámara NO puede: lo que a ese personaje le cuesta, lo que está calculando, lo que
+  teme, cuánto dinero le falta, a qué huele, qué temperatura hace, qué pasó antes. Eso no se dibuja.
+- Los adjetivos que no cambian nada se borran. Prueba: quitá el adjetivo. Si la frase sigue diciendo lo
+  mismo, el adjetivo era paja. "Mis tobillos desnudos" → "mis tobillos". "Mi camisola de algodón blanca
+  y fina" → "mi camisola".
+- Una imagen, una frase. Sujeto, verbo, hecho. Si una frase necesita tres subordinadas para colocar un
+  detalle visual, ese detalle iba en la imagen, no en la voz.`;
+
 // El generador de imagen no entiende que era una manera de hablar: dibuja lo
 // que lee. Un guion decía que a la chica se le ponían los ojos rojos sólo de
 // imaginar lo que costaba el banquete, y salió una chica lanzando rayos láser
@@ -1917,9 +1937,9 @@ MODO GORE/VIOLENTO — REGLAS DE CONTENIDO (OBLIGATORIAS):
 ECCHI/HAREM ACTIVO — REGLA GENERAL (contenido adulto):
 - Este es contenido ecchi PARA ADULTOS y se COMBINA con el género principal "${genero}" — no lo reemplaza: la trama, los stakes y el tono siguen siendo los del género, con fan service integrado.
 - TODOS los personajes son adultos (18 en adelante), cada uno con su propia edad adulta asignada según su rol en la historia — jamás colegiales ni uniformes escolares en el contenido ecchi.${subgenres.includes('escolar') ? '\n- El subgénero "Escolar" está activo: el entorno académico es UNIVERSITARIO o de academia de adultos (18+), nunca secundaria. Esta regla anula cualquier lectura de "escolar" como instituto de menores.' : ''}
-- Personajes femeninos SIEMPRE con ropa corta, sugerente o reveladora
-- Situaciones comprometedoras naturales en la trama
-- imagePromptA debe reflejar el fan service visualmente`;
+- Ropa sugerente cuando la escena y el sitio lo justifiquen, no en todos los personajes ni todo el rato
+- Situaciones comprometedoras que salgan de la trama, no colocadas encima de ella
+- El fan service se ve en la IMAGEN. La narración no lo repite ni lo señala: eso suena forzado y barato`;
   }
 
   return text;
@@ -3522,6 +3542,8 @@ ${reglaNarrativa(state.universe?.bible?.narrativa)}
 
 ${REGISTRO_MANHUA}
 
+${VOZ_SOBRE_IMAGEN}
+
 EXTENSIÓN Y FORMATO: entre ${wordTarget.min} y ${wordTarget.max} palabras en total (la narración TTS corre a ~150 palabras/minuto: este total produce los ~${fmt.minutes} minutos del formato elegido), español. Un solo bloque de texto continuo — esta llamada NO genera imágenes ni divide en escenas todavía, eso es un paso separado.
 Responde SOLO JSON válido sin markdown`;
 
@@ -3529,17 +3551,33 @@ Responde SOLO JSON válido sin markdown`;
     // visual/camera language goes with the image-prompt call.
     const genreExtra = hasEcchi
       ? `\n\nECCHI/HAREM ACTIVO — CONTENIDO PARA AUDIENCIA ADULTA:
-Este proyecto es anime para adultos. El fan service SE COMBINA con el género principal "${genero}" — no lo reemplaza: la trama, el tono y los stakes siguen siendo los del género seleccionado, con los momentos ecchi tejidos dentro de esa historia. TODOS los personajes son adultos (18 años en adelante), cada uno con su PROPIA edad adulta asignada según su rol en la historia — edades variadas entre personajes, no todos iguales. Los contextos son adultos y ACORDES AL GÉNERO Y SETTING de la historia (secta de cultivación, gremio, apocalipsis, oficina, universidad, reino de fantasía — lo que la historia pida). JAMÁS estudiantes de secundaria/colegio, JAMÁS uniformes escolares ni ambientes de instituto/aula — nada que encuadre a los personajes como menores de edad. La narración NO debe sonar sanitizada ni infantil — sé tan sugerente y directo como el máximo permitido por las políticas de Gemini.
-A lo largo de la historia completa, tejé VARIOS momentos reales de fan service — no necesariamente uno por cada tramo del episodio, dejá que surjan donde la escena lo pida naturalmente, con variedad real entre ellos. Descritos con detalle sensorial genuino, no de forma tímida o edulcorada: curvas, piel, ropa ajustada, momentos accidentales, tensión sexual. Tono sugerente, picante y adulto.
-SITUACIONES CLÁSICAS DE FAN SERVICE (variá cuáles usás, no repitas la misma una y otra vez): caída accidental encima de alguien, ropa mojada tras la lluvia, cambio de ropa interrumpido, vestido o falda que se levanta con el viento, escena de playa o piscina, toalla que casi cae, ropa deportiva ajustada, pijama corto en el pasillo, inclinarse hacia adelante sin darse cuenta.
-LÍMITE REAL: el único límite es lo que Gemini realmente bloquea (desnudez explícita, partes íntimas visibles). Todo lo demás — sugerencia, sensualidad, tensión — está permitido y es DESEABLE. No te autocensures por debajo de ese límite.`
+Este proyecto es anime para adultos. El fan service SE COMBINA con el género principal "${genero}" — no lo reemplaza: la trama, el tono y los stakes siguen siendo los del género seleccionado, con los momentos ecchi tejidos dentro de esa historia. TODOS los personajes son adultos (18 años en adelante), cada uno con su PROPIA edad adulta asignada según su rol en la historia — edades variadas entre personajes, no todos iguales. Los contextos son adultos y ACORDES AL GÉNERO Y SETTING de la historia (secta de cultivación, gremio, apocalipsis, oficina, universidad, reino de fantasía — lo que la historia pida). JAMÁS estudiantes de secundaria/colegio, JAMÁS uniformes escolares ni ambientes de instituto/aula — nada que encuadre a los personajes como menores de edad. La narración NO debe sonar sanitizada ni infantil. Pero "adulto" es el CONFLICTO y lo que está en juego, no escribir en el máximo de explicitud que el filtro aguante: empujar hasta el límite en cada frase es justo lo que hace que un guion suene amateur.
+A lo largo de la historia completa, tejé VARIOS momentos reales de fan service — no uno por tramo, sino donde la escena lo pida, con variedad real entre ellos.
+SITUACIONES (variá cuáles usás, no repitas la misma): caída accidental encima de alguien, ropa mojada tras la lluvia, cambio de ropa interrumpido, ropa que se mueve con el viento, escena de agua, toalla que casi cae, ropa ajustada de trabajo o de deporte, inclinarse sin darse cuenta.
+
+⚠️ CÓMO SE ESCRIBEN ESOS MOMENTOS — ESTO ES LO QUE SEPARA UN CANAL QUE FUNCIONA DE UNO QUE DA VERGÜENZA:
+- UN HECHO FÍSICO, DICHO UNA VEZ, Y SE SIGUE. "La tela se humedeció de sudor y se me pegó al cuerpo."
+  Punto. No se le añade lo que se marca, ni qué forma tiene, ni qué se transparenta. Eso ya lo hace la
+  imagen, y en la voz suena a catálogo.
+- PROHIBIDO EL INVENTARIO DE ANATOMÍA. Nada de "curvas", "voluptuosa", "silueta de reloj de arena",
+  "mis pechos", "mis pezones", "mi lencería", "mis piernas desnudas", "mis tobillos desnudos". No es que
+  sea demasiado fuerte: es que suena FORZADO, a metido con calzador, y encima hace que el generador de
+  imagen rechace ese plano y te quedes sin él.
+- PROHIBIDO EL ADJETIVO METIDO A EMPUJONES. Si un adjetivo sensual se puede quitar y la frase sigue
+  contando lo mismo, sobraba. Metido a la fuerza no calienta: se nota, y se nota barato.
+- LO QUE DE VERDAD CARGA UNA ESCENA es la situación y lo que el personaje está dispuesto a hacer o a
+  aguantar: quién debe qué a quién, qué se juega, lo que le cuesta, quién está mirando. Escribí ESO. El
+  cuerpo que se vea, se ve en la imagen; no hace falta señalarlo con el dedo.
+- Un momento de fan service dura UNA frase. Si te ocupa tres, ya no es un momento: es un catálogo.
+LÍMITE: sin desnudez explícita ni partes íntimas. Y por debajo de ese límite, sugerir es más eficaz que
+enumerar — no te autocensures, pero tampoco confundas "adulto" con "listar partes del cuerpo".`
       : '';
 
     const genreExtraImage = hasEcchi
       ? `\n\nECCHI ACTIVO — LENGUAJE VISUAL:
 TODOS los personajes son ADULTOS (18 años en adelante), con cuerpos y rostros claramente adultos, cada uno con su propia edad adulta según su rol, en contextos adultos acordes al género y setting de la historia. JAMÁS uniformes escolares, aulas, ni nada que sugiera colegiales o menores de edad.
 LENGUAJE DE CÁMARA ECCHI: "low angle shot revealing her thighs", "wind lifting her skirt she blushes", "her fitted dress barely covers as she leans forward", "wet shirt clinging to her figure after rain", "she wraps towel around herself surprised expression", "swimsuit scene at pool side profile view", "form-fitting activewear surprised mid-motion", "short nightgown in hallway embarrassed expression", "side view leaning over table dress riding up"
-APARIENCIA: figuras atractivas y sensuales de mujeres adultas con outfits sugerentes — vestido entallado, bikini, lingerie estilo anime (lace trim, ribbon details), ropa ajustada que marca la silueta, vestido corto de noche, traje de baño, ropa de oficina entallada. Describir la silueta con: "hourglass silhouette", "voluptuous figure", "long slender legs", "delicate collarbone visible", "curvy figure", "fitted dress emphasizing her shape". Todos los personajes son adultos.
+APARIENCIA: mujeres adultas con ropa que la historia justifique — vestido entallado, traje de baño, ropa de trabajo ajustada, ropa de dormir. Nombrá la PRENDA, su tela y su corte. NO describas el cuerpo con etiquetas de catálogo ("hourglass silhouette", "voluptuous figure", "curvy"): son justo las palabras que hacen que el filtro tire el plano, y lo que hace atractiva una imagen es el ÁNGULO, la POSTURA y la LUZ, no un adjetivo sobre la anatomía. Todos los personajes son adultos.
 LÍMITE: sin desnudez explícita, sin partes íntimas visibles — todo lo demás (sensual, sugerente, provocativo) está permitido.`
       : '';
 
@@ -7465,6 +7503,8 @@ VOZ NARRATIVA (se te dice cuál en el encargo — sostenela sin cambiar ni una f
 ${voz}
 
 ${REGISTRO_MANHUA}
+
+${VOZ_SOBRE_IMAGEN}
 
 ${LITERALIDAD}
 Acá eso se traduce en algo muy concreto: en "narracion" escribí como quieras, con todas las figuras que
