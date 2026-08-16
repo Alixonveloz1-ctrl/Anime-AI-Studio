@@ -2103,11 +2103,18 @@ function explicarErrorDeImagen(e) {
   if (!/bloquead/i.test(m)) return m;
   return `${m}
 
-El filtro de Google rechazó esta imagen y ya se reintentó dos veces suavizando el texto por dentro. Lo que suele destrabarla:
-• Contá la ropa por su CAÍDA y su tela, no por lo que deja ver ("la gasa se pega al hombro" pasa; "revela la silueta de sus pechos" no).
-• Quitá del prompt las palabras de anatomía y de ropa interior: la sugerencia sale de la postura, el encuadre y la luz.
-• Si la escena es de baño o de cambiarse, cambiá el momento: justo antes o justo después.
-Podés editar el prompt de esta escena con el botón ✏️ Prompt y volver a darle.`;
+Antes de seguir editando el texto, mirá QUÉ se está enviando: ✏️ Prompt → 👁️ Ver lo que se le envía a Google.
+Tu texto suele ser una fracción pequeña del total, y además viajan IMÁGENES —la ficha del personaje y el
+fotograma del plano anterior— que pueden bloquear el plano ellas solas. Contra eso no hay edición de texto
+que sirva, por muy básico que lo pongas.
+
+Por orden, lo que destraba un plano:
+1. Quitá la imagen del plano anterior para esa escena (está en esa misma ventana). Es la causa más frecuente
+   cuando el texto ya es inofensivo.
+2. Contá la ropa por su CAÍDA y su tela, no por lo que deja ver ("la gasa se pega al hombro" pasa;
+   "revela la silueta de sus pechos" no). Fuera las palabras de anatomía y de ropa interior.
+3. Si la escena es de baño o de cambiarse, cambiá el momento: justo antes o justo después.
+4. Si sigue, la ficha del personaje puede ser la que bloquea: regenerala más vestida y volvé a probar.`;
 }
 
 // ─── Una tanda a la vez, y con freno ───
@@ -4832,6 +4839,15 @@ window.editScenePrompts = function(sceneId) {
     <div style="margin-top:8px">
       <button class="btn-sec" style="font-size:12px;width:100%" onclick="saveAndRegenAll('${sceneId}')">🖼️ Guardar y regenerar las 3 imágenes</button>
     </div>
+    <div style="margin-top:8px">
+      <button class="btn-sec" style="font-size:12px;width:100%;border-color:rgba(0,229,255,0.4);color:var(--accent2)"
+        onclick="saveScenePrompts('${sceneId}');verEnvioDeEscena('${sceneId}','A')">👁️ Ver lo que se le envía a Google</button>
+    </div>
+    <p style="font-size:11px;color:var(--text-dim);margin:8px 0 0;line-height:1.5">
+      Tu texto es sólo una parte de lo que se envía: van también el estilo, el lugar, las fichas de
+      personaje y la imagen del plano anterior. Si un plano se bloquea por mucho que suavices el texto,
+      casi siempre es por una de esas imágenes. Mirá ahí qué está viajando.
+    </p>
   `);
 };
 
@@ -4919,6 +4935,8 @@ function anclaDeEscenario(esc) {
 // nearest PREVIOUS scene that happens in the SAME escenario (its last C/B/A).
 // The chain resets automatically whenever the location changes.
 async function getContinuityRef(s, slot) {
+  // Apagado a mano para esta escena: la imagen anterior la estaba bloqueando.
+  if (s?.sinContinuidad) return null;
   try {
     const tryList = [];
     if (slot === 'C') tryList.push([s.id, 'B'], [s.id, 'A']);
@@ -4939,6 +4957,90 @@ async function getContinuityRef(s, slot) {
   } catch(_) {}
   return null;
 }
+
+// Lo que de verdad se le manda a Google para un plano. Se construye aparte de
+// generarlo para poder ENSEÑARLO: editar el prompt a ciegas no sirve de nada
+// cuando el texto propio es una fracción de lo que viaja, y cuando además viajan
+// imágenes que ninguna edición de texto puede quitar.
+async function armarEnvioDeEscena(s, slot) {
+  const base = s['imagePrompt' + slot] || s.imagePromptA || s.imagePromptEN || s.narration;
+  if (!base) return null;
+  const desdeNarracion = !s['imagePrompt' + slot] && !s.imagePromptA && !s.imagePromptEN;
+  const tam = s['tamano' + slot];
+  const conPlano = tam ? `${planoEn(tam)}. ${base}` : base;
+  const { refs, ancla, sinFicha } = await repartoDeLaEscena(conPlano, s);
+  const env = buildSceneEnvContext(s);
+  env.desdeNarracion = desdeNarracion;
+  env.continuityRef = await getContinuityRef(s, slot);
+  const previo = { B: 'tamanoA', C: 'tamanoB' }[slot];
+  if (env.continuityRef && tam) {
+    env.planoPrevio = previo && s[previo] ? planoEn(s[previo]) : '';
+    env.planoNuevo = planoEn(tam);
+  }
+  return { base, tuTexto: base, prompt: conPlano + ancla, refs, ancla, sinFicha, env, desdeNarracion };
+}
+
+// El texto COMPLETO tal y como lo lee Google, con el añadido del cliente incluido.
+function textoFinalDeImagen(prompt, env) {
+  return String(prompt || '')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim()
+    + (env?.envText || '') + ' ' + estiloCore();
+}
+
+window.verEnvioDeEscena = async function(sceneId, slot) {
+  const s = state.scenes.find(x => x.id === sceneId);
+  if (!s) return;
+  const envio = await armarEnvioDeEscena(s, slot);
+  if (!envio) { showToast(`Escena ${s.num}: sin prompt ${slot}`, 'error'); return; }
+  const final = textoFinalDeImagen(envio.prompt, envio.env);
+  const mio = String(envio.tuTexto || '').length;
+  const esc = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const ecchi = (state.universe?.subgenres || []).some(x => ['ecchi','harem','harem_inverso'].includes(x));
+  openModal(`
+    <div class="modal-handle"></div>
+    <h3>👁️ Lo que se le envía a Google — escena ${s.num}, imagen ${slot === 'A' ? '1' : slot === 'B' ? '2' : '3'}</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;line-height:1.5">
+      Tu texto son <strong>${mio}</strong> de <strong>${final.length}</strong> caracteres
+      (${Math.round(mio / final.length * 100)}%). El resto lo pone la app.
+      <strong>Además viajan imágenes</strong>, y una imagen puede bloquear el plano por sí sola:
+      contra eso no hay edición de texto que sirva.
+    </p>
+    <label>Imágenes que viajan</label>
+    <div style="font-size:12px;line-height:1.7;background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px">
+      ${envio.refs.length
+        ? `🧍 Fichas de personaje: <strong>${envio.refs.map(r => esc(r.name)).join(', ')}</strong>`
+        : '🧍 Ninguna ficha de personaje'}<br>
+      ${envio.env.continuityRef
+        ? '🎞️ La imagen del plano anterior, como referencia de continuidad'
+        : '🎞️ Sin referencia de continuidad'}<br>
+      ${ecchi ? '🔥 Subgénero ecchi activo: el servidor añade "poses sugerentes, ropa ceñida"' : '🔥 Sin añadidos ecchi'}
+      ${envio.desdeNarracion ? '<br>⚠️ Esta escena no tiene prompt propio: se está usando la NARRACIÓN' : ''}
+      ${envio.sinFicha.length ? `<br>⚠️ Sin ficha dibujada: ${esc(envio.sinFicha.join(', '))}` : ''}
+    </div>
+    <label style="margin-top:10px">Texto final, entero</label>
+    <textarea readonly style="height:200px;font-size:11px;line-height:1.45">${esc(final)}</textarea>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+      <button class="btn-sec" onclick="closeModal()">Cerrar</button>
+      <button class="btn-sec" style="border-color:rgba(255,180,80,0.5);color:#ffd28a"
+        onclick="alternarContinuidad('${s.id}')">
+        ${s.sinContinuidad ? '🎞️ Volver a mandar el plano anterior' : '🚫 No mandar el plano anterior'}
+      </button>
+    </div>`);
+};
+
+// Un plano que se bloquea una y otra vez suele bloquearse por la IMAGEN de
+// referencia, no por el texto. Esto lo apaga para esta escena — se pierde algo
+// de continuidad, pero un plano que existe vale más que uno perfecto que no está.
+window.alternarContinuidad = function(sceneId) {
+  const s = state.scenes.find(x => x.id === sceneId);
+  if (!s) return;
+  s.sinContinuidad = !s.sinContinuidad;
+  saveState();
+  closeModal();
+  showToast(s.sinContinuidad
+    ? `Escena ${s.num}: ya no se manda la imagen del plano anterior`
+    : `Escena ${s.num}: vuelve a mandarse la imagen del plano anterior`, 'success');
+};
 
 window.generateSceneImageAB = async function(sceneId, slot) {
   const s = state.scenes.find(x => x.id === sceneId);

@@ -205,25 +205,32 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
   // un prompt, y sin enfriar se bloquea siempre.
   const base = limpiarPrompt(prompt, { desdeNarracion });
 
+  // El último escalón suelta también la REFERENCIA DE CONTINUIDAD, que es la
+  // imagen del plano anterior. Una imagen de entrada puede bloquear el plano por
+  // sí sola, y contra eso no hay edición de texto que valga: por mucho que se
+  // suavice el prompt, se le sigue enseñando el fotograma anterior y pidiéndole
+  // el momento siguiente. No cuesta una llamada más — es el mismo tercer intento
+  // que ya se hacía, ahora con más posibilidades de salir.
   const escalones = [
-    { texto: base, ecchi: isEcchi, nivel: 0 },
-    { texto: enfriar(base, 1), ecchi: isEcchi, nivel: 1 },
-    { texto: enfriar(base, 2), ecchi: false, nivel: 2 },
+    { texto: base, ecchi: isEcchi, cont: continuityRef, nivel: 0 },
+    { texto: enfriar(base, 1), ecchi: isEcchi, cont: continuityRef, nivel: 1 },
+    { texto: enfriar(base, 2), ecchi: false, cont: null, nivel: 2 },
   ];
 
   let ultimo = null;
   for (const e of escalones) {
-    // Un escalón que no cambió nada respecto del anterior no se paga dos veces.
-    if (ultimo && e.texto === ultimo.texto && e.ecchi === ultimo.ecchi) continue;
+    // Un escalón que no cambió NADA respecto del anterior no se paga dos veces.
+    if (ultimo && e.texto === ultimo.texto && e.ecchi === ultimo.ecchi && e.cont === ultimo.cont) continue;
     const r = await pedirImagen(model, e.texto, characterRefs, projectId, token, e.ecchi,
-      aspectRatio, continuityRef, styleSpec, sinCortes, segundosEntre, planoPrevio, planoNuevo);
+      aspectRatio, e.cont, styleSpec, sinCortes, segundosEntre, planoPrevio, planoNuevo);
     if (r.imageData) return e.nivel ? { ...r, rescate: e.nivel } : r;
     // Sólo los bloqueos se enfrían. Un 429 o un modelo sin acceso no mejora
     // cambiando palabras, y reintentarlo tres veces sólo tarda más.
     if (!r.bloqueado) return r;
     ultimo = { ...e, error: r.error };
   }
-  return { error: `${ultimo.error} — se reintentó dos veces suavizando el texto y siguió bloqueado`,
+  return { error: `${ultimo.error} — se reintentó suavizando el texto y, la última vez, `
+           + `también sin la imagen del plano anterior. Siguió bloqueado.`,
            bloqueado: true, rescateAgotado: true };
 }
 
