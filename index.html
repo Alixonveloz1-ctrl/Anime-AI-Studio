@@ -920,11 +920,9 @@ const ANIME_STYLE_LEAD_IN = 'Authentic Japanese hand-drawn 2D TV anime frame, cr
 // (`leadIn`, la usa el director al escribir los prompts, para no pagar mil
 // palabras por escena).
 // ════════════════════════════════════════════════════════════════
-// Los tamaños de plano son DATO, no una esperanza. Dos keyframes seguidos con
-// el mismo tamaño salen casi idénticos —el modelo se agarra a la imagen de
-// referencia— y entonces Veo tiene ocho segundos vacíos que rellena inventando:
-// así fue como un hombre sentado se convirtió en un reptil. Alternando el
-// tamaño, el clip TIENE un trabajo que hacer: acercarse, alejarse, rodear.
+// Shot-size helpers. The forced alternation function below is kept ONLY for
+// the dedicated short/keyframe workflow. Long-form episodes use normal cuts
+// and are allowed to repeat a shot size when the dramatic coverage needs it.
 const PLANOS_CORTO = [
   { id: 'general',  en: 'WIDE SHOT — the whole place visible, characters full-body and small in frame' },
   { id: 'medio',    en: 'MEDIUM SHOT — characters from the knees or waist up, the room still readable behind' },
@@ -4130,7 +4128,7 @@ Un cambio de ángulo de cámara NO es un beat. Si lo único que cambiaría entre
 - CONTINUIDAD ENTRE ESCENAS: un CORTE es normal. Marca "continuarAnterior": true SOLO cuando la nueva escena ocurre segundos después, en el mismo lugar, con la misma ropa y la acción depende físicamente del estado exacto del plano anterior. Un mismo escenario visitado horas después NO es continuidad de fotograma.
 - INTEGRACIÓN FÍSICA: el personaje está DENTRO del espacio — apoyado, sentado o de pie sobre algo que ESE lugar ya tiene, con sombras e iluminación coherentes. NUNCA debe verse como un personaje pegado sobre un fondo. Para lograrlo usá el mobiliario que la descripción del escenario ya menciona; no inventes un mueble nuevo solo para tener con qué interactuar.
 - CÁMARA LIBRE EN EL LUGAR: a lo largo del episodio mostrá el MISMO lugar desde posiciones y ángulos DIFERENTES (desde la puerta, desde la ventana, ángulo bajo, over-shoulder, rincones distintos) — no repitas siempre el mismo encuadre del escenario.
-- VESTIMENTA FIEL AL MUNDO: la ropa de cada personaje conserva el material y la CONDICIÓN de su ficha (basta, desteñida, con parches si es pobre) — nunca la embellezcas ni la conviertas en ropa elegante que la historia no justifica.
+- VESTIMENTA FIEL AL MOMENTO: usa la prenda ACTUAL que corresponde a esta escena y conserva su material/condición entre planos. La ficha fija identidad, no obliga a llevar siempre la ropa de la primera referencia.
 
 ⚠️ DECISIÓN 3 — MOVIMIENTO LIMITADO DE ANIME / MOTION COMIC:
 Para cada plano devuelve "tiposMovimiento": "still" | "limited" | "action".
@@ -4146,7 +4144,7 @@ Campo "movimientos": describe en INGLÉS únicamente el movimiento pequeño que 
 - El último plano siempre tiene continuo=false.
 - Devuelve "continuarAnterior": true sólo si el primer plano de esta escena debe usar el ÚLTIMO fotograma de la escena inmediatamente anterior como ancla física. No lo uses sólo porque el escenario se repite.
 
-CAMPO "escenario": asigná a cada escena el id EXACTO del escenario del universo donde ocurre (de la lista provista). Si el fragmento ocurre en un lugar que NO está en la lista, dejá "escenario" como "" (vacío) y describí ese lugar nuevo con detalle DENTRO de los 3 prompts — NUNCA asignes un escenario incorrecto solo por llenar el campo, porque su descripción anclaría un fondo equivocado.
+CAMPO "escenario": asigná a cada escena el id EXACTO del escenario del universo donde ocurre (de la lista provista). Si el fragmento ocurre en un lugar que NO está en la lista, dejá "escenario" como "" (vacío) y describí ese lugar nuevo con detalle dentro de CADA prompt que esa escena necesite — NUNCA asignes un escenario incorrecto solo por llenar el campo.
 
 ⚠️ INVENTARIO CERRADO DEL LUGAR (dirección de arte — esto se revisa):
 La descripción del escenario asignado NO es decoración: es el inventario de lo que existe ahí. Solo podés nombrar muebles, mobiliario fijo y objetos grandes que esa descripción mencione, o que cualquiera daría por sentados en ESE tipo de lugar concreto.
@@ -4252,11 +4250,9 @@ Responde SOLO JSON válido sin markdown`;
       return scenesForPrompt.map(s => aplicarPlanos(s, null));
     }
 
-    // 3 prompts per scene = 45 total. Generated in chunks of 5 scenes
-    // (15 prompts per call) to keep each JSON response small enough to
-    // avoid output truncation. This chunks the PROMPT-TRANSLATION step,
-    // not the narrative — each scene's narration is already final, so
-    // there is no narrative context to lose across chunks.
+    // Visual direction is generated in chunks of 5 scenes. Each scene may
+    // need 1, 2 or 3 shots; chunking keeps JSON responses small without
+    // changing the already-finished narrative.
     let scenes;
     if (scenesNoImg.some(s => s.narration)) {
       scenes = [];
@@ -6656,8 +6652,8 @@ function buildMontarScript(scenes, opts) {
           `    case "$MOD" in`,
           `      1) Z="z='min(zoom+0.0011,1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'" ;;`,
           `      2) Z="z='if(eq(on,0),1.12,max(zoom-0.0011,1.0))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'" ;;`,
-          `      3) Z="z='1.08':x='(iw-iw/zoom)*on/CF':y='ih/2-(ih/zoom/2)'" ;;`,
-          `      0) Z="z='1.08':x='(iw-iw/zoom)*(1-on/CF)':y='ih/2-(ih/zoom/2)'" ;;`,
+          `      3) Z="z='1.08':x='(iw-iw/zoom)*on/$CF':y='ih/2-(ih/zoom/2)'" ;;`,
+          `      0) Z="z='1.08':x='(iw-iw/zoom)*(1-on/$CF)':y='ih/2-(ih/zoom/2)'" ;;`,
           `    esac`,
           `    ffmpeg -y -loop 1 -i ${pl.image} -t "$CT" -vf "scale=$((W*2)):$((H*2)):force_original_aspect_ratio=increase,crop=$((W*2)):$((H*2)),zoompan=$Z:d=$CF:s=${'${W}'}x${'${H}'}:fps=$FPS,format=yuv420p" -an -c:v libx264 -preset veryfast cam_${sufijo}_$J.mp4`,
           `    echo "file '$PWD/cam_${sufijo}_$J.mp4'" >> cam_${sufijo}.txt`,
