@@ -4231,6 +4231,8 @@ ${allAges
 
 ${REGISTRO_LONGFORM_REFERENCIA}
 
+${formulaViralBrief(u)}
+
 ${storyModeRules}
 
 TONO DEL GÉNERO:
@@ -4242,6 +4244,7 @@ ${reglaNarrativa(state.universe?.bible?.narrativa)}
 ${VOZ_SOBRE_IMAGEN}
 
 REGLAS DE DESARROLLO:
+- PRIORIDAD DE CALIDAD: 1) fórmula viral de referencia, 2) concepto del usuario, 3) género/subgéneros, 4) resto de estilo. Si una regla genérica empuja la historia lejos de la fórmula probada, gana la fórmula.
 - El primer minuto introduce AL PROTAGONISTA EN UNA SITUACIÓN, no una explicación del mundo. Antes de explicar reglas, crea una pregunta.
 - No quemes la sinopsis en cinco minutos. Expande mediante decisiones y consecuencias reales.
 - Cada bloque de 6-10 minutos debe modificar al menos una de estas cosas: objetivo, relación, poder/recursos, información, amenaza o precio de una decisión.
@@ -4308,6 +4311,8 @@ ${GENRE_PROMPTS[genero] || ''}
 
 ${subgenreText}
 
+${formulaViralBrief(u)}
+
 ${SUBGENRE_FIDELITY_CONTRACT}`;
 
     // ─── Step 1: Characters (only for Episode 1 — reuse existing for 2+) ───
@@ -4330,7 +4335,8 @@ El humor nace de la premisa y de objetivos incompatibles, no de obligar a todos 
       : `Eres diseñador de personajes para una historia de ANIME JAPONÉS 2D, para ${allAges ? 'público general' : 'audiencia adulta'}.
 TONO DEL GÉNERO:
 ${genreTone}
-Los personajes sirven al género "${genero}" y al concepto aprobado: tienen deseos, contradicciones, relaciones y función causal en la trama. No añadas arquetipos virales ni roles de fórmula que el concepto no pida.`;
+Los personajes sirven al género "${genero}", al concepto aprobado Y a la fórmula viral seleccionada. Si la fórmula necesita un humillador, rival, beneficiario, testigo, ex pareja, recluta, maestro, cliente o figura de estatus para que el payoff funcione, CREA ese rol. No añadas personajes decorativos que no participen en la cadena de recompensa/escalada.
+${formulaViralBrief(u)}`;
 
     if (!state.characters?.length) {
       setProg(5, 'Paso 1/5: Creando personajes...');
@@ -4370,7 +4376,7 @@ Los personajes sirven al género "${genero}" y al concepto aprobado: tienen dese
 - Variedad visual: distintos colores de cabello, ojos, estilos de ropa
 - Cada personaje debe tener un rol claro y FUNCIÓN CAUSAL en la trama: quiere algo, puede tomar decisiones y su presencia modifica al menos una relación, objetivo o consecuencia.
 - Diferencia personalidades por valores, deseos, defectos y forma de actuar; no repartas etiquetas de arquetipo como si fueran una lista obligatoria.
-${comedyMode ? `- Si la premisa necesita contraste cómico, dáselo a relaciones concretas entre personajes. Un compañero o figura de autoridad sólo entra si crea decisiones y consecuencias propias de ESTA historia.` : `- Roles y relaciones fieles al género "${genero}" y al concepto, sin insertar personajes de fórmula.`}
+${comedyMode ? `- Si la fórmula viral y la premisa necesitan contraste cómico, dáselo a relaciones concretas entre personajes. Un compañero o figura de autoridad entra cuando ayuda a producir decisiones, reacciones y payoff.` : `- Roles y relaciones fieles al género "${genero}", al concepto Y a la fórmula viral. Los roles de fórmula son deseables cuando son necesarios para reproducir la mecánica que funcionó en las referencias.`}
 
 ⚠️ PERSONAJE NO-HUMANO — LEE EL CONCEPTO CON MUCHO CUIDADO:
 Si el CONCEPTO SEMILLA ORIGINAL menciona EXPLÍCITAMENTE que un personaje específico (normalmente el protagonista) transmigró, se reencarnó, o habita el cuerpo de un animal, criatura, objeto u otra entidad NO humana — SOLO ESE personaje específico debe crearse como no-humano, respetando el esquema JSON completo (name, role, gender, age, appearance, personality, backstory). NO lo omitas y NO lo conviertas en humano.
@@ -4420,7 +4426,7 @@ ${briefDeNombres(genero, u.conceptoOriginal || '')}
 Esto vale SOLO para los personajes que el usuario no haya nombrado ya: los suyos se respetan tal cual.
 Responde SOLO JSON válido sin markdown.`;
 
-      const charPrompt = `${ctx}\n\n${charRules}\n\nCrea ${numChars} personajes únicos que pertenezcan al género "${genero}" y encajen con el concepto exacto de la historia (incluyendo protagonistas no-humanos si el concepto lo indica)${isEcchi ? '. Tono ecchi para los personajes humanos femeninos' : ''}. Devuelve SOLO:
+      const charPrompt = `${ctx}\n\n${charRules}\n\nCrea ${numChars} personajes funcionales para la fórmula viral y el género "${genero}", manteniendo el concepto exacto de la historia (incluyendo protagonistas no-humanos si el concepto lo indica)${isEcchi ? '. Tono ecchi para los personajes humanos femeninos' : ''}. Devuelve SOLO:
 {"characters":[{"id":"c1","name":"nombre","role":"protagonista o rol (indica su naturaleza si no es humano)","gender":"female o male","age":"edad numérica (18+)","appearance":"descripción visual ${isEcchi ? 'atractiva y sugerente para humanos (figura, ropa que enfatiza); fiel a la especie/naturaleza si no es humano' : 'neutra y descriptiva; fiel a la especie/naturaleza si no es humano'}","personality":"2 frases","backstory":"2 frases"}]}`;
       let parsedChars = null;
       let charAttempt = 0;
@@ -4503,8 +4509,9 @@ Responde SOLO JSON válido sin markdown.`;
     // Pressing Generate again resumes from the first missing block.
     const episodeInstructionsNow = document.getElementById('episodeInstructions')?.value.trim() || '';
     const draftSignature = JSON.stringify({
-      v: 3, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
+      v: 4, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
       storyMode, endingMode, instructions: episodeInstructionsNow,
+      viralFormula: idFormulaViral(formulaViralActual(u)),
       title: u.title || '', concept: u.concepto || '', conflict: u.conflicto || '',
       demo: u.demo || '', genero: u.genero || '', subgenres,
       bible: u.bible || null,
@@ -4611,14 +4618,19 @@ Responde SOLO JSON válido sin markdown.`;
     function buildLongformPartBriefs(parts, completeEnding) {
       return Array.from({ length: parts }, (_, i) => {
         const p = (i + 1) / parts;
-        if (i === 0) return 'BLOQUE DE APERTURA: instala el gancho, el deseo del protagonista, la primera fricción y la promesa de la historia. Empieza dentro de una situación. Siembra 2-3 preguntas; no expliques todavía todo el mundo y no cierres el conflicto.';
-        if (i === parts - 1) return completeEnding
-          ? 'BLOQUE FINAL: las decisiones anteriores convergen en el clímax. Paga el conflicto central, muestra reacciones y consecuencias, y entrega un epílogo breve que haga sentir la historia completa.'
-          : 'BLOQUE FINAL DE ESTA ENTREGA: paga el conflicto inmediato y luego abre una amenaza/revelación concreta. Termina en un punto de decisión deliberado que continúe después.';
-        if (p <= 0.30) return 'DESARROLLO TEMPRANO: explota las consecuencias del gancho. Introduce relaciones, reglas y obstáculos sólo cuando el protagonista choque con ellos. Haz que una solución cree una nueva necesidad.';
-        if (p <= 0.55) return 'DESARROLLO MEDIO: complica objetivos y relaciones. Recupera información sembrada antes, paga al menos una pregunta y abre otra de mayor peso. Evita repetir el mismo tipo de obstáculo.';
-        if (p <= 0.78) return 'ESCALADA: una decisión o revelación cambia la posición del protagonista. Sube el costo y fuerza una elección distinta a las anteriores. Los demás reaccionan y toman medidas.';
-        return 'PRECLÍMAX: convergen subtramas y consecuencias. Quita salidas fáciles, recupera elementos sembrados y deja preparado el conflicto final sin resolverlo todavía.';
+        const formulaBeat = formulaBeatForPart(i, parts, u);
+        let fase = '';
+        if (i === 0) fase = 'BLOQUE DE APERTURA: entra directamente en el problema material y entrega muy pronto la promesa de la fórmula.';
+        else if (i === parts - 1) fase = completeEnding
+          ? 'BLOQUE FINAL: ejecuta el payoff principal, deja reaccionar a quienes subestimaron al protagonista y paga el conflicto central.'
+          : 'BLOQUE FINAL DE ESTA ENTREGA: ejecuta un payoff real y abre inmediatamente una escala/amenaza superior.';
+        else if (p <= 0.30) fase = 'DESARROLLO TEMPRANO: primera demostración, primera reacción y primera recompensa visible.';
+        else if (p <= 0.55) fase = 'DESARROLLO MEDIO: repite la MECÁNICA DE RECOMPENSA sin repetir el mismo evento; cada victoria aumenta recursos, estatus, poder, relación o información.';
+        else if (p <= 0.78) fase = 'ESCALADA: trae de vuelta a quien subestimó, o introduce una figura de mayor estatus que mida el crecimiento.';
+        else fase = 'PRECLÍMAX: prepara la inversión pública de estatus, la revelación grande o el choque con la escala superior.';
+        return `${fase}
+HITO OBLIGATORIO DE LA FÓRMULA EN ESTE BLOQUE: ${formulaBeat}.
+No sustituyas ese hito por una escena contemplativa ni por exposición. Debe OCURRIR y producir una reacción/consecuencia visible antes de pasar al siguiente bloque.`;
       });
     }
 
@@ -4661,6 +4673,7 @@ ${soFar}
 ═══ FIN DEL CANON ESCRITO ═══
 ` : ''}
 ESCRIBE AHORA: ${briefs[i]}
+REGLA DE RETENCIÓN: el bloque debe entregar una RECOMPENSA, GIRO o CAMBIO DE ESTATUS reconocible; no basta con "desarrollar personajes". La cercanía a la estructura de las referencias es deliberada.
 Objetivo aproximado de este bloque: ${perPart} palabras.
 ${i > 0 ? 'Comienza exactamente después de la última acción/decisión previa. No reinicies la premisa.' : ''}
 ${i < briefs.length - 1 ? 'Este bloque NO es el final. Déjalo avanzar hacia el siguiente sin un cliffhanger artificial interno.' : ''}
@@ -4844,7 +4857,8 @@ Responde SOLO JSON válido.`;
 
     const majorTurns = fmt.minutes >= 75 ? '14-18' : fmt.minutes >= 50 ? '10-14' : fmt.minutes >= 25 ? '7-10' : '4-6';
     const storyArcGuide = `ARCO DE ESTA HISTORIA LARGA:
-- Gancho claro en los primeros 60-90 segundos: persona + deseo/problema + promesa.
+- COLUMNA VERTEBRAL: ${formulaViralActual(u).label}. No la reemplaces por un arco "más original".
+- Gancho claro en los primeros 60-90 segundos: persona + problema material + promesa concreta de inversión/progresión.
 - Aproximadamente ${majorTurns} cambios MAYORES a lo largo de la obra; no significa ${majorTurns} peleas. Un cambio puede ser relación, información, recurso, objetivo o amenaza.
 - Recupera elementos sembrados. Una revelación importante recibe reacción y consecuencia antes de pasar de página.
 - Mantén variedad: alterna confrontación, decisión, descubrimiento, relación, costo y respiración según el género.
@@ -4862,7 +4876,7 @@ Responde SOLO JSON válido.`;
     // ─── CALL 1: the story, guided by the bible and the chapter note ───
     setProg(30, 'Paso 2/5: Escribiendo la historia...');
     const storyPackage = await generateFullStory(
-      `${ctx}${bibleBrief()}${episodeDirectionBrief(epDirection)}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${storyArcGuide}\n\nEstás escribiendo el episodio ${epNum}.`
+      `${ctx}${formulaViralBrief(u)}${bibleBrief()}${episodeDirectionBrief(epDirection)}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${storyArcGuide}\n\nEstás escribiendo el episodio ${epNum}.`
     );
     const fullStory = storyPackage.story;
 
