@@ -3918,22 +3918,74 @@ Responde SOLO JSON válido sin markdown.`;
       ? `{"id":"s1","num":1,"title":"título corto","narration":"texto legible de la escena","interventions":[{"type":"narrator|dialogue|thought|system","speakerId":"narrator|system|ID_DEL_PERSONAJE","text":"texto que se pronuncia"}]}`
       : `{"id":"s1","num":1,"title":"título corto","narration":"fragmento completo y natural de la historia"}`;
 
+    function problemasDeRegistroReferencia(story, esApertura) {
+      const txt = String(story || '').trim();
+      const sentences = (txt.match(/[^.!?…]+[.!?…]+/g) || []).map(x => x.trim()).filter(Boolean);
+      const counts = sentences.map(x => x.split(/\s+/).filter(Boolean).length);
+      const avg = counts.length ? counts.reduce((a,b)=>a+b,0) / counts.length : 999;
+      const longRatio = counts.length ? counts.filter(n => n > 30).length / counts.length : 1;
+      const low = txt.toLowerCase();
+      const problems = [];
+
+      if (avg > 22) problems.push(`frases demasiado largas (media ${avg.toFixed(1)} palabras)`);
+      if (longRatio > 0.22) problems.push('demasiadas frases de más de 30 palabras');
+
+      if (esApertura) {
+        const first = low.split(/\s+/).slice(0, 45).join(' ');
+        if (/^(el sol|la lluvia|el cielo|la noche|el viento|el aire|era una|en un mundo|desde tiempos|la ciudad|aquella mañana)/.test(first)) {
+          problems.push('abre con ambientación en vez de una persona dentro del problema');
+        }
+      }
+
+      const literary = [
+        /el aire (?:estaba|se sentía) cargado/,
+        /sus ojos reflejaban/,
+        /silencio ensordecedor/,
+        /el destino (?:tenía|estaba)/,
+        /una mezcla (?:de emociones|indescriptible)/,
+        /no podía evitar preguntarse/,
+        /en lo más profundo de su (?:ser|corazón)/,
+        /como si el tiempo se hubiera detenido/
+      ];
+      const literaryHits = literary.reduce((n,re)=>n+(re.test(low)?1:0),0);
+      if (literaryHits >= 2) problems.push('prosa literaria/IA en lugar de voz oral directa');
+
+      // Direct speech is part of both reference families. The dash/quotes are
+      // only writing punctuation; TTS does not read them as speaker labels.
+      const directMarks = (txt.match(/[—“”«»]/g) || []).length + (txt.match(/"[^"]{3,}"/g) || []).length;
+      const wc = txt.split(/\s+/).filter(Boolean).length;
+      const minDirect = storyMode === 'cast'
+        ? Math.max(4, Math.floor(wc / 180))
+        : Math.max(2, Math.floor(wc / 450));
+      if (directMarks < minDirect) problems.push('casi no hay diálogo directo; suena a resumen expositivo');
+
+      return problems;
+    }
+
     async function generateStoryPart(prompt, minWords) {
       let lastErr = '';
+      let styleFeedback = '';
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
-          const raw = await callGemini(prompt, sysBase + genreExtra);
+          const attemptPrompt = prompt + styleFeedback;
+          const raw = await callGemini(attemptPrompt, sysBase + genreExtra);
           const parsed = safeParseJSON(raw);
           const story = String(parsed.story || '').trim();
           const wc = story.split(/\s+/).filter(Boolean).length;
-          if (story && wc >= minWords) return story;
-          lastErr = story ? `demasiado corto (${wc} palabras, mínimo ${minWords})` : 'respuesta vacía o sin campo "story"';
+          if (story && wc >= minWords) {
+            const problems = problemasDeRegistroReferencia(story, prompt.includes('BLOQUE DE APERTURA'));
+            if (!problems.length) return story;
+            lastErr = 'registro narrativo fuera de la referencia: ' + problems.join('; ');
+            styleFeedback = `\n\nREINTENTO OBLIGATORIO: el bloque anterior fue rechazado por el editor porque ${problems.join('; ')}. Conserva los mismos acontecimientos pedidos, pero vuelve a escribir DESDE CERO con la huella narrativa indicada: español oral, frases cortas, diálogo directo y progresión concreta. Devuelve otra vez sólo {"story":"..."}.`;
+          } else {
+            lastErr = story ? `demasiado corto (${wc} palabras, mínimo ${minWords})` : 'respuesta vacía o sin campo "story"';
+          }
         } catch (e) {
           lastErr = e.message;
         }
         if (attempt < 3) await new Promise(r => setTimeout(r, 1800));
       }
-      throw new Error(`Google no completó este bloque de historia: ${lastErr}. No se aceptará un bloque corto para rellenarlo después con escenas inventadas.`);
+      throw new Error(`Google no completó este bloque de historia con el registro requerido: ${lastErr}. El borrador se conserva; no se aceptará prosa fuera de la fórmula ni un bloque corto para rellenarlo después.`);
     }
 
     function buildLongformPartBriefs(parts, completeEnding) {
