@@ -44,7 +44,7 @@ module.exports = async function handler(req, res) {
 
   try {
     const { prompt, negativePrompt, imageA, imageB, lastFrame, durationSeconds,
-            imageMimeType, lastFrameMimeType,
+            imageMimeType, lastFrameMimeType, studioProjectId,
             aspectRatio = '9:16', generateAudio = false, veoModel } = req.body;
     // The frames used to be hardcoded as image/png. They arrive re-encoded as
     // JPEG now (two detailed PNGs were 7.7 MB, over the 4.5 MB body limit), and
@@ -84,7 +84,9 @@ module.exports = async function handler(req, res) {
       generateAudio: generateAudio === true,
       personGeneration: 'allow_adult',
       ...(negativePrompt ? { negativePrompt: String(negativePrompt).slice(0, 1000) } : {}),
-      storageUri: `gs://${bucket}/${cfg.prefix}/veo/`,
+      storageUri: `gs://${bucket}/${cfg.prefix}/${/^p[a-zA-Z0-9_-]{5,80}$/.test(String(studioProjectId || ''))
+        ? `projects/${String(studioProjectId)}/veo`
+        : 'veo'}/`,
     };
     const instancia = {
       prompt: promptLimpio,
