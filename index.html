@@ -5938,172 +5938,186 @@ window.addEventListener('load', () => setTimeout(updateEpisodeNav, 500));
 // REPAIR EMPTY/UNDEFINED SCENES
 // ════════════════════════════════════════════════════════════════
 document.getElementById('btnRepairScenes').addEventListener('click', async () => {
-  if (!state.universe || !state.scenes.length) { showToast('No hay episodio', 'error'); return; }
+  if (!state.universe || !state.scenes.length) { showToast('No hay historia', 'error'); return; }
   const u = state.universe;
-
-  // Separate broken scenes into two categories so we don't redo work that
-  // already succeeded: scenes missing narration need full repair, but
-  // scenes that already HAVE narration (e.g. call 1 succeeded, call 2
-  // didn't) only need an image prompt — a much lighter task.
-  const needsNarrationIdx = [];
-  const needsImageOnlyIdx = [];
-  state.scenes.forEach((s, idx) => {
-    if (!s.narration || !s.title || s.num === undefined || s.num === null) {
-      needsNarrationIdx.push(idx);
-    } else if (!s.imagePromptA) {
-      needsImageOnlyIdx.push(idx);
-    }
-  });
-
-  const originalBrokenIndices = [...needsNarrationIdx, ...needsImageOnlyIdx];
-  const totalBroken = originalBrokenIndices.length;
-  if (!totalBroken) { showToast('No hay escenas que reparar', 'success'); return; }
+  const broken = state.scenes.map((s, idx) => ({ s, idx })).filter(({s}) =>
+    !s.narration || !s.title || s.num == null || !s.imagePromptA);
+  if (!broken.length) { showToast('No hay escenas que reparar', 'success'); return; }
 
   const btn = document.getElementById('btnRepairScenes');
   btn.disabled = true;
-  btn.innerHTML = `<div class="spinner"></div> Reparando ${totalBroken} escenas...`;
+  btn.innerHTML = `<div class="spinner"></div> Reparando ${broken.length} escena(s)...`;
 
   try {
-    const charRef = state.characters.map(c =>
-      `- ${c.name} (${c.role}): ${c.appearance}`
+    const subs = effectiveSubgenres(u.subgenres || [], u.demo);
+    const allAges = isAllAges(u.demo);
+    const hasEcchi = subs.some(x => ['ecchi','harem','harem_inverso'].includes(x));
+    const fmt = getEpisodeFormat();
+    const mode = u.storyMode || 'narrated';
+    const charRef = state.characters.map(ch =>
+      `- ${ch.id} = ${ch.name} (${ch.role}, ${ch.age || ''}): ${ch.appearance || ''}; personalidad: ${ch.personality || ''}`
     ).join('\n');
-    const ctx = `Universo: ${u.title}\nDemografía: ${u.demo || 'shonen'}\nGénero: ${u.genero}\nConcepto: ${u.concepto}\nConflicto: ${u.conflicto}\nSetting: ${u.setting}`;
-    // Repairs must follow the SAME mode as the original generation: comedy
-    // formula only for comedy genres/subgenre, and ecchi rules whenever
-    // ecchi/harem is active — otherwise repaired scenes broke tone/content.
-    const repairSubgenres = effectiveSubgenres(u.subgenres || [], u.demo);
-    const repairComedy = isComedyMode(u.genero, repairSubgenres);
-    const repairEcchi = repairSubgenres.some(s => ['ecchi','harem','harem_inverso'].includes(s));
-    const repairAllAges = isAllAges(u.demo);
-    const repairSuper = genreAllowsSupernatural(u.genero, repairSubgenres);
+    const scenarioText = (u.escenarios || []).length
+      ? (u.escenarios || []).map(e => `${e.id} = "${e.name}": ${e.desc}`).join('\n')
+      : '(ninguno definido)';
 
-    // ─── Step A: narration for scenes that don't have any ───
-    if (needsNarrationIdx.length) {
-      btn.innerHTML = `<div class="spinner"></div> Reparando narración (${needsNarrationIdx.length})...`;
+    const validSpeakerIds = new Set(['narrator','system', ...state.characters.map(ch => ch.id)]);
+    const normalizeInterventionsRepair = (scene) => {
+      if (mode !== 'cast') return [{ type:'narrator', speakerId:'narrator', text:String(scene.narration || '').trim() }].filter(x=>x.text);
+      const src = Array.isArray(scene.interventions) ? scene.interventions : [];
+      const out = src.map(x => {
+        const type = ['narrator','dialogue','thought','system'].includes(x?.type) ? x.type : 'narrator';
+        let speakerId = type === 'narrator' ? 'narrator' : type === 'system' ? 'system' : String(x?.speakerId || '');
+        if (!validSpeakerIds.has(speakerId)) speakerId = 'narrator';
+        return { type, speakerId, text:String(x?.text || '').trim() };
+      }).filter(x=>x.text);
+      return out.length ? out : [{ type:'narrator', speakerId:'narrator', text:String(scene.narration || '').trim() }].filter(x=>x.text);
+    };
 
-      const repairNarrationSys = `${repairComedy
-        ? `You are a viral anime scriptwriter for Facebook Reels${repairAllAges ? ', all-ages audience' : ', adult audience'}. Write THIRD-PERSON Spanish narrations in the viral dubbed-donghua recap style: protagonist always NAMED (never first person), constant direct dialogue woven into the narration (about half the text is character voices), short concrete sentences with specific numbers, sparing rhetorical questions, comedic escalating situations born ONLY from the premise of the story, its "${u.genero}" genre and its selected subgenres, deadpan delivery — no drama, no forced emotion. NEVER introduce systems, stat windows, notifications or any trope the universe does not already contain.`
-        : `You are a viral anime scriptwriter for Facebook Reels${repairAllAges ? ', all-ages audience' : ', adult audience'}. Write THIRD-PERSON Spanish narrations (protagonist always NAMED, never first person; constant direct dialogue woven into the narration; short concrete sentences with specific numbers) STRICTLY FAITHFUL to the "${u.genero}" genre's real tone — no comedy, no parody, no comedic detection systems. Show, don't tell: build the genre's emotion from concrete events, actions and sensory detail, never empty emotional adjectives.`}${repairSuper ? '' : `\nGENRE RESTRICTION: the "${u.genero}" genre of this universe has NO magic, powers, status systems or supernatural phenomena. Everything that happens has a real-world cause.`}${repairEcchi ? '\nECCHI/HAREM ACTIVE (adult content): all characters are adults (18 or older, each with their own adult age fitting their story role) in adult settings appropriate to the genre — never school uniforms or classrooms, nothing that frames characters as minors. Weave suggestive fan-service moments naturally where scenes allow, with genuine sensory detail; the only limit is what Gemini actually blocks.' : ''}${repairAllAges ? '\nALL-AGES (Kodomomuke): no explicit violence, no sexual or suggestive content, no adult themes. Warm tone with a clear moral.' : ''}
-RULES:
-- JSON field MUST be "narration" (no accent). EXACTLY 48-55 Spanish words. Count them. Fast-paced: 2-3 distinct visualizable events per narration, minimal atmosphere (max one short setting phrase), the rest is action and dialogue.
-- OPEN with a NAMED person doing or saying something concrete — never with weather, light, time of day, or a description of the place. If the first sentence can be illustrated with nobody in frame, rewrite it starting from the person. Specific over vague. End naturally for the genre.
-- Respond ONLY with valid JSON, no markdown`;
+    // ── A. Repara primero la historia, escena por escena, usando ambos vecinos.
+    for (const item of broken.filter(x => !x.s.narration || !x.s.title || x.s.num == null)) {
+      const idx = item.idx;
+      const before = [...state.scenes.slice(0, idx)].reverse().find(x => x?.narration);
+      const after = state.scenes.slice(idx + 1).find(x => x?.narration);
+      const num = idx + 1;
+      const act = actForIndex(idx, state.scenes.length || fmt.scenes);
+      const target = Math.max(65, fmt.wordsPerScene || 100);
 
-      const firstBroken = needsNarrationIdx[0];
-      const lastGood = firstBroken > 0 ? state.scenes[firstBroken - 1] : null;
-      const startNum = firstBroken + 1;
-      const endNum = needsNarrationIdx[needsNarrationIdx.length - 1] + 1;
-      const count = needsNarrationIdx.length;
+      const modeRules = mode === 'cast'
+        ? `MODO DRAMATIZADO: devuelve "interventions" en orden. dialogue/thought usan speakerId exacto del personaje; narrator sólo para contexto que la imagen no puede mostrar; system sólo si el universo realmente tiene sistema. El campo narration sigue siendo el texto completo editable de la escena.`
+        : `MODO NARRADO: una sola voz leerá narration, incluyendo frases directas de personajes. No devuelvas etiquetas técnicas dentro del texto.`;
 
-      const repairTotal = state.scenes.length || getEpisodeFormat().scenes;
-      const act = actForIndex(startNum - 1, repairTotal);
+      const sys = `Eres el editor de continuidad de una historia anime LARGA para YouTube. Reparas UNA escena perdida sin convertirla en un Reel ni cambiar la historia.
+${REGISTRO_LONGFORM_REFERENCIA}
+${VOZ_SOBRE_IMAGEN}
+${modeRules}
+Género: ${u.genero}. Subgéneros: ${subs.join(', ') || 'ninguno'}.
+${GENRE_PROMPTS[u.genero] || ''}
+${getSubgenreText(subs, u.genero)}
+${SUBGENRE_FIDELITY_CONTRACT}
+${allAges ? 'AUDIENCIA GENERAL: sin contenido adulto.' : ''}
+${hasEcchi ? 'ECCHI ADULTO: el fan service, si esta escena lo admite, nace de la situación; no conviertas la narración en catálogo corporal.' : ''}
+Mantén ${formaNarrativa(u.bible?.narrativa)}.
+La escena debe conectar CAUSALMENTE con lo anterior y lo posterior. No inventes un giro enorme sólo para rellenar un hueco.
+Objetivo aproximado: ${Math.round(target * .7)}-${Math.round(target * 1.3)} palabras; manda el beat dramático, no el conteo.
+Responde SOLO JSON válido.`;
 
-      const lastGoodRef = lastGood ? `\nEscena anterior (${lastGood.num}): "${lastGood.narration}"` : '';
-      const sceneExample = `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"EXACTAMENTE 48-55 palabras, ${formaNarrativa(state.universe?.bible?.narrativa)}"}`;
-      // The repair used to receive only the universe blurb, so repaired scenes
-      // lost the genre/subgenre rules the rest of the episode was written with.
-      const repairGenreCtx = `${GENRE_PROMPTS[u.genero] || ''}\n\n${getSubgenreText(repairSubgenres, u.genero)}\n\n${SUBGENRE_FIDELITY_CONTRACT}`;
-      const prompt = `${ctx}\n\n${repairGenreCtx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: ${repairTotal} escenas.\nCada escena DEBE tener narration (EXACTAMENTE 48-55 palabras, ${formaNarrativa(state.universe?.bible?.narrativa)}, diálogo directo intercalado, ritmo rápido: 2-3 eventos distintos por escena, ambientación mínima).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
+      const prompt = `UNIVERSO: ${u.title}
+CONCEPTO: ${u.concepto}
+CONFLICTO: ${u.conflicto}
+PERSONAJES:
+${charRef}
 
-      let newNarrations = [];
-      for (let attempt = 0; attempt < 3 && newNarrations.length < count; attempt++) {
+${before ? `ESCENA ANTERIOR ${before.num}: ${before.title}\n${before.narration}` : 'No hay escena anterior: ésta pertenece al inicio.'}
+
+ESCENA PERDIDA A REPARAR: número ${num}, acto ${act}.
+
+${after ? `ESCENA SIGUIENTE ${after.num}: ${after.title}\n${after.narration}` : 'No hay escena posterior: ésta pertenece al cierre.'}
+
+Devuelve:
+{"title":"3-6 palabras","narration":"texto completo"${mode === 'cast' ? ',"interventions":[{"type":"narrator|dialogue|thought|system","speakerId":"ID","text":"..."}]' : ''}}`;
+
+      let repaired = null;
+      for (let attempt=0; attempt<4 && !repaired; attempt++) {
         try {
-          const raw = await callGemini(prompt, repairNarrationSys);
-          const parsed = safeParseJSON(raw);
-          (parsed.scenes || []).forEach(s => { if (s && s['narración'] && !s.narration) s.narration = s['narración']; });
-          const arr = (parsed.scenes || []).filter(s => s && s.narration && s.title);
-          if (arr.length >= count) {
-            newNarrations = arr.slice(0, count).map((s, i) => ({
-              ...s, id: `s${startNum + i}`, num: startNum + i, act: s.act || act,
-            }));
-            break;
-          }
-          console.warn(`Reparación narración intento ${attempt+1}: ${arr.length}/${count}`);
-          await new Promise(r => setTimeout(r, 2000));
+          const raw = await callGemini(prompt, sys);
+          const p = safeParseJSON(raw);
+          if (p?.narration && p?.title) repaired = p;
         } catch(e) {
-          console.error(`Reparación narración intento ${attempt+1}:`, e.message);
-          if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
+          if (attempt === 3) throw e;
+          await new Promise(r => setTimeout(r, 1800));
+        }
+      }
+      if (!repaired) throw new Error(`No se pudo reparar la escena ${num}`);
+      state.scenes[idx] = {
+        ...state.scenes[idx],
+        id: state.scenes[idx]?.id || `s${num}`,
+        num, act, title: repaired.title, narration: repaired.narration,
+        interventions: normalizeInterventionsRepair(repaired),
+        imagePromptA:'', imagePromptB:'', imagePromptC:''
+      };
+      saveState();
+    }
+
+    // ── B. Genera puesta en escena sólo donde falte imagen.
+    const visualBroken = state.scenes.map((s, idx)=>({s,idx})).filter(x => x.s.narration && !x.s.imagePromptA);
+    for (let offset=0; offset<visualBroken.length; offset+=5) {
+      const batch = visualBroken.slice(offset, offset+5);
+      btn.innerHTML = `<div class="spinner"></div> Dirección visual ${Math.min(offset+5, visualBroken.length)}/${visualBroken.length}...`;
+
+      const sceneText = batch.map(({s}) => `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`).join('\n\n');
+      const sys = `Eres director de fotografía de una historia anime japonesa 2D de formato largo. Reparas la puesta en escena sin cambiar los acontecimientos.
+ESTILO FIJO: ${estiloCore()}
+${bibleVisualBrief()}
+REGLAS:
+- 1 plano si un solo momento visual basta; 2 para acción→reacción/llegada→descubrimiento; 3 sólo si hay tres beats realmente distintos. No rellenes.
+- Un corte normal NO exige que los personajes se muevan de un fotograma al siguiente.
+- Elige tamaño por función dramática: general | medio | cerca | escorzo | detalle. Puede repetirse tras un corte.
+- Máximo 3 personajes visibles por imagen; presencia narrativa no obliga a estar en cuadro.
+- Referencias maestras fijan identidad, NO vestuario. El prompt nombra brevemente la ropa ACTUAL de la escena.
+- tiposMovimiento: still | limited | action. Usa action sólo cuando perder el movimiento volvería confusa la acción; limited para gesto/boca/parpadeo; la mayoría puede ser still.
+- continuos=true sólo entre dos planos de la MISMA acción física que realmente deben interpolarse. Último plano false.
+- continuarAnterior=true sólo si esta escena sucede segundos después de la anterior, mismo lugar/ropa y depende de su estado físico exacto.
+- El escenario asignado es inventario cerrado. Si el lugar no existe en la lista, escenario="" y descríbelo en el prompt.
+- Los prompts son INGLÉS y empiezan con "${estiloLeadIn()} Scene with [nombre exacto]:".
+- No pongas texto, logos, subtítulos ni personajes mirando al espectador.
+- ${hasEcchi ? 'Contenido adulto sugerente sólo cuando la escena lo justifica; el encuadre sigue siendo narrativo y no explícito.' : 'Respeta el tono del género.'}
+Responde SOLO JSON válido.`;
+
+      const prompt = `PERSONAJES:
+${charRef}
+
+ESCENARIOS:
+${scenarioText}
+
+ESCENAS:
+${sceneText}
+
+Devuelve {"imagePrompts":[{"num":1,"escenario":"","planos":1,"continuarAnterior":false,"prompts":["..."],"tamanos":["medio"],"tiposMovimiento":["still"],"movimientos":["subtle motion in English"],"continuos":[false]}]} con un objeto por escena.`;
+
+      let map = new Map();
+      for (let attempt=0; attempt<4 && map.size<batch.length; attempt++) {
+        try {
+          const raw=await callGemini(prompt,sys);
+          const arr=safeParseJSON(raw).imagePrompts || [];
+          map=new Map(arr.filter(p=>p?.num && Array.isArray(p.prompts) && p.prompts[0]).map(p=>[p.num,p]));
+        } catch(e) {
+          if (attempt===3) throw e;
+          await new Promise(r=>setTimeout(r,1800));
         }
       }
 
-      needsNarrationIdx.forEach((idx, i) => {
-        if (newNarrations[i]) {
-          const oldId = state.scenes[idx].id;
-          if (oldId) { dbSet(sceneImgKey(oldId), null).catch(() => {}); dbSet(sceneAudKey(oldId), null).catch(() => {}); }
-          state.scenes[idx] = { ...newNarrations[i], imagePromptA: '' };
-          needsImageOnlyIdx.push(idx); // now needs an image prompt too
-        }
-      });
-      saveState();
-      renderScenes();
-    }
-
-    // ─── Step B: image prompts for any scene that has narration but no image ───
-    if (needsImageOnlyIdx.length) {
-      btn.innerHTML = `<div class="spinner"></div> Generando ${needsImageOnlyIdx.length} descripciones visuales...`;
-
-      const imageSys = `Eres el director de fotografía de este anime. Para cada escena decidí CUÁNTOS PLANOS necesita (1, 2 o 3) y escribí sus prompts en inglés, basados en la narración ya escrita — no inventás historia nueva.
-⚠️ CUÁNTOS PLANOS: contá los beats visuales REALES (cambia la posición de alguien, el estado de un objeto, quién está presente o el lugar). Una conversación estática o una sola acción continua = 1 PLANO. Un cambio de ángulo NO es un beat. PROHIBIDO rellenar: si dos planos no se verían claramente distintos, devolvé uno solo.
-Cuando hay más de uno son momentos consecutivos que cubren TODO lo que el texto narra, en orden. Todos los planos de una escena: MISMO lugar, MISMA ropa/peinado de cada personaje; solo cambia la acción que avanza y el ángulo de cámara. También asigna el campo "escenario" con el id exacto del escenario del universo donde ocurre la escena — si el lugar no está en la lista, deja "escenario" como "" y describe ese lugar dentro de los prompts (nunca asignes un escenario incorrecto).
-REGLAS: SIEMPRE en inglés. Cada prompt empieza con "${estiloLeadIn()} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello con material y condición fieles a su ficha y a la economía del mundo (sin embellecer). Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. Si 2+ personajes están presentes en la escena, TODOS aparecen: el prompt 1 los muestra juntos; los prompts 2-3 pueden enfocar a uno pero los demás siguen visibles. Cuando el texto se enfoca en un personaje, el protagonista y los demás ya presentes SIGUEN en el lugar — inclúyelos por nombre salvo que la narración diga que salieron. Entre escenas consecutivas en el mismo escenario los personajes permanecen presentes salvo que la narración los saque. Los planos de cada escena son momentos consecutivos que cubren TODO el fragmento en orden — nunca dos versiones del mismo instante; cada prompt muestra SOLO lo visible en su momento (nada revelado después puede verse antes) y si el texto dice que el personaje entra o se mueve, ese prompt YA lo muestra en la nueva posición. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.
-⚠️ INVENTARIO CERRADO DEL LUGAR: la descripción del escenario asignado es el inventario de lo que existe ahí. Solo podés nombrar muebles y objetos grandes que esa descripción mencione o que ese tipo de sitio tenga de verdad. Un pasillo, una escalera, una calle o una azotea NO tienen pupitres, camas, mesas puestas ni tazas apoyadas: ahí la gente está de pie, caminando, apoyada en la pared o sentada en un escalón. Si la acción necesita un mueble que ese lugar no tiene, reescribí la acción con lo que sí hay; si es imposible, el escenario está mal asignado (corregí el id o dejalo vacío y describí el lugar entero). Los objetos pequeños que el personaje trae encima sí pueden aparecer donde sea. Si el lugar es interior, la lluvia y la nieve se ven POR la ventana, nunca dentro.${repairEcchi ? `
-ECCHI ACTIVO — LENGUAJE VISUAL: TODOS los personajes son ADULTOS (18 en adelante, cada uno con su edad adulta según su rol), en contextos adultos acordes al género — jamás uniformes escolares ni aulas, nada que sugiera menores. Usa lenguaje de cámara ecchi cuando la escena lo permita: "low angle shot revealing her thighs", "form-fitting dress emphasizing her shape", "wet shirt clinging to her figure", "hourglass silhouette", "long slender legs", "curvy figure" — sensual y sugerente, sin desnudez explícita.` : ''}
-Responde SOLO JSON válido sin markdown`;
-
-      const repairScenarioList = (u.escenarios || []).length
-        ? 'ESCENARIOS DEL UNIVERSO (asigná uno por escena usando su id exacto):\n' + u.escenarios.map(e => `${e.id} = "${e.name}": ${e.desc}`).join('\n')
-        : 'ESCENARIOS DEL UNIVERSO: (ninguno definido — dejá "escenario" como "")';
-
-      const scenesToDescribe = needsImageOnlyIdx.map(idx => state.scenes[idx]);
-      const scenesText = scenesToDescribe.map(s => `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`).join('\n\n');
-      const imgPrompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${repairScenarioList}\n\nESCENAS YA ESCRITAS:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"prompts":["Scene with..."]}]} con exactamente ${scenesToDescribe.length} objetos. "planos" es cuántos necesita esa escena (1, 2 o 3) y "prompts" lleva exactamente esa cantidad.`;
-
-      let imgMap = new Map();
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          const raw = await callGemini(imgPrompt, imageSys);
-          const parsed = safeParseJSON(raw);
-          const arr = parsed.imagePrompts || [];
-          arr.forEach(p => { if (p && p.num && Array.isArray(p.prompts) && p.prompts[0]) imgMap.set(p.num, p); });
-          if (imgMap.size >= scenesToDescribe.length) break;
-          console.warn(`Reparación imágenes intento ${attempt+1}: ${imgMap.size}/${scenesToDescribe.length}`);
-          if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
-        } catch(e) {
-          console.error(`Reparación imágenes intento ${attempt+1}:`, e.message);
-          if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
-        }
+      for (const {s,idx} of batch) {
+        const p=map.get(s.num);
+        if (!p) continue;
+        const prompts=p.prompts || [], sizes=p.tamanos || [], motions=p.movimientos || [];
+        const kinds=p.tiposMovimiento || [], continuous=p.continuos || [];
+        const validSize=i=>PLANOS_CORTO.some(x=>x.id===String(sizes[i]||'').toLowerCase()) ? String(sizes[i]).toLowerCase() : ['general','medio','cerca'][i];
+        const kind=i=>['still','limited','action'].includes(kinds[i]) ? kinds[i] : 'still';
+        state.scenes[idx]={
+          ...s,
+          escenario:p.escenario || s.escenario || '',
+          imagePromptA:prompts[0]||'', imagePromptB:prompts[1]||'', imagePromptC:prompts[2]||'',
+          tamanoA:prompts[0]?validSize(0):'', tamanoB:prompts[1]?validSize(1):'', tamanoC:prompts[2]?validSize(2):'',
+          videoPromptA:motions[0]||'', videoPromptB:motions[1]||'', videoPromptC:motions[2]||'',
+          motionA:prompts[0]?kind(0):'', motionB:prompts[1]?kind(1):'', motionC:prompts[2]?kind(2):'',
+          sueltoPlanoA:continuous[0]!==true, sueltoPlanoB:continuous[1]!==true, sueltoPlanoC:true,
+          continuarAnterior:p.continuarAnterior===true
+        };
       }
-
-      needsImageOnlyIdx.forEach(idx => {
-        const s = state.scenes[idx];
-        const p = imgMap.get(s.num);
-        if (p) {
-          s.escenario = p.escenario || s.escenario || '';
-          s.imagePromptA = p.prompts[0] || '';
-          s.imagePromptB = p.prompts[1] || '';
-          s.imagePromptC = p.prompts[2] || '';
-        }
-      });
       saveState();
-      renderScenes();
     }
 
-    // Count success based on FINAL state of the originally-broken scenes
-    const totalRepaired = originalBrokenIndices.filter(idx => {
-      const s = state.scenes[idx];
-      return s.narration && s.imagePromptA;
-    }).length;
-
-    if (totalRepaired < totalBroken) {
-      showToast(`⚠️ ${totalRepaired}/${totalBroken} escenas reparadas — vuelve a intentar para las restantes`, 'error');
-    } else {
-      showToast(`✅ ${totalRepaired} escenas reparadas`, 'success');
-    }
+    renderScenes();
+    audioSecCache.clear();
+    const remain=state.scenes.filter(s=>!s.narration || !s.imagePromptA).length;
+    if (remain) showToast(`⚠️ Quedan ${remain} escena(s) por reparar`, 'error');
+    else showToast('✅ Reparación completa', 'success');
   } catch(e) {
     openErrorModal('Error reparando escenas', e.message);
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = '🔧 Reparar escenas vacías';
+    btn.disabled=false;
+    btn.innerHTML='🔧 Reparar escenas vacías';
   }
 });
 
