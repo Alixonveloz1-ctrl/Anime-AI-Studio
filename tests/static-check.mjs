@@ -56,16 +56,31 @@ const required = [
   ['REGISTRO_LONGFORM_REFERENCIA', 'motor narrativo largo'],
   ['generarAudioDeEscena', 'audio dramatizado por intervención'],
   ['tiposMovimiento', 'dirección motion-comic'],
-  ['continuarAnterior', 'continuidad explícita entre escenas']
+  ['continuarAnterior', 'continuidad explícita entre escenas'],
+  ['btnAllCharacterRefs', 'generación en lote de referencias maestras'],
+  ['longformDrafts', 'reanudación persistente de historias largas'],
+  ['creativeVersion', 'versionado compatible de proyectos'],
+  ['Motion anime', 'perfil motion-anime visible']
 ];
 for (const [needle, label] of required) html.includes(needle) ? ok(label) : fail('Falta ' + label);
 
 if (/reintentando sin refs/i.test(html)) fail('Todavía existe un fallback que elimina referencias de personaje');
 else ok('Nunca se eliminan referencias de identidad silenciosamente');
 
+if (/on\/CF/.test(html)) fail('Montaje contiene CF sin expansión en un paneo');
+else ok('Paneos de montaje expanden el conteo de fotogramas');
+
+if (/Facebook Reels/i.test(html)) fail('El motor largo todavía contiene reglas editoriales de Facebook Reels');
+else ok('El motor largo no hereda reglas de Facebook Reels');
+
+if (/REGLAS DE PERSONAJES FEMENINOS/.test(html)) fail('Persisten reglas de apariencia femenina de fórmula');
+else ok('El reparto no usa un molde femenino obligatorio');
+
 const imageApi = fs.readFileSync('api/image.js','utf8');
 if (!/AUTHENTIC JAPANESE HAND-DRAWN 2D TV ANIME FRAME/.test(imageApi)) fail('api/image.js no comparte el contrato japonés 2D');
 else ok('api/image.js comparte el contrato japonés 2D');
+if (/form-fitting clothing, blushing expressions, suggestive poses/.test(imageApi)) fail('api/image.js todavía fuerza fan service genérico en todas las escenas');
+else ok('Fan service del servidor es situacional, no obligatorio por fotograma');
 
 const gcp = fs.readFileSync('api/_lib/gcp.js','utf8');
 const setup = fs.readFileSync('setup.sh','utf8');
