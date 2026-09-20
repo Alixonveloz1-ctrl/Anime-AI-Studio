@@ -3072,9 +3072,25 @@ const EPISODE_FORMATS = {
 const WORDS_PER_MINUTE = 145;
 
 function getEpisodeFormat() {
-  // Once the first episode is generated the universe keeps that production
-  // format. Before that, the visible selector is authoritative.
-  const firstExists = !!(state.episodes?.[1]?.length);
+  const firstScenes = state.episodes?.[1] || [];
+  const firstExists = firstScenes.length > 0;
+
+  // Projects created before the long-form engine have no creativeVersion and
+  // used 15/24/36/48-scene presets. Preserve their exact shape forever: the
+  // labels "medio/largo/epico" were reused, so reading only epFormat would
+  // otherwise reinterpret an old 48-scene project as a new 60-minute one.
+  if (firstExists && (state.universe?.creativeVersion || 1) < 2) {
+    const n = firstScenes.length;
+    const legacyMinutes = n <= 15 ? 5 : n <= 24 ? 8 : n <= 36 ? 12 : 16;
+    const totalWords = Math.round(legacyMinutes * WORDS_PER_MINUTE);
+    return {
+      key: 'legacy_' + n, scenes: n, parts: Math.max(1, Math.ceil(n / 12)),
+      label: 'Proyecto anterior', minutes: legacyMinutes, totalWords,
+      wordsPerScene: Math.max(45, Math.round(totalWords / Math.max(1,n))), legacy:true
+    };
+  }
+
+  // New projects lock their production format after episode 1.
   const key = (firstExists && state.universe?.epFormat)
     || document.getElementById('epLengthSelect')?.value
     || state.universe?.epFormat
@@ -3238,6 +3254,7 @@ Devuelve JSON:
     state.universe.demo      = demo;
     state.universe.genero    = genero;
     state.universe.subgenres = subgenres;
+    state.universe.creativeVersion = 2;
     state.universe.epFormat  = document.getElementById('epLengthSelect')?.value || 'hora';
     state.universe.storyMode = document.getElementById('storyModeSelect')?.value || 'narrated';
     state.universe.endingMode = document.getElementById('endingModeSelect')?.value || 'complete';
@@ -3495,6 +3512,7 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     // The first episode locks the creative production choices for this universe.
     // Later episodes inherit them so voice/style logic cannot silently change.
     if (!(state.episodes?.[1]?.length)) {
+      u.creativeVersion = 2;
       u.epFormat = document.getElementById('epLengthSelect')?.value || u.epFormat || 'hora';
       u.storyMode = document.getElementById('storyModeSelect')?.value || u.storyMode || 'narrated';
       u.endingMode = document.getElementById('endingModeSelect')?.value || u.endingMode || 'complete';
