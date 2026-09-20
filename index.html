@@ -4310,7 +4310,7 @@ Responde SOLO JSON válido.`;
 
     const imageSysPrompt = `Eres el DIRECTOR DE FOTOGRAFÍA de este anime. Tu tarea: decidir CUÁNTOS PLANOS necesita cada escena y escribir sus prompts de imagen en inglés, basados en la narración YA ESCRITA — no inventas historia nueva, solo decides el desglose visual de lo que ya ocurre.
 
-⚠️ DECISIÓN 1 — CUÁNTOS PLANOS (motion-anime de formato largo):
+⚠️ DECISIÓN 1 — CUÁNTOS PLANOS (montaje anime):
 La narración de una escena suele durar decenas de segundos. La imagen no puede quedarse congelada todo ese tiempo. Decide 1, 2 o 3 ILUSTRACIONES distintas por FUNCIÓN EDITORIAL:
 - 1 PLANO sólo para un beat realmente breve y autosuficiente: establishing corto, insert de objeto, reacción aislada, pensamiento corto o una acción cuya misma composición sostiene todo el fragmento.
 - 2 PLANOS para acción→reacción, pregunta→respuesta, llegada→descubrimiento, o una conversación corta que necesita ver al hablante y a quien escucha.
@@ -5754,7 +5754,16 @@ async function pollVideoStatus(operationName, projectId, onProgress, model) {
         body: JSON.stringify({ operationName, projectId, model }),
       });
       const data = await res.json();
-      if (data.error && data.done) throw new Error(data.error);
+      if (data.done && data.error) {
+        const err = new Error(data.error);
+        err.veoTerminal = true;
+        throw err;
+      }
+      if (data.done && !data.publicUrl) {
+        const err = new Error('Veo terminó sin devolver un video utilizable');
+        err.veoTerminal = true;
+        throw err;
+      }
       if (data.done) return data.publicUrl;
     } catch(e) {
       throw e;
@@ -5832,12 +5841,14 @@ window.alternarEncadenado = function(sceneId, slot) {
     dbGet(sceneVidKeyBy(sceneId, slot)).then(v => {
       if (v) showToast(`El clip ${num} de la escena ${s.num} ya no coincide — regeneralo`, 'error');
     });
+    dbDel(sceneVidOpKeyBy(sceneId, slot)).catch(() => {});
   }
 };
 
 window.generateSceneVideo = async function(sceneId, slot = 'A') {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
+  const opKey = sceneVidOpKeyBy(sceneId, slot);
   const btn = document.getElementById(`btnVid_${sceneId}_${slot}`);
   const statusEl = document.getElementById(`vidStatus_${sceneId}_${slot}`);
 
@@ -5890,7 +5901,6 @@ window.generateSceneVideo = async function(sceneId, slot = 'A') {
         + `o dale al botón 🔗 de ese plano para dejarlo suelto: así viaja una sola imagen.`);
     }
 
-    const opKey = sceneVidOpKeyBy(sceneId, slot);
     let startData = null;
     const savedOpRaw = await dbGet(opKey);
     if (savedOpRaw) {
@@ -5947,9 +5957,12 @@ window.generateSceneVideo = async function(sceneId, slot = 'A') {
     await renderScenes();
     showToast(`Video ${s.num}${slot !== 'A' ? '-' + slot : ''} listo 🎬`, 'success');
   } catch(e) {
+    if (e?.veoTerminal) {
+      try { await dbDel(opKey); } catch (_) {}
+    }
     setBtn('🎬 Video', false);
     setStatus('');
-    showToast(`Error video ${s.num}${slot !== 'A' ? '-' + slot : ''}: ${e.message}`, 'error');
+    showToast(`${e?.veoTerminal ? 'Veo terminó con error' : 'Video pausado'} ${s.num}${slot !== 'A' ? '-' + slot : ''}: ${e.message}`, 'error');
   }
 };
 
