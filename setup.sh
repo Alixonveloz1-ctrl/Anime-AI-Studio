@@ -107,6 +107,29 @@ fi
 
 echo "Cuenta de servicio:    $SA_EMAIL"
 
+# Buscar una clave JSON YA existente para esta misma service account.
+# Se valida por client_email y private_key; no hay correo hardcodeado aquí.
+find_existing_key() {
+  python3 - "$SA_EMAIL" "$HOME" <<'PY'
+import glob, json, os, sys
+email, home = sys.argv[1], sys.argv[2]
+for pattern in (os.path.join(home, "*.json"), os.path.join(home, ".secrets", "*.json")):
+    for path in glob.glob(pattern):
+        try:
+            with open(path, encoding="utf-8") as f:
+                d = json.load(f)
+            if d.get("type") == "service_account" and d.get("client_email") == email and d.get("private_key"):
+                print(path)
+                raise SystemExit(0)
+        except Exception:
+            pass
+PY
+}
+EXISTING_KEY="$(find_existing_key || true)"
+if [[ -n "$EXISTING_KEY" ]]; then
+  echo "Clave JSON existente:  $EXISTING_KEY"
+fi
+
 for ROLE in   roles/aiplatform.user   roles/storage.admin   roles/serviceusage.serviceUsageConsumer   roles/run.invoker
 do
   gcloud projects add-iam-policy-binding "$PROJECT_ID"     --member="serviceAccount:$SA_EMAIL" --role="$ROLE" --quiet >/dev/null
@@ -174,30 +197,48 @@ echo
 echo "GCP_SERVICE_ACCOUNT debe contener el JSON de la cuenta elegida arriba."
 echo "Ni el correo de la cuenta Google, ni el correo de la service account, ni el project ID"
 echo "quedan escritos en el repositorio: todo se detecta en tiempo de instalación."
-echo "Si ya tienes el JSON de esta cuenta de servicio, reutilízalo."
-echo
-echo "Si NO tienes una clave JSON y quieres crear una nueva, ejecuta:"
-echo "  bash setup.sh key"
 echo
 
-if [[ "${1:-}" == "key" ]]; then
-  mkdir -p .secrets
+mkdir -p .secrets
+ONE_LINE=".secrets/GCP_SERVICE_ACCOUNT-one-line.txt"
+
+if [[ -n "$EXISTING_KEY" ]]; then
+  python3 - "$EXISTING_KEY" "$ONE_LINE" <<'PY'
+import json, sys
+src, dst = sys.argv[1], sys.argv[2]
+with open(src, encoding="utf-8") as f:
+    d = json.load(f)
+with open(dst, "w", encoding="utf-8") as f:
+    f.write(json.dumps(d, separators=(",", ":")))
+PY
+  chmod 600 "$ONE_LINE"
+  echo "✅ Se reutilizó la clave JSON que ya existía para esta misma service account."
+  echo "No se creó ninguna clave nueva."
+  echo "Versión de una línea para Vercel: $ONE_LINE"
+elif [[ "${1:-}" == "key" ]]; then
   KEY=".secrets/anime-studio-service-account.json"
   if [[ -e "$KEY" ]]; then
     echo "Ya existe $KEY; no se creó otra clave."
   else
-    gcloud iam service-accounts keys create "$KEY"       --iam-account="$SA_EMAIL" --project="$PROJECT_ID"
+    gcloud iam service-accounts keys create "$KEY" \
+      --iam-account="$SA_EMAIL" --project="$PROJECT_ID"
     chmod 600 "$KEY"
-    python3 - <<PY
-import json
-src="$KEY"
-with open(src, encoding="utf-8") as f:
-    d=json.load(f)
-with open(".secrets/GCP_SERVICE_ACCOUNT-one-line.txt","w",encoding="utf-8") as f:
-    f.write(json.dumps(d,separators=(",",":")))
-PY
-    echo "Clave creada en $KEY"
-    echo "Versión de una línea para Vercel: .secrets/GCP_SERVICE_ACCOUNT-one-line.txt"
-    echo "⚠️ No subas esos archivos a GitHub."
   fi
+  python3 - "$KEY" "$ONE_LINE" <<'PY'
+import json, sys
+src, dst = sys.argv[1], sys.argv[2]
+with open(src, encoding="utf-8") as f:
+    d = json.load(f)
+with open(dst, "w", encoding="utf-8") as f:
+    f.write(json.dumps(d, separators=(",", ":")))
+PY
+  chmod 600 "$ONE_LINE"
+  echo "Clave nueva creada porque no había una reutilizable."
+  echo "Versión de una línea para Vercel: $ONE_LINE"
+else
+  echo "⚠️ No encontré en Cloud Shell una clave JSON local que corresponda a esta service account."
+  echo "No se creó ninguna nueva automáticamente."
+  echo "Si luego confirmas que hace falta crear una, usa: bash setup.sh key"
 fi
+
+echo "⚠️ No subas .secrets/ ni ninguna clave a GitHub."
