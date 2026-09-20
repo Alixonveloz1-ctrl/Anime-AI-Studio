@@ -13,7 +13,7 @@ Estudio personal para producir historias anime largas desde el móvil. Conserva 
 |Dirección        |Director creativo: biblia de serie, nota por capítulo, música|
 |Clips de video   |Veo 3.1 Lite (`/api/video-start` + `/api/video-status`)     |
 |Subtítulos       |Alineados al audio real de cada escena (`/api/transcribe`)   |
-|Ensamblaje       |Cloud Run Job `diezmo-montaje` (ya desplegado) vía `/api/assemble`|
+|Ensamblaje       |Cloud Run Job `anime-studio-montage` vía `/api/assemble`           |
 
 ## Características
 
@@ -21,10 +21,10 @@ Estudio personal para producir historias anime largas desde el móvil. Conserva 
 - Dos modos de audio: **Narrada** (una voz conduce y lee diálogos) o **Dramatizada** (voz estable por personaje)
 - Dos tipos de cierre: historia completa o cliffhanger deliberado
 - El director decide cuántos planos necesita cada escena (1, 2 o 3) — no se generan imágenes de relleno
-- Movimiento configurable: **Motion anime** (recomendado), Mixto o Animar todo
+- El director marca qué planos recomienda animar con Veo; tú puedes generar video manualmente para cualquier imagen y el montaje siempre usa el clip si existe
 - Los cortes son normales; sólo se interpola entre fotogramas cuando una acción necesita continuidad física
-- Cada clip dura su parte real de la narración, no ocho segundos fijos
-- Los episodios largos se escriben acto por acto, encadenando el texto ya escrito
+- Veo genera clips de hasta 8 s; el montaje ajusta su velocidad para cubrir la duración real de la toma sin repetir el clip consecutivamente
+- Todas las duraciones se escriben por bloques completos y guardados; 5, 8, 15, 30, 60 y 90 min se pueden reanudar
 - Multi-episodio con continuidad de personajes y escenarios
 - Escenarios extraídos de la historia y reutilizados entre episodios
 - Formato 9:16 vertical o 16:9 widescreen
@@ -41,8 +41,8 @@ Estudio personal para producir historias anime largas desde el móvil. Conserva 
 1. Genera la historia: el universo/sinopsis se conservan y el motor desarrolla el conflicto por causalidad, reacciones y consecuencias.
 1. Genera una referencia limpia por personaje y luego las imágenes de las escenas.
 1. Genera las voces. En modo dramatizado cada personaje conserva su voz.
-1. Genera sólo los clips que necesites según el perfil de movimiento.
-1. Genera música si la quieres y ensambla el MP4 final.
+1. Usa **Videos recomendados** para generar lo que pidió el director, o el botón 🎬 de cualquier imagen para animarla manualmente.
+1. Genera música si la quieres y ensambla el MP4 final. Imágenes, audio, música y videos ya terminados se conservan si recargas y las tandas continúan sólo con lo que falta.
 
 ## Google Cloud desde el iPhone
 
@@ -97,8 +97,8 @@ lo dice: nunca reporta "sin fallos" sobre algo que no llegó a mirar.
 1. **Biblia de serie** — se escribe al crear el universo: dirección visual (paleta y luz concretas), identidad musical, regla de ritmo, motivos recurrentes, reglas de oro y arco de temporada. Se inyecta en todos los prompts posteriores.
 2. **Nota de capítulo** — antes de escribir cada episodio: qué debe lograr en el arco, curva emocional, imagen clave y qué queda abierto.
 3. **Dirección musical** — el brief de cada pista, a partir de la identidad musical y de lo que ocurre en cada acto.
-4. **Desglose de planos** — cuántas imágenes necesita cada escena. Una conversación estática es UN plano; solo se abren dos o tres cuando hay beats visuales realmente distintos. Un cambio de ángulo no cuenta como beat.
-5. **Movimiento de cada plano** — qué se mueve y en qué estado queda el clip al terminar. El estado final de un plano tiene que ser la imagen del plano siguiente: es lo que hace que los clips de una escena se vean como una toma continua.
+4. **Desglose de planos** — cuántas imágenes necesita cada escena. Una conversación larga puede necesitar hablante, reacción y plano conjunto aunque nadie camine; no hay una regla de “una conversación = una imagen”.
+5. **Recomendación de video** — por cada imagen el director decide si Veo aporta algo real. Esa recomendación no bloquea al usuario: cualquier imagen conserva su botón 🎬 manual. Cuando no hay clip, el montaje aplica zoom/paneo visible sobre la ilustración.
 
 El director **no puede cambiar el género**: recibe el mismo contrato de fidelidad que el resto del pipeline y su trabajo es hacer que ese género se sienta excelente, no reinterpretarlo. Puedes regenerar la biblia desde la pantalla de Universo.
 
@@ -134,10 +134,13 @@ Todo se genera con Google Cloud. No hay ningún project ID, bucket, modelo ni re
 
 ### Cambiar de cuenta de Google Cloud
 
-1. Crea una service account en el proyecto nuevo y descarga su JSON.
-2. Pega el JSON completo en `GCP_SERVICE_ACCOUNT` y el bucket nuevo en `GCS_OUTPUT_BUCKET`.
-3. **Redeploy** — Vercel no aplica variables nuevas a un deployment ya construido.
-4. Abre "APIs configuradas" en la app: muestra el proyecto, la service account y el bucket en uso, y verifica credenciales, Vertex AI y acceso al bucket (`/api/health`).
+El correo de tu cuenta de Google **no está hardcodeado**. Abre Cloud Shell desde la cuenta nueva, selecciona el proyecto nuevo y ejecuta:
+
+```bash
+bash setup.sh
+```
+
+El instalador muestra primero la **cuenta Google activa** y el **proyecto activo**; si no puede acceder a ese proyecto, se detiene sin crear recursos. Después prepara APIs, bucket, cuenta de servicio y el montador. Finalmente actualiza en Vercel `GCP_SERVICE_ACCOUNT` y `GCS_OUTPUT_BUCKET` y haz redeploy.
 
 En el proyecto nuevo hacen falta:
 
@@ -176,9 +179,11 @@ clip (Veo no siempre devuelve los segundos que se le pidieron), calcula
 sacado de un clip de 4 s corre un poco más rápido, uno de 10 s sacado de uno de
 8 s corre un poco más lento, y **los dos extremos se conservan**.
 
-La ralentización se topa en 2×, porque más allá el movimiento se lee como cámara
-lenta en vez de como ritmo; lo que falte se queda quieto en el último fotograma —
-que es precisamente el fotograma de enganche, así que la unión sobrevive igual.
+La ralentización automática admite hasta 3×. Por ejemplo, un clip real de 8 s que
+debe ocupar 12 s usa un factor 1,5 y se reproduce más lento para durar exactamente
+12 s. Si una toma exigiera todavía más tiempo que el límite razonable, lo restante
+se sostiene en el último fotograma. El clip nunca se vuelve a empezar para rellenar
+tiempo y el montador bloquea el mismo clip dos veces seguidas.
 
 Por eso el empate al elegir la duración lo gana la **menor**: al reajustar la
 velocidad, quedarse corto o pasarse cuesta lo mismo en imagen, y Veo cobra por
@@ -354,11 +359,11 @@ Reglas de coherencia que aplica el código:
 
 ## Ensamblaje final
 
-El montaje del MP4 lo hace el **Cloud Run Job que ya está desplegado en esta
-cuenta** (`diezmo-montaje`). No hay que desplegar nada nuevo: ese contenedor es
-genérico — baja un encargo del bucket y ejecuta el script de ffmpeg que la app
-deja ahí. Toda la lógica de render vive en `buildMontarScript()` en la app, así
-que cambiar cómo se ve un episodio no requiere volver a desplegar nada.
+El montaje del MP4 lo hace el Cloud Run Job **`anime-studio-montage`**. En una
+cuenta nueva se crea con `bash setup.sh`. El contenedor es genérico: baja un
+encargo del bucket y ejecuta el script de ffmpeg que genera la app. Toda la lógica
+de duración, movimientos sobre imágenes, retiming de clips y anti-repetición vive
+en `buildMontarScript()`.
 
 Flujo:
 
@@ -404,12 +409,12 @@ se lee de `error.txt`, porque Cloud Run solo sabe decir "exit code N".
 
 ## Reglas estéticas
 
-- Anime 2D cinematográfico de alto presupuesto (MAPPA / Ufotable / Kyoto Animation / donghua de gama alta)
-- Linework fino de grosor variable, cel-shading con degradados suaves, fondos densamente detallados
-- Iluminación motivada y cinematográfica
-- Proporciones humanas realistas
-- NO render 3D, NO CGI, NO Disney/Pixar, NO webtoon plano, NO chibi
-- Personajes 18+ (excepto en la demografía Kodomomuke)
+- Fotograma claramente de **anime japonés 2D dibujado a mano**
+- Línea variable y limpia, sombras de cel con bordes definidos, piel mate y cabello organizado en masas/mechones
+- Fondos 2D detallados; la profundidad viene de composición, color y perspectiva, no de materiales PBR
+- NO render 3D, NO CGI, NO cinemática de videojuego, NO retrato semirrealista, NO donghua/manhua/webtoon como acabado por defecto
+- La referencia maestra fija identidad; el vestuario lo manda la escena actual
+- Personajes sexualizados siempre adultos; el fan service es situacional, no un filtro permanente
 
 ## Regenerar un episodio
 
