@@ -2,7 +2,7 @@
 // PROJECT STORE — Google Cloud Storage is the permanent source of truth.
 //
 // localStorage/IndexedDB are only device caches. Every project has one manifest:
-//   <prefix>/projects/<projectId>/project.json
+//   <prefix>/project-manifests/<projectId>.json
 //
 // GET    /api/project-store           -> list cloud projects
 // GET    /api/project-store?id=p...   -> full project manifest
@@ -15,8 +15,9 @@ function safeProjectId(v) {
   const id = String(v || '').trim();
   return /^p[a-zA-Z0-9_-]{5,80}$/.test(id) ? id : null;
 }
-const root = () => `${cfg.prefix}/projects`;
-const manifestPath = id => `${root()}/${id}/project.json`;
+const manifestRoot = () => `${cfg.prefix}/project-manifests`;
+const projectRoot = id => `${cfg.prefix}/projects/${id}`;
+const manifestPath = id => `${manifestRoot()}/${id}.json`;
 
 async function readManifest(token, id) {
   const raw = await gcsReadText(token, cfg.bucket, manifestPath(id));
@@ -48,11 +49,11 @@ module.exports = async function handler(req, res) {
 
       // GCS listing is the authoritative project index. No browser/device index
       // is needed, so a new phone sees every project immediately.
-      const objects = await gcsList(token, cfg.bucket, root() + '/');
+      const objects = await gcsList(token, cfg.bucket, manifestRoot() + '/');
       const ids = [...new Set(objects
         .map(x => String(x.name || ''))
-        .filter(n => /\/project\.json$/.test(n))
-        .map(n => n.split('/').slice(-2, -1)[0])
+        .filter(n => n.startsWith(manifestRoot() + '/') && /\.json$/.test(n))
+        .map(n => n.slice((manifestRoot() + '/').length, -5))
         .filter(safeProjectId))];
 
       const projects = [];
@@ -99,13 +100,14 @@ module.exports = async function handler(req, res) {
 
     const id = safeProjectId(req.body?.id);
     if (!id) return res.status(400).json({ error: 'project id inválido' });
-    const prefix = `${root()}/${id}/`;
+    const prefix = projectRoot(id) + '/';
     const objects = await gcsList(token, cfg.bucket, prefix);
     let deleted = 0;
     for (let i = 0; i < objects.length; i += 20) {
       const results = await Promise.all(objects.slice(i, i + 20).map(o => gcsDelete(token, cfg.bucket, o.name)));
       deleted += results.filter(Boolean).length;
     }
+    if (await gcsDelete(token, cfg.bucket, manifestPath(id))) deleted++;
     return res.status(200).json({ ok: true, deleted });
   } catch (e) {
     return fail(res, e);
