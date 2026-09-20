@@ -1,32 +1,64 @@
 # Anime AI Studio · instalación en Google Cloud
 
-Este repositorio incluye su propio montador. No necesitas copiar comandos largos desde el iPhone.
+El correo de tu cuenta Google no está escrito en la aplicación. El instalador trabaja con **la cuenta autenticada en Cloud Shell** y con **el proyecto activo**.
 
-## En Cloud Shell
+## Desde el iPhone
 
-Con el repositorio abierto, ejecuta solamente:
+1. Abre Cloud Shell desde la cuenta Google nueva.
+2. Selecciona arriba el proyecto que vas a usar para Anime AI Studio.
+3. Abre este repositorio en Cloud Shell.
+4. Escribe solamente:
 
 ```bash
 bash setup.sh
 ```
 
-El script:
-- activa Vertex AI, Storage, Speech-to-Text, Text-to-Speech, Cloud Run, Cloud Build y Artifact Registry;
-- crea o reutiliza la cuenta de servicio `anime-studio`;
-- crea un bucket exclusivo para el proyecto si no indicas otro;
-- configura CORS;
-- construye el contenedor de montaje con FFmpeg;
-- despliega el Cloud Run Job `anime-studio-montage`;
-- crea `anime-studio-cloud.env` con los valores que debes poner en Vercel.
+Al comenzar verás algo parecido a:
 
-Si ya tienes una cuenta de servicio con otro nombre, antes del comando puedes definir `ANIME_SA_EMAIL`. No hace falta hacerlo si aceptas que el instalador use/cree `anime-studio@TU_PROYECTO.iam.gserviceaccount.com`.
+```text
+Cuenta Google activa: correo@ejemplo.com
+Proyecto activo: mi-proyecto
+Región: us-central1
+Bucket: gs://mi-proyecto-anime-ai-studio
+```
 
-## Si necesitas un JSON nuevo para Vercel
+Si la cuenta activa no tiene acceso al proyecto seleccionado, el script se detiene antes de crear recursos.
 
-Ejecuta:
+## Qué prepara
+
+- Vertex AI
+- Cloud Storage
+- Speech-to-Text
+- Text-to-Speech
+- Cloud Run
+- Cloud Build
+- Artifact Registry
+- bucket del proyecto
+- CORS del bucket
+- cuenta de servicio de Anime AI Studio si hace falta
+- contenedor FFmpeg
+- Cloud Run Job `anime-studio-montage`
+
+Al final crea `anime-studio-cloud.env` con los valores que debes llevar a Vercel.
+
+## Cuenta de servicio
+
+Por defecto crea o reutiliza:
+
+```text
+anime-studio@TU_PROYECTO.iam.gserviceaccount.com
+```
+
+Eso es independiente del correo personal con el que entraste a Google Cloud.
+
+Si ya existe una cuenta de servicio distinta que quieras reutilizar, se configurará cuando hagamos la instalación definitiva; no es necesario hardcodearla ahora.
+
+## Si hace falta un JSON nuevo para Vercel
+
+Sólo si no tienes ya la clave correspondiente a la cuenta de servicio:
 
 ```bash
 bash setup.sh key
 ```
 
-Se guarda en `.secrets/`, carpeta ignorada por Git. No compartas ese archivo ni lo subas al repositorio.
+Se guarda en `.secrets/`, carpeta ignorada por Git. Nunca se sube esa clave al repositorio.
