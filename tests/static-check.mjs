@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
 const fail = (msg) => { console.error('❌ ' + msg); process.exitCode = 1; };
 const ok = (msg) => console.log('✅ ' + msg);
@@ -22,6 +23,27 @@ for (const file of [
   const src = fs.readFileSync(file, 'utf8');
   try { new Function('module','exports','require','process','fetch','Buffer',src); ok(file + ' parsea'); }
   catch (e) { fail(file + ': ' + e.message); }
+}
+
+// Build an actual montage shell script and let bash validate its quoting.
+// Parsing the JavaScript alone cannot catch a malformed ffmpeg/case expression
+// inside a generated template string.
+try {
+  const fnStart = html.indexOf('function buildMontarScript(');
+  const fnEndMarker = '\n}\n\n// ════════════════════════════════════════════════════════════════\n// VOLUMEN DE LA MÚSICA';
+  const fnEnd = html.indexOf(fnEndMarker, fnStart);
+  if (fnStart < 0 || fnEnd < 0) throw new Error('no se encontró buildMontarScript');
+  const fnText = html.slice(fnStart, fnEnd + 2);
+  const build = new Function(fnText + '; return buildMontarScript;')();
+  const shell = build([
+    { audio:'narr_000.wav', planos:[{ image:'img_000.png' }] },
+    { audio:'narr_001.wav', planos:[{ clip:'vid_001.mp4' }, { image:'img_001.png' }] }
+  ], { vertical:false, hasMusic:true, musicVol:25, episodio:1 });
+  fs.writeFileSync('/tmp/anime-studio-montar-test.sh', shell);
+  execFileSync('bash', ['-n', '/tmp/anime-studio-montar-test.sh'], { stdio:'pipe' });
+  ok('buildMontarScript genera bash válido');
+} catch (e) {
+  fail('buildMontarScript: ' + (e.stderr?.toString() || e.message));
 }
 
 const required = [
