@@ -324,7 +324,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-20.112 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-20.113 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -3810,6 +3810,7 @@ Devuelve JSON:
     state.universe.subgenres = subgenres;
     state.universe.viralFormulaId = viralFormulaId;
     state.universe.viralFormulaLabel = viralFormula.label;
+    state.universe.storyEngineVersion = 3;
     state.universe.creativeVersion = 2;
     state.universe.epFormat  = document.getElementById('epLengthSelect')?.value || 'hora';
     state.universe.storyMode = document.getElementById('storyModeSelect')?.value || 'narrated';
@@ -4086,13 +4087,13 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
       const vf = seleccionarFormulaViral(genero, subgenres, u.conceptoOriginal || u.concepto || '');
       u.viralFormulaId = idFormulaViral(vf);
       u.viralFormulaLabel = vf.label;
-      u.storyEngineVersion = 2;
+      u.storyEngineVersion = 3;
       u.bible = null;
       saveState();
       setProg(2, 'Aplicando fórmula viral al proyecto...');
       await generateSeriesBible();
-    } else if ((u.storyEngineVersion || 0) < 2) {
-      u.storyEngineVersion = 2;
+    } else if ((u.storyEngineVersion || 0) < 3) {
+      u.storyEngineVersion = 3;
       u.bible = null;
       saveState();
       setProg(2, 'Actualizando la dirección narrativa viral...');
@@ -4290,9 +4291,9 @@ REGLAS DE DESARROLLO:
 ${endingRule}
 
 EXTENSIÓN: ${wordTarget.min}-${wordTarget.max} palabras en total. La historia se escribirá por bloques consecutivos, pero debe leerse como UNA sola obra continua.
-CRÍTICO: devuelve SOLO JSON válido sin markdown con DOS campos:
-{"story":"historia completa de este bloque","viralEvidence":"copia LITERAL de 8-30 palabras consecutivas del propio story donde ocurre el hito viral obligatorio pedido para este bloque"}.
-"viralEvidence" NO es explicación ni resumen: debe existir literalmente dentro de "story".`;
+CRÍTICO: devuelve SOLO JSON válido sin markdown con TRES campos:
+{"story":"historia completa de este bloque","viralEvidence":"copia LITERAL de 8-30 palabras consecutivas del propio story donde OCURRE el hito viral obligatorio","viralConsequence":"copia LITERAL de 8-30 palabras consecutivas, POSTERIOR a viralEvidence, donde se ve la reacción o consecuencia concreta de ese hito"}.
+"viralEvidence" y "viralConsequence" NO son explicaciones ni resúmenes: ambas cadenas deben existir literalmente dentro de "story", en ese orden. Un hito sin reacción/consecuencia NO se acepta.`;
     // Split ecchi rules: narration guidance goes with the narration call,
     // visual/camera language goes with the image-prompt call.
     const genreExtra = hasEcchi
@@ -4540,7 +4541,7 @@ Responde SOLO JSON válido sin markdown.`;
     // Pressing Generate again resumes from the first missing block.
     const episodeInstructionsNow = document.getElementById('episodeInstructions')?.value.trim() || '';
     const draftSignature = JSON.stringify({
-      v: 5, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
+      v: 6, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
       storyMode, endingMode, instructions: episodeInstructionsNow,
       viralFormula: idFormulaViral(formulaViralActual(u)),
       title: u.title || '', concept: u.concepto || '', conflict: u.conflicto || '',
@@ -4620,12 +4621,19 @@ Responde SOLO JSON válido sin markdown.`;
       return problems;
     }
 
-    function evidenciaViralValida(story, evidence) {
+    function evidenciasViralesValidas(story, evidence, consequence) {
       const norm = x => String(x || '').replace(/\s+/g, ' ').trim();
+      const full = norm(story);
       const e = norm(evidence);
-      const n = e.split(/\s+/).filter(Boolean).length;
-      if (n < 8 || n > 30) return false;
-      return norm(story).includes(e);
+      const c = norm(consequence);
+      const wordsOK = x => {
+        const n = x.split(/\s+/).filter(Boolean).length;
+        return n >= 8 && n <= 30;
+      };
+      if (!wordsOK(e) || !wordsOK(c)) return false;
+      const pe = full.indexOf(e);
+      const pc = full.indexOf(c);
+      return pe >= 0 && pc >= 0 && pc > pe + e.length;
     }
 
     async function generateStoryPart(prompt, minWords, requiredBeat) {
@@ -4634,20 +4642,21 @@ Responde SOLO JSON válido sin markdown.`;
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const attemptPrompt = prompt + styleFeedback
-            + `\n\nHITO VIRAL QUE TIENES QUE PODER DEMOSTRAR EN "viralEvidence": ${requiredBeat}.`;
+            + `\n\nHITO VIRAL QUE TIENES QUE DEMOSTRAR EN "viralEvidence": ${requiredBeat}. Después del hito, la historia DEBE mostrar qué cambia y copiar ese momento posterior en "viralConsequence".`;
           const raw = await callGemini(attemptPrompt, sysBase + genreExtra, { temperature: 0.55, maxOutputTokens: 32768 });
           const parsed = safeParseJSON(raw);
           const story = String(parsed.story || '').trim();
           const evidence = String(parsed.viralEvidence || '').trim();
+          const consequence = String(parsed.viralConsequence || '').trim();
           const wc = story.split(/\s+/).filter(Boolean).length;
           if (story && wc >= minWords) {
             const problems = problemasDeRegistroReferencia(story, prompt.includes('BLOQUE DE APERTURA'));
-            if (!evidenciaViralValida(story, evidence)) {
-              problems.push('no demostró dentro del propio texto que ejecutó el hito viral obligatorio');
+            if (!evidenciasViralesValidas(story, evidence, consequence)) {
+              problems.push('no probó en orden el hito viral y una reacción/consecuencia posterior dentro del propio texto');
             }
             if (!problems.length) return story;
             lastErr = 'bloque fuera del motor viral: ' + problems.join('; ');
-            styleFeedback = `\n\nREINTENTO OBLIGATORIO: el bloque anterior fue rechazado porque ${problems.join('; ')}. Mantén la continuidad, pero vuelve a escribir DESDE CERO. El hito "${requiredBeat}" debe OCURRIR, producir una reacción/consecuencia y después debes copiar 8-30 palabras LITERALES de ese momento en "viralEvidence". Conserva español oral, frases cortas y diálogo directo.`;
+            styleFeedback = `\n\nREINTENTO OBLIGATORIO: el bloque anterior fue rechazado porque ${problems.join('; ')}. Mantén la continuidad, pero vuelve a escribir DESDE CERO. El hito "${requiredBeat}" debe OCURRIR y después debe CAMBIAR algo observable. Copia 8-30 palabras literales del hito en "viralEvidence" y 8-30 palabras literales de su reacción/consecuencia POSTERIOR en "viralConsequence". Conserva español oral, frases cortas y diálogo directo.`;
           } else {
             lastErr = story ? `demasiado corto (${wc} palabras, mínimo ${minWords})` : 'respuesta vacía o sin campo "story"';
           }
@@ -4722,7 +4731,7 @@ Objetivo aproximado de este bloque: ${perPart} palabras.
 ${i > 0 ? 'Comienza exactamente después de la última acción/decisión previa. No reinicies la premisa.' : ''}
 ${i < briefs.length - 1 ? 'Este bloque NO es el final. Déjalo avanzar hacia el siguiente sin un cliffhanger artificial interno.' : ''}
 
-Devuelve SOLO {"story":"..."}.`;
+Devuelve SOLO {"story":"...","viralEvidence":"...","viralConsequence":"..."}.`;
         partsOut[i] = await generateStoryPart(prompt, minPerPart, formulaBeatForPart(i, briefs.length, u));
         longDraft.storyParts = partsOut.slice();
         longDraft.updatedAt = Date.now();

@@ -74,11 +74,12 @@ const required = [
   ['seleccionarFormulaViral', 'selección de fórmula viral por concepto/género'],
   ['formulaBeatForPart', 'hitos virales distribuidos por bloque'],
   ['FÓRMULA VIRAL DE REFERENCIA', 'contrato viral inyectado en el guion'],
-  ['v: 5, epNum', 'borrador versionado para no reutilizar guiones anteriores'],
+  ['v: 6, epNum', 'borrador versionado para no reutilizar guiones anteriores'],
   ['temperature: 0.55', 'menor deriva creativa en el guion largo'],
   ['viralEvidence', 'evidencia literal de ejecución del hito viral'],
-  ['evidenciaViralValida', 'validación mecánica del hito viral'],
-  ['storyEngineVersion = 2', 'migración automática de proyectos existentes al motor viral'],
+  ['viralConsequence', 'evidencia literal de la consecuencia posterior'],
+  ['evidenciasViralesValidas', 'validación mecánica de hito y consecuencia en orden'],
+  ['storyEngineVersion = 3', 'migración automática de proyectos existentes al motor viral final'],
   ['cloudSaveProject', 'estado permanente de proyectos en GCS'],
   ['migrateThisBrowserToCloud', 'migración automática del primer almacenamiento local'],
   ['refreshProjectsFromCloud', 'lista de proyectos reconstruida desde el bucket'],
@@ -130,10 +131,15 @@ if (!/la originalidad NO es un objetivo/i.test(html) || !/no lo alejes para "hac
   fail('La prioridad de fórmula probada no quedó explícita');
 } else ok('La fórmula probada tiene prioridad explícita sobre la originalidad');
 
-if (!/HITO VIRAL QUE TIENES QUE PODER DEMOSTRAR/.test(html)
-    || !/no demostró dentro del propio texto que ejecutó el hito viral obligatorio/.test(html)) {
-  fail('El guion puede aceptar un bloque que no ejecute su hito viral');
-} else ok('Cada bloque debe demostrar dentro del propio texto que ejecutó el hito viral');
+if (!/HITO VIRAL QUE TIENES QUE DEMOSTRAR/.test(html)
+    || !/no probó en orden el hito viral y una reacción\/consecuencia posterior/.test(html)
+    || !/viralConsequence/.test(html)) {
+  fail('El guion puede aceptar un hito viral sin reacción o consecuencia posterior');
+} else ok('Cada bloque debe demostrar el hito viral y su consecuencia posterior, en orden');
+
+if (/Devuelve SOLO \{"story":"\.\.\."\}\./.test(html)) {
+  fail('Un prompt por bloque contradice el contrato y pide sólo story');
+} else ok('Todos los prompts por bloque exigen story + evidencia viral + consecuencia');
 
 if (/REGLAS DE PERSONAJES FEMENINOS/.test(html)) fail('Persisten reglas de apariencia femenina de fórmula');
 else ok('El reparto no usa un molde femenino obligatorio');
