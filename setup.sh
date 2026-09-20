@@ -35,18 +35,13 @@ if [[ -z "$BUCKET" ]]; then
   BUCKET="${PROJECT_ID}-anime-ai-studio"
 fi
 
-if [[ -z "$SA_EMAIL" ]]; then
-  SA_EMAIL="anime-studio@${PROJECT_ID}.iam.gserviceaccount.com"
-fi
-
 echo
 echo "Anime AI Studio"
 echo "Cuenta Google activa: $ACTIVE_ACCOUNT"
 echo "Proyecto activo:       $PROJECT_ID"
 echo "Región:                $REGION"
-echo "Bucket:  gs://$BUCKET"
-echo "Cuenta:  $SA_EMAIL"
-echo "Job:     $JOB"
+echo "Bucket nuevo:          gs://$BUCKET"
+echo "Job nuevo:             $JOB"
 echo
 
 gcloud config set project "$PROJECT_ID" >/dev/null
@@ -55,9 +50,63 @@ echo "1/7 · Activando APIs..."
 gcloud services enable   aiplatform.googleapis.com   storage.googleapis.com   speech.googleapis.com   texttospeech.googleapis.com   run.googleapis.com   cloudbuild.googleapis.com   artifactregistry.googleapis.com   --project "$PROJECT_ID" --quiet
 
 echo "2/7 · Preparando cuenta de servicio..."
-if ! gcloud iam service-accounts describe "$SA_EMAIL" --project "$PROJECT_ID" >/dev/null 2>&1; then
-  gcloud iam service-accounts create "${SA_EMAIL%%@*}"     --display-name="Anime AI Studio" --project "$PROJECT_ID"
+
+# No hay ningún correo de service account escrito en el repositorio.
+# Si ANIME_SA_EMAIL viene definido, se usa ese. Si no, se detectan las cuentas
+# que YA existen en el proyecto y se reutilizan. Sólo se crea una nueva cuando
+# no hay ninguna utilizable (o cuando el usuario la elige explícitamente).
+if [[ -n "$SA_EMAIL" ]]; then
+  if ! gcloud iam service-accounts describe "$SA_EMAIL" --project "$PROJECT_ID" >/dev/null 2>&1; then
+    echo "ANIME_SA_EMAIL apunta a una cuenta que no existe en este proyecto:"
+    echo "  $SA_EMAIL"
+    exit 1
+  fi
+else
+  mapfile -t EXISTING_SAS < <(
+    gcloud iam service-accounts list --project "$PROJECT_ID" --format='value(email)' 2>/dev/null \
+      | grep -v -- '-compute@developer.gserviceaccount.com' \
+      | grep -v -- '@cloudbuild.gserviceaccount.com' \
+      || true
+  )
+
+  if [[ "${#EXISTING_SAS[@]}" -eq 0 ]]; then
+    SA_EMAIL="anime-studio@${PROJECT_ID}.iam.gserviceaccount.com"
+    gcloud iam service-accounts create "anime-studio" \
+      --display-name="Anime AI Studio" --project "$PROJECT_ID"
+    echo "  Se creó una cuenta nueva: $SA_EMAIL"
+  elif [[ "${#EXISTING_SAS[@]}" -eq 1 ]]; then
+    SA_EMAIL="${EXISTING_SAS[0]}"
+    echo "  Se reutilizará la cuenta existente:"
+    echo "  $SA_EMAIL"
+  else
+    echo "  Hay varias cuentas de servicio. Escribe SOLO EL NÚMERO:"
+    for i in "${!EXISTING_SAS[@]}"; do
+      printf '  %2d) %s\n' "$((i + 1))" "${EXISTING_SAS[$i]}"
+    done
+    printf '  %2d) crear una nueva (anime-studio)\n' "$(( ${#EXISTING_SAS[@]} + 1 ))"
+
+    while true; do
+      read -r CHOICE
+      if [[ "$CHOICE" =~ ^[0-9]+$ ]] \
+        && (( CHOICE >= 1 && CHOICE <= ${#EXISTING_SAS[@]} + 1 )); then
+        break
+      fi
+      echo "  Escribe un número válido."
+    done
+
+    if (( CHOICE == ${#EXISTING_SAS[@]} + 1 )); then
+      SA_EMAIL="anime-studio@${PROJECT_ID}.iam.gserviceaccount.com"
+      gcloud iam service-accounts create "anime-studio" \
+        --display-name="Anime AI Studio" --project "$PROJECT_ID"
+      echo "  Se creó: $SA_EMAIL"
+    else
+      SA_EMAIL="${EXISTING_SAS[$((CHOICE - 1))]}"
+      echo "  Se reutilizará: $SA_EMAIL"
+    fi
+  fi
 fi
+
+echo "Cuenta de servicio:    $SA_EMAIL"
 
 for ROLE in   roles/aiplatform.user   roles/storage.admin   roles/serviceusage.serviceUsageConsumer   roles/run.invoker
 do
@@ -123,8 +172,9 @@ echo
 echo "Valores para Vercel:"
 cat anime-studio-cloud.env
 echo
-echo "GCP_SERVICE_ACCOUNT debe contener el JSON de: $SA_EMAIL"
-echo "El correo con el que entraste a Google Cloud NO va en Vercel ni en el código."
+echo "GCP_SERVICE_ACCOUNT debe contener el JSON de la cuenta elegida arriba."
+echo "Ni el correo de la cuenta Google, ni el correo de la service account, ni el project ID"
+echo "quedan escritos en el repositorio: todo se detecta en tiempo de instalación."
 echo "Si ya tienes el JSON de esta cuenta de servicio, reutilízalo."
 echo
 echo "Si NO tienes una clave JSON y quieres crear una nueva, ejecuta:"
