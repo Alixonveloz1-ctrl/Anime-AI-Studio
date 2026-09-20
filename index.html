@@ -526,7 +526,7 @@
       <label>Formato de imagen y video</label>
       <select id="aspectRatio">
         <option value="9:16">📱 9:16 Vertical — Reels / TikTok / Stories</option>
-        <option value="16:9">🖥️ 16:9 Horizontal — YouTube / Widescreen</option>
+        <option value="16:9" selected>🖥️ 16:9 Horizontal — YouTube / Widescreen</option>
       </select>
 
       <label style="margin-top:12px">Movimiento</label>
@@ -6147,6 +6147,7 @@ CÓMO TRABAJAS:
 - Concreto sobre abstracto: "linterna de papel naranja como única fuente cálida en planos nocturnos" en vez de "iluminación atmosférica".
 - Cada decisión es ejecutable por un equipo: se puede dibujar, componer o cronometrar.
 - Coherencia por encima de novedad: lo que fijas en la biblia se respeta en todos los capítulos.
+- EL ESTILO DE DIBUJO YA ESTÁ FIJADO POR LA APP: anime japonés 2D dibujado a mano, línea clara y cel-shading. Tú eliges paleta, luz, composición y motivos; NUNCA pidas 3D, CGI, fotorrealismo, manhua/donghua, webtoon, piel volumétrica ni "render cinematográfico" que contradiga ese contrato.
 Responde SOLO JSON válido sin markdown.`;
 }
 
@@ -6183,19 +6184,21 @@ async function generateSeriesBible() {
 
   const prompt = `${directorContext()}
 
-Formato de cada capítulo: ${fmt.scenes} escenas, ~${fmt.minutes} minutos, formato vertical para redes.
+Formato objetivo de la primera historia: ~${fmt.minutes} minutos, ${fmt.scenes} escenas narrativas, YouTube 16:9 por defecto.
+Modo de audio: ${u.storyMode === 'cast' ? 'dramatizado con voces por personaje' : 'narrado por una voz principal'}.
+Tipo de cierre: ${u.endingMode === 'cliffhanger' ? 'continuará' : 'historia completa'}.
 
-Escribe la BIBLIA DE DIRECCIÓN de esta serie. Es el documento que seguirán todos los capítulos.
+Escribe la BIBLIA DE DIRECCIÓN. El universo y la sinopsis ya son buenos: protégelos. La biblia debe ayudar a DESARROLLARLOS, no sustituirlos con otra fórmula.
 
 Devuelve JSON:
 {
-  "direccionVisual": "Cómo se ve esta serie y solo esta serie: paleta concreta (3-4 colores nombrados), tratamiento de luz, lenguaje de cámara recurrente, textura. 3-4 frases ejecutables.",
-  "narrativa": "La VOZ del relato. Elegí UNA: primera_presente | tercera_presente | tercera_pasado | segunda. Elegí primera_presente si hay un protagonista con voz interior propia o dos frentes que se alternan (es la que mejor funciona en resúmenes de manhua). Sólo el identificador, sin explicar.",
-  "identidadMusical": "El COLOR de fondo de la serie: familia instrumental, textura y tempo. Es un colchón que suena POR DEBAJO de una narración, no una pieza de concierto — así que nada de melodías ni de instrumentos solistas llevando un tema. 2-3 frases.",
-  "ritmo": "Regla de ritmo propia de esta serie dentro del género: dónde acelera, dónde respira, cómo entra y sale de cada capítulo. 2-3 frases.",
-  "arcoTemporada": ["Capítulo 1: qué establece y con qué queda abierto", "Capítulo 2: ...", "Capítulo 3: ...", "Capítulo 4: ...", "Capítulo 5: ..."],
-  "motivosRecurrentes": ["objeto, gesto o encuadre que reaparece y significa algo", "otro", "otro"],
-  "reglasDeOro": ["regla concreta que esta serie NUNCA rompe", "otra", "otra", "otra"]
+  "direccionVisual": "SOLO paleta concreta (3-4 colores), tratamiento de luz, composición y motivos visuales. El render ya está fijado como anime japonés 2D; no lo redefinas. 3-4 frases ejecutables.",
+  "narrativa": "La VOZ del relato. Elige UNA: primera_presente | tercera_presente | tercera_pasado | segunda. Elige la que sirva al concepto, no por una regla de manhua. Sólo el identificador.",
+  "identidadMusical": "Familia instrumental, textura y tempo del colchón musical. Debe acompañar voz durante mucho tiempo sin competir con ella. 2-3 frases.",
+  "ritmo": "Cómo respira una historia LARGA: dónde acelera, dónde deja reaccionar una revelación y cómo alterna presión/relación/descubrimiento. 2-3 frases.",
+  "arcoTemporada": ["Macroacto 1: gancho y primera alteración", "Macroacto 2: consecuencias y relaciones", "Macroacto 3: punto medio/revelación", "Macroacto 4: escalada y costo", "Macroacto 5: clímax y consecuencia"],
+  "motivosRecurrentes": ["objeto, gesto o encuadre que reaparece con sentido", "otro", "otro"],
+  "reglasDeOro": ["regla causal concreta que esta historia nunca rompe", "regla de personaje", "regla de tono", "regla de continuidad"]
 }`;
 
   const raw = await callGemini(prompt, directorSystemPrompt(u.genero, comedyMode));
@@ -6250,15 +6253,19 @@ ${bibleBrief()}
 
 ${arc.length ? `ARCO DE TEMPORADA:\n${arc.map((a, i) => `${i + 1}. ${a}`).join('\n')}\n` : ''}
 ${prevSummary ? `LO QUE YA PASÓ EN CAPÍTULOS ANTERIORES:\n${prevSummary}\n` : ''}
-Estás dirigiendo el CAPÍTULO ${epNum}. Da la nota de dirección al guionista antes de que escriba.
+Estás dirigiendo la HISTORIA/ENTREGA ${epNum}. Da una nota al guionista para que el universo aprobado se desarrolle con causalidad y personalidad.
+Tipo de cierre: ${u.endingMode === 'cliffhanger' ? 'CONTINUARÁ' : 'COMPLETO'}.
+${u.endingMode === 'complete'
+  ? 'El conflicto central de esta entrega DEBE cerrarse. Puede quedar una posibilidad futura, pero no conviertas el último acto en un teaser que roba la resolución.'
+  : 'El tramo debe resolver algo importante antes de abrir la siguiente amenaza.'}
 
 Devuelve JSON:
 {
-  "objetivo": "Qué tiene que lograr este capítulo en el arco (1-2 frases concretas)",
-  "curvaEmocional": "De qué emoción parte el espectador y a cuál llega (1 frase)",
-  "imagenClave": "La imagen que el espectador debe recordar de este capítulo (1 frase visual concreta)",
-  "notaDeDireccion": "La instrucción más importante para que este capítulo no se sienta genérico (1-2 frases)",
-  "quedaAbierto": "Qué queda deliberadamente sin resolver para el capítulo siguiente (1 frase)"
+  "objetivo": "Qué transformación concreta debe completar esta entrega (1-2 frases)",
+  "curvaEmocional": "De qué estado parte el espectador/protagonista y a cuál llega",
+  "imagenClave": "Una imagen memorable que nace de un acontecimiento real de la trama",
+  "notaDeDireccion": "Qué evitar o potenciar para que esta premisa no se vuelva genérica o repetitiva",
+  "quedaAbierto": "Si el cierre es completo: sólo una posibilidad secundaria opcional. Si continúa: el problema concreto que queda abierto."
 }`;
 
   try {
@@ -6281,7 +6288,7 @@ OBJETIVO: ${dir.objetivo || ''}
 CURVA EMOCIONAL: ${dir.curvaEmocional || ''}
 IMAGEN CLAVE (tiene que existir en el capítulo): ${dir.imagenClave || ''}
 NOTA DEL DIRECTOR: ${dir.notaDeDireccion || ''}
-QUEDA ABIERTO para el próximo capítulo: ${dir.quedaAbierto || ''}
+${state.universe?.endingMode === 'complete' ? 'POSIBILIDAD FUTURA OPCIONAL (NO sustituye el cierre)' : 'QUEDA ABIERTO'}: ${dir.quedaAbierto || ''}
 ═══════════════════════════════════════════`;
 }
 
