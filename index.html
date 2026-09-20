@@ -6637,19 +6637,33 @@ function buildMontarScript(scenes, opts) {
           `setpts=PTS*$R,fps=$FPS,tpad=stop_mode=clone:stop_duration=$PAD" ` +
           `-an -c:v libx264 -preset veryfast -pix_fmt yuv420p seg_${sufijo}.mp4`);
       } else if (pl && pl.image) {
-        // zoompan jitters at 1x, so it works on an upscaled copy.
-        //
-        // `d` is how many frames one zoom cycle lasts, and zoompan RESTARTS at
-        // zoom 1 when it runs out. `%d` truncates, so `d` used to come out one
-        // frame short of what `-t` actually emits and the segment's LAST frame
-        // was the first frame of a new cycle — the image snapped back to 1×
-        // right on the cut. Two spare frames put the restart safely past the
-        // end: -t emits round(T*24) ≤ floor(T*24)+1 frames, always < d.
-        p(`F=$(awk "BEGIN{printf \\"%d\\", ${T}*24+2}")`,
-          `ffmpeg -y -loop 1 -i ${pl.image} -t "${T}" ` +
-          `-vf "scale=$((W*2)):$((H*2)):force_original_aspect_ratio=increase,crop=$((W*2)):$((H*2)),` +
-          `zoompan=z='min(zoom+0.0006,1.12)':d=$F:s=${'${W}'}x${'${H}'}:fps=$FPS,format=yuv420p" ` +
-          `-an -c:v libx264 -preset veryfast seg_${sufijo}.mp4`);
+        // Motion-anime edit: a still illustration must not sit under narration
+        // for 30-40 seconds with one endless zoom. Every ~6 seconds the montage
+        // makes a clean editorial cut on the SAME drawing with a different
+        // crop/motion. This costs zero extra image/Veo generations and matches
+        // the visual cadence of long-form motion-comic references.
+        p(`NCUT=$(awk "BEGIN{n=int((${T}+5.999)/6); if(n<1)n=1; if(n>8)n=8; print n}")`,
+          `if [ "$NCUT" -le 1 ]; then`,
+          `  F=$(awk "BEGIN{printf \\"%d\\", ${T}*24+2}")`,
+          `  ffmpeg -y -loop 1 -i ${pl.image} -t "${T}" -vf "scale=$((W*2)):$((H*2)):force_original_aspect_ratio=increase,crop=$((W*2)):$((H*2)),zoompan=z='min(zoom+0.0006,1.10)':d=$F:s=${'${W}'}x${'${H}'}:fps=$FPS,format=yuv420p" -an -c:v libx264 -preset veryfast seg_${sufijo}.mp4`,
+          `else`,
+          `  BASE=$(awk "BEGIN{printf \\"%.3f\\", ${T}/$NCUT}")`,
+          `  : > cam_${sufijo}.txt`,
+          `  for J in $(seq 1 "$NCUT"); do`,
+          `    if [ "$J" -eq "$NCUT" ]; then CT=$(awk "BEGIN{printf \\"%.3f\\", ${T}-($NCUT-1)*$BASE}"); else CT=$BASE; fi`,
+          `    CF=$(awk "BEGIN{printf \\"%d\\", $CT*24+2}")`,
+          `    MOD=$((J % 4))`,
+          `    case "$MOD" in`,
+          `      1) Z="z='min(zoom+0.0011,1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'" ;;`,
+          `      2) Z="z='if(eq(on,0),1.12,max(zoom-0.0011,1.0))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'" ;;`,
+          `      3) Z="z='1.08':x='(iw-iw/zoom)*on/CF':y='ih/2-(ih/zoom/2)'" ;;`,
+          `      0) Z="z='1.08':x='(iw-iw/zoom)*(1-on/CF)':y='ih/2-(ih/zoom/2)'" ;;`,
+          `    esac`,
+          `    ffmpeg -y -loop 1 -i ${pl.image} -t "$CT" -vf "scale=$((W*2)):$((H*2)):force_original_aspect_ratio=increase,crop=$((W*2)):$((H*2)),zoompan=$Z:d=$CF:s=${'${W}'}x${'${H}'}:fps=$FPS,format=yuv420p" -an -c:v libx264 -preset veryfast cam_${sufijo}_$J.mp4`,
+          `    echo "file '$PWD/cam_${sufijo}_$J.mp4'" >> cam_${sufijo}.txt`,
+          `  done`,
+          `  ffmpeg -y -f concat -safe 0 -i cam_${sufijo}.txt -c copy seg_${sufijo}.mp4`,
+          `fi`);
       } else {
         // Neither asset: black, so the picture never drifts from the audio.
         p(`ffmpeg -y -f lavfi -i color=c=black:s=${'${W}'}x${'${H}'}:r=$FPS -t "${T}" ` +
@@ -6962,7 +6976,7 @@ async function assembleEpisode() {
     const manifest = {
       carpeta: carpetaProy,
       episodio: epNum,
-      hoja: { titulo: state.universe?.title || '', episodio: epNum, escenas: guion.length, vertical, hasMusic, musicVol },
+      hoja: { titulo: state.universe?.title || '', episodio: epNum, escenas: guion.length, vertical, hasMusic, musicVol, motionProfile: document.getElementById('motionProfileSelect')?.value || 'motion_comic' },
       script: buildMontarScript(guion, { vertical, hasMusic, musicVol, episodio: epNum }),
       descargas,
     };
