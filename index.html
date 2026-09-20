@@ -4271,7 +4271,10 @@ Responde SOLO JSON válido.`;
     // their reference images keep the same place fixed; only new places
     // from this story are appended.
     setProg(60, 'Paso 4/5: Extrayendo escenarios de la historia...');
-    await extractScenariosFromStory(fullStory);
+    const scenariosOK = await extractScenariosFromStory(fullStory);
+    if (!scenariosOK && !(u.escenarios || []).length) {
+      throw new Error('Google no completó la extracción de escenarios. No se generarán fondos sin ancla; vuelve a pulsar Generar para reanudar esta misma historia.');
+    }
 
     // ─── CALL 3: image prompts, based on the narration already written above.
     // This call does NOT continue the story — it only translates finished
@@ -4393,33 +4396,48 @@ Responde SOLO JSON válido sin markdown`;
       const scenesText = scenesForPrompt.map(s =>
         `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`
       ).join('\n\n');
-      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales y genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"continuarAnterior":false,"prompts":["Scene with..."],"tamanos":["general"],"tiposMovimiento":["still"],"movimientos":["subtle motion in English"],"continuos":[false]},...]} con exactamente ${scenesForPrompt.length} objetos. "prompts", "tamanos", "tiposMovimiento", "movimientos" y "continuos" llevan exactamente la cantidad de planos elegida.
+      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales y genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"continuarAnterior":false,"prompts":["Scene with..."],"tamanos":["general"],"videoRecomendado":[false],"movimientos":["visible purposeful motion in English"],"continuos":[false]},...]} con EXACTAMENTE ${scenesForPrompt.length} objetos. "prompts", "tamanos", "videoRecomendado", "movimientos" y "continuos" llevan exactamente la cantidad de planos elegida.
 
-⚠️ "tamanos": general | medio | cerca | escorzo | detalle. Elige el tamaño por FUNCIÓN DRAMÁTICA, no por alternancia automática. Repetir un plano medio o un primer plano en dos cortes consecutivos es válido si muestran interlocutores o reacciones diferentes. Sólo cuando "continuos" sea true, los dos fotogramas deben describir estados físicamente compatibles para una interpolación corta.`;
+⚠️ "tamanos": general | medio | cerca | escorzo | detalle. Elige el tamaño por FUNCIÓN DRAMÁTICA. "videoRecomendado" es true SÓLO cuando animar ese plano con Veo mejora materialmente la acción/actuación; false cuando una ilustración con montaje de cámara es suficiente. Esto es una recomendación del director, no un bloqueo: el usuario puede animar cualquier plano manualmente. Sólo cuando "continuos" sea true, dos fotogramas deben describir estados físicamente compatibles para una interpolación corta.`;
 
+      const accumulated = new Map();
+      let lastErr = null;
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callGemini(prompt, imageSysPrompt);
-          const parsed = safeParseJSON(raw);
-          const arr = parsed.imagePrompts || [];
-          const map = new Map(arr
-            .filter(p => p && p.num && Array.isArray(p.prompts) && p.prompts.filter(Boolean).length >= 1)
-            .map(p => [p.num, p]));
-          if (map.size >= scenesForPrompt.length) {
-            return scenesForPrompt.map(s => aplicarPlanos(s, map.get(s.num)));
+          const arr = safeParseJSON(raw).imagePrompts || [];
+          for (const p of arr) {
+            if (p && p.num && Array.isArray(p.prompts) && p.prompts.filter(Boolean).length >= 1) {
+              accumulated.set(Number(p.num), p);
+            }
           }
-          console.warn(`Image prompts intento ${attempt+1}: ${map.size}/${scenesForPrompt.length}`);
-          if (attempt === 3) {
-            return scenesForPrompt.map(s => aplicarPlanos(s, map.get(s.num)));
+          if (scenesForPrompt.every(s => accumulated.has(Number(s.num)))) {
+            return scenesForPrompt.map(s => aplicarPlanos(s, accumulated.get(Number(s.num))));
           }
-          await new Promise(r => setTimeout(r, 3000));
+          lastErr = new Error(`Dirección visual incompleta: ${accumulated.size}/${scenesForPrompt.length}`);
+          console.warn(`Dirección visual intento ${attempt+1}: ${accumulated.size}/${scenesForPrompt.length}`);
         } catch(e) {
-          console.error(`Image prompts intento ${attempt+1}:`, e.message);
-          if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
-          else return scenesForPrompt.map(s => aplicarPlanos(s, null));
+          lastErr = e;
+          console.error(`Dirección visual intento ${attempt+1}:`, e.message);
         }
+        if (attempt < 3) await new Promise(r => setTimeout(r, 1800));
       }
-      return scenesForPrompt.map(s => aplicarPlanos(s, null));
+
+      // Output truncation is different from a creative failure. If a five-scene
+      // response stays partial, automatically shrink the request instead of
+      // committing blanks and exposing a Repair button.
+      if (scenesForPrompt.length > 1) {
+        const mid = Math.ceil(scenesForPrompt.length / 2);
+        const left = await generateImagePromptsBatch(scenesForPrompt.slice(0, mid), prevContext);
+        const leftLast = left[left.length - 1];
+        const rightContext = leftLast
+          ? `Escena ${leftLast.num}: ${leftLast.narration}\nEstado visual final: ${leftLast.imagePromptC || leftLast.imagePromptB || leftLast.imagePromptA || ''}`
+          : prevContext;
+        const right = await generateImagePromptsBatch(scenesForPrompt.slice(mid), rightContext);
+        return [...left, ...right];
+      }
+
+      throw new Error(`Google no completó la dirección visual de la escena ${scenesForPrompt[0]?.num || '?'}. La generación queda pausada y reanudará esta misma escena. ${lastErr?.message || ''}`);
     }
 
     // Visual direction is generated in chunks of 5 scenes. Each scene may
@@ -4460,14 +4478,20 @@ Responde SOLO JSON válido sin markdown`;
       scenes = scenesNoImg.map(s => ({ ...s, escenario: '', imagePromptA: '', imagePromptB: '', imagePromptC: '' }));
     }
 
-    // The new story is written: now the old episode's material can go. Doing it
-    // here and not up front means a generation that fails loses nothing.
+    // Transactional completion: NOTHING becomes the new episode until every
+    // requested scene has story + title + at least one visual plan.
+    const incomplete = scenes.filter(s => !String(s.narration || '').trim() || !String(s.title || '').trim() || !String(s.imagePromptA || '').trim());
+    if (scenes.length !== fmt.scenes || incomplete.length) {
+      throw new Error(`Generación incompleta: ${scenes.length - incomplete.length}/${fmt.scenes} escenas válidas. El borrador queda guardado y continuará sin reparar ni inventar escenas aparte.`);
+    }
+
+    // Only now is it safe to replace an older episode.
     if (materialViejo.length) {
       setProg(96, 'Limpiando el material del episodio anterior...');
       const borrados = await borrarMaterialDelEpisodio();
       if (borrados) showToast(`${borrados} archivo(s) del episodio anterior borrados`, 'success');
     }
-    audioSecCache.clear();   // las duraciones medidas eran de la historia vieja
+    audioSecCache.clear();
 
     state.scenes = scenes;
     state.episodes[epNum] = scenes;
@@ -4477,15 +4501,9 @@ Responde SOLO JSON válido sin markdown`;
     renderScenarios();
     updateEpisodeNav();
 
-    const pendingCount = scenes.filter(s => !s.narration || !s.imagePromptA).length;
-    if (pendingCount > 0) {
-      setProg(100, `⚠️ ${scenes.length - pendingCount}/${fmt.scenes} escenas — ${pendingCount} pendientes`);
-      showToast(`${pendingCount} escenas pendientes. Usa "Reparar escenas vacías".`, 'error');
-    } else {
-      const planosTotales = scenes.reduce((n,s) => n + ['A','B','C'].filter(sl => s['imagePrompt'+sl]).length, 0);
-      setProg(100, `✅ Episodio ${epNum} completo — ${fmt.scenes} escenas · ${planosTotales} planos necesarios`);
-      showToast(`Episodio ${epNum}: ${state.characters.length} personajes y ${fmt.scenes} escenas listas`, 'success');
-    }
+    const planosTotales = scenes.reduce((n,s) => n + ['A','B','C'].filter(sl => s['imagePrompt'+sl]).length, 0);
+    setProg(100, `✅ Episodio ${epNum} completo — ${fmt.scenes} escenas · ${planosTotales} planos necesarios`);
+    showToast(`Episodio ${epNum}: ${state.characters.length} personajes y ${fmt.scenes} escenas listas`, 'success');
     setTimeout(() => { progress.style.display = 'none'; setProg(0, ''); }, 3000);
     updateEpisodeNav();
     // Clear new chars input after successful generation
@@ -4494,7 +4512,7 @@ Responde SOLO JSON válido sin markdown`;
 
   } catch(e) {
     saveState();
-    openErrorModal('Generación pausada', `${e.message}\n\nEl progreso de la historia larga quedó guardado. Pulsa “Generar Episodio” otra vez para reanudar desde el último bloque completado.`);
+    openErrorModal('Generación pausada', `${e.message}\n\nEl progreso quedó guardado. Pulsa “Generar Episodio” otra vez para continuar exactamente desde el último bloque completado, sin reparar escenas aparte.`);
     progress.style.display = 'none';
   } finally {
     btn.disabled = false;
