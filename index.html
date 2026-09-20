@@ -324,7 +324,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-19.110 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-19.111 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -2270,7 +2270,7 @@ document.getElementById('btnProjects').addEventListener('click', () => openProje
 // ════════════════════════════════════════════════════════════════
 // GEMINI TEXT API (via /api/script → Vertex AI, gemini-3.1-pro-preview)
 // ════════════════════════════════════════════════════════════════
-async function callGeminiOnce(prompt, system) {
+async function callGeminiOnce(prompt, system, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 85000);
   let res;
@@ -2281,6 +2281,8 @@ async function callGeminiOnce(prompt, system) {
       body: JSON.stringify({
         messages: [{ role: 'user', parts: [{ text: prompt }] }],
         system: system || '',
+        ...(Number.isFinite(options.temperature) ? { temperature: options.temperature } : {}),
+        ...(Number.isFinite(options.maxOutputTokens) ? { maxOutputTokens: options.maxOutputTokens } : {}),
       }),
       signal: controller.signal,
     });
@@ -2302,7 +2304,7 @@ async function callGeminiOnce(prompt, system) {
   return data.text;
 }
 
-async function callGemini(prompt, system) {
+async function callGemini(prompt, system, options = {}) {
   // Text generation uses one shared resilience policy. A Vertex 429 is Google's
   // project/model quota, not a Vercel rate limit. We wait and retry the SAME
   // request instead of returning a partial episode that later needs "repair".
@@ -2312,7 +2314,7 @@ async function callGemini(prompt, system) {
 
   for (;;) {
     try {
-      return await callGeminiOnce(prompt, system);
+      return await callGeminiOnce(prompt, system, options);
     } catch(e) {
       const msg = String(e?.message || '');
       const quota = /\b429\b|resource_exhausted|exhausted|quota|rate.?limit|sin capacidad/i.test(msg);
@@ -3329,6 +3331,274 @@ personas conversando sin que nada cambie.`;
 const HUMILLACION_LAYER = `
 CAPA DE HUMILLACIÓN Y REVANCHA (la selección del usuario SÍ la pide): la injusticia es PÚBLICA y con testigos que tienen nombre — no basta con que el protagonista lo pase mal en privado. Quien humilla sube la apuesta con actos concretos y visibles; el protagonista aguanta por un motivo material que el espectador entiende (una deuda, alguien a quien protege, una prueba que todavía no tiene); y el desquite llega con algo que TODOS los testigos ven: un papel, una cifra, un objeto, un nombre dicho en voz alta. Quien humilló reacciona EN PANTALLA — su cara, su frase, su silencio. Prohibido narrar la revancha en resumen, prohibido que la justicia llegue fuera de escena y prohibido el salvador externo: el vuelco lo produce algo que el protagonista hizo o supo antes y que el espectador ya vio.`;
 
+
+// ════════════════════════════════════════════════════════════════
+// VIRAL REFERENCE FORMULAS — derived from the channels/videos studied.
+//
+// These are NOT "inspiration themes". They are structural contracts. The user
+// explicitly wants the app to prioritize proven audience mechanics over novelty.
+// We still never copy literal dialogue or prose from a source video; we reuse the
+// premise fantasy, progression logic, reveal cadence and payoff architecture.
+// ════════════════════════════════════════════════════════════════
+const VIRAL_REFERENCE_FORMULAS = {
+  apocalipsis_base: {
+    label: 'Expulsado → sistema/base → recursos → reclutas → regreso del agresor',
+    genero: ['supervivencia','videojuego'],
+    subgenres: ['apocalipsis','sistema_awakening','overpowered','revenge'],
+    keywords: ['apocalipsis','zombi','zombie','base','refugio','refugio','recursos','supervivientes','almacen','almacén'],
+    contract: `FÓRMULA PROBADA — APOCALIPSIS + BASE/SISTEMA:
+1) ABRE con el protagonista ya humillado, expulsado, abandonado o reducido a un recurso para otros.
+2) La ventaja extraordinaria aparece MUY PRONTO y se demuestra con algo pequeño y concreto.
+3) Primera prueba: comida, refugio, mejora, habilidad o recurso visible; alguien reacciona.
+4) La ventaja empieza a crear una BASE/RED/GRUPO, no sólo poder individual.
+5) Recluta a personas descartadas por otros y conviértelas en valor real.
+6) Cada mejora abre una necesidad nueva: cristales, gente, territorio, defensa, comercio.
+7) El antiguo abusador regresa creyendo que nada cambió.
+8) PAYOFF PÚBLICO: ve con sus propios ojos que el "inútil" ahora controla lo que necesita.
+9) Después del primer desquite, aparece una amenaza/escala mayor para impedir que la historia muera.
+10) Progresión visible y cuantificable. Nada de capítulos enteros reflexionando sobre el apocalipsis.`,
+    beats: [
+      'humillación/exclusión material ya ocurriendo',
+      'activación o descubrimiento de la ventaja con una prueba pequeña',
+      'primer recurso/mejora que cambia su supervivencia de inmediato',
+      'primer recluta o aliado que los demás habían descartado',
+      'segunda mejora que amplía lo que la base puede hacer',
+      'reacción externa: otros descubren que ahí hay comida/poder/seguridad',
+      'regresa alguien que antes lo explotaba o despreciaba',
+      'inversión pública de estatus y primera revancha',
+      'nuevo riesgo, traición o enemigo que supera la escala anterior',
+      'cierre con expansión clara: más territorio, más poder o una amenaza mayor'
+    ]
+  },
+  divorcio_retorno: {
+    label: 'Despreciado → separación → talento/identidad oculta → regreso profesional → inversión pública',
+    genero: ['drama'],
+    subgenres: ['revenge','romance','mafia','overpowered'],
+    keywords: ['esposa','esposo','divorcio','prometida','mantenido','empresa','tecnologia','tecnología','secretario','fundador'],
+    contract: `FÓRMULA PROBADA — RELACIÓN ROTA + INVERSIÓN DE ESTATUS:
+1) ABRE con una humillación sentimental concreta, no con recuerdos vagos.
+2) El protagonista deja de perseguir, insistir o sacrificarse. Toma una decisión irreversible.
+3) Sale del entorno donde era invisible: renuncia, se va, firma, devuelve algo, corta contacto.
+4) Reactiva una capacidad/identidad/red profesional que había abandonado por esa relación.
+5) La otra parte nota su ausencia pero la interpreta mal al principio.
+6) El rival/amor platónico/figura admirada parece tener ventaja social.
+7) El protagonista acumula validaciones REALES: talento, contrato, mentor, producto, empresa, evento.
+8) La ex pareja descubre piezas de la verdad por terceros y demasiado tarde.
+9) PAYOFF PÚBLICO: una escena donde quienes lo subestimaban ven su verdadero estatus/capacidad.
+10) El final paga la elección emocional: no basta con "ahora soy rico"; decide qué quiere hacer con esa vida recuperada.`,
+    beats: [
+      'humillación sentimental o ruptura concreta',
+      'decisión de dejar de perseguir y cortar una rutina vieja',
+      'salida material del entorno: renuncia, mudanza, firma o separación',
+      'primer regreso al talento/red/empresa abandonada',
+      'la ex pareja nota la ausencia y la interpreta mal',
+      'primer reconocimiento externo fuerte del protagonista',
+      'el rival parece ganar terreno mientras el protagonista crece fuera de cuadro',
+      'descubrimiento parcial de la verdadera capacidad/estatus',
+      'revelación pública donde cambia quién tiene poder social',
+      'cierre emocional que demuestra que el protagonista ya no vive para esa relación'
+    ]
+  },
+  compromiso_mente: {
+    label: 'Compromiso impuesto → finge ser basura → ella sabe la verdad → planes que se vuelven contra él',
+    genero: ['romcom','drama'],
+    subgenres: ['romance','comedia','misterio'],
+    keywords: ['compromiso','prometida','prometido','matrimonio','contrato','pensamientos','leer la mente','leer mentes'],
+    requiresKeyword: true,
+    contract: `FÓRMULA PROBADA — COMPROMISO/MATRIMONIO + ASIMETRÍA DE INFORMACIÓN:
+1) ABRE con la obligación sentimental ya encima: compromiso, matrimonio, convivencia o acuerdo.
+2) El protagonista QUIERE romperlo y adopta una estrategia concreta para parecer indeseable/inútil/sinvergüenza.
+3) La otra persona posee una ventaja de información que él ignora: oye pensamientos, conoce su identidad, sabe el plan o descubre la mentira.
+4) Cada plan del protagonista tiene un resultado contrario y visible.
+5) La gracia/tensión está en que el espectador sabe ambas intenciones.
+6) Introduce terceros que empeoran el malentendido: familia, pretendiente, rival, socio.
+7) La pareja empieza a protegerlo o sabotear su plan sin admitir por qué.
+8) Un momento vulnerable revela que la máscara no coincide con lo que hace.
+9) PAYOFF: él descubre que ella sabía más de lo que parecía, o ella obliga a que deje de fingir.
+10) Cierra pagando la relación, no sólo la broma.`,
+    beats: [
+      'obligación sentimental ya impuesta',
+      'primer plan para parecer indeseable o romper el acuerdo',
+      'prueba de que la otra persona conoce algo que él ignora',
+      'primer plan que sale exactamente al revés',
+      'tercero que complica la relación',
+      'ella empieza a intervenir activamente para frustrar su salida',
+      'la máscara del protagonista se resquebraja por una acción genuina',
+      'malentendido o revelación que eleva la tensión sentimental',
+      'descubrimiento de la asimetría de información',
+      'decisión final sobre la relación'
+    ]
+  },
+  bestia_evolucion: {
+    label: 'Criatura débil → sistema/evolución → devora/vence → nueva forma → linaje/amenaza mayor',
+    genero: ['fantasia','donghua','isekai','videojuego'],
+    subgenres: ['reencarnacion','sistema_awakening','overpowered'],
+    keywords: ['bestia','perro','lobo','criatura','animal','evolucion','evolución','devora','devorar','mascota'],
+    requiresKeyword: true,
+    contract: `FÓRMULA PROBADA — BESTIA DÉBIL + EVOLUCIÓN:
+1) ABRE siendo realmente débil, prescindible o confundido con una criatura común.
+2) La mecánica de evolución se activa muy pronto y con reglas fáciles de entender.
+3) Primera presa/recurso = primera mejora visible.
+4) La nueva habilidad resuelve un problema que antes era imposible.
+5) Humanos/sectas/otras bestias siguen subestimándolo durante varias etapas.
+6) Cada victoria desbloquea una propiedad distinta, no sólo "más fuerza".
+7) Se revela que su especie/linaje/origen no era normal.
+8) Entra una bestia/secta/enemigo que conoce lo que realmente es.
+9) PAYOFF de transformación/evolución que todos presencian.
+10) Cierra con una ruta de evolución mayor todavía abierta.`,
+    beats: [
+      'estado inicial débil y peligro inmediato',
+      'activación de la mecánica de evolución',
+      'primera mejora visible por comida/combate/recurso',
+      'uso práctico de la habilidad nueva',
+      'segundo salto de poder con una propiedad distinta',
+      'alguien poderoso empieza a sospechar qué criatura es',
+      'rival o depredador obliga a usar todo lo aprendido',
+      'revelación de linaje/especie/origen',
+      'evolución pública importante',
+      'amenaza o forma futura que supera la escala actual'
+    ]
+  },
+  cultivacion_face: {
+    label: 'Basura de la secta → ventaja oculta → progreso secreto → desafío público → face-slap → rango mayor',
+    genero: ['donghua'],
+    subgenres: ['revenge','overpowered','sistema_awakening'],
+    keywords: ['secta','discípulo','discipulo','cultivo','cultivacion','cultivación','qi','núcleo','nucleo','clan'],
+    contract: `FÓRMULA PROBADA — CULTIVACIÓN + HUMILLACIÓN + REVANCHA:
+1) ABRE con jerarquía visible y una humillación concreta delante de testigos.
+2) El protagonista obtiene/descubre una ventaja que los demás no entienden todavía.
+3) Entrena o explota esa ventaja EN PRIVADO y consigue un primer resultado medible.
+4) Un rival lo provoca de nuevo creyendo que sigue igual.
+5) Primer desquite parcial: lo suficiente para sorprender, no para gastar todo el techo de poder.
+6) El clan/secta reacciona: maestros, ancianos, rivales cambian su conducta.
+7) Aparece un recurso/torneo/prueba con un premio que acelera la progresión.
+8) El rival escala la humillación o llama a alguien de rango superior.
+9) PAYOFF PÚBLICO: ruptura de rango, técnica imposible o victoria que destruye la lectura anterior.
+10) El mundo se hace más grande inmediatamente después: otra secta, reino o enemigo superior.`,
+    beats: [
+      'humillación pública dentro de la jerarquía',
+      'descubrimiento de la ventaja oculta',
+      'primer progreso privado y medible',
+      'rival vuelve a provocar',
+      'primer desquite parcial',
+      'reacción de maestros/clan/secta',
+      'prueba, torneo o recurso de alto valor',
+      'enemigo de rango superior sube la apuesta',
+      'face-slap público y avance de rango',
+      'apertura inmediata hacia una escala mayor'
+    ]
+  },
+  oficio_poder: {
+    label: 'Oficio humilde → habilidad absurda → primer cliente sorprendido → élites dudan → prueba pública → expansión',
+    genero: ['fantasia','drama','aventura'],
+    subgenres: ['overpowered','sistema_awakening','misterio'],
+    keywords: ['herrero','restaurante','cocinero','tienda','taller','farmacia','medico','médico','artesano','vendedor'],
+    requiresKeyword: true,
+    contract: `FÓRMULA PROBADA — OFICIO HUMILDE + HABILIDAD IMPOSIBLE:
+1) ABRE mostrando por qué su oficio parece mediocre o de bajo estatus.
+2) La habilidad convierte una tarea cotidiana en algo extraordinario.
+3) Un primer cliente/persona descubre el efecto antes que el mundo.
+4) La noticia corre y atrae alguien de estatus mayor.
+5) Un experto/élite se burla o duda públicamente.
+6) El protagonista resuelve una prueba que el experto consideraba imposible.
+7) Su producto/servicio empieza a alterar relaciones de poder.
+8) Aparece alguien que quiere comprarlo, controlarlo o robarle el secreto.
+9) PAYOFF PÚBLICO: el oficio "inferior" supera una institución prestigiosa.
+10) Cierra con demanda/escala que ya no cabe en su vida anterior.`,
+    beats: [
+      'oficio despreciado o negocio al borde del fracaso',
+      'primera demostración pequeña de la habilidad',
+      'primer cliente que nota algo imposible',
+      'la reputación empieza a correr',
+      'élite o experto pone en duda el resultado',
+      'prueba imposible resuelta en público',
+      'consecuencia económica/social de esa prueba',
+      'intento de control, compra o robo del secreto',
+      'victoria pública del oficio humilde sobre la institución',
+      'expansión a una escala mayor'
+    ]
+  },
+  escalada_general: {
+    label: 'Desventaja clara → ventaja concreta → primera prueba → reacción → escalada → inversión pública',
+    genero: [],
+    subgenres: [],
+    keywords: [],
+    contract: `FÓRMULA BASE DE LAS REFERENCIAS:
+1) Empieza con una desventaja/humillación/problema MATERIAL que se entiende en segundos.
+2) Introduce pronto una ventaja, información o capacidad que cambia las reglas.
+3) Demuéstrala con una prueba pequeña antes de explicarla por completo.
+4) Haz que otra persona REACCIONE y cambie su conducta.
+5) Cada solución abre una necesidad mayor; nunca vuelvas al mismo punto.
+6) Recupera a alguien que lo subestimó o introduce una figura de estatus superior.
+7) Escala con recursos, poder, reputación, relación o información visibles.
+8) Incluye al menos una inversión pública de estatus.
+9) Después del payoff, abre una escala mayor en lugar de repetir exactamente el mismo conflicto.
+10) La historia debe sentirse como una cadena de recompensas y complicaciones, no como una novela contemplativa.`,
+    beats: [
+      'problema material claro y protagonista en desventaja',
+      'ventaja concreta que cambia las reglas',
+      'primera prueba pequeña de esa ventaja',
+      'reacción de otra persona que cambia la situación',
+      'escalada de recursos/estatus/información',
+      'regreso o aparición de alguien que lo subestima',
+      'segunda demostración de mayor escala',
+      'inversión pública de estatus',
+      'complicación o amenaza superior',
+      'payoff y apertura hacia una escala mayor'
+    ]
+  }
+};
+
+function normalizarFormulaTexto(v) {
+  return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function seleccionarFormulaViral(genero, subgenres = [], concepto = '') {
+  const txt = normalizarFormulaTexto(concepto);
+  let best = VIRAL_REFERENCE_FORMULAS.escalada_general;
+  let bestScore = -1;
+  for (const [id, f] of Object.entries(VIRAL_REFERENCE_FORMULAS)) {
+    if (id === 'escalada_general') continue;
+    let score = 0, keywordHits = 0;
+    if ((f.genero || []).includes(genero)) score += 2;
+    for (const sg of (subgenres || [])) if ((f.subgenres || []).includes(sg)) score += 2;
+    for (const kw of (f.keywords || [])) {
+      if (txt.includes(normalizarFormulaTexto(kw))) { score += 4; keywordHits++; }
+    }
+    if (f.requiresKeyword && !keywordHits) continue;
+    if (score > bestScore) { best = f; bestScore = score; }
+  }
+  return bestScore >= 5 ? best : VIRAL_REFERENCE_FORMULAS.escalada_general;
+}
+
+function formulaViralActual(u = state.universe) {
+  if (!u) return VIRAL_REFERENCE_FORMULAS.escalada_general;
+  if (u.viralFormulaId && VIRAL_REFERENCE_FORMULAS[u.viralFormulaId]) return VIRAL_REFERENCE_FORMULAS[u.viralFormulaId];
+  return seleccionarFormulaViral(u.genero, effectiveSubgenres(u.subgenres || [], u.demo), u.conceptoOriginal || u.concepto || '');
+}
+
+function idFormulaViral(formula) {
+  return Object.entries(VIRAL_REFERENCE_FORMULAS).find(([,v]) => v === formula)?.[0] || 'escalada_general';
+}
+
+function formulaViralBrief(u = state.universe) {
+  const f = formulaViralActual(u);
+  return `\n═══ FÓRMULA VIRAL DE REFERENCIA — OBLIGATORIA ═══
+${f.label}
+${f.contract}
+OBJETIVO: conservar la misma FANTASÍA DE AUDIENCIA y la misma arquitectura de recompensa/escalada de las referencias estudiadas. La originalidad NO es un criterio de calidad aquí. Si el concepto se parece mucho a una premisa que ya funcionó, NO lo alejes para "hacerlo diferente". Cambia sólo los detalles necesarios para que esta historia sea coherente con su propio elenco/mundo. Nunca copies frases literales de otro guion.
+═══════════════════════════════════════════════════`;
+}
+
+function formulaBeatForPart(i, parts, u = state.universe) {
+  const beats = formulaViralActual(u).beats || VIRAL_REFERENCE_FORMULAS.escalada_general.beats;
+  if (!beats.length) return '';
+  const idx = Math.min(beats.length - 1, Math.floor(i * beats.length / Math.max(1, parts)));
+  const nextIdx = Math.min(beats.length - 1, Math.floor((i + 1) * beats.length / Math.max(1, parts)));
+  const slice = [...new Set([beats[idx], beats[nextIdx]])];
+  return slice.join(' → ');
+}
+
 // ════════════════════════════════════════════════════════════════
 // EPISODE FORMATS — length is data, not a hardcoded 15.
 // words ≈ scenes × 52, because TTS runs at ~150 words/minute and each
@@ -3457,7 +3727,9 @@ document.getElementById('btnGenerarUniverso').addEventListener('click', async ()
   try {
     const comedyMode = isComedyMode(genero, subgenres);
     const allAgesUni = isAllAges(demo);
-    const system = `Eres un creador de universos para historias anime de YouTube. Tu trabajo aquí es sólo diseñar una premisa, conflicto y mundo fuertes; NO desarrollar todavía el guion largo.
+    const viralFormula = seleccionarFormulaViral(genero, subgenres, concepto);
+    const viralFormulaId = idFormulaViral(viralFormula);
+    const system = `Eres un creador de universos para historias anime LARGAS de YouTube. Tu prioridad es RETENCIÓN y reproducir la fantasía de audiencia/arquitectura que ya funcionó en las referencias estudiadas; la originalidad NO es un objetivo. Tu trabajo aquí es diseñar la premisa, conflicto y mundo sobre esa fórmula; NO desarrollar todavía el guion largo.
 REGLAS ABSOLUTAS:
 ${briefDeNombres(genero, concepto)}
 ${comedyMode
@@ -3468,7 +3740,9 @@ ${comedyMode
 - En "hook" describe UNA situación concreta e impactante del primer episodio, fiel al género, no una promesa vaga.`}
 - NO mezclar géneros no solicitados.
 ${SUBGENRE_FIDELITY_CONTRACT}
-${concepto ? `- ⚠️ CRÍTICO — HAY UN CONCEPTO SEMILLA PROPORCIONADO POR EL USUARIO: ese concepto es CANON OBLIGATORIO, no una sugerencia. DEBES preservar EXACTAMENTE: los nombres de personajes que menciona (no los cambies, no los reemplaces con otros), la premisa central, y cada detalle específico que describe. Tu trabajo es EXPANDIR ese concepto (agregar ambientación, personajes secundarios coherentes, detalles del mundo) — NUNCA inventar una historia distinta ni renombrar lo que ya está definido. Si el concepto dice que un personaje se llama "Sofía", el universo resultante DEBE tener un personaje llamado "Sofía" — no "Yuki", no "Yuri", no ningún otro nombre.` : '- No hay concepto semilla: tienes libertad creativa total para inventar un universo ORIGINAL fiel al género.'}
+${concepto ? `- ⚠️ CRÍTICO — HAY UN CONCEPTO SEMILLA PROPORCIONADO POR EL USUARIO: ese concepto es CANON OBLIGATORIO, no una sugerencia. DEBES preservar EXACTAMENTE nombres, relaciones, premisa y detalles específicos. NO lo "mejores" alejándolo de una fórmula conocida: si se parece mucho a una historia que ya funcionó, CONSERVA esa cercanía y explota el mismo tipo de recompensa/escalada.` : '- No hay concepto semilla: construye una premisa deliberadamente cercana a la FÓRMULA VIRAL seleccionada. No busques ser novedoso por ser novedoso.'}
+- PROHIBIDO introducir diferencias sólo para "hacerlo original". Diferencia nombres, lugares y detalles únicamente cuando la coherencia de esta historia lo necesite.
+- Nunca copies frases literales de otro guion; sí puedes reutilizar la misma fantasía, secuencia de progresión, tipo de antagonista, inversiones de estatus y ritmo de revelaciones.
 - Responde SOLO JSON válido sin markdown`;
 
     const prompt = `${DEMO_PROMPTS[demo] || ''}
@@ -3476,6 +3750,10 @@ ${concepto ? `- ⚠️ CRÍTICO — HAY UN CONCEPTO SEMILLA PROPORCIONADO POR EL
 ${GENRE_PROMPTS[genero] || ''}
 
 ${subgenreText}
+
+FÓRMULA VIRAL SELECCIONADA — ${viralFormula.label}
+${viralFormula.contract}
+La fórmula anterior es una ESTRUCTURA OBLIGATORIA de recompensa/retención, no una sugerencia decorativa.
 
 Tono: ${tono || 'neutral'}
 ${concepto ? `
@@ -3488,7 +3766,7 @@ CONCEPTO SEMILLA — TEXTO LITERAL DEL USUARIO (CANON OBLIGATORIO):
 INSTRUCCIÓN: El universo que generes DEBE ser este concepto, expandido con más detalle — no una historia diferente "inspirada" en él. Conserva cada nombre propio, cada relación entre personajes, y la premisa exacta tal como está escrita arriba. Tu única tarea creativa es AÑADIR: ambientación específica, personajes secundarios que complementen (sin reemplazar a los ya mencionados), y estructura narrativa para el episodio 1.
 ` : ''}
 
-${concepto ? 'Expande el concepto semilla de arriba en un universo completo' : 'Crea un universo ORIGINAL y único'} que sea ESTRICTAMENTE FIEL al género "${genero}" con los subgéneros seleccionados integrados naturalmente.
+${concepto ? 'Expande el concepto semilla de arriba SIN alejarlo de su fantasía central' : 'Construye el universo sobre la fórmula viral seleccionada'} y mantenlo ESTRICTAMENTE FIEL al género "${genero}" y a los subgéneros seleccionados. La cercanía a una fórmula que ya funcionó es una VENTAJA, no un defecto.
 ${!genreAllowsSupernatural(genero, subgenres) ? `\n⚠️ RESTRICCIÓN DEL GÉNERO "${genero}": este universo NO tiene magia, poderes, sistemas de estado ni fenómenos sobrenaturales. El conflicto y el hook se sostienen con causas del mundo real. (Esta misma restricción se aplica al escribir los episodios — no generes un universo que después no se pueda contar.)` : ''}
 ${allAgesUni ? `\n⚠️ DEMOGRAFÍA KODOMOMUKE: universo apto para público infantil — sin violencia explícita, sin contenido sexual o sugerente, sin temas adultos. El conflicto es comprensible para un niño y deja una moraleja clara.` : ''}
 
@@ -3530,6 +3808,8 @@ Devuelve JSON:
     state.universe.demo      = demo;
     state.universe.genero    = genero;
     state.universe.subgenres = subgenres;
+    state.universe.viralFormulaId = viralFormulaId;
+    state.universe.viralFormulaLabel = viralFormula.label;
     state.universe.creativeVersion = 2;
     state.universe.epFormat  = document.getElementById('epLengthSelect')?.value || 'hora';
     state.universe.storyMode = document.getElementById('storyModeSelect')?.value || 'narrated';
@@ -3750,6 +4030,7 @@ function renderUniverse() {
       ${clasificacion ? `<div class="field"><div class="field-label">Clasificación</div>${clasificacion}</div>` : ''}
       <div class="field"><div class="field-label">Carpeta en el bucket</div><code>proyectos/${carpetaProyecto()}/</code></div>
       ${subs.length ? `<div class="field"><div class="field-label">Subgéneros</div>${subs.map(s => SUBGENERO_LABELS[s] || s).join(' · ')}</div>` : ''}
+      <div class="field"><div class="field-label">🔥 Fórmula de referencia</div>${u.viralFormulaLabel || formulaViralActual(u).label}</div>
       <div class="field"><div class="field-label">Concepto</div>${u.concepto || ''}</div>
       <div class="field"><div class="field-label">Conflicto</div>${u.conflicto || ''}</div>
       <div class="field"><div class="field-label">Setting</div>${u.setting || ''}</div>
@@ -3958,6 +4239,8 @@ ${allAges
 
 ${REGISTRO_LONGFORM_REFERENCIA}
 
+${formulaViralBrief(u)}
+
 ${storyModeRules}
 
 TONO DEL GÉNERO:
@@ -3969,6 +4252,7 @@ ${reglaNarrativa(state.universe?.bible?.narrativa)}
 ${VOZ_SOBRE_IMAGEN}
 
 REGLAS DE DESARROLLO:
+- PRIORIDAD DE CALIDAD: 1) fórmula viral de referencia, 2) concepto del usuario, 3) género/subgéneros, 4) resto de estilo. Si una regla genérica empuja la historia lejos de la fórmula probada, gana la fórmula.
 - El primer minuto introduce AL PROTAGONISTA EN UNA SITUACIÓN, no una explicación del mundo. Antes de explicar reglas, crea una pregunta.
 - No quemes la sinopsis en cinco minutos. Expande mediante decisiones y consecuencias reales.
 - Cada bloque de 6-10 minutos debe modificar al menos una de estas cosas: objetivo, relación, poder/recursos, información, amenaza o precio de una decisión.
@@ -4035,6 +4319,8 @@ ${GENRE_PROMPTS[genero] || ''}
 
 ${subgenreText}
 
+${formulaViralBrief(u)}
+
 ${SUBGENRE_FIDELITY_CONTRACT}`;
 
     // ─── Step 1: Characters (only for Episode 1 — reuse existing for 2+) ───
@@ -4057,7 +4343,8 @@ El humor nace de la premisa y de objetivos incompatibles, no de obligar a todos 
       : `Eres diseñador de personajes para una historia de ANIME JAPONÉS 2D, para ${allAges ? 'público general' : 'audiencia adulta'}.
 TONO DEL GÉNERO:
 ${genreTone}
-Los personajes sirven al género "${genero}" y al concepto aprobado: tienen deseos, contradicciones, relaciones y función causal en la trama. No añadas arquetipos virales ni roles de fórmula que el concepto no pida.`;
+Los personajes sirven al género "${genero}", al concepto aprobado Y a la fórmula viral seleccionada. Si la fórmula necesita un humillador, rival, beneficiario, testigo, ex pareja, recluta, maestro, cliente o figura de estatus para que el payoff funcione, CREA ese rol. No añadas personajes decorativos que no participen en la cadena de recompensa/escalada.
+${formulaViralBrief(u)}`;
 
     if (!state.characters?.length) {
       setProg(5, 'Paso 1/5: Creando personajes...');
@@ -4097,7 +4384,7 @@ Los personajes sirven al género "${genero}" y al concepto aprobado: tienen dese
 - Variedad visual: distintos colores de cabello, ojos, estilos de ropa
 - Cada personaje debe tener un rol claro y FUNCIÓN CAUSAL en la trama: quiere algo, puede tomar decisiones y su presencia modifica al menos una relación, objetivo o consecuencia.
 - Diferencia personalidades por valores, deseos, defectos y forma de actuar; no repartas etiquetas de arquetipo como si fueran una lista obligatoria.
-${comedyMode ? `- Si la premisa necesita contraste cómico, dáselo a relaciones concretas entre personajes. Un compañero o figura de autoridad sólo entra si crea decisiones y consecuencias propias de ESTA historia.` : `- Roles y relaciones fieles al género "${genero}" y al concepto, sin insertar personajes de fórmula.`}
+${comedyMode ? `- Si la fórmula viral y la premisa necesitan contraste cómico, dáselo a relaciones concretas entre personajes. Un compañero o figura de autoridad entra cuando ayuda a producir decisiones, reacciones y payoff.` : `- Roles y relaciones fieles al género "${genero}", al concepto Y a la fórmula viral. Los roles de fórmula son deseables cuando son necesarios para reproducir la mecánica que funcionó en las referencias.`}
 
 ⚠️ PERSONAJE NO-HUMANO — LEE EL CONCEPTO CON MUCHO CUIDADO:
 Si el CONCEPTO SEMILLA ORIGINAL menciona EXPLÍCITAMENTE que un personaje específico (normalmente el protagonista) transmigró, se reencarnó, o habita el cuerpo de un animal, criatura, objeto u otra entidad NO humana — SOLO ESE personaje específico debe crearse como no-humano, respetando el esquema JSON completo (name, role, gender, age, appearance, personality, backstory). NO lo omitas y NO lo conviertas en humano.
@@ -4147,7 +4434,7 @@ ${briefDeNombres(genero, u.conceptoOriginal || '')}
 Esto vale SOLO para los personajes que el usuario no haya nombrado ya: los suyos se respetan tal cual.
 Responde SOLO JSON válido sin markdown.`;
 
-      const charPrompt = `${ctx}\n\n${charRules}\n\nCrea ${numChars} personajes únicos que pertenezcan al género "${genero}" y encajen con el concepto exacto de la historia (incluyendo protagonistas no-humanos si el concepto lo indica)${isEcchi ? '. Tono ecchi para los personajes humanos femeninos' : ''}. Devuelve SOLO:
+      const charPrompt = `${ctx}\n\n${charRules}\n\nCrea ${numChars} personajes funcionales para la fórmula viral y el género "${genero}", manteniendo el concepto exacto de la historia (incluyendo protagonistas no-humanos si el concepto lo indica)${isEcchi ? '. Tono ecchi para los personajes humanos femeninos' : ''}. Devuelve SOLO:
 {"characters":[{"id":"c1","name":"nombre","role":"protagonista o rol (indica su naturaleza si no es humano)","gender":"female o male","age":"edad numérica (18+)","appearance":"descripción visual ${isEcchi ? 'atractiva y sugerente para humanos (figura, ropa que enfatiza); fiel a la especie/naturaleza si no es humano' : 'neutra y descriptiva; fiel a la especie/naturaleza si no es humano'}","personality":"2 frases","backstory":"2 frases"}]}`;
       let parsedChars = null;
       let charAttempt = 0;
@@ -4230,8 +4517,9 @@ Responde SOLO JSON válido sin markdown.`;
     // Pressing Generate again resumes from the first missing block.
     const episodeInstructionsNow = document.getElementById('episodeInstructions')?.value.trim() || '';
     const draftSignature = JSON.stringify({
-      v: 3, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
+      v: 4, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
       storyMode, endingMode, instructions: episodeInstructionsNow,
+      viralFormula: idFormulaViral(formulaViralActual(u)),
       title: u.title || '', concept: u.concepto || '', conflict: u.conflicto || '',
       demo: u.demo || '', genero: u.genero || '', subgenres,
       bible: u.bible || null,
@@ -4315,7 +4603,7 @@ Responde SOLO JSON válido sin markdown.`;
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const attemptPrompt = prompt + styleFeedback;
-          const raw = await callGemini(attemptPrompt, sysBase + genreExtra);
+          const raw = await callGemini(attemptPrompt, sysBase + genreExtra, { temperature: 0.55, maxOutputTokens: 32768 });
           const parsed = safeParseJSON(raw);
           const story = String(parsed.story || '').trim();
           const wc = story.split(/\s+/).filter(Boolean).length;
@@ -4338,14 +4626,19 @@ Responde SOLO JSON válido sin markdown.`;
     function buildLongformPartBriefs(parts, completeEnding) {
       return Array.from({ length: parts }, (_, i) => {
         const p = (i + 1) / parts;
-        if (i === 0) return 'BLOQUE DE APERTURA: instala el gancho, el deseo del protagonista, la primera fricción y la promesa de la historia. Empieza dentro de una situación. Siembra 2-3 preguntas; no expliques todavía todo el mundo y no cierres el conflicto.';
-        if (i === parts - 1) return completeEnding
-          ? 'BLOQUE FINAL: las decisiones anteriores convergen en el clímax. Paga el conflicto central, muestra reacciones y consecuencias, y entrega un epílogo breve que haga sentir la historia completa.'
-          : 'BLOQUE FINAL DE ESTA ENTREGA: paga el conflicto inmediato y luego abre una amenaza/revelación concreta. Termina en un punto de decisión deliberado que continúe después.';
-        if (p <= 0.30) return 'DESARROLLO TEMPRANO: explota las consecuencias del gancho. Introduce relaciones, reglas y obstáculos sólo cuando el protagonista choque con ellos. Haz que una solución cree una nueva necesidad.';
-        if (p <= 0.55) return 'DESARROLLO MEDIO: complica objetivos y relaciones. Recupera información sembrada antes, paga al menos una pregunta y abre otra de mayor peso. Evita repetir el mismo tipo de obstáculo.';
-        if (p <= 0.78) return 'ESCALADA: una decisión o revelación cambia la posición del protagonista. Sube el costo y fuerza una elección distinta a las anteriores. Los demás reaccionan y toman medidas.';
-        return 'PRECLÍMAX: convergen subtramas y consecuencias. Quita salidas fáciles, recupera elementos sembrados y deja preparado el conflicto final sin resolverlo todavía.';
+        const formulaBeat = formulaBeatForPart(i, parts, u);
+        let fase = '';
+        if (i === 0) fase = 'BLOQUE DE APERTURA: entra directamente en el problema material y entrega muy pronto la promesa de la fórmula.';
+        else if (i === parts - 1) fase = completeEnding
+          ? 'BLOQUE FINAL: ejecuta el payoff principal, deja reaccionar a quienes subestimaron al protagonista y paga el conflicto central.'
+          : 'BLOQUE FINAL DE ESTA ENTREGA: ejecuta un payoff real y abre inmediatamente una escala/amenaza superior.';
+        else if (p <= 0.30) fase = 'DESARROLLO TEMPRANO: primera demostración, primera reacción y primera recompensa visible.';
+        else if (p <= 0.55) fase = 'DESARROLLO MEDIO: repite la MECÁNICA DE RECOMPENSA sin repetir el mismo evento; cada victoria aumenta recursos, estatus, poder, relación o información.';
+        else if (p <= 0.78) fase = 'ESCALADA: trae de vuelta a quien subestimó, o introduce una figura de mayor estatus que mida el crecimiento.';
+        else fase = 'PRECLÍMAX: prepara la inversión pública de estatus, la revelación grande o el choque con la escala superior.';
+        return `${fase}
+HITO OBLIGATORIO DE LA FÓRMULA EN ESTE BLOQUE: ${formulaBeat}.
+No sustituyas ese hito por una escena contemplativa ni por exposición. Debe OCURRIR y producir una reacción/consecuencia visible antes de pasar al siguiente bloque.`;
       });
     }
 
@@ -4388,6 +4681,7 @@ ${soFar}
 ═══ FIN DEL CANON ESCRITO ═══
 ` : ''}
 ESCRIBE AHORA: ${briefs[i]}
+REGLA DE RETENCIÓN: el bloque debe entregar una RECOMPENSA, GIRO o CAMBIO DE ESTATUS reconocible; no basta con "desarrollar personajes". La cercanía a la estructura de las referencias es deliberada.
 Objetivo aproximado de este bloque: ${perPart} palabras.
 ${i > 0 ? 'Comienza exactamente después de la última acción/decisión previa. No reinicies la premisa.' : ''}
 ${i < briefs.length - 1 ? 'Este bloque NO es el final. Déjalo avanzar hacia el siguiente sin un cliffhanger artificial interno.' : ''}
@@ -4571,7 +4865,8 @@ Responde SOLO JSON válido.`;
 
     const majorTurns = fmt.minutes >= 75 ? '14-18' : fmt.minutes >= 50 ? '10-14' : fmt.minutes >= 25 ? '7-10' : '4-6';
     const storyArcGuide = `ARCO DE ESTA HISTORIA LARGA:
-- Gancho claro en los primeros 60-90 segundos: persona + deseo/problema + promesa.
+- COLUMNA VERTEBRAL: ${formulaViralActual(u).label}. No la reemplaces por un arco "más original".
+- Gancho claro en los primeros 60-90 segundos: persona + problema material + promesa concreta de inversión/progresión.
 - Aproximadamente ${majorTurns} cambios MAYORES a lo largo de la obra; no significa ${majorTurns} peleas. Un cambio puede ser relación, información, recurso, objetivo o amenaza.
 - Recupera elementos sembrados. Una revelación importante recibe reacción y consecuencia antes de pasar de página.
 - Mantén variedad: alterna confrontación, decisión, descubrimiento, relación, costo y respiración según el género.
@@ -4589,7 +4884,7 @@ Responde SOLO JSON válido.`;
     // ─── CALL 1: the story, guided by the bible and the chapter note ───
     setProg(30, 'Paso 2/5: Escribiendo la historia...');
     const storyPackage = await generateFullStory(
-      `${ctx}${bibleBrief()}${episodeDirectionBrief(epDirection)}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${storyArcGuide}\n\nEstás escribiendo el episodio ${epNum}.`
+      `${ctx}${formulaViralBrief(u)}${bibleBrief()}${episodeDirectionBrief(epDirection)}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${storyArcGuide}\n\nEstás escribiendo el episodio ${epNum}.`
     );
     const fullStory = storyPackage.story;
 
@@ -6709,10 +7004,11 @@ window.addEventListener('load', () => setTimeout(updateEpisodeNav, 500));
 // same fidelity contract is included in its prompt.
 // ════════════════════════════════════════════════════════════════
 function directorSystemPrompt(genero, comedyMode) {
-  return `Eres un DIRECTOR CREATIVO de anime con veinte años de experiencia: has dirigido series completas, sabes qué hace que un capítulo se sienta de autor y no de plantilla, y conoces las convenciones reales de cada género.
+  return `Eres un DIRECTOR CREATIVO de historias anime para YouTube con veinte años de experiencia. Tu prioridad es RETENCIÓN: sabes ejecutar una fórmula probada sin diluirla por querer "ser original", y conoces las convenciones reales de cada género.
 
 TU AUTORIDAD Y SUS LÍMITES:
 - Decides la identidad visual, sonora y de ritmo de la serie, y qué debe lograr cada capítulo.
+- NO eres un director de autor que deba escapar de una plantilla exitosa. La FÓRMULA VIRAL seleccionada es un encargo cerrado: tu trabajo es ejecutarla con claridad y escalada.
 - NO decides el género: el género "${genero}" y los subgéneros seleccionados son un encargo cerrado. Tu trabajo es hacer que ESE género se sienta excelente, no reinterpretarlo ni suavizarlo.
 - NO inventas mecánicas que el género no tiene (sistemas, poderes, tropos de subgéneros no seleccionados).
 ${comedyMode ? '- Esta serie es una comedia: la dirección debe servir al humor sin volverla una parodia sin stakes.' : '- Esta serie NO es una comedia: dirige con el tono serio real del género.'}
@@ -6745,6 +7041,8 @@ ${GENRE_PROMPTS[u.genero] || ''}
 
 ${getSubgenreText(subs, u.genero)}
 
+${formulaViralBrief(u)}
+
 ${SUBGENRE_FIDELITY_CONTRACT}
 ${cast ? `\nELENCO:\n${cast}` : ''}`;
 }
@@ -6762,7 +7060,7 @@ Formato objetivo de la primera historia: ~${fmt.minutes} minutos, ${fmt.scenes} 
 Modo de audio: ${u.storyMode === 'cast' ? 'dramatizado con voces por personaje' : 'narrado por una voz principal'}.
 Tipo de cierre: ${u.endingMode === 'cliffhanger' ? 'continuará' : 'historia completa'}.
 
-Escribe la BIBLIA DE DIRECCIÓN. El universo y la sinopsis ya son buenos: protégelos. La biblia debe ayudar a DESARROLLARLOS, no sustituirlos con otra fórmula.
+Escribe la BIBLIA DE DIRECCIÓN. El universo, la sinopsis Y la FÓRMULA VIRAL seleccionada son canon. La biblia debe ayudar a EJECUTAR esa fórmula durante 60-90 minutos; no la suavices, no la vuelvas "más original" y no la sustituyas por un arco de autor distinto.
 
 Devuelve JSON:
 {
@@ -6771,7 +7069,7 @@ Devuelve JSON:
   "identidadMusical": "Familia instrumental, textura y tempo del colchón musical. Debe acompañar voz durante mucho tiempo sin competir con ella. 2-3 frases.",
   "ritmo": "Cómo respira una historia LARGA: dónde acelera, dónde deja reaccionar una revelación y cómo alterna presión/relación/descubrimiento. 2-3 frases.",
   "ritmoVisual": "Cadencia de MONTAJE para esta serie dentro de la fórmula base: composición nueva normalmente cada 3–7 s, 4–6 s en diálogo estable y 2–4 s en tensión/acción/comedia. Explica en 1–2 frases cuándo esta serie usa el extremo rápido o el lento, sin romper esos rangos.",
-  "arcoTemporada": ["Macroacto 1: gancho y primera alteración", "Macroacto 2: consecuencias y relaciones", "Macroacto 3: punto medio/revelación", "Macroacto 4: escalada y costo", "Macroacto 5: clímax y consecuencia"],
+  "arcoTemporada": ["Macroacto 1: problema/humillación + activación de la ventaja", "Macroacto 2: primera prueba + reacción + recompensa visible", "Macroacto 3: progresión + regreso/aparición de quien subestima", "Macroacto 4: inversión pública de estatus + consecuencia", "Macroacto 5: payoff mayor + nueva escala o cierre"],
   "motivosRecurrentes": ["objeto, gesto o encuadre que reaparece con sentido", "otro", "otro"],
   "reglasDeOro": ["regla causal concreta que esta historia nunca rompe", "regla de personaje", "regla de tono", "regla de continuidad"]
 }`;
@@ -6834,7 +7132,7 @@ ${bibleBrief()}
 
 ${arc.length ? `ARCO DE TEMPORADA:\n${arc.map((a, i) => `${i + 1}. ${a}`).join('\n')}\n` : ''}
 ${prevSummary ? `LO QUE YA PASÓ EN CAPÍTULOS ANTERIORES:\n${prevSummary}\n` : ''}
-Estás dirigiendo la HISTORIA/ENTREGA ${epNum}. Da una nota al guionista para que el universo aprobado se desarrolle con causalidad y personalidad.
+Estás dirigiendo la HISTORIA/ENTREGA ${epNum}. Da una nota al guionista para que el universo aprobado EJECUTE la fórmula viral de referencia con causalidad, recompensas y escalada. Personalidad sí; desviarse de la fórmula para buscar originalidad, no.
 Tipo de cierre: ${u.endingMode === 'cliffhanger' ? 'CONTINUARÁ' : 'COMPLETO'}.
 ${u.endingMode === 'complete'
   ? 'El conflicto central de esta entrega DEBE cerrarse. Puede quedar una posibilidad futura, pero no conviertas el último acto en un teaser que roba la resolución.'
