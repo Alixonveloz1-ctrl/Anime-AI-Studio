@@ -537,13 +537,7 @@
         <option value="16:9" selected>🖥️ 16:9 Horizontal — YouTube / Widescreen</option>
       </select>
 
-      <label style="margin-top:12px">Movimiento</label>
-      <select id="motionProfileSelect">
-        <option value="motion_comic" selected>🎞️ Motion anime — cortes + paneos/zooms; Veo sólo donde hace falta</option>
-        <option value="mixed">✨ Mixto — también anima gestos y conversaciones importantes</option>
-        <option value="full">🎬 Animar todo — genera Veo para todos los planos</option>
-      </select>
-      <p style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.5">Recomendado: Motion anime. Conserva el aspecto 2D, usa el movimiento como acento y evita convertir una hora de historia en una sucesión de cinemáticas de videojuego.</p>
+      <p style="font-size:11px;color:var(--text-dim);margin:10px 0 0;line-height:1.5">🎞️ <strong>Montaje anime:</strong> el director decide qué planos recomienda animar con Veo. Los demás se montan con movimientos de cámara visibles sobre la ilustración. Tú puedes generar video manualmente para cualquier plano y el montaje lo usará automáticamente.</p>
 
       <label>Idioma</label>
       <select id="voiceLang" style="font-size:13px"><option value="es-US">Español · Latinoamérica</option></select>
@@ -572,8 +566,7 @@
         <button class="btn-sec" id="btnAllAudio">🎙️ Toda la Narración</button>
       </div>
       <div class="btn-row" style="margin-top:8px">
-        <button class="btn-sec" id="btnRepairScenes" style="display:none">🔧 Reparar escenas vacías</button>
-        <button class="btn-sec" onclick="generateAllVideos()" style="border-color:rgba(0,229,255,0.4);color:var(--accent2)">🎬 Todos los Videos</button>
+        <button class="btn-sec" onclick="generateAllVideos()" style="border-color:rgba(0,229,255,0.4);color:var(--accent2)">🎬 Videos recomendados</button>
       </div>
 
       <div id="bulkProgress" style="display:none;margin-top:10px">
@@ -2653,7 +2646,7 @@ function pintarVocesDelIdioma() {
 // (con qué modelo generás, con qué voz narrás), no contenido de un anime.
 // ════════════════════════════════════════════════════════════════
 const AJUSTES_KEY = 'ajustes_estudio';
-const CAMPOS_AJUSTE = ['imageModelSelect', 'veoModelSelect', 'estiloAnime', 'aspectRatio', 'motionProfileSelect',
+const CAMPOS_AJUSTE = ['imageModelSelect', 'veoModelSelect', 'estiloAnime', 'aspectRatio',
                        'voiceLang', 'voiceSelect', 'voiceSpeed', 'voiceVolumen',
                        'assemblyUseClips', 'assemblyUseMusic', 'assemblyMusicVol',
                        'cortoRatio', 'cortoDuracion', 'cortoGenero', 'cortoEstilo',
@@ -2719,7 +2712,6 @@ function restaurarAjustes() {
   if (!localStorage.getItem(migrationKey)) {
     datos.estiloAnime = 'japon_2d';
     datos.aspectRatio = '16:9';
-    datos.motionProfileSelect = 'motion_comic';
     try {
       localStorage.setItem(AJUSTES_KEY, JSON.stringify(datos));
       localStorage.setItem(migrationKey, '1');
@@ -4953,23 +4945,10 @@ document.getElementById('climaSelect')?.addEventListener('change', function() {
 // ════════════════════════════════════════════════════════════════
 async function renderScenes() {
   const c = document.getElementById('scenesList');
-  const repairBtn = document.getElementById('btnRepairScenes');
 
   if (!state.scenes.length) {
     c.innerHTML = `<div class="empty"><div class="emoji">🎬</div><p>Genera un episodio primero</p></div>`;
-    if (repairBtn) repairBtn.style.display = 'none';
     return;
-  }
-
-  // Detect broken scenes (no narration, title or num)
-  const brokenCount = state.scenes.filter(s => !s.narration || !s.title || !s.imagePromptA || s.num === undefined || s.num === null).length;
-  if (repairBtn) {
-    if (brokenCount > 0) {
-      repairBtn.style.display = 'inline-flex';
-      repairBtn.innerHTML = `🔧 Reparar ${brokenCount} escena${brokenCount > 1 ? 's' : ''} vacía${brokenCount > 1 ? 's' : ''}`;
-    } else {
-      repairBtn.style.display = 'none';
-    }
   }
 
   const items = await Promise.all(state.scenes.map(async s => {
