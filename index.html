@@ -4316,6 +4316,49 @@ Responde SOLO JSON válido sin markdown`;
       return 1;
     }
 
+    // Every planned shot must prove WHICH exact words of the narration it covers.
+    // This prevents a late event ("ya está tirado en el suelo") from leaking into
+    // shot 1 just because the art model saw the whole scene at once.
+    function tokensCronologia(texto) {
+      return String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().replace(/[^a-z0-9ñü]+/gi, ' ').trim().split(/\s+/).filter(Boolean);
+    }
+    function buscarSecuencia(haystack, needle, desde = 0) {
+      if (!needle.length || needle.length > haystack.length) return -1;
+      outer: for (let i = Math.max(0, desde); i <= haystack.length - needle.length; i++) {
+        for (let j = 0; j < needle.length; j++) if (haystack[i + j] !== needle[j]) continue outer;
+        return i;
+      }
+      return -1;
+    }
+    function validarAnclasNarrativas(scene, plan) {
+      const prompts = (plan?.prompts || []).filter(Boolean);
+      const anclas = (plan?.anclasNarrativas || []).slice(0, prompts.length);
+      if (!prompts.length || anclas.length !== prompts.length) return false;
+      const narr = tokensCronologia(scene?.narration);
+      if (!narr.length) return false;
+      const pos = [];
+      let desde = 0;
+      for (const a of anclas) {
+        const tok = tokensCronologia(a);
+        // 4-14 consecutive words copied from the narration: enough to prove
+        // chronology without turning the anchor into another prompt.
+        if (tok.length < 4 || tok.length > 14) return false;
+        const p = buscarSecuencia(narr, tok, desde);
+        if (p < 0) return false;
+        pos.push(p);
+        desde = p + tok.length;
+      }
+      if (prompts.length >= 2) {
+        // Shot 1 must genuinely cover the beginning, not jump to a later state.
+        if (pos[0] > narr.length * 0.38) return false;
+        // The last shot must reach the later half of the scene rather than
+        // spending every composition on the same opening beat.
+        if (pos[pos.length - 1] < narr.length * 0.45) return false;
+      }
+      return true;
+    }
+
     // Shot prompts + the motion of each shot, onto the scene.
     function aplicarPlanos(s, p) {
       const [a, b, c] = p?.prompts || [];
@@ -4323,6 +4366,7 @@ Responde SOLO JSON válido sin markdown`;
       const [va, vb, vc] = p?.videoRecomendado || [];
       const [ca, cb, cc] = p?.continuos || [];
       const [pa, pb, pc] = p?.pesos || [];
+      const [na, nb, nc] = p?.anclasNarrativas || [];
       const peso = v => {
         const n = Number(v);
         return Number.isFinite(n) && n > 0 ? Math.min(5, Math.max(1, n)) : 1;
@@ -4338,6 +4382,7 @@ Responde SOLO JSON válido sin markdown`;
         ...s,
         escenario: p?.escenario || '',
         imagePromptA: a || '', imagePromptB: b || '', imagePromptC: c || '',
+        anclaNarrativaA: a ? (na || '') : '', anclaNarrativaB: b ? (nb || '') : '', anclaNarrativaC: c ? (nc || '') : '',
         tamanoA: a ? tam(0) : '', tamanoB: b ? tam(1) : '', tamanoC: c ? tam(2) : '',
         videoPromptA: ma || '', videoPromptB: mb || '', videoPromptC: mc || '',
         videoRecommendedA: !!(a && va === true),
@@ -4360,8 +4405,9 @@ Responde SOLO JSON válido sin markdown`;
       const scenesText = scenesForPrompt.map(s =>
         `Escena ${s.num} [${s.act}] "${s.title}" — MÍNIMO ${minPlanosPorTexto(s.narration)} plano(s): ${s.narration}`
       ).join('\n\n');
-      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales. El texto ya te indica el MÍNIMO permitido por su duración estimada. Genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":3,"continuarAnterior":false,"prompts":["Scene with...","Scene with...","Scene with..."],"tamanos":["general","cerca","medio"],"pesos":[2,1,2],"videoRecomendado":[false,false,true],"movimientos":["...","...","..."],"continuos":[false,false,false]},...]} con EXACTAMENTE ${scenesForPrompt.length} objetos. "prompts", "tamanos", "pesos", "videoRecomendado", "movimientos" y "continuos" llevan exactamente la cantidad de planos elegida.
+      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales. El texto ya te indica el MÍNIMO permitido por su duración estimada. Genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":3,"continuarAnterior":false,"anclasNarrativas":["4-14 palabras consecutivas COPIADAS de la narración para el plano 1","...plano 2","...plano 3"],"prompts":["Scene with...","Scene with...","Scene with..."],"tamanos":["general","cerca","medio"],"pesos":[2,1,2],"videoRecomendado":[false,false,true],"movimientos":["...","...","..."],"continuos":[false,false,false]},...]} con EXACTAMENTE ${scenesForPrompt.length} objetos. "anclasNarrativas", "prompts", "tamanos", "pesos", "videoRecomendado", "movimientos" y "continuos" llevan exactamente la cantidad de planos elegida.
 
+⚠️ "anclasNarrativas": para CADA plano copia literalmente 4-14 PALABRAS CONSECUTIVAS de la narración que ese plano ilustra. Deben aparecer EN ORDEN y sin solaparse. Es una prueba mecánica de cronología: plano 1 usa palabras del inicio real; el último llega a la mitad/final real. Si el personaje cae al suelo más tarde, el plano 1 NO puede mostrarlo en el suelo.
 ⚠️ "tamanos": general | medio | cerca | escorzo | detalle. Elige el tamaño por FUNCIÓN DRAMÁTICA.
 ⚠️ "pesos": enteros 1–5 y representan DURACIÓN RELATIVA EN PANTALLA, no calidad. 1 = insert/reacción muy corta; 2–3 = frase o beat normal; 4–5 = beat dominante. Úsalos para que el corte visual caiga donde cambia la frase/acción, no en tercios matemáticos.
 "videoRecomendado" es true SÓLO cuando el movimiento temporal necesita Veo; false cuando una ilustración con montaje de cámara es suficiente. Esto es una recomendación del director, no un bloqueo: el usuario puede animar cualquier plano manualmente. Sólo cuando "continuos" sea true, dos fotogramas deben describir estados físicamente compatibles para una interpolación corta.`;
@@ -4375,8 +4421,12 @@ Responde SOLO JSON válido sin markdown`;
           for (const p of arr) {
             const scene = scenesForPrompt.find(s => Number(s.num) === Number(p?.num));
             const min = scene ? minPlanosPorTexto(scene.narration) : 1;
-            if (p && p.num && Array.isArray(p.prompts) && p.prompts.filter(Boolean).length >= min) {
+            if (p && p.num && Array.isArray(p.prompts)
+                && p.prompts.filter(Boolean).length >= min
+                && validarAnclasNarrativas(scene, p)) {
               accumulated.set(Number(p.num), p);
+            } else if (scene && p?.num) {
+              console.warn(`Dirección visual rechazada en escena ${scene.num}: los planos no prueban la cronología del texto`);
             }
           }
           if (scenesForPrompt.every(s => accumulated.has(Number(s.num)))) {
