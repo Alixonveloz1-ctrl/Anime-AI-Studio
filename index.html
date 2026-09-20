@@ -3954,7 +3954,9 @@ Responde SOLO JSON válido sin markdown.`;
       v: 2, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
       storyMode, endingMode, instructions: episodeInstructionsNow,
       title: u.title || '', concept: u.concepto || '', conflict: u.conflicto || '',
-      chars: state.characters.map(ch => [ch.id, ch.name, ch.role, ch.age])
+      demo: u.demo || '', genero: u.genero || '', subgenres,
+      bible: u.bible || null,
+      chars: state.characters.map(ch => [ch.id, ch.name, ch.role, ch.age, ch.personality])
     });
     if (!u.longformDrafts || typeof u.longformDrafts !== 'object') u.longformDrafts = {};
     let longDraft = u.longformDrafts[epNum];
@@ -4164,7 +4166,9 @@ Responde SOLO JSON válido.`;
     // ─── The director gives the note for this chapter BEFORE it is written ───
     const prevEpSummary = buildPrevEpisodesSummary();
     setProg(25, 'El director prepara el capítulo...');
-    const epDirection = await directEpisode(epNum, prevEpSummary);
+    const epDirection = (resumingLongDraft && state.episodeDirection?.[epNum])
+      ? state.episodeDirection[epNum]
+      : await directEpisode(epNum, prevEpSummary);
 
     // ─── CALL 1: the story, guided by the bible and the chapter note ───
     setProg(30, 'Paso 2/5: Escribiendo la historia...');
