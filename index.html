@@ -4290,7 +4290,9 @@ REGLAS DE DESARROLLO:
 ${endingRule}
 
 EXTENSIÓN: ${wordTarget.min}-${wordTarget.max} palabras en total. La historia se escribirá por bloques consecutivos, pero debe leerse como UNA sola obra continua.
-CRÍTICO: el campo JSON es "story". Responde SOLO JSON válido sin markdown.`;
+CRÍTICO: devuelve SOLO JSON válido sin markdown con DOS campos:
+{"story":"historia completa de este bloque","viralEvidence":"copia LITERAL de 8-30 palabras consecutivas del propio story donde ocurre el hito viral obligatorio pedido para este bloque"}.
+"viralEvidence" NO es explicación ni resumen: debe existir literalmente dentro de "story".`;
     // Split ecchi rules: narration guidance goes with the narration call,
     // visual/camera language goes with the image-prompt call.
     const genreExtra = hasEcchi
