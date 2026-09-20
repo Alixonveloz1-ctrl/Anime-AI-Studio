@@ -1567,7 +1567,8 @@ function buildVideoPrompt(s, slot = 'A', opts = {}) {
     ? 'FRAMING — INTERPOLATION: this clip travels from the first frame to the provided final frame and must LAND exactly on that final framing — same camera distance, same shot size, same lens, same character positions. Move between the two smoothly and at an even rate; do not overshoot past the final framing and add no camera movement beyond what is needed to get there.'
     : 'FRAMING — LOCKED: the first frame sets the camera position, the lens and the shot size for the ENTIRE clip. Hold that exact framing from first frame to last: same distance to the subject, same lens, same shot size, same headroom, same amount of the room visible. The camera sits on a locked tripod unless the SHOT MOTION line names a camera move — if it names none, there is no zoom, no push-in, no pull-back and no reframing at any point.';
 
-  return `${animeStyle} ${motionRule} ${framingRule} ${locRule} ${climaRule} ${actuacion} SHOT MOTION: ${base}. ${audioRule}`;
+  const stagingRule = anclaPuestaEnEscena(s, slot);
+  return `${animeStyle} ${motionRule} ${framingRule} ${locRule} ${climaRule} ${actuacion} ${stagingRule} SHOT MOTION: ${base}. ${audioRule}`;
 }
 
 // ─── EQUIPO: lo que Veo NO debe poner ───
@@ -5512,8 +5513,8 @@ async function renderScenarios() {
     <div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:8px">
       <p style="font-size:11px;color:var(--text-dim);margin:0 0 8px;line-height:1.4">¿Fondos inconsistentes entre escenas del mismo lugar? Vinculá cada escena a su escenario — así todas reciben la misma descripción del sitio. Después regenerá las imágenes de esas escenas.</p>
       <button class="btn-sec" onclick="relinkScenesToScenarios()">🔗 Vincular escenas de este episodio a estos escenarios</button>
-      <p style="font-size:11px;color:var(--text-dim);margin:14px 0 8px;line-height:1.4">¿Un plano muestra muebles que no pueden estar en ese lugar (un pupitre en un pasillo) o lluvia dentro de un interior? El director de arte repasa los prompts ya escritos y corrige SÓLO los que estén mal. No borra ninguna imagen.</p>
-      <button class="btn-sec" onclick="supervisarEpisodio()">🎬 Revisar la puesta en escena de este episodio</button>
+      <p style="font-size:11px;color:var(--text-dim);margin:14px 0 8px;line-height:1.4">Corrige los prompts ya escritos SIN tocar historia ni personajes: retratos/poses, continuidad espacial, personajes que desaparecen, beats adelantados, muebles imposibles y clima incoherente. Las imágenes existentes no se borran; la app te indica cuáles regenerar.</p>
+      <button class="btn-sec" onclick="supervisarEpisodio()">🎬 Corregir continuidad visual de este episodio</button>
     </div>`;
 }
 
@@ -5658,7 +5659,7 @@ async function assignScenariosToScenes() {
 // forbidden objects, it reasons about the pair (prompt, place) — so it catches
 // the failure nobody anticipated, in any universe.
 // ════════════════════════════════════════════════════════════════
-const SUPERVISOR_SYS = `Eres el DIRECTOR DE ARTE de este anime y hacés también de script. Tu ÚNICO trabajo es revisar la PUESTA EN ESCENA de prompts YA ESCRITOS por el director de fotografía. No escribís historia, no cambiás el encuadre, no cambiás la acción dramática, no cambiás la ropa ni el peinado, no cambiás la luz.
+const SUPERVISOR_SYS = `Eres el DIRECTOR DE ARTE, CONTINUIDAD y SCRIPT de este anime. Revisás prompts YA ESCRITOS antes de que cuesten imágenes. No escribís historia ni cambias lo que ocurre. Conservás ropa, peinado, identidad, lugar y luz. Podés corregir el ENCUADRE solamente cuando el actual parece retrato/promocional, no muestra la acción narrada o rompe la geografía física entre planos.
 
 CÓMO SE USA LO QUE REVISÁS: cada prompt se manda al generador de imagen con la DESCRIPCIÓN DEL ESCENARIO ASIGNADO PEGADA DETRÁS, palabra por palabra. Si el prompt y esa descripción describen sitios distintos, el generador dibuja LOS DOS MEZCLADOS y la imagen sale rota (un pupitre con taza de té en medio de un pasillo). Ese es el fallo que tenés que cazar.
 
@@ -5667,6 +5668,10 @@ LO QUE BUSCÁS, EN ESTE ORDEN:
    Un lugar de PASO (pasillo, escalera, calle, andén, vestíbulo) no tiene dónde sentarse a una mesa: ahí la gente está de pie, caminando, apoyada en la pared o en una barandilla, o sentada en un escalón.
 2. CLIMA DENTRO: si el escenario es un interior, la lluvia, la nieve y la niebla sólo pueden verse a través de ventanas o puertas. Lluvia, charcos o suelo mojado DENTRO del encuadre = FALLO.
 3. LUGAR EQUIVOCADO: si el lugar que describe el prompt es el correcto según la narración y el id asignado es el que está mal, NO toques el prompt: devolvé sólo el "escenario" corregido.
+4. RETRATO EN VEZ DE ESCENA: un personaje centrado, quieto, mirando o posando como foto/promocional cuando la narración describe interacción, conflicto, desplazamiento o reacción = FALLO. Reescribí ese plano como cobertura cinematográfica del beat: acción hacia otro personaje/objeto, 3/4, lateral, over-shoulder, desde atrás o plano conjunto según corresponda. Nadie mira a cámara.
+5. GEOGRAFÍA ROTA ENTRE PLANOS: compará A→B→C como UNA misma realidad física. Un corte NO mueve cuerpos. Si A deja a alguien arrodillado a la izquierda y B pone a otra persona mágicamente en esa misma marca sin movimiento narrado, = FALLO. Conservá posiciones y orientaciones; cambiar de ángulo no cambia el mundo.
+6. DESAPARICIÓN FALSA: un personaje puede quedar fuera de cuadro por el encuadre, pero no puede desaparecer de la escena. Si la interacción depende de dos personas y todos los planos son retratos aislados sin establecer dónde están una respecto de la otra, = FALLO. Al menos un plano debe mostrar o recordar la relación espacial.
+7. BEAT EQUIVOCADO: si el prompt muestra sólo la acción final o una revelación que ocurre más tarde y omite lo que se narra en ese punto, = FALLO. Cada plano muestra su momento exacto y los planos juntos desarrollan situación → acción/interacción → reacción/consecuencia cuando el texto contiene esos pasos.
 
 ⚠️ EL MOVIMIENTO VA PEGADO A LA IMAGEN. Cada plano tiene además un MOVIMIENTO (en inglés) que describe qué se anima en su clip de video y en qué estado TERMINA, y ese estado final tiene que ser exactamente la imagen del plano SIGUIENTE. Por eso, si corregís el prompt de un plano:
 - Revisá el movimiento de ESE plano: si mencionaba el mueble que quitaste ("lowers the phone onto the desk"), corregilo con la acción equivalente que el lugar sí permite ("lowers the phone to her side"). Devolvelo en "movimiento".
@@ -5675,7 +5680,8 @@ LO QUE BUSCÁS, EN ESTE ORDEN:
 
 CÓMO CORREGÍS — MÍNIMA INTERVENCIÓN:
 - Si el plano es correcto, NO lo toques y NO lo devuelvas. Devolver de más es un error tan grave como no corregir: cada cambio innecesario cuesta una imagen.
-- Si tiene atrezzo imposible, reescribí SOLO ese trozo: quitá el mueble u objeto que no va y sustituílo por la acción equivalente que ese lugar SÍ permite, conservando palabra por palabra TODO lo demás (el arranque de estilo, el "Scene with [nombre]:", la ropa, el pelo, el ángulo de cámara, la iluminación y la emoción del personaje).
+- Si tiene atrezzo imposible, reescribí SOLO ese trozo: quitá el mueble u objeto que no va y sustituílo por la acción equivalente que ese lugar SÍ permite.
+- Si el fallo es retrato, geografía, desaparición o beat equivocado, reescribí el prompt COMPLETO del plano conservando identidad, vestuario, lugar, luz y momento narrativo, pero corrigiendo la composición y la acción. La prioridad es que A→B→C parezca cobertura de una misma escena, no tres fichas de personajes.
   Ejemplo: en un pasillo, "sits at a small pressed-wood desk by a rain-streaked window, looking down at a cracked smartphone" → "stands leaning against the corridor wall beside a rain-streaked window, looking down at a cracked smartphone".
 - El prompt corregido sigue EN INGLÉS y empieza EXACTAMENTE igual que el original.
 - NUNCA agregues personajes, NUNCA agregues objetos que la narración no menciona, NUNCA "mejores" la redacción.
@@ -5787,7 +5793,7 @@ window.supervisarEpisodio = async function() {
   // editor writes to. There is no undo anywhere in the app, so an episode with
   // hand-tuned prompts deserves a warning before a model rewrites them.
   if (!confirm(
-      'El director de arte va a reescribir los prompts que estén mal puestos en escena.\n\n' +
+      'El director va a corregir continuidad, encuadre y puesta en escena de los prompts que estén mal, sin tocar la historia.\n\n' +
       'Se cambia SOLO el texto de los planos con el fallo. Las imágenes y los clips que ya generaste no se borran.\n\n' +
       'Si editaste algún prompt a mano, esa edición puede quedar reescrita y no hay deshacer.\n\n¿Seguir?')) return;
 
@@ -6164,6 +6170,28 @@ function limiteCronologicoPlano(s, slot) {
   return ` CHRONOLOGY LIMIT — this shot corresponds EXACTLY to this narration beat: "${a}". Depict the world at this moment only. Do NOT include actions, injuries, positions, objects or reveals that occur later in the scene. Preserve every state already established before this beat unless this beat changes it.`;
 }
 
+function anclaPuestaEnEscena(s, slot) {
+  const prev = slot === 'B' ? 'A' : slot === 'C' ? 'B' : null;
+  const before = prev ? String(s?.['estadoDespues' + prev] || '').trim()
+                      : String(s?.estadoEscenaInicial || '').trim();
+  const after = String(s?.['estadoDespues' + slot] || '').trim();
+  const layout = String(s?.layoutEscena || '').trim();
+  const cambio = String(s?.['cambioVisible' + slot] || '').trim();
+  const funcion = String(s?.['funcion' + slot] || '').trim();
+  const visibles = Array.isArray(s?.['personajesVisibles' + slot])
+    ? s['personajesVisibles' + slot].filter(Boolean).join(', ') : '';
+
+  const base = ' CINEMATIC STAGING — HARD RULE: this is a frame from an ongoing animated scene, never a portrait, poster, character showcase or promotional pose. A camera cut changes framing, NOT physical reality. Characters act toward each other, an object or the event; nobody poses for the viewer or looks into the lens.';
+  if (!layout && !before && !after) return base;
+  return base
+    + (layout ? ` SCENE BLOCKING: ${layout}` : '')
+    + (before ? ` STATE BEFORE THIS SHOT: ${before}` : '')
+    + (funcion ? ` EDITORIAL FUNCTION: ${funcion}.` : '')
+    + (visibles ? ` VISIBLE IN THIS FRAME: ${visibles}. Other established characters remain in their prior off-screen positions unless the narration moves them.` : '')
+    + (cambio ? ` VISIBLE CHANGE DURING THIS BEAT: ${cambio}` : '')
+    + (after ? ` REQUIRED PHYSICAL STATE AFTER THIS BEAT: ${after}` : '');
+}
+
 // The location anchor, appended BEHIND the shot prompt before it goes to the
 // image model. Both were arriving as mandatory at once, which is how a desk from
 // a classroom prompt and a corridor description ended up drawn on top of each
@@ -6223,7 +6251,7 @@ async function armarEnvioDeEscena(s, slot) {
     env.planoPrevio = previo && s[previo] ? planoEn(s[previo]) : '';
     env.planoNuevo = planoEn(tam);
   }
-  return { base, tuTexto: base, prompt: conPlano + ancla + limiteCronologicoPlano(s, slot), refs, ancla, sinFicha, env, desdeNarracion };
+  return { base, tuTexto: base, prompt: conPlano + ancla + limiteCronologicoPlano(s, slot) + anclaPuestaEnEscena(s, slot), refs, ancla, sinFicha, env, desdeNarracion };
 }
 
 // El texto COMPLETO tal y como lo lee Google, con el añadido del cliente incluido.
@@ -6312,7 +6340,7 @@ window.generateSceneImageAB = async function(sceneId, slot) {
     if (sinFicha.length) {
       showToast(`${sinFicha.join(', ')} no fue reconocido de forma explícita en el plano; se usa el ancla textual`, 'error');
     }
-    const prompt = conPlano + ancla + limiteCronologicoPlano(s, slot);
+    const prompt = conPlano + ancla + limiteCronologicoPlano(s, slot) + anclaPuestaEnEscena(s, slot);
     const env = buildSceneEnvContext(s);
     env.desdeNarracion = desdeNarracion;
     env.continuityRef = await getContinuityRef(s, slot);
@@ -6706,7 +6734,11 @@ window.generateSceneVideo = async function(sceneId, slot = 'A') {
 
     // Each shot gets its share of the narration. Without this the clip runs the
     // full eight seconds and the character invents movement to fill them.
-    const segundos = (await sceneAudioSeconds(s)) / (slots.length || 1);
+    const audioSeg = await sceneAudioSeconds(s);
+    const pesos = slots.map(sl => Math.max(1, Number(s['peso' + sl]) || 1));
+    const totalPesos = pesos.reduce((a, b) => a + b, 0) || slots.length || 1;
+    const pesoActual = pesos[Math.max(0, idx)] || 1;
+    const segundos = audioSeg * pesoActual / totalPesos;
 
     const inicial = await prepararFotograma(imgData);
     const final   = await prepararFotograma(lastFrame);
