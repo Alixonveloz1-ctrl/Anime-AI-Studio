@@ -64,8 +64,7 @@ if [[ -n "$SA_EMAIL" ]]; then
 else
   mapfile -t EXISTING_SAS < <(
     gcloud iam service-accounts list --project "$PROJECT_ID" --format='value(email)' 2>/dev/null \
-      | grep -v -- '-compute@developer.gserviceaccount.com' \
-      | grep -v -- '@cloudbuild.gserviceaccount.com' \
+      | grep -E "@${PROJECT_ID//./\\.}\\.iam\\.gserviceaccount\\.com$" \
       || true
   )
 
