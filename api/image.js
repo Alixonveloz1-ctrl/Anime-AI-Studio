@@ -109,8 +109,9 @@ What stays identical: the place, the light, the characters' faces, hair and clot
   // regla de "nada de texto" era una clausula suelta en medio de un parrafo.
   const namesList = (characterRefs || []).map(r => r.name).join(', ');
   const ecchiRules = isEcchi ? `
-- This is an ecchi/fan-service anime scene. ALL characters are ADULTS (18 or older), in adult settings fitting the story's genre. NEVER draw school uniforms, classrooms, or anything implying minors.
-- Draw it with appropriate suggestive visual elements: flattering angles, form-fitting clothing, blushing expressions, suggestive poses.` : '';
+- This project may contain ECCHI/FAN-SERVICE, and every sexualized character is an ADULT (18+), clearly adult in face, body and context. Never imply minors or secondary-school settings.
+- Fan-service is SCENE-DRIVEN, not a permanent body filter. If the current scene text describes an adult suggestive beat, wardrobe or awkward romantic situation, render it confidently in Japanese ecchi-anime language through pose, framing, timing and expression while staying non-explicit. If the current beat is grief, combat, exposition, danger or ordinary conversation, do NOT force cleavage, blushing, form-fitting clothes or suggestive poses that the scene did not request.
+- Preserve the character's actual current wardrobe and proportions; do not turn every adult woman into the same exaggerated body type.` : '';
   parts.push({ text: `${namesList ? `Character references provided: ${namesList}.\n\n` : ''}MANDATORY RULES:
 1. ABSOLUTELY NO TEXT. No letters, no words, no numbers, no watermarks, no captions, no subtitles, no readable signage, no speech bubbles, no logos, no signature. This is a single frame of animation, not a page of a comic. Any writing at all is a failed image.
 2. Draw EVERY character named in the scene - if two or three are named, ALL appear. Do not add extra people beyond those mentioned.
