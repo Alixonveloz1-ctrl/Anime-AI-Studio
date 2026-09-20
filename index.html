@@ -3404,6 +3404,7 @@ const VIRAL_REFERENCE_FORMULAS = {
     genero: ['romcom','drama'],
     subgenres: ['romance','comedia','misterio'],
     keywords: ['compromiso','prometida','prometido','matrimonio','contrato','pensamientos','leer la mente','leer mentes'],
+    requiresKeyword: true,
     contract: `FÓRMULA PROBADA — COMPROMISO/MATRIMONIO + ASIMETRÍA DE INFORMACIÓN:
 1) ABRE con la obligación sentimental ya encima: compromiso, matrimonio, convivencia o acuerdo.
 2) El protagonista QUIERE romperlo y adopta una estrategia concreta para parecer indeseable/inútil/sinvergüenza.
@@ -3433,6 +3434,7 @@ const VIRAL_REFERENCE_FORMULAS = {
     genero: ['fantasia','donghua','isekai','videojuego'],
     subgenres: ['reencarnacion','sistema_awakening','overpowered'],
     keywords: ['bestia','perro','lobo','criatura','animal','evolucion','evolución','devora','devorar','mascota'],
+    requiresKeyword: true,
     contract: `FÓRMULA PROBADA — BESTIA DÉBIL + EVOLUCIÓN:
 1) ABRE siendo realmente débil, prescindible o confundido con una criatura común.
 2) La mecánica de evolución se activa muy pronto y con reglas fáciles de entender.
@@ -3491,6 +3493,7 @@ const VIRAL_REFERENCE_FORMULAS = {
     genero: ['fantasia','drama','aventura'],
     subgenres: ['overpowered','sistema_awakening','misterio'],
     keywords: ['herrero','restaurante','cocinero','tienda','taller','farmacia','medico','médico','artesano','vendedor'],
+    requiresKeyword: true,
     contract: `FÓRMULA PROBADA — OFICIO HUMILDE + HABILIDAD IMPOSIBLE:
 1) ABRE mostrando por qué su oficio parece mediocre o de bajo estatus.
 2) La habilidad convierte una tarea cotidiana en algo extraordinario.
@@ -3556,13 +3559,16 @@ function seleccionarFormulaViral(genero, subgenres = [], concepto = '') {
   let bestScore = -1;
   for (const [id, f] of Object.entries(VIRAL_REFERENCE_FORMULAS)) {
     if (id === 'escalada_general') continue;
-    let score = 0;
-    if ((f.genero || []).includes(genero)) score += 4;
+    let score = 0, keywordHits = 0;
+    if ((f.genero || []).includes(genero)) score += 2;
     for (const sg of (subgenres || [])) if ((f.subgenres || []).includes(sg)) score += 2;
-    for (const kw of (f.keywords || [])) if (txt.includes(normalizarFormulaTexto(kw))) score += 3;
+    for (const kw of (f.keywords || [])) {
+      if (txt.includes(normalizarFormulaTexto(kw))) { score += 4; keywordHits++; }
+    }
+    if (f.requiresKeyword && !keywordHits) continue;
     if (score > bestScore) { best = f; bestScore = score; }
   }
-  return bestScore >= 4 ? best : VIRAL_REFERENCE_FORMULAS.escalada_general;
+  return bestScore >= 5 ? best : VIRAL_REFERENCE_FORMULAS.escalada_general;
 }
 
 function formulaViralActual(u = state.universe) {
