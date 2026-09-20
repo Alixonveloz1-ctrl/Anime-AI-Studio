@@ -6958,7 +6958,7 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
       const imgB64 = await conEsperaDeCuota(async () => {
         const contRef = await getContinuityRef(s, ab);
         const previo = { B: 'tamanoA', C: 'tamanoB' }[ab];
-        return generateImageRaw(prompt + anclaDeEscena(prompt, s) + limiteCronologicoPlano(s, ab), refsDeEscena(prompt, s), {
+        return generateImageRaw(prompt + anclaDeEscena(prompt, s) + limiteCronologicoPlano(s, ab) + anclaPuestaEnEscena(s, ab), refsDeEscena(prompt, s), {
           ...envForScene(s), continuityRef: contRef, desdeNarracion,
           planoPrevio: (contRef && tam && previo && s[previo]) ? planoEn(s[previo]) : '',
           planoNuevo: (contRef && tam) ? planoEn(tam) : '',
@@ -7006,7 +7006,8 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
   const cleanPrompt = String(prompt || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim() + (env.envText || '') + ' ' + estiloCore() + ' ALL characters named in this prompt are visible in the frame, actively in the scene, NOT looking at camera. FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side. Characters drawn at true real-world scale inside the environment — feet grounded with contact shadows, natural headroom, matching the perspective and lighting of the scene; never oversized or pasted over the background.';
+    .trim() + (env.envText || '') + ' ' + estiloCore()
+    + ' NARRATIVE ANIME FRAME — NEVER a character portrait, poster, model sheet or promotional pose. Characters act toward each other, an object or the event; nobody poses for the viewer, stands front-and-center just to be displayed, or looks into the lens. A camera cut changes framing, NOT physical reality: preserve established positions, orientation, injuries, held objects and off-screen presence. FULL-BLEED composition edge-to-edge. Characters stay at true real-world scale inside the environment, grounded with contact shadows and matching perspective/lighting; never oversized or pasted over the background.';
 
   const isEcchi = (state.universe?.subgenres || []).some(s => ['ecchi','harem','harem_inverso'].includes(s));
 
@@ -7046,7 +7047,7 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
       data.error.includes('provided character') ||
       data.error.includes('cannot generate an image based on')
     );
-    if (isRefError && refs?.length) {
+    if (isRefError && preCompressedRefs?.length) {
       throw new Error('Gemini rechazó una referencia de personaje. La tanda NO generó esta toma sin referencias para no cambiar la identidad. Regenera la referencia o este plano manualmente.');
     }
     throw new Error(data.error || `Image proxy ${res.status}`);
