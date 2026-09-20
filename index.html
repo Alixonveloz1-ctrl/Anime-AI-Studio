@@ -6712,7 +6712,7 @@ async function uploadAssets(items, onProgress) {
 // directory with every file from descargas.txt already downloaded under the
 // local names used here.
 //
-// The container's wrapper looks for DIEZMO-EP*.mp4 to know the render finished,
+// The container's wrapper looks for ANIME-EP*.mp4 to know the render finished,
 // so the local filename has to match that glob. The name it gets in the bucket
 // comes from SALIDA, not from here, so this never reaches the user.
 function buildMontarScript(scenes, opts) {
@@ -6861,7 +6861,7 @@ function buildMontarScript(scenes, opts) {
   // sin filtro de subtítulos no hay nada que redibujar, así que el montaje
   // termina en segundos y no pierde calidad.
   p('', '# ─── mezcla final ───');
-  const salida = `DIEZMO-EP${String(episodio).padStart(2, '0')}.mp4`;
+  const salida = `ANIME-EP${String(episodio).padStart(2, '0')}.mp4`;
   p(`ffmpeg -y -i mudo.mp4 -i mezcla.wav -c:v copy -c:a aac -b:a 192k -shortest ` +
     `-movflags +faststart ${salida}`);
   p(`echo "Montado: ${salida}"`);
@@ -7573,7 +7573,7 @@ async function combineAudiosToWav(audioEntries, progressCb) {
 // EXPORT ZIP — lo que hace falta para PUBLICAR, y nada más.
 //
 // Tres archivos:
-//   DIEZMO-EPnn.mp4   el montaje ya terminado, traído del bucket
+//   ANIME-EPnn.mp4   el montaje ya terminado, traído del bucket
 //   descripcion.txt   título, descripción y hashtags listos para pegar
 //   subtitulos.srt    con el timing real, para importarlo en CapCut
 //
