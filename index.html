@@ -1056,6 +1056,19 @@ se le encienden los ojos porque así ocurre en ese mundo, se dibuja tal cual y c
 // puesta. Decir otra vez que la bata es translúcida no dibuja nada nuevo — sólo
 // pone en el texto la frase que hace saltar el filtro, y esa escena se queda en
 // negro.
+const REGISTRO_LONGFORM_REFERENCIA = `MOTOR DE HISTORIA LARGA — aprendido de las referencias estudiadas:
+- El gancho de los primeros 60-90 segundos plantea una situación concreta, un deseo y una fricción que prometen una transformación. No hace falta resolver nada ahí.
+- CAUSALIDAD: una solución cambia la situación y crea la siguiente necesidad. Evita episodios intercambiables del tipo "aparece rival → gana → aparece rival más fuerte" si nada más cambia.
+- Cada revelación tiene REACCIÓN visible: alguien cambia de decisión, relación, posición, información o recursos. No saltes al siguiente asunto antes de cobrar el efecto de lo que acabas de revelar.
+- Aprovecha ASIMETRÍA DE INFORMACIÓN cuando el concepto la permita: el espectador sabe algo que un personaje ignora, o dos personajes interpretan el mismo hecho de forma distinta. Esa diferencia genera decisiones.
+- Alterna presión, descubrimiento, relación, consecuencia y respiración. Una historia de una hora NO es un Reel repetido doce veces ni necesita un mini-clímax artificial cada minuto.
+- Mantén preguntas abiertas simultáneas, pero paga regularmente algunas de ellas. Introduce una nueva pregunta antes de cerrar todas las anteriores.
+- Diálogo corto y funcional. Los personajes hablan para querer algo, ocultar algo, provocar, negociar, mentir, rechazar o revelar. Evita conversaciones que sólo repiten exposición.
+- La narración aporta lo que la cámara no puede mostrar: intención, información previa, cálculo, ironía y contexto. No describe por duplicado pelo, ropa, muebles o expresiones que ya están en pantalla.
+- Antes de cerrar una secuencia, comprueba de forma ORGÁNICA: expectativa → decisión → consecuencia → reacción → nueva necesidad. Es una prueba de causalidad, NO una plantilla que deba aparecer con el mismo ritmo en cada escena.
+- Varía el mecanismo. Progresión, malentendido, romance, misterio, venganza o poder oculto sólo aparecen si pertenecen al concepto y género elegidos. Nunca metas "sistema", humillación o romance porque una referencia los usara.
+- El final respeta el tipo de cierre elegido: una historia completa paga su conflicto central; un cliffhanger resuelve un tramo y abre un problema concreto. Nunca cortes por falta de texto.`;
+
 const PROMPT_ES_UN_PLANO = `⚠️ EL PROMPT DE IMAGEN NO ES LA NARRACIÓN: ES LA ORDEN DE UN PLANO.
 La narración puede ser todo lo explícita que el género pida — a ella no la filtra nadie. Al generador de
 imagen SÍ, y lo que dispara su filtro es el TEXTO del prompt. Un prompt bloqueado no es una imagen
@@ -3410,6 +3423,16 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     const hasSliceOfLife = subgenres.includes('slice_of_life');
     const hasEcchi = subgenres.includes('ecchi') || subgenres.includes('harem') || subgenres.includes('harem_inverso');
     const subgenreText = getSubgenreText(subgenres, genero);
+    // The first episode locks the creative production choices for this universe.
+    // Later episodes inherit them so voice/style logic cannot silently change.
+    if (!(state.episodes?.[1]?.length)) {
+      u.epFormat = document.getElementById('epLengthSelect')?.value || u.epFormat || 'hora';
+      u.storyMode = document.getElementById('storyModeSelect')?.value || u.storyMode || 'narrated';
+      u.endingMode = document.getElementById('endingModeSelect')?.value || u.endingMode || 'complete';
+      saveState();
+    }
+    const storyMode = u.storyMode || 'narrated';
+    const endingMode = u.endingMode || 'complete';
     const fmt = getEpisodeFormat();
     const wordTarget = formatWordTarget(fmt);
 
@@ -3531,56 +3554,59 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     const sceneOpening = SCENE_OPENING[genero]
       || 'un personaje con nombre ya metido en lo que el género considera un problema';
 
-    const sysBase = `${comedyMode
-      ? 'Eres un guionista de comedia viral para anime/manhua, escribiendo para Facebook Reels — capítulos cortos, ritmo ágil, tono absurdo y directo.'
-      : `Eres un guionista de anime/manhua viral para Facebook Reels — capítulos cortos, ritmo ágil, ESTRICTAMENTE FIEL al tono del género "${genero}". NO es comedia: no agregues chistes, sistemas cómicos ni tono paródico que el género no pide.`}
+    const storyModeRules = storyMode === 'cast'
+      ? `MODO DRAMATIZADO — VOCES POR PERSONAJE:
+- Escribe una historia muy dialogada. El narrador sólo une saltos temporales, antecedentes o información imposible de ver.
+- Los pensamientos pertenecen al personaje que los piensa y deben poder leerse con SU misma voz.
+- Cada intervención debe dejar claro por contexto quién habla; evita párrafos donde tres voces se mezclen sin anclaje.
+- No escribas acotaciones teatrales para ser pronunciadas. La acción se cuenta brevemente o se muestra visualmente.`
+      : `MODO NARRADO — UNA VOZ PRINCIPAL:
+- Una sola voz contará la historia y también leerá las frases de los personajes, como en un resumen dramatizado.
+- La prosa debe fluir al oído: narración, pensamiento y diálogo se distinguen por redacción y contexto, no por etiquetas técnicas.
+- Usa diálogo directo con frecuencia, pero el narrador puede enlazar acciones y saltos sin convertirlo en una obra teatral.`;
+
+    const endingRule = endingMode === 'complete'
+      ? `CIERRE COMPLETO: el conflicto central de ESTA historia queda pagado. Puede quedar mundo para otras historias, pero el espectador no termina sintiendo que faltó el último acto. La última secuencia muestra la consecuencia de la decisión final.`
+      : `CIERRE CONTINUARÁ: resuelve el conflicto del tramo y abre una amenaza, condición o revelación concreta para la siguiente entrega. El corte se siente deliberado, no truncado.`;
+
+    const sysBase = `Eres el guionista principal de una HISTORIA ANIME LARGA para YouTube. No estás escribiendo un Reel, una tesis ni una novela contemplativa. Estás escribiendo una historia audiovisual de aproximadamente ${fmt.minutes} minutos que debe sostener curiosidad, emoción y claridad durante todo su recorrido.
+
+GÉNERO: ${genero}. DEMOGRAFÍA: ${demo}. SUBGÉNEROS: ${subgenres.join(', ') || 'ninguno'}.
+El UNIVERSO y la SINOPSIS ya aprobados son canon. Tu trabajo es DESARROLLARLOS bien, no sustituirlos por otra premisa.
 
 ${allAges
-  ? 'ALL-AGES AUDIENCE (demografía Kodomomuke): historia para público infantil — sin violencia explícita, sin contenido sexual ni sugerente, sin lenguaje adulto. Conflictos comprensibles, tono cálido y una moraleja clara. El ritmo y el gancho siguen siendo los mismos; lo que cambia es el contenido.'
-  : "ADULT AUDIENCE: this is adult content — write with edge and directness, not family-friendly softening. The only real limit is what Gemini's policies actually block."}
+  ? 'AUDIENCIA GENERAL: contenido apropiado para la demografía seleccionada.'
+  : 'PERSONAJES ADULTOS cuando el contenido o subgénero lo requiera. El tono puede ser maduro sin convertir cada escena en provocación.'}
 
-CRITICAL: el campo JSON es "story" (un solo bloque de texto continuo, no un array de escenas).
+${REGISTRO_LONGFORM_REFERENCIA}
 
-TU TAREA: escribí LA HISTORIA COMPLETA del episodio como narración continua y natural — NO como una lista de escenas desconectadas ni como una checklist que hay que marcar en cada párrafo. Contá una historia real de RITMO RÁPIDO CONSTANTE — esto es un Reel de Facebook, no un capítulo de anime de 24 minutos: el espectador abandona en segundos si la historia no avanza. Diálogo cuando aporte. ${comedyMode ? 'Que la comedia fluya como la escribiría un guionista humano.' : 'Que la historia fluya como la escribiría un guionista humano del género.'}
+${storyModeRules}
 
-ESTILO NARRATIVO VIRAL (obligatorio para TODOS los géneros — el género decide QUÉ pasa; esto decide CÓMO se cuenta):
-- PRIMERA ORACIÓN DEL EPISODIO — es una regla de POSICIÓN, no una ventana: el SUJETO de la primera oración es una PERSONA CON NOMBRE, haciendo o diciendo algo concreto. Antes de la palabra 15 ya se sabe qué está en juego para ella: qué le falta, qué le acaban de hacer, qué quiere y no puede, o qué acaba de descubrir. Una línea de diálogo como primera frase también vale.
-  🚫 PROHIBIDO ABRIR CON: clima, calor, frío, viento, hora del día, luz, polvo, olor, silencio, ni con el pueblo / la ciudad / la casa / la sala.
-  TEST: si tu primera oración se puede ilustrar SIN ningún personaje en el cuadro, está mal — reescribila empezando por la persona.
-  TEST DEL BORRADO (hacelo antes de entregar): tapá tu primera oración y leé desde la segunda. Si no se pierde ningún HECHO, sobraba: borrala y empezá por la segunda, que casi siempre era el verdadero comienzo. El material fuerte NUNCA va en segundo lugar.
-  ARRANQUE PROPIO DE ESTE GÉNERO (el género decide QUÉ es un arranque fuerte; la regla de arriba sólo exige que esté primero): ${sceneOpening}.
-- DIÁLOGO DIRECTO constante tejido en la narración — los personajes hablan con sus propias voces en líneas cortas ("—¿Crees que puedes entrar aquí?"); apuntá a que cerca de la MITAD del texto sean voces de personajes.
-- Frases CORTAS de hechos concretos. Números específicos siempre que aporten ("tres años", "mil yuanes", "una semana") — nunca vaguedades ("mucho tiempo", "mucho dinero").
-- PROHIBIDO el lirismo y los adjetivos emocionales vacíos ("sintió un terror indescriptible", "todo cambió en ese momento") — la emoción sale de lo que PASA y de lo que DICEN.
-- PREGUNTAS RETÓRICAS dosificadas (máximo 1-2 por tramo) al espectador o entre personajes ("¿Una semana? Le bastaron dos días.").
-- MINI-CLÍMAX CONSTANTES: cada 2-3 escenas un golpe de giro propio del género (venganza: humillación → bofetada de karma; misterio: pista → vuelco; romance: acercamiento → interrupción; terror: falsa calma → golpe; comedia: plan → desastre absurdo). NO un solo clímax al final.
-- Ritmo de avance permanente: cada frase mueve la historia; nada de párrafos contemplativos. Esto aplica incluso a géneros de ritmo tradicionalmente lento (slice of life, drama, terror): el QUÉ es del género, el ritmo Reel no se negocia.
-- AMBIENTACIÓN SIN FRASE PROPIA, NUNCA: un lugar nuevo se nombra en 6 palabras o menos DENTRO de una oración cuyo sujeto es un personaje y cuyo verbo es una acción ("[NOMBRE] cruzó el patio de la casa [APELLIDO]"). Jamás en oración propia, jamás antes de que el personaje entre en el cuadro — la imagen ya muestra el lugar y el espectador la está viendo mientras te escucha. PROHIBIDO gastar frases en clima, luz, temperatura, olores, polvo o texturas ("el aire helado", "la luz entraba por las rendijas"). ÚNICA excepción: que ese detalle CAUSE un evento de la trama, y entonces se escribe como causa dentro de una acción ("el barro le tragó la sandalia"), nunca como estampa. Esa excepción NO EXISTE en la primera oración del episodio ni en la primera oración de un tramo: ahí arranca la persona, siempre.
-- DENSIDAD Y ORDEN DE CADA TRAMO: este texto se corta después en ${fmt.scenes} fragmentos consecutivos de ~${WORDS_PER_SCENE} palabras, y CADA fragmento se convierte en un video suelto con su propia imagen y su propia voz. Escribí como si cada ~${WORDS_PER_SCENE} palabras empezara un video nuevo que tiene que retener solo: el tramo ABRE con lo más fuerte que tenga dentro (una acción, una voz entrando en frío, una cifra, una revelación) y lo explicativo, lo que ata cabos y lo descriptivo va SIEMPRE después, nunca en su primera oración. Dentro de cada tramo pasan 2-3 cosas DISTINTAS y visualizables (acción → reacción → consecuencia), nunca un solo momento estirado. Al menos UNO DE CADA TRES tramos abre con diálogo.
-
-⚠️ NADA se convierte en tic mecánico repetido en cada párrafo — ni ${comedyMode ? 'el dinero/recompensa, ni ' : ''}una reacción fija de un personaje, ni una frase tipo. ${comedyMode ? 'Si el protagonista calcula una recompensa, que pase con variación real a lo largo de la historia — no lo repitas después de cada incidente como si fuera una casilla que hay que marcar.' : 'Cualquier recurso narrativo debe variar de forma real a lo largo de la historia — nada de repetir la misma fórmula en cada tramo.'}
-
-PERSONAJES: usá el elenco tal como está definido más abajo (roles, rasgos y quirks ya establecidos en sus fichas) — no inventes roles que el elenco no tiene, no ignores rasgos ya asignados a quien sí existe.
-
-TONO DE GÉNERO (${comedyMode ? 'mecánica cómica de referencia, no mandato de trama — palabras como "reino"/"héroe" abajo son solo ilustrativas si no aplican a tu concepto' : 'atmósfera y convenciones del género — mandato de tono, adaptado al concepto y setting de esta historia'}):
+TONO DEL GÉNERO:
 ${genreTone}
-${u.conceptoOriginal ? `🎯 EL CONCEPTO DEFINE EL SETTING: el concepto semilla del usuario (marcado CANON arriba) es el mundo real de esta historia. Si es contemporáneo/realista, quedate ahí — sin reinos, magia ni tecnología futurista que el concepto no mencione. Aplicá solo la mecánica cómica de tono (arriba) a ese setting ya establecido.` : ''}
 
-CIERRE: ${sceneEnding} — terminá con un CLIFFHANGER seco y concreto hacia el episodio ${epNum + 1} — una amenaza visible, una llegada, una frase cortada; no una reflexión.${allAges ? '' : `
-QUE LO COMENTEN (los últimos segundos deciden si escriben o si sólo miran): 1) la ÚLTIMA LÍNEA del episodio la DICE un personaje en voz alta —una amenaza, una condición, una cifra, un plazo—, nunca el narrador. 2) El protagonista hace por lo menos UNA cosa que se puede criticar con razón, y el antagonista dice en voz alta UN motivo que se entiende aunque lo que haga siga estando mal: si al bando contrario no le diste ni una línea con la que alguien podría estar de acuerdo, escribiste un sermón y nadie discute. 3) Queda una decisión a punto de tomarse que una parte del público aprobaría y otra condenaría, y el episodio corta ANTES de que la tome — mostrala y cortá, SIN VEREDICTO: si el episodio dice quién tiene razón, el comentario ya está escrito y nadie lo escribe. Todo esto se mide en cosas concretas (cuánto dinero, cuántos días, quién se queda con qué, quién cuida a quién), nunca en abstracciones.`}
-${isGrounded ? `MODO COTIDIANO ACTIVO: día a día real y específico, CERO fantasmas, CERO poderes — ${comedyMode ? 'el humor' : 'el interés'} viene de situaciones reales.` : `MODO NARRATIVO ACTIVO: la emoción viene de los hechos, no de adjetivos. "[NOMBRE] dispara y falla. El monstruo está a diez metros." No "el terror lo paraliza".`}
-${!allowsSuper && !allowsSuper2 ? `⚠️ RESTRICCIÓN: sin elementos sobrenaturales para el género ${genero} — ni magia, ni poderes, ni sistemas, ni fenómenos inexplicables. Todo lo que ocurre tiene una causa del mundo real.` : ''}
-
-VOZ NARRATIVA (la decidió el director — sostenela sin cambiar ni una frase):
+VOZ NARRATIVA:
 ${reglaNarrativa(state.universe?.bible?.narrativa)}
-
-${REGISTRO_MANHUA}
 
 ${VOZ_SOBRE_IMAGEN}
 
-EXTENSIÓN Y FORMATO: entre ${wordTarget.min} y ${wordTarget.max} palabras en total (la narración TTS corre a ~150 palabras/minuto: este total produce los ~${fmt.minutes} minutos del formato elegido), español. Un solo bloque de texto continuo — esta llamada NO genera imágenes ni divide en escenas todavía, eso es un paso separado.
-Responde SOLO JSON válido sin markdown`;
+REGLAS DE DESARROLLO:
+- El primer minuto introduce AL PROTAGONISTA EN UNA SITUACIÓN, no una explicación del mundo. Antes de explicar reglas, crea una pregunta.
+- No quemes la sinopsis en cinco minutos. Expande mediante decisiones y consecuencias reales.
+- Cada bloque de 6-10 minutos debe modificar al menos una de estas cosas: objetivo, relación, poder/recursos, información, amenaza o precio de una decisión.
+- Si un personaje demuestra algo extraordinario, deja que otros reaccionen y actúen por ello. La reacción es parte del acontecimiento.
+- Los secundarios no existen para hacer fila y admirar al protagonista: tienen objetivos, información parcial y capacidad de empeorar o mejorar la situación.
+- Evita repetir exactamente el mismo ciclo de problema/recompensa. Si una mecánica reaparece, cambia el costo, la interpretación o la consecuencia.
+- No hagas resúmenes de acontecimientos que merecen escena. Las decisiones, confrontaciones, descubrimientos y revelaciones importantes ocurren delante del espectador.
+- Usa elipsis para trayectos, rutinas y repeticiones que no cambian nada.
+- Mantén nombres, reglas del mundo, relaciones, objetos importantes, deudas y heridas consistentes entre bloques.
+- Diálogos naturales y relativamente cortos. Nada de personajes dando discursos para explicar al espectador lo que ambos ya saben.
+- Español natural. Evita traducciones literales, frases robóticas, muletillas repetidas y cierres moralizantes.
 
+${endingRule}
+
+EXTENSIÓN: ${wordTarget.min}-${wordTarget.max} palabras en total. La historia se escribirá por bloques consecutivos, pero debe leerse como UNA sola obra continua.
+CRÍTICO: el campo JSON es "story". Responde SOLO JSON válido sin markdown.`;
     // Split ecchi rules: narration guidance goes with the narration call,
     // visual/camera language goes with the image-prompt call.
     const genreExtra = hasEcchi
@@ -3812,186 +3838,170 @@ Responde SOLO JSON válido sin markdown.`;
 
     const charRefShort = state.characters.map(c => c.name).join(', ');
 
-    // N escenas × 3 imágenes por escena, según el formato elegido
-    const narrationShape = `{"id":"s1","num":1,"title":"título corto","narration":"~48-55 palabras tomadas TAL CUAL de la historia original, cortadas en un punto natural — no reescribas ni le agregues un gancho artificial, solo extraé el fragmento que corresponde."}`;
+    const charVoiceMap = state.characters.map(ch => `${ch.id} = ${ch.name}`).join('\n');
+    const narrationShape = storyMode === 'cast'
+      ? `{"id":"s1","num":1,"title":"título corto","narration":"texto legible de la escena","interventions":[{"type":"narrator|dialogue|thought|system","speakerId":"narrator|system|ID_DEL_PERSONAJE","text":"texto que se pronuncia"}]}`
+      : `{"id":"s1","num":1,"title":"título corto","narration":"fragmento completo y natural de la historia"}`;
 
-    // ─── STEP: write the episode as continuous prose — no per-scene checklist,
-    // so nothing (money amounts, character beats, reactions) gets mechanically
-    // repeated once per scene.
-    //
-    // One call per PART. A short episode is a single call, as before. Longer
-    // formats are written act by act because a single 2500-word generation runs
-    // past Vercel's 60s function limit. Splitting by ACT is safe in a way that
-    // splitting by SCENE was not: every part receives the complete text written
-    // so far plus what its act must accomplish, so it continues one story
-    // instead of restarting it (the old per-scene split is what made scene 10
-    // repeat scene 5). ───
     async function generateStoryPart(prompt, minWords) {
-      let best = '';
-      let lastErr = '';
+      let best = '', lastErr = '';
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callGemini(prompt, sysBase + genreExtra);
-          let parsed;
-          try {
-            parsed = safeParseJSON(raw);
-          } catch (pe) {
-            // The API answered but the body didn't parse as JSON — show why and
-            // a snippet of what came back, so truncation/format issues are clear.
-            throw new Error(`respuesta recibida pero el JSON no parseó (${pe.message}) | inicio: ${String(raw).slice(0, 180)}`);
-          }
+          const parsed = safeParseJSON(raw);
           const story = String(parsed.story || '').trim();
           const wc = story.split(/\s+/).filter(Boolean).length;
           if (story.length > best.length) best = story;
-          if (story && wc >= minWords) return story; // sanity floor — reject obviously truncated results
+          if (story && wc >= minWords) return story;
           lastErr = story ? `demasiado corto (${wc} palabras, mínimo ${minWords})` : 'respuesta vacía o sin campo "story"';
-          console.warn(`Historia intento ${attempt+1}: ${lastErr}`);
-          await new Promise(r => setTimeout(r, 3000));
-        } catch(e) {
+          if (attempt < 3) await new Promise(r => setTimeout(r, 2500));
+        } catch (e) {
           lastErr = e.message;
-          console.error(`Historia intento ${attempt+1}:`, e.message);
-          if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
+          if (attempt < 3) await new Promise(r => setTimeout(r, 2500));
         }
       }
-      if (best) return best; // accept the longest attempt rather than fail outright
-      throw new Error(`No se pudo generar la historia. Último error: ${lastErr}`);
+      if (best) return best;
+      throw new Error(`No se pudo escribir esta parte de la historia: ${lastErr}`);
     }
 
-    // Arc beats per part, so each call knows what its act has to accomplish.
-    const PART_BRIEFS = {
-      1: ['la historia COMPLETA: abrí con la historia YA EN MARCHA (una persona con nombre y algo en juego desde la primera oración — nada de presentar el mundo antes), desarrollo, clímax y cierre con cliffhanger'],
-      2: ['PRIMERA MITAD: abrí con la historia YA EN MARCHA (una persona con nombre y algo en juego desde la primera oración), primer incidente y escalada hasta un punto de giro fuerte (NO cierres la historia)',
-          'SEGUNDA MITAD: consecuencias del giro, escalada final, clímax y cierre con cliffhanger'],
-      3: ['ACTO 1: abrí con la historia YA EN MARCHA (una persona con nombre y algo en juego desde la primera oración); el elenco se presenta actuando, y el primer evento que rompe la normalidad (NO cierres nada)',
-          'ACTO 2: escalada — complicaciones, alianzas y traiciones, un giro que sube las apuestas (NO cierres la historia)',
-          'ACTO 3: convergencia de los hilos sembrados, clímax y cierre con cliffhanger'],
-      4: ['ACTO 1: abrí con la historia YA EN MARCHA (una persona con nombre y algo en juego desde la primera oración) y primer incidente que rompe la normalidad (NO cierres nada)',
-          'ACTO 2: complicaciones que escalan y un primer giro real (NO cierres nada)',
-          'ACTO 3: las apuestas suben al máximo, todo se complica antes del final (NO cierres la historia)',
-          'ACTO 4: convergencia de los hilos sembrados, clímax y cierre con cliffhanger'],
-    };
+    function buildLongformPartBriefs(parts, completeEnding) {
+      return Array.from({ length: parts }, (_, i) => {
+        const p = (i + 1) / parts;
+        if (i === 0) return 'BLOQUE DE APERTURA: instala el gancho, el deseo del protagonista, la primera fricción y la promesa de la historia. Empieza dentro de una situación. Siembra 2-3 preguntas; no expliques todavía todo el mundo y no cierres el conflicto.';
+        if (i === parts - 1) return completeEnding
+          ? 'BLOQUE FINAL: las decisiones anteriores convergen en el clímax. Paga el conflicto central, muestra reacciones y consecuencias, y entrega un epílogo breve que haga sentir la historia completa.'
+          : 'BLOQUE FINAL DE ESTA ENTREGA: paga el conflicto inmediato y luego abre una amenaza/revelación concreta. Termina en un punto de decisión deliberado que continúe después.';
+        if (p <= 0.30) return 'DESARROLLO TEMPRANO: explota las consecuencias del gancho. Introduce relaciones, reglas y obstáculos sólo cuando el protagonista choque con ellos. Haz que una solución cree una nueva necesidad.';
+        if (p <= 0.55) return 'DESARROLLO MEDIO: complica objetivos y relaciones. Recupera información sembrada antes, paga al menos una pregunta y abre otra de mayor peso. Evita repetir el mismo tipo de obstáculo.';
+        if (p <= 0.78) return 'ESCALADA: una decisión o revelación cambia la posición del protagonista. Sube el costo y fuerza una elección distinta a las anteriores. Los demás reaccionan y toman medidas.';
+        return 'PRECLÍMAX: convergen subtramas y consecuencias. Quita salidas fáciles, recupera elementos sembrados y deja preparado el conflicto final sin resolverlo todavía.';
+      });
+    }
 
     async function generateFullStory(baseCtx) {
-      const briefs = PART_BRIEFS[fmt.parts] || PART_BRIEFS[1];
+      const briefs = buildLongformPartBriefs(fmt.parts, endingMode === 'complete');
       const perPart = Math.round(wordTarget.total / fmt.parts);
       const partsOut = [];
 
       for (let i = 0; i < briefs.length; i++) {
-        if (fmt.parts > 1) {
-          setProg(30 + Math.round((i / briefs.length) * 12), `Paso 2/5: Escribiendo parte ${i+1}/${briefs.length}...`);
-        }
+        if (fmt.parts > 1) setProg(30 + Math.round((i / briefs.length) * 12), `Paso 2/5: Escribiendo bloque ${i + 1}/${briefs.length}...`);
         const soFar = partsOut.join('\n\n');
         const prompt = `${baseCtx}
 
-${soFar ? `═══ TEXTO YA ESCRITO DE ESTE MISMO EPISODIO (continuá desde aquí, NO lo repitas, NO reinicies la historia) ═══
+${soFar ? `═══ HISTORIA YA ESCRITA — CANON INMEDIATO (CONTINÚA; NO RESUMAS NI REPITAS) ═══
 ${soFar}
-═══ FIN DEL TEXTO YA ESCRITO ═══
+═══ FIN DEL CANON ESCRITO ═══
+` : ''}
+ESCRIBE AHORA: ${briefs[i]}
+Objetivo aproximado de este bloque: ${perPart} palabras.
+${i > 0 ? 'Comienza exactamente después de la última acción/decisión previa. No reinicies la premisa.' : ''}
+${i < briefs.length - 1 ? 'Este bloque NO es el final. Déjalo avanzar hacia el siguiente sin un cliffhanger artificial interno.' : ''}
 
-` : ''}ESCRIBÍ AHORA ${briefs[i]}.
-Extensión de esta parte: ~${perPart} palabras.${i > 0 ? '\nEmpezá exactamente donde quedó el texto anterior, sin resumirlo y sin repetir eventos ya narrados.' : ''}${i < briefs.length - 1 ? '\nEsta parte NO termina el episodio: dejá la tensión abierta para la parte siguiente.' : ''}
-
-Devolvé SOLO: {"story":"el texto de esta parte, en un solo bloque continuo"}`;
-
-        partsOut.push(await generateStoryPart(prompt, Math.round(perPart * 0.6)));
+Devuelve SOLO {"story":"..."}.`;
+        partsOut.push(await generateStoryPart(prompt, Math.round(perPart * 0.72)));
       }
-      return partsOut.join('\n\n');
+      return { story: partsOut.join('\n\n'), parts: partsOut };
     }
 
-    // ─── STEP: split the ALREADY-FINISHED story into exactly N sequential
-    // scenes. This does NOT continue or add to the story (that would risk
-    // the context-loss failure mode from splitting narrative generation
-    // across calls) — it only restructures text that already exists in
-    // front of it, the same safe pattern the image-prompt call already used. ───
-    const splitSysPrompt = `Sos un editor que divide una historia YA TERMINADA en exactamente ${fmt.scenes} fragmentos secuenciales para un formato de video. NO agregues historia nueva, NO reescribas el contenido ni el estilo — dividí el texto ya escrito en ${fmt.scenes} cortes naturales, preservando el orden y el contenido original. Podés ajustar levemente las palabras justo en los puntos de corte para que cada fragmento se lea bien de forma independiente, pero el contenido, los eventos y el estilo son los del autor original — vos solo cortás.
-Cada fragmento: ~48-55 palabras en español, ${formaNarrativa(state.universe?.bible?.narrativa)} — no cambies la voz ni la persona.
-⚠️ REGLA DE CORTE ABSOLUTA: cada fragmento DEBE empezar al inicio de una oración y DEBE terminar con puntuación final (. ! ? …). JAMÁS cortes a mitad de una oración — cada fragmento se convierte en un audio expresivo INDEPENDIENTE, y si una oración queda partida entre dos fragmentos la voz cambia de tono a mitad de la frase y se rompe la continuidad auditiva. Preferí un fragmento de 44 o de 60 palabras antes que cortar una oración por la mitad. Antes de devolver, verificá que los ${fmt.scenes} fragmentos terminen en . ! ? o …
-Cada fragmento necesita un "title" corto (3-6 palabras). No te preocupes por el campo "act": lo asigna la app según la posición.
-CRÍTICO: el campo se llama "narration" (sin tilde).
-Responde SOLO JSON válido sin markdown.`;
-
-    // ─── Deterministic sentence-boundary repair (JS, not LLM) ───
-    // Even with the split rule, the model occasionally cuts mid-sentence.
-    // This pass moves any trailing partial sentence of chunk N to the start
-    // of chunk N+1, guaranteeing every scene's narration is complete
-    // sentences — so each scene's expressive TTS audio starts and ends at
-    // natural boundaries and the voice tone stays continuous.
-    function lastSentenceEnd(t) {
-      const re = /[.!?…]["'»”)]*/g;
-      let last = -1, m;
-      while ((m = re.exec(t)) !== null) last = m.index + m[0].length;
-      return last;
-    }
-    function alignScenesToSentenceBoundaries(scenes) {
-      for (let i = 0; i < scenes.length - 1; i++) {
-        const txt = String(scenes[i].narration || '').trim();
-        if (!txt) continue;
-        const cut = lastSentenceEnd(txt);
-        if (cut === -1 || cut >= txt.length) { scenes[i].narration = txt; continue; }
-        const head = txt.slice(0, cut).trim();
-        const tail = txt.slice(cut).trim();
-        // Safety: never leave a scene nearly empty — if no full sentence fits, keep as-is
-        if (head.length < 15) { scenes[i].narration = txt; continue; }
-        scenes[i].narration = head;
-        scenes[i + 1].narration = (tail + ' ' + String(scenes[i + 1].narration || '').trim()).trim();
-      }
-      return scenes;
+    function scenesInPart(i, parts, total) {
+      const base = Math.floor(total / parts);
+      return base + (i < (total % parts) ? 1 : 0);
     }
 
-    async function splitStoryIntoScenes(story) {
-      const prompt = `HISTORIA COMPLETA A DIVIDIR:\n\n${story}\n\nDividila en EXACTAMENTE ${fmt.scenes} fragmentos secuenciales, en orden. Devolvé SOLO: {"scenes":[${narrationShape},...]} con exactamente ${fmt.scenes} objetos numerados 1-${fmt.scenes}.`;
+    const splitSysPrompt = `Eres el editor de guion de una producción audiovisual. Recibes UN BLOQUE ya escrito y lo divides en escenas consecutivas. No agregas acontecimientos nuevos y no cambias el resultado del bloque.
+
+Cada escena debe cubrir un beat audiovisual coherente. No hay objetivo fijo de 52 palabras: una conversación puede ser más larga y una acción puede ser breve. La duración media objetivo de este proyecto es ~${fmt.wordsPerScene} palabras por escena, pero manda el sentido dramático y las oraciones completas.
+
+MODO: ${storyMode === 'cast' ? 'DRAMATIZADO CON VOCES POR PERSONAJE' : 'NARRADO CON UNA VOZ PRINCIPAL'}.
+PERSONAJES Y SUS IDs:
+${charVoiceMap}
+
+${storyMode === 'cast' ? `
+Para cada escena devuelve "interventions" EN ORDEN:
+- dialogue: frase pronunciada por un personaje.
+- thought: pensamiento del personaje, con SU speakerId.
+- narrator: sólo contexto, transición o información que la imagen no puede dar.
+- system: únicamente si existe un sistema real en esta historia.
+No escribas el nombre del hablante dentro de "text". Usa speakerId exacto. El diálogo/pensamiento debe ser la mayoría cuando la escena lo permita. "narration" queda como lectura completa de la escena para editarla visualmente.`
+: `No necesitas separar voces: "narration" contiene el fragmento completo que leerá un único narrador. La misma voz podrá leer las frases directas de personajes tal como están escritas.`}
+
+Reglas:
+- Empieza y termina en límites naturales. Nunca cortes una oración a la mitad.
+- Una escena importante debe incluir la reacción a su revelación/decisión cuando esa reacción pertenece al mismo beat.
+- No fabriques un gancho al final de cada escena. Los cortes existen para montaje, no para convertir una hora en docenas de Reels.
+- Título de 3-6 palabras.
+Responde SOLO JSON válido.`;
+
+    function normalizeInterventions(scene) {
+      if (storyMode !== 'cast') return [{ type: 'narrator', speakerId: 'narrator', text: String(scene.narration || '').trim() }].filter(x => x.text);
+      const validIds = new Set(['narrator', 'system', ...state.characters.map(ch => ch.id)]);
+      const arr = Array.isArray(scene.interventions) ? scene.interventions : [];
+      const cleaned = arr.map(x => {
+        const type = ['narrator','dialogue','thought','system'].includes(x?.type) ? x.type : 'narrator';
+        let speakerId = String(x?.speakerId || 'narrator');
+        if (type === 'system') speakerId = 'system';
+        if (type === 'narrator') speakerId = 'narrator';
+        if (!validIds.has(speakerId)) speakerId = 'narrator';
+        return { type, speakerId, text: String(x?.text || '').trim() };
+      }).filter(x => x.text);
+      return cleaned.length ? cleaned : [{ type: 'narrator', speakerId: 'narrator', text: String(scene.narration || '').trim() }].filter(x => x.text);
+    }
+
+    async function splitStoryPart(partText, wanted, startNum) {
+      const prompt = `BLOQUE A DIVIDIR:\n\n${partText}\n\nDivídelo en EXACTAMENTE ${wanted} escenas consecutivas. Devuelve {"scenes":[${narrationShape},...]} con ${wanted} objetos.`;
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callGemini(prompt, splitSysPrompt);
-          const parsed = safeParseJSON(raw);
-          const arr = parsed.scenes || [];
-          arr.forEach(s => { if (s && s['narración'] && !s.narration) s.narration = s['narración']; });
+          const arr = safeParseJSON(raw).scenes || [];
           const valid = arr.filter(s => s && s.narration && s.title);
-          if (valid.length >= fmt.scenes) {
-            // The act is POSITIONAL, so it is computed here rather than trusted
-            // from the model: a uniform or shifted "act" in the response used to
-            // survive straight into the episode.
-            const scenes = valid.slice(0, fmt.scenes).map((s, i) => ({ ...s, id: `s${i+1}`, num: i+1, act: actForIndex(i, fmt.scenes) }));
-            return alignScenesToSentenceBoundaries(scenes);
+          if (valid.length >= wanted) {
+            return valid.slice(0, wanted).map((s, i) => ({
+              ...s, id: `s${startNum + i}`, num: startNum + i,
+              interventions: normalizeInterventions(s)
+            }));
           }
-          console.warn(`División intento ${attempt+1}: ${valid.length}/${fmt.scenes}`);
-          await new Promise(r => setTimeout(r, 3000));
-        } catch(e) {
-          console.error(`División intento ${attempt+1}:`, e.message);
-          if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
-        }
+        } catch (e) {}
+        if (attempt < 3) await new Promise(r => setTimeout(r, 2500));
       }
-      // Mechanical fallback: sentence-aware split — never cuts mid-sentence.
-      const sentences = story.match(/[^.!?…]+[.!?…]+["'»”)]*\s*/g) || [story];
-      const totalWords = story.split(/\s+/).filter(Boolean).length;
-      const perScene = Math.ceil(totalWords / fmt.scenes) || 1;
-      const chunks = []; let cur = '', curWords = 0;
+
+      // Deterministic fallback by complete sentences.
+      const sentences = partText.match(/[^.!?…]+[.!?…]+["'»”)]*\s*/g) || [partText];
+      const totalWords = partText.split(/\s+/).filter(Boolean).length;
+      const perScene = Math.ceil(totalWords / wanted) || 1;
+      const chunks=[]; let cur='', words=0;
       for (const sent of sentences) {
-        const w = sent.split(/\s+/).filter(Boolean).length;
-        if (curWords + w > perScene && cur && chunks.length < fmt.scenes - 1) {
-          chunks.push(cur.trim()); cur = ''; curWords = 0;
-        }
-        cur += sent; curWords += w;
+        const w=sent.split(/\s+/).filter(Boolean).length;
+        if (cur && words + w > perScene && chunks.length < wanted - 1) { chunks.push(cur.trim()); cur=''; words=0; }
+        cur += sent; words += w;
       }
       if (cur.trim()) chunks.push(cur.trim());
-      while (chunks.length < fmt.scenes) chunks.push('');
-      return Array.from({ length: fmt.scenes }, (_, i) => ({
-        id: `s${i+1}`, num: i+1, act: actForIndex(i, fmt.scenes),
-        title: `Escena ${i+1}`, narration: chunks[i] || '', dialogue: [], imagePromptA: '',
-      }));
+      while (chunks.length < wanted) chunks.push('');
+      return Array.from({length:wanted},(_,i) => {
+        const s={ id:`s${startNum+i}`, num:startNum+i, title:`Escena ${startNum+i}`, narration:chunks[i]||'' };
+        s.interventions=normalizeInterventions(s);
+        return s;
+      });
     }
 
-    const storyArcGuide = `ARCO DEL EPISODIO (guía de ritmo, NO plantilla mecánica escena-por-escena):
-${comedyMode
-  ? `Arranque en caliente: el protagonista YA metido en el primer incidente cómico desde la primera oración — su rutina se deduce de lo que el incidente le rompe, no se cuenta antes.
-Desarrollo: 3-4 incidentes que escalan en absurdo, con chistes recurrentes que se van sembrando y retomando.
-Clímax: el incidente más grande del episodio, donde convergen los chistes recurrentes.
-Cierre: resolución parcial + gancho claro hacia el próximo episodio.`
-  : `Arranque en caliente: el protagonista YA dentro del primer evento que rompe su normalidad, desde la primera oración (fiel al género) — la situación previa se deduce de lo que ese evento le quita, no se cuenta antes.
-Desarrollo: 3-4 eventos que escalan la tensión propia del género, sembrando elementos que se retoman después.
-Clímax: el evento más intenso del episodio, donde convergen los hilos sembrados.
-Cierre: resolución parcial + gancho claro hacia el próximo episodio.`}
+    async function splitStoryIntoScenes(storyParts) {
+      const scenes=[]; let num=1;
+      for (let i=0; i<storyParts.length; i++) {
+        const wanted=scenesInPart(i, storyParts.length, fmt.scenes);
+        setProg(45 + Math.round((i / storyParts.length) * 12), `Paso 3/5: Organizando escenas ${i + 1}/${storyParts.length}...`);
+        const chunk=await splitStoryPart(storyParts[i], wanted, num);
+        scenes.push(...chunk); num += wanted;
+      }
+      return scenes.slice(0, fmt.scenes).map((s,i)=>({ ...s, id:`s${i+1}`, num:i+1, act:actForIndex(i, fmt.scenes) }));
+    }
 
-- Usá TODOS o la gran mayoría de los personajes listados en "PERSONAJES DEL EPISODIO" — no ignores a los secundarios enfocándote solo en 2. Si hay 5 personajes, los 5 deberían tener presencia real.
+    const majorTurns = fmt.minutes >= 75 ? '14-18' : fmt.minutes >= 50 ? '10-14' : fmt.minutes >= 25 ? '7-10' : '4-6';
+    const storyArcGuide = `ARCO DE ESTA HISTORIA LARGA:
+- Gancho claro en los primeros 60-90 segundos: persona + deseo/problema + promesa.
+- Aproximadamente ${majorTurns} cambios MAYORES a lo largo de la obra; no significa ${majorTurns} peleas. Un cambio puede ser relación, información, recurso, objetivo o amenaza.
+- Recupera elementos sembrados. Una revelación importante recibe reacción y consecuencia antes de pasar de página.
+- Mantén variedad: alterna confrontación, decisión, descubrimiento, relación, costo y respiración según el género.
+- Los secundarios aparecen cuando tienen una función causal; no hay obligación de meter a todos en cada tramo.
+- ${endingMode === 'complete' ? 'El final resuelve el conflicto central y muestra su consecuencia.' : 'El final resuelve el tramo actual y deja un problema concreto abierto.'}
 - Extensión total: ${wordTarget.min}-${wordTarget.max} palabras.`;
 
     // ─── The director gives the note for this chapter BEFORE it is written ───
@@ -4001,13 +4011,13 @@ Cierre: resolución parcial + gancho claro hacia el próximo episodio.`}
 
     // ─── CALL 1: the story, guided by the bible and the chapter note ───
     setProg(30, 'Paso 2/5: Escribiendo la historia...');
-    const fullStory = await generateFullStory(
+    const storyPackage = await generateFullStory(
       `${ctx}${bibleBrief()}${episodeDirectionBrief(epDirection)}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${storyArcGuide}\n\nEstás escribiendo el episodio ${epNum}.`
     );
+    const fullStory = storyPackage.story;
 
-    // ─── CALL 2: split the finished story into 15 scenes ───
-    setProg(45, `Paso 3/5: Dividiendo en ${fmt.scenes} escenas...`);
-    const scenesNoImg = await splitStoryIntoScenes(fullStory);
+    setProg(45, `Paso 3/5: Organizando ${fmt.scenes} escenas...`);
+    const scenesNoImg = await splitStoryIntoScenes(storyPackage.parts);
 
     // ─── CALL 2.5: extract THIS story's locations → universe scenarios ───
     // Story first, always: locations are derived FROM the finished story.
