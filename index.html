@@ -698,10 +698,140 @@ function initDB() {
     req.onerror = e => rej(e);
   });
 }
-function dbSet(k, v) { return new Promise((res, rej) => { const tx = db.transaction('blobs','readwrite'); tx.objectStore('blobs').put(v, k); tx.oncomplete = res; tx.onerror = rej; }); }
-function dbGet(k)    { return new Promise((res, rej) => { const tx = db.transaction('blobs','readonly'); const r = tx.objectStore('blobs').get(k); r.onsuccess = () => res(r.result || null); r.onerror = rej; }); }
-function dbDel(k)    { return new Promise(res => { const tx = db.transaction('blobs','readwrite'); tx.objectStore('blobs').delete(k); tx.oncomplete = res; }); }
-function dbKeys()    { return new Promise((res, rej) => { const tx = db.transaction('blobs','readonly'); const r = tx.objectStore('blobs').getAllKeys(); r.onsuccess = () => res(r.result || []); r.onerror = rej; }); }
+function localDbSet(k, v) { return new Promise((res, rej) => { const tx = db.transaction('blobs','readwrite'); tx.objectStore('blobs').put(v, k); tx.oncomplete = res; tx.onerror = rej; }); }
+function localDbGet(k)    { return new Promise((res, rej) => { const tx = db.transaction('blobs','readonly'); const r = tx.objectStore('blobs').get(k); r.onsuccess = () => res(r.result ?? null); r.onerror = rej; }); }
+function localDbDel(k)    { return new Promise(res => { const tx = db.transaction('blobs','readwrite'); tx.objectStore('blobs').delete(k); tx.oncomplete = res; }); }
+function localDbKeys()    { return new Promise((res, rej) => { const tx = db.transaction('blobs','readonly'); const r = tx.objectStore('blobs').getAllKeys(); r.onsuccess = () => res(r.result || []); r.onerror = rej; }); }
+
+const cloudMissingKeys = new Set();
+const signedVideoCache = new Map();
+
+function projectIdFromDbKey(k) {
+  const m = /^[a-z]+_(p[a-zA-Z0-9-]{5,80})(?:_|$)/.exec(String(k || ''));
+  return m ? m[1] : null;
+}
+function isVideoDbKey(k) { return /^sv[abc]_/.test(String(k || '')); }
+
+function canonicalVideoValue(v) {
+  const raw = String(v || '');
+  if (raw.startsWith('gs://')) return raw;
+  try {
+    const u = new URL(raw);
+    if (u.hostname !== 'storage.googleapis.com') return raw;
+    const p = u.pathname.replace(/^\/+/, '').split('/');
+    if (p.length < 2) return raw;
+    const bucket = p.shift();
+    const objectPath = decodeURIComponent(p.join('/'));
+    return `gs://${bucket}/${objectPath}`;
+  } catch (_) {
+    return raw;
+  }
+}
+
+async function signProjectAsset(projectId, key, method) {
+  const r = await fetch('/api/project-asset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId, key, method }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.url) throw new Error(d.error || `project-asset ${r.status}`);
+  return d.url;
+}
+
+async function cloudPutDbValue(k, v) {
+  const projectId = projectIdFromDbKey(k);
+  if (!projectId) return;
+  const value = isVideoDbKey(k) ? canonicalVideoValue(v) : String(v ?? '');
+  let last = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const url = await signProjectAsset(projectId, k, 'PUT');
+      const r = await fetch(url, { method:'PUT', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:value });
+      if (!r.ok) throw new Error(`GCS ${r.status}`);
+      cloudMissingKeys.delete(k);
+      return;
+    } catch (e) {
+      last = e;
+      if (attempt < 2) await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+    }
+  }
+  throw new Error(`No se pudo guardar ${k} en el bucket: ${last?.message || 'error'}`);
+}
+
+async function cloudGetDbValue(k) {
+  const projectId = projectIdFromDbKey(k);
+  if (!projectId || cloudMissingKeys.has(k)) return null;
+  try {
+    const url = await signProjectAsset(projectId, k, 'GET');
+    const r = await fetch(url, { cache:'no-store' });
+    if (r.status === 404) { cloudMissingKeys.add(k); return null; }
+    if (!r.ok) throw new Error(`GCS ${r.status}`);
+    return await r.text();
+  } catch (e) {
+    if (/404/.test(String(e.message))) { cloudMissingKeys.add(k); return null; }
+    console.warn('Lectura cloud:', k, e.message);
+    return null;
+  }
+}
+
+async function resolveVideoValue(v) {
+  const canonical = canonicalVideoValue(v);
+  if (!canonical.startsWith('gs://')) return v;
+  const cached = signedVideoCache.get(canonical);
+  if (cached && cached.expiresAt > Date.now() + 60_000) return cached.url;
+  const r = await fetch('/api/download-url', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ gcsUri:canonical, descarga:false }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.url) throw new Error(d.error || 'No se pudo firmar el video');
+  signedVideoCache.set(canonical, { url:d.url, expiresAt:Date.now() + 5 * 3600_000 });
+  return d.url;
+}
+
+// Device storage is a cache only. Every project value is mirrored to GCS
+// immediately; another device can rebuild it even with empty browser storage.
+async function dbSet(k, v) {
+  const canonical = isVideoDbKey(k) ? canonicalVideoValue(v) : v;
+  await localDbSet(k, canonical);
+  const pid = projectIdFromDbKey(k);
+  if (pid) await cloudPutDbValue(k, canonical);
+}
+async function dbGet(k) {
+  let v = await localDbGet(k);
+  if (v == null) {
+    v = await cloudGetDbValue(k);
+    if (v != null) await localDbSet(k, v);
+  }
+  if (v == null) return null;
+  return isVideoDbKey(k) ? resolveVideoValue(v) : v;
+}
+async function dbDel(k) {
+  await localDbDel(k);
+  cloudMissingKeys.add(k);
+  const projectId = projectIdFromDbKey(k);
+  if (!projectId) return;
+  try {
+    await fetch('/api/project-asset', {
+      method:'DELETE', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ projectId, key:k }),
+    });
+  } catch (e) {
+    console.warn('Borrado cloud:', k, e.message);
+  }
+}
+async function dbKeys() {
+  const local = await localDbKeys();
+  const projectId = state.projectId;
+  if (!projectId) return local;
+  try {
+    const r = await fetch('/api/project-asset?projectId=' + encodeURIComponent(projectId), { cache:'no-store' });
+    const d = await r.json();
+    if (r.ok && Array.isArray(d.keys)) return [...new Set([...local, ...d.keys])];
+  } catch (_) {}
+  return local;
+}
 
 const charImgKey   = id => `ci_${state.projectId}_${id}`;
 const sceneImgKey  = id => `si_${state.projectId}_${id}`;
