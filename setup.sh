@@ -5,6 +5,7 @@ set -Eeuo pipefail
 # Designed for Cloud Shell: clone/open the repo and run only:
 #   bash setup.sh
 
+ACTIVE_ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -n1 || true)"
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null || true)}"
 REGION="${GCP_LOCATION:-us-central1}"
 JOB="${MONTAJE_JOB:-anime-studio-montage}"
@@ -12,9 +13,21 @@ AR_REPO="${ANIME_AR_REPO:-anime-studio}"
 BUCKET="${GCS_OUTPUT_BUCKET:-}"
 SA_EMAIL="${ANIME_SA_EMAIL:-}"
 
+if [[ -z "$ACTIVE_ACCOUNT" ]]; then
+  echo "No hay una cuenta de Google autenticada en Cloud Shell."
+  echo "Abre Cloud Shell desde la cuenta de Google que vas a usar y vuelve a ejecutar: bash setup.sh"
+  exit 1
+fi
+
 if [[ -z "$PROJECT_ID" || "$PROJECT_ID" == "(unset)" ]]; then
   echo "No hay proyecto activo en gcloud."
   echo "En Cloud Shell, elige el proyecto desde la barra superior y vuelve a ejecutar: bash setup.sh"
+  exit 1
+fi
+
+if ! gcloud projects describe "$PROJECT_ID" >/dev/null 2>&1; then
+  echo "La cuenta $ACTIVE_ACCOUNT no puede acceder al proyecto $PROJECT_ID."
+  echo "Selecciona el proyecto correcto en Cloud Shell y vuelve a ejecutar: bash setup.sh"
   exit 1
 fi
 
@@ -28,8 +41,9 @@ fi
 
 echo
 echo "Anime AI Studio"
-echo "Proyecto: $PROJECT_ID"
-echo "Región:  $REGION"
+echo "Cuenta Google activa: $ACTIVE_ACCOUNT"
+echo "Proyecto activo:       $PROJECT_ID"
+echo "Región:                $REGION"
 echo "Bucket:  gs://$BUCKET"
 echo "Cuenta:  $SA_EMAIL"
 echo "Job:     $JOB"
@@ -51,7 +65,6 @@ do
 done
 
 # The Cloud Shell user needs actAs on the runtime account to deploy the Job.
-ACTIVE_ACCOUNT="$(gcloud config get-value account 2>/dev/null || true)"
 if [[ -n "$ACTIVE_ACCOUNT" ]]; then
   if [[ "$ACTIVE_ACCOUNT" == *".gserviceaccount.com" ]]; then
     MEMBER="serviceAccount:$ACTIVE_ACCOUNT"
@@ -111,7 +124,8 @@ echo "Valores para Vercel:"
 cat anime-studio-cloud.env
 echo
 echo "GCP_SERVICE_ACCOUNT debe contener el JSON de: $SA_EMAIL"
-echo "Si ya tienes ese JSON, reutilízalo."
+echo "El correo con el que entraste a Google Cloud NO va en Vercel ni en el código."
+echo "Si ya tienes el JSON de esta cuenta de servicio, reutilízalo."
 echo
 echo "Si NO tienes una clave JSON y quieres crear una nueva, ejecuta:"
 echo "  bash setup.sh key"
