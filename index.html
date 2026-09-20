@@ -2634,6 +2634,7 @@ function pintarVocesDelIdioma() {
     }
   }
   guardarAjustes();
+  if (state.universe?.storyMode === 'cast') renderCharacters();
   // The count has to match what the menu is showing, which is one language.
   if (nota) nota.innerHTML = HAY_CHIRP
     ? `<strong>${dellang.length}</strong> voces Chirp 3: HD en este idioma. Mantienen el <strong>mismo narrador de principio a fin</strong>, sin cambiar de registro entre escenas. La velocidad se aplica después de generar, conservando el tono.`
@@ -3840,6 +3841,7 @@ Responde SOLO JSON válido sin markdown.`;
       }
       state.characters = parsedChars.characters || [];
       recordarNombres(state.characters.map(ch => ch.name));
+      asegurarVocesPersonajes();
       saveState();
       renderCharacters();
       setProg(20, `✅ ${state.characters.length} personajes — Paso 2/5: Escribiendo historia...`);
@@ -3864,6 +3866,7 @@ Responde SOLO JSON válido sin markdown.`;
             newChars.forEach((ch, i) => { ch.id = `c_new_ep${epNum}_${i}_${ts}`; });
             state.characters = [...state.characters, ...newChars];
             recordarNombres(newChars.map(ch => ch.name));
+            asegurarVocesPersonajes();
             saveState();
             renderCharacters();
 
@@ -4180,15 +4183,13 @@ Responde SOLO JSON válido sin markdown`;
       const [ma, mb, mc] = p?.movimientos || [];
       const [ta, tb, tc] = p?.tiposMovimiento || [];
       const [ca, cb, cc] = p?.continuos || [];
-      // Los planos de una escena se encadenan igual que los keyframes de un
-      // corto: el clip del plano 1 termina en la imagen del plano 2. Si los dos
-      // son del mismo tamaño salen casi iguales y el video, sin nada que
-      // animar, deforma caras. El director los asigna y esto los obliga a
-      // alternar — no basta con pedírselo.
-      const kf = alternarPlanos((p?.tamanos || []).map(t => ({ plano: String(t || '').trim().toLowerCase() })));
-      const tam = i => (PLANOS_CORTO.some(x => x.id === kf[i]?.plano)
-        ? kf[i].plano
-        : ['general', 'cerca', 'escorzo'][i]);
+      // Long-form coverage is edited by CUTS. Repeating a medium or close shot
+      // is perfectly valid when the dramatic function demands it; forcing an
+      // alternating pattern made conversations feel mechanical and game-like.
+      const tamanos = (p?.tamanos || []).map(t => String(t || '').trim().toLowerCase());
+      const tam = i => (PLANOS_CORTO.some(x => x.id === tamanos[i])
+        ? tamanos[i]
+        : ['general', 'medio', 'cerca'][i]);
       return {
         ...s,
         escenario: p?.escenario || '',
@@ -4207,9 +4208,9 @@ Responde SOLO JSON válido sin markdown`;
       const scenesText = scenesForPrompt.map(s =>
         `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`
       ).join('\n\n');
-      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTINUIDAD — ASÍ TERMINÓ LA ESCENA ANTERIOR A ESTE BLOQUE (el prompt 1 de la primera escena de abajo continúa desde aquí):\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena, genera el campo "escenario" + TRES prompts secuenciales con continuidad:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"continuarAnterior":false,"prompts":["Scene with..."],"tamanos":["general"],"tiposMovimiento":["still"],"movimientos":["subtle motion in English"],"continuos":[false]},...]} con exactamente ${scenesForPrompt.length} objetos. "prompts", "tamanos", "tiposMovimiento", "movimientos" y "continuos" llevan exactamente la cantidad de planos elegida.
+      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales y genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"continuarAnterior":false,"prompts":["Scene with..."],"tamanos":["general"],"tiposMovimiento":["still"],"movimientos":["subtle motion in English"],"continuos":[false]},...]} con exactamente ${scenesForPrompt.length} objetos. "prompts", "tamanos", "tiposMovimiento", "movimientos" y "continuos" llevan exactamente la cantidad de planos elegida.
 
-⚠️ "tamanos" ES EL TAMAÑO DE CADA PLANO: general | medio | cerca | escorzo | detalle. Dentro de una escena NUNCA repitas el mismo dos veces seguidas. El clip de video que une dos planos parte del primero y termina en el segundo: si los dos son del mismo tamaño, las dos imágenes salen casi idénticas, el video se queda sin nada que animar y acaba deformando caras e inventando cosas. El cambio de distancia de cámara ES el movimiento del plano.`;
+⚠️ "tamanos": general | medio | cerca | escorzo | detalle. Elige el tamaño por FUNCIÓN DRAMÁTICA, no por alternancia automática. Repetir un plano medio o un primer plano en dos cortes consecutivos es válido si muestran interlocutores o reacciones diferentes. Sólo cuando "continuos" sea true, los dos fotogramas deben describir estados físicamente compatibles para una interpolación corta.`;
 
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
@@ -4259,7 +4260,7 @@ Responde SOLO JSON válido sin markdown`;
         // assigned scenario and closing prompt
         const last = done[done.length - 1];
         if (last) {
-          prevContext = `Escena ${last.num} (escenario: ${last.escenario || 'nuevo lugar descrito en el prompt'}): ${last.narration}\nÚltimo prompt de esa escena: ${last.imagePromptC || last.imagePromptA || '(sin prompt)'}`;
+          prevContext = `Escena ${last.num} (escenario: ${last.escenario || 'nuevo lugar descrito en el prompt'}): ${last.narration}\nEstado visual final para coherencia: ${last.imagePromptC || last.imagePromptB || last.imagePromptA || '(sin prompt)'}\nIMPORTANTE: la escena siguiente empieza con un CORTE salvo que su propia acción exija continuar físicamente este instante.`;
         }
       }
     } else {
@@ -4976,7 +4977,7 @@ window.editScenePrompts = function(sceneId) {
     <div class="modal-handle"></div>
     <h3>✏️ Editar Prompts — Escena ${s.num}</h3>
     <p style="font-size:12px;color:var(--text-dim);margin:0 0 12px;line-height:1.5">
-      3 imágenes secuenciales de la escena (inicio → desarrollo → cierre). Edita, guarda y regenera.
+      Edita los planos visuales de esta escena. Los campos vacíos significan que el director decidió que ese plano no era necesario.
     </p>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
       <label style="margin:0">Imagen 1 — momento inicial</label>
@@ -4993,7 +4994,7 @@ window.editScenePrompts = function(sceneId) {
       <button class="btn" onclick="saveScenePrompts('${sceneId}')">💾 Guardar</button>
     </div>
     <div style="margin-top:8px">
-      <button class="btn-sec" style="font-size:12px;width:100%" onclick="saveAndRegenAll('${sceneId}')">🖼️ Guardar y regenerar las 3 imágenes</button>
+      <button class="btn-sec" style="font-size:12px;width:100%" onclick="saveAndRegenAll('${sceneId}')">🖼️ Guardar y regenerar los planos existentes</button>
     </div>
     <div style="margin-top:8px">
       <button class="btn-sec" style="font-size:12px;width:100%;border-color:rgba(0,229,255,0.4);color:var(--accent2)"
@@ -7401,23 +7402,17 @@ async function generarTextoDePublicacion(scenes) {
   const sinopsis = scenes.slice(0, 6).map(s => (s.narration || '').slice(0, 320)).join('\n\n');
   const final = scenes.slice(-2).map(s => (s.narration || '').slice(-320)).join('\n\n');
 
-  const sys = `Sos el encargado de publicación de un canal de anime narrado en español que vive de la
-monetización. Tu trabajo NO es resumir el episodio con elegancia: es conseguir el clic y conseguir el
-comentario. Escribís como los canales de donghua y de historias chinas que revientan en Facebook y
-YouTube — directo, con conflicto por delante, sin florituras.
+  const sys = `Sos el encargado de publicación de un canal de historias anime en español monetizado en YouTube.
+El video puede ser narrado por una sola voz o dramatizado con varias voces. Tu trabajo es presentar el CONFLICTO real de la historia con claridad y curiosidad, sin inventar promesas ni copiar títulos de otras obras.
 
 Reglas:
-- El TÍTULO va en la voz del conflicto, no del narrador. Nombra lo que está en juego y a quién se lo
-  hacen. Nada de títulos de capítulo tipo "El despertar" o "Capítulo 1: el inicio". Máx. 90 caracteres.
-- La DESCRIPCIÓN abre con la injusticia o la traición, no con el contexto. Dos o tres frases. La última
-  deja el episodio abierto.
-- La PREGUNTA va al final de la descripción, en su propia línea, y obliga a tomar bando. La gente
-  comenta cuando cree que la otra mitad se equivoca, no cuando le preguntan si le gustó. Una sola
-  línea, sin "comenta abajo" ni "dime qué opinas".
-- HASHTAGS: exactamente 6. Ni uno más — una pared de etiquetas la lee Facebook como spam. Elegí los
-  seis que de verdad busca alguien que quiere ver esto: dos generales de anime en español, dos del
-  género, dos de la historia concreta. Sin espacios dentro de un hashtag, todos en minúscula.
-- Nada de inventar datos que no estén en la historia. Nada de prometer lo que el episodio no da.
+- El TÍTULO nombra la situación que cambia la vida del protagonista o la contradicción principal. Máx. 90 caracteres. Nada de "Capítulo 1" ni títulos abstractos.
+- La DESCRIPCIÓN abre con el conflicto concreto y resume la promesa de la historia en 2-3 frases.
+- Si esta entrega tiene CIERRE COMPLETO, NO finjas que quedó inconclusa: puedes insinuar una consecuencia o pregunta posterior sin ocultar que la historia resolvió su conflicto central.
+- Si es CLIFFHANGER, sí puedes señalar el problema concreto que quedó abierto.
+- La PREGUNTA final invita a tomar una posición sobre una decisión o relación real de esta historia. Una sola línea.
+- HASHTAGS: exactamente 6; dos generales de anime/historias, dos del género y dos del concepto concreto.
+- Nada de inventar datos, herramientas, giros o personajes que no estén en la historia.
 
 Devolvé SÓLO este JSON:
 {"titulo":"...","descripcion":"...","pregunta":"...","hashtags":["#...","#..."]}`;
@@ -7425,6 +7420,8 @@ Devolvé SÓLO este JSON:
   const prompt = `TÍTULO DE LA SERIE: ${u.title || '(sin título)'}
 GÉNERO: ${u.genero || ''}${(u.subgenres || []).length ? ' · ' + (u.subgenres || []).join(', ') : ''}
 TONO: ${u.tono || ''}
+MODO DE AUDIO: ${u.storyMode === 'cast' ? 'dramatizado con voces por personaje' : 'narrado'}
+CIERRE: ${u.endingMode === 'cliffhanger' ? 'continuará' : 'completo'}
 EPISODIO: ${state.currentEpisode || 1}
 
 CÓMO EMPIEZA:
