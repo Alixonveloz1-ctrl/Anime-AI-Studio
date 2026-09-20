@@ -1319,11 +1319,8 @@ function estiloCore(forzado) {
 function estiloLeadIn(forzado) {
   return (ESTILOS_ANIME[forzado] || ESTILOS_ANIME[estiloElegido()]).leadIn;
 }
-// "wet-surface reflections" se escribió para dar brillo a las IMÁGENES. Dentro
-// de un prompt de video se lee como una orden de mojar el suelo — y así llegó
-// la lluvia a un pasillo interior. Se quita sólo en la ruta de video.
 function estiloParaVideo(forzado) {
-  return estiloCore(forzado).replace('wet-surface reflections, ', '');
+  return estiloCore(forzado);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1453,10 +1450,7 @@ function buildVideoPrompt(s, slot = 'A', opts = {}) {
   // only the creation form: after a reload or a project switch they still show
   // their defaults, so this used to reference the wrong studio (accion/shonen)
   // for every project once the page had been reloaded.
-  const genre     = state.universe?.genero || document.getElementById('generoSelect')?.value || 'accion';
-  const demo      = state.universe?.demo   || document.getElementById('demoSelect')?.value   || 'shonen';
-  const studio   = STUDIO_BY_GENRE[genre]  || STUDIO_BY_GENRE['accion'];
-  const demoRef  = STUDIO_BY_DEMO[demo]    || '';
+  const genre = state.universe?.genero || document.getElementById('generoSelect')?.value || 'accion';
   // This was called noCamera, for "never look at the lens" — but its text ALSO
   // ordered "use side angles, 3/4 views, over-shoulder or from-behind". That was
   // written for IMAGE prompts, where choosing an angle is free. In VIDEO the
@@ -3324,7 +3318,15 @@ document.getElementById('epLengthSelect')?.addEventListener('change', function()
 });
 for (const [id, field] of [['storyModeSelect','storyMode'], ['endingModeSelect','endingMode']]) {
   document.getElementById(id)?.addEventListener('change', function() {
-    if (state.universe) { state.universe[field] = this.value; saveState(); }
+    if (!state.universe) return;
+    const previous = state.universe[field];
+    if (field === 'storyMode' && state.scenes?.length && previous && previous !== this.value) {
+      const ok = confirm('Cambiar Narrada/Dramatizada modifica cómo se escribe y separa cada intervención. Para obtener el nuevo modo correctamente tendrás que regenerar la historia. ¿Guardar este cambio?');
+      if (!ok) { this.value = previous; return; }
+      showToast('Modo de voz guardado. Regenera la historia para crear el guion en ese formato.', 'success');
+    }
+    state.universe[field] = this.value;
+    saveState();
   });
 }
 
@@ -3695,13 +3697,12 @@ enumerar — no te autocensures, pero tampoco confundas "adulto" con "listar par
       : '';
 
     const genreExtraImage = hasEcchi
-      ? `\n\nECCHI ACTIVO — LENGUAJE VISUAL:
-TODOS los personajes son ADULTOS (18 años en adelante), con cuerpos y rostros claramente adultos, cada uno con su propia edad adulta según su rol, en contextos adultos acordes al género y setting de la historia. JAMÁS uniformes escolares, aulas, ni nada que sugiera colegiales o menores de edad.
-LENGUAJE DE CÁMARA ECCHI: "low angle shot revealing her thighs", "wind lifting her skirt she blushes", "her fitted dress barely covers as she leans forward", "wet shirt clinging to her figure after rain", "she wraps towel around herself surprised expression", "swimsuit scene at pool side profile view", "form-fitting activewear surprised mid-motion", "short nightgown in hallway embarrassed expression", "side view leaning over table dress riding up"
-APARIENCIA: mujeres adultas con ropa que la historia justifique — vestido entallado, traje de baño, ropa de trabajo ajustada, ropa de dormir. Nombrá la PRENDA, su tela y su corte. NO describas el cuerpo con etiquetas de catálogo ("hourglass silhouette", "voluptuous figure", "curvy"): son justo las palabras que hacen que el filtro tire el plano, y lo que hace atractiva una imagen es el ÁNGULO, la POSTURA y la LUZ, no un adjetivo sobre la anatomía. Todos los personajes son adultos.
-LÍMITE: sin desnudez explícita, sin partes íntimas visibles — todo lo demás (sensual, sugerente, provocativo) está permitido.`
+      ? `\n\nECCHI ADULTO — DIRECCIÓN VISUAL:
+TODOS los personajes sexualizados son ADULTOS (18+), con rostro y contexto claramente adultos. Nunca secundaria, colegiales ni códigos visuales de menores.
+El fan service debe sentirse como anime ecchi, pero nace de la SITUACIÓN: proximidad incómoda, reacción avergonzada, vestuario apropiado al contexto, cambio de ropa fuera de campo, traje de baño, ropa de dormir, cita, sesión de fotos, entrenamiento, baño termal adulto u otros contextos que la historia realmente haya establecido.
+La cámara puede usar ángulos sugerentes y timing cómico, pero sigue contando el beat narrativo. Evita inventarios anatómicos, poses de catálogo y cuerpos exagerados que rompen continuidad o empujan el resultado a una ilustración genérica.
+Sin desnudez explícita ni partes íntimas visibles. La identidad japonesa 2D, las proporciones coherentes y la continuidad del personaje tienen prioridad.`
       : '';
-
     const episodeInstructions = document.getElementById('episodeInstructions')?.value.trim() || '';
 
     const ctx = `Universo: ${u.title}
@@ -3733,14 +3734,14 @@ ${SUBGENRE_FIDELITY_CONTRACT}`;
     // comedy formula in the ep2+ path, so a serious drama/terror universe got
     // gag archetypes for every character introduced after episode 1.
     const charDesignerHeader = comedyMode
-      ? `Eres un diseñador de personajes para anime/manhua cómico viral para ${allAges ? 'público infantil' : 'audiencia adulta'}.
-FÓRMULA DE COMEDIA — arquetipos de referencia (esto es MECÁNICA cómica, no estética visual obligatoria):
+      ? `Eres diseñador de personajes para una historia de ANIME JAPONÉS 2D de comedia, para ${allAges ? 'público general' : 'audiencia adulta'}.
+TONO DEL GÉNERO:
 ${genreTone}
-Los personajes deben tener un protagonista mercenario/práctico (nunca dramático). Un COMPAÑERO y una figura de autoridad que sufre las consecuencias son roles PROBADOS para el humor viral y buen default — pero inclúyelos SOLO si encajan con el concepto/género de esta historia; si el concepto no los sugiere, no los fuerces.`
-      : `Eres un diseñador de personajes para anime/manhua viral para ${allAges ? 'público infantil' : 'audiencia adulta'}.
-TONO DEL GÉNERO (los personajes deben servir a esta atmósfera):
+El humor nace de la premisa y de objetivos incompatibles, no de obligar a todos a ser caricaturas. Diseña personas capaces de sostener una historia larga: deseos propios, defectos, límites y relaciones que puedan cambiar. Un compañero cómico o una figura de autoridad sólo aparecen si el concepto realmente los necesita.`
+      : `Eres diseñador de personajes para una historia de ANIME JAPONÉS 2D, para ${allAges ? 'público general' : 'audiencia adulta'}.
+TONO DEL GÉNERO:
 ${genreTone}
-Los personajes deben ser fieles al género "${genero}" y al concepto de la historia — con motivaciones, roles y conflictos propios de ese género. NO agregues roles cómicos (compañero de chiste, autoridad que sufre gags) ni conviertas al protagonista en un personaje de parodia: el reparto es serio dentro de las reglas de su género.`;
+Los personajes sirven al género "${genero}" y al concepto aprobado: tienen deseos, contradicciones, relaciones y función causal en la trama. No añadas arquetipos virales ni roles de fórmula que el concepto no pida.`;
 
     if (epNum === 1 || !state.characters?.length) {
       setProg(5, 'Paso 1/5: Creando personajes...');
