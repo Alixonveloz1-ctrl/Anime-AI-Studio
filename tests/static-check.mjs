@@ -17,8 +17,8 @@ scripts.forEach((src, i) => {
 for (const file of [
   'api/_lib/gcp.js','api/_lib/texto.js','api/assemble.js','api/audio.js',
   'api/download-url.js','api/health.js','api/image.js','api/music.js',
-  'api/project-asset.js','api/project-store.js','api/script.js','api/transcribe.js',
-  'api/upload-url.js','api/video-start.js','api/video-status.js','api/voices.js'
+  'api/script.js','api/transcribe.js','api/upload-url.js','api/video-start.js',
+  'api/video-status.js','api/voices.js'
 ]) {
   const src = fs.readFileSync(file, 'utf8');
   try { new Function('module','exports','require','process','fetch','Buffer',src); ok(file + ' parsea'); }
@@ -133,14 +133,13 @@ else ok('Montador y aplicación usan el mismo Job');
 if (!setup.includes("gcloud auth list") || !setup.includes("Cuenta Google activa")) fail('setup.sh no valida la cuenta activa de Cloud Shell');
 else ok('setup.sh usa la sesión/proyecto activos; no depende de un correo hardcodeado');
 
-const projectStore = fs.readFileSync('api/project-store.js','utf8');
-const projectAsset = fs.readFileSync('api/project-asset.js','utf8');
-if (!/project-manifests/.test(projectStore) || !/GCS listing is the authoritative project index/.test(projectStore)) {
-  fail('project-store no usa GCS como índice autoritativo');
-} else ok('El bucket es la fuente de verdad de la lista de proyectos');
-if (!/signed access/.test(projectAsset) || !/cache\//.test(projectAsset)) {
-  fail('project-asset no refleja los medios del proyecto en GCS');
-} else ok('Los medios del proyecto tienen espejo cloud');
+const storageApi = fs.readFileSync('api/upload-url.js','utf8');
+if (!/project-manifests/.test(storageApi) || !/projectList/.test(storageApi) || !/projectSave/.test(storageApi)) {
+  fail('upload-url no contiene el índice autoritativo de proyectos en GCS');
+} else ok('El bucket es la fuente de verdad de la lista y estado de proyectos');
+if (!/assetSign/.test(storageApi) || !/assetList/.test(storageApi) || !/cache\//.test(storageApi)) {
+  fail('upload-url no refleja los medios del proyecto en GCS');
+} else ok('Los medios del proyecto tienen espejo cloud sin sumar funciones de Vercel');
 
 if (process.exitCode) process.exit(process.exitCode);
 console.log('\nValidación estática completa.');
