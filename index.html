@@ -537,13 +537,7 @@
         <option value="16:9" selected>🖥️ 16:9 Horizontal — YouTube / Widescreen</option>
       </select>
 
-      <label style="margin-top:12px">Movimiento</label>
-      <select id="motionProfileSelect">
-        <option value="motion_comic" selected>🎞️ Motion anime — cortes + paneos/zooms; Veo sólo donde hace falta</option>
-        <option value="mixed">✨ Mixto — también anima gestos y conversaciones importantes</option>
-        <option value="full">🎬 Animar todo — genera Veo para todos los planos</option>
-      </select>
-      <p style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.5">Recomendado: Motion anime. Conserva el aspecto 2D, usa el movimiento como acento y evita convertir una hora de historia en una sucesión de cinemáticas de videojuego.</p>
+      <p style="font-size:11px;color:var(--text-dim);margin:10px 0 0;line-height:1.5">🎞️ <strong>Montaje anime:</strong> el director decide qué planos recomienda animar con Veo. Los demás se montan con movimientos de cámara visibles sobre la ilustración. Tú puedes generar video manualmente para cualquier plano y el montaje lo usará automáticamente.</p>
 
       <label>Idioma</label>
       <select id="voiceLang" style="font-size:13px"><option value="es-US">Español · Latinoamérica</option></select>
@@ -571,9 +565,9 @@
         <button class="btn-sec" id="btnAllImages">🖼️ Todas las Imágenes</button>
         <button class="btn-sec" id="btnAllAudio">🎙️ Toda la Narración</button>
       </div>
+      <p style="font-size:10px;color:var(--text-dim);margin:6px 0 0;line-height:1.45">↻ Todas las tandas son reanudables: referencias, imágenes, audio y videos ya terminados se conservan y se omiten al continuar.</p>
       <div class="btn-row" style="margin-top:8px">
-        <button class="btn-sec" id="btnRepairScenes" style="display:none">🔧 Reparar escenas vacías</button>
-        <button class="btn-sec" onclick="generateAllVideos()" style="border-color:rgba(0,229,255,0.4);color:var(--accent2)">🎬 Todos los Videos</button>
+        <button class="btn-sec" onclick="generateAllVideos()" style="border-color:rgba(0,229,255,0.4);color:var(--accent2)">🎬 Videos recomendados</button>
       </div>
 
       <div id="bulkProgress" style="display:none;margin-top:10px">
@@ -786,6 +780,7 @@ const sceneVidKeyA = id => `sva_${state.projectId}${epSfx()}_${id}`;
 // existed are still found.
 const sceneVidKeyBy = (id, slot) => slot === 'A' ? sceneVidKeyA(id)
   : `sv${slot.toLowerCase()}_${state.projectId}${epSfx()}_${id}`;
+const sceneVidOpKeyBy = (id, slot) => `vop${slot.toLowerCase()}_${state.projectId}${epSfx()}_${id}`;
 
 // Every stored file belonging to ONE episode of this project: the shot images,
 // the narration, the clips and the music.
@@ -793,7 +788,7 @@ const sceneVidKeyBy = (id, slot) => slot === 'A' ? sceneVidKeyA(id)
 // Careful with episode 1: its keys have no episode suffix (they predate
 // multi-episode), so its prefix `sia_<proj>_` also matches `sia_<proj>_ep2_s1`.
 // Anything that looks like another episode has to be excluded by hand.
-const MEDIA_TIPOS = ['sia', 'sib', 'sic', 'sa', 'sva', 'svb', 'svc', 'mus'];
+const MEDIA_TIPOS = ['sia', 'sib', 'sic', 'sa', 'sva', 'svb', 'svc', 'vopa', 'vopb', 'vopc', 'mus'];
 function esDeEsteEpisodio(k) {
   if (typeof k !== 'string') return false;
   const sfx = epSfx();                       // '' en el episodio 1, '_ep2' en el 2
@@ -2007,9 +2002,9 @@ document.getElementById('btnProjects').addEventListener('click', openProjectsMod
 // ════════════════════════════════════════════════════════════════
 // GEMINI TEXT API (via /api/script → Vertex AI, gemini-3.1-pro-preview)
 // ════════════════════════════════════════════════════════════════
-async function callGemini(prompt, system) {
+async function callGeminiOnce(prompt, system) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 90000); // 90 sec max
+  const timeout = setTimeout(() => controller.abort(), 85000);
   let res;
   try {
     res = await fetch('/api/script', {
@@ -2023,14 +2018,11 @@ async function callGemini(prompt, system) {
     });
   } catch(e) {
     clearTimeout(timeout);
-    if (e.name === 'AbortError') throw new Error('Tiempo de espera agotado (90 seg). El servidor tardó demasiado — intenta de nuevo.');
+    if (e.name === 'AbortError') throw new Error('Tiempo de espera agotado al generar texto.');
     throw new Error('Fallo de red al contactar /api/script: ' + (e.message || e.name));
   }
   clearTimeout(timeout);
-  // Read the body as TEXT first. If /api/script returns something that isn't
-  // JSON (a Vercel function-timeout page, a crash, a truncated body, an empty
-  // response), this surfaces the HTTP status and the actual body instead of an
-  // opaque "res.json() failed" exception — so the real cause is visible.
+
   const rawText = await res.text();
   let data;
   try {
@@ -2040,6 +2032,40 @@ async function callGemini(prompt, system) {
   }
   if (!res.ok || data.error) throw new Error(data.error || `Script API ${res.status}`);
   return data.text;
+}
+
+async function callGemini(prompt, system) {
+  // Text generation uses one shared resilience policy. A Vertex 429 is Google's
+  // project/model quota, not a Vercel rate limit. We wait and retry the SAME
+  // request instead of returning a partial episode that later needs "repair".
+  const quotaWaits = [20, 45, 90, 150, 240];
+  const transientWaits = [4, 8, 16];
+  let quotaAttempt = 0, transientAttempt = 0;
+
+  for (;;) {
+    try {
+      return await callGeminiOnce(prompt, system);
+    } catch(e) {
+      const msg = String(e?.message || '');
+      const quota = /\b429\b|resource_exhausted|exhausted|quota|rate.?limit|sin capacidad/i.test(msg);
+      const transient = /\b5\d\d\b|timeout|tiempo de espera|network|red al contactar|respuesta no-json/i.test(msg);
+
+      if (quota && quotaAttempt < quotaWaits.length) {
+        const secs = quotaWaits[quotaAttempt++];
+        console.warn(`Vertex AI quota: esperando ${secs}s antes de reintentar texto`);
+        showToast(`⏳ Google alcanzó la cuota temporal. Reanudando en ${secs}s…`, 'error');
+        await new Promise(r => setTimeout(r, secs * 1000));
+        continue;
+      }
+      if (transient && transientAttempt < transientWaits.length) {
+        const secs = transientWaits[transientAttempt++];
+        console.warn(`Texto: error transitorio; reintento en ${secs}s — ${msg}`);
+        await new Promise(r => setTimeout(r, secs * 1000));
+        continue;
+      }
+      throw e;
+    }
+  }
 }
 
 function safeParseJSON(raw) {
@@ -2653,7 +2679,7 @@ function pintarVocesDelIdioma() {
 // (con qué modelo generás, con qué voz narrás), no contenido de un anime.
 // ════════════════════════════════════════════════════════════════
 const AJUSTES_KEY = 'ajustes_estudio';
-const CAMPOS_AJUSTE = ['imageModelSelect', 'veoModelSelect', 'estiloAnime', 'aspectRatio', 'motionProfileSelect',
+const CAMPOS_AJUSTE = ['imageModelSelect', 'veoModelSelect', 'estiloAnime', 'aspectRatio',
                        'voiceLang', 'voiceSelect', 'voiceSpeed', 'voiceVolumen',
                        'assemblyUseClips', 'assemblyUseMusic', 'assemblyMusicVol',
                        'cortoRatio', 'cortoDuracion', 'cortoGenero', 'cortoEstilo',
@@ -2719,7 +2745,6 @@ function restaurarAjustes() {
   if (!localStorage.getItem(migrationKey)) {
     datos.estiloAnime = 'japon_2d';
     datos.aspectRatio = '16:9';
-    datos.motionProfileSelect = 'motion_comic';
     try {
       localStorage.setItem(AJUSTES_KEY, JSON.stringify(datos));
       localStorage.setItem(migrationKey, '1');
@@ -3958,14 +3983,17 @@ Responde SOLO JSON válido sin markdown.`;
       bible: u.bible || null,
       chars: state.characters.map(ch => [ch.id, ch.name, ch.role, ch.age, ch.personality])
     });
-    if (!u.longformDrafts || typeof u.longformDrafts !== 'object') u.longformDrafts = {};
-    let longDraft = u.longformDrafts[epNum];
+    if (!u.generationDrafts || typeof u.generationDrafts !== 'object') {
+      u.generationDrafts = (u.longformDrafts && typeof u.longformDrafts === 'object') ? u.longformDrafts : {};
+      delete u.longformDrafts;
+    }
+    let longDraft = u.generationDrafts[epNum];
     if (!longDraft || longDraft.signature !== draftSignature) {
       longDraft = {
         signature: draftSignature, storyParts: [], sceneChunks: [], visualChunks: [],
         createdAt: Date.now(), updatedAt: Date.now()
       };
-      u.longformDrafts[epNum] = longDraft;
+      u.generationDrafts[epNum] = longDraft;
       saveState();
     }
     const resumingLongDraft = (longDraft.storyParts?.length || longDraft.sceneChunks?.length || longDraft.visualChunks?.length) > 0;
@@ -3975,7 +4003,7 @@ Responde SOLO JSON válido sin markdown.`;
       `El Episodio ${epNum} ya tiene ${materialViejo.length} archivo(s) generados (imágenes, voces, videos y música).\n\n` +
       `Generar una historia nueva hará que ese material deje de corresponderle y se borrará SÓLO cuando la historia nueva termine correctamente.\n\n` +
       `El universo, los personajes y sus referencias NO se tocan.\n\n¿Seguir?`)) {
-      delete u.longformDrafts[epNum];
+      delete u.generationDrafts[epNum];
       saveState();
       return;
     }
@@ -3984,24 +4012,21 @@ Responde SOLO JSON válido sin markdown.`;
       : `{"id":"s1","num":1,"title":"título corto","narration":"fragmento completo y natural de la historia"}`;
 
     async function generateStoryPart(prompt, minWords) {
-      let best = '', lastErr = '';
+      let lastErr = '';
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callGemini(prompt, sysBase + genreExtra);
           const parsed = safeParseJSON(raw);
           const story = String(parsed.story || '').trim();
           const wc = story.split(/\s+/).filter(Boolean).length;
-          if (story.length > best.length) best = story;
           if (story && wc >= minWords) return story;
           lastErr = story ? `demasiado corto (${wc} palabras, mínimo ${minWords})` : 'respuesta vacía o sin campo "story"';
-          if (attempt < 3) await new Promise(r => setTimeout(r, 2500));
         } catch (e) {
           lastErr = e.message;
-          if (attempt < 3) await new Promise(r => setTimeout(r, 2500));
         }
+        if (attempt < 3) await new Promise(r => setTimeout(r, 1800));
       }
-      if (best) return best;
-      throw new Error(`No se pudo escribir esta parte de la historia: ${lastErr}`);
+      throw new Error(`Google no completó este bloque de historia: ${lastErr}. No se aceptará un bloque corto para rellenarlo después con escenas inventadas.`);
     }
 
     function buildLongformPartBriefs(parts, completeEnding) {
@@ -4021,9 +4046,27 @@ Responde SOLO JSON válido sin markdown.`;
     async function generateFullStory(baseCtx) {
       const briefs = buildLongformPartBriefs(fmt.parts, endingMode === 'complete');
       const perPart = Math.round(wordTarget.total / fmt.parts);
+      const minPerPart = Math.ceil(wordTarget.min / fmt.parts);
       const partsOut = Array.isArray(longDraft.storyParts)
         ? longDraft.storyParts.slice(0, briefs.length).map(x => String(x || '').trim())
         : [];
+
+      // Drafts created by an older build may contain a short block that used to
+      // be accepted as "best effort". Keep valid earlier canon, but invalidate
+      // that block and everything after it because later blocks were written
+      // from the wrong/short context.
+      for (let i = 0; i < partsOut.length; i++) {
+        const wc = String(partsOut[i] || '').split(/\s+/).filter(Boolean).length;
+        if (!partsOut[i] || wc < minPerPart) {
+          partsOut.splice(i);
+          longDraft.storyParts = partsOut.slice();
+          longDraft.sceneChunks = [];
+          longDraft.visualChunks = [];
+          longDraft.updatedAt = Date.now();
+          saveState();
+          break;
+        }
+      }
 
       for (let i = 0; i < briefs.length; i++) {
         if (partsOut[i]) {
@@ -4044,12 +4087,17 @@ ${i > 0 ? 'Comienza exactamente después de la última acción/decisión previa.
 ${i < briefs.length - 1 ? 'Este bloque NO es el final. Déjalo avanzar hacia el siguiente sin un cliffhanger artificial interno.' : ''}
 
 Devuelve SOLO {"story":"..."}.`;
-        partsOut[i] = await generateStoryPart(prompt, Math.round(perPart * 0.72));
+        partsOut[i] = await generateStoryPart(prompt, minPerPart);
         longDraft.storyParts = partsOut.slice();
         longDraft.updatedAt = Date.now();
         saveState();
       }
-      return { story: partsOut.join('\n\n'), parts: partsOut };
+      const story = partsOut.join('\n\n');
+      const totalWords = story.split(/\s+/).filter(Boolean).length;
+      if (totalWords < wordTarget.min) {
+        throw new Error(`Historia demasiado corta: ${totalWords} palabras; mínimo ${wordTarget.min}. El borrador se conserva y no se crearán escenas artificiales para aparentar duración.`);
+      }
+      return { story, parts: partsOut };
     }
 
     function scenesInPart(i, parts, total) {
@@ -4096,40 +4144,102 @@ Responde SOLO JSON válido.`;
       return cleaned.length ? cleaned : [{ type: 'narrator', speakerId: 'narrator', text: String(scene.narration || '').trim() }].filter(x => x.text);
     }
 
+    function splitTextExactly(partText, wanted, startNum) {
+      const sentences = (String(partText).match(/[^.!?…]+[.!?…]+["'»”)]*\s*/g) || [])
+        .map(x => x.trim()).filter(Boolean);
+      const chunks = [];
+
+      if (sentences.length >= wanted) {
+        const counts = sentences.map(s => s.split(/\s+/).filter(Boolean).length);
+        let si = 0, usedWords = 0;
+        const totalWords = counts.reduce((a,b)=>a+b,0);
+        for (let part = 0; part < wanted; part++) {
+          const remainingParts = wanted - part;
+          const remainingSentences = sentences.length - si;
+          if (remainingParts === 1) {
+            chunks.push(sentences.slice(si).join(' ').trim());
+            break;
+          }
+          const targetEnd = Math.round(totalWords * (part + 1) / wanted);
+          let cur = [], curWords = 0;
+          while (si < sentences.length) {
+            const mustLeave = remainingParts - 1;
+            if (sentences.length - si <= mustLeave) break;
+            const w = counts[si];
+            if (cur.length && usedWords + curWords + w > targetEnd) break;
+            cur.push(sentences[si++]); curWords += w;
+          }
+          if (!cur.length) { cur.push(sentences[si]); curWords += counts[si]; si++; }
+          usedWords += curWords;
+          chunks.push(cur.join(' ').trim());
+        }
+      } else {
+        // Extremely punctuation-poor text: split by words rather than create
+        // empty scenes. The story content stays identical and ordered.
+        const words = String(partText).trim().split(/\s+/).filter(Boolean);
+        if (words.length < wanted) throw new Error(`El bloque tiene muy poco texto para ${wanted} escenas sin inventar contenido.`);
+        for (let i = 0; i < wanted; i++) {
+          const a = Math.round(i * words.length / wanted);
+          const b = Math.round((i + 1) * words.length / wanted);
+          chunks.push(words.slice(a, b).join(' ').trim());
+        }
+      }
+
+      if (chunks.length !== wanted || chunks.some(x => !x)) {
+        throw new Error(`No se pudo segmentar el bloque en ${wanted} escenas completas sin perder texto.`);
+      }
+
+      return chunks.map((narration, i) => {
+        const short = narration.replace(/[“”"'«»]/g,'').split(/\s+/).slice(0,5).join(' ');
+        return {
+          id:`s${startNum+i}`, num:startNum+i,
+          title: short || `Escena ${startNum+i}`,
+          narration,
+          interventions: storyMode === 'cast' ? [] : [{ type:'narrator', speakerId:'narrator', text:narration }]
+        };
+      });
+    }
+
+    async function tagFallbackCastScenes(scenes) {
+      if (storyMode !== 'cast') return scenes;
+      const prompt = `PERSONAJES E IDs:\n${charVoiceMap}\n\nESCENAS YA SEGMENTADAS (NO cambies narration ni inventes acciones):\n${JSON.stringify(scenes.map(s=>({num:s.num,title:s.title,narration:s.narration})))}\n\nPara cada escena devuelve solamente title + interventions. Mantén exactamente los mismos números y no omitas ninguna. Devuelve {"scenes":[{"num":1,"title":"...","interventions":[{"type":"narrator|dialogue|thought|system","speakerId":"ID","text":"..."}]}]}.`;
+      const raw = await callGemini(prompt, splitSysPrompt);
+      const arr = safeParseJSON(raw).scenes || [];
+      const byNum = new Map(arr.filter(x=>x?.num && Array.isArray(x.interventions)).map(x=>[Number(x.num),x]));
+      if (byNum.size !== scenes.length) {
+        throw new Error('Google no devolvió todas las voces del bloque. La generación queda pausada para reanudarla sin perder contexto.');
+      }
+      return scenes.map(s => {
+        const tagged = byNum.get(s.num);
+        const merged = { ...s, title: tagged.title || s.title, interventions: tagged.interventions };
+        merged.interventions = normalizeInterventions(merged);
+        if (!merged.interventions.length) throw new Error(`La escena ${s.num} quedó sin intervenciones de voz.`);
+        return merged;
+      });
+    }
+
     async function splitStoryPart(partText, wanted, startNum) {
-      const prompt = `BLOQUE A DIVIDIR:\n\n${partText}\n\nDivídelo en EXACTAMENTE ${wanted} escenas consecutivas. Devuelve {"scenes":[${narrationShape},...]} con ${wanted} objetos.`;
+      const prompt = `BLOQUE A DIVIDIR:\n\n${partText}\n\nDivídelo en EXACTAMENTE ${wanted} escenas consecutivas. No resumas, no repitas y no inventes. Devuelve {"scenes":[${narrationShape},...]} con EXACTAMENTE ${wanted} objetos.`;
+      let lastErr = null;
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callGemini(prompt, splitSysPrompt);
           const arr = safeParseJSON(raw).scenes || [];
-          const valid = arr.filter(s => s && s.narration && s.title);
-          if (valid.length >= wanted) {
-            return valid.slice(0, wanted).map((s, i) => ({
+          const valid = arr.filter(s => s && String(s.narration || '').trim() && String(s.title || '').trim());
+          if (valid.length === wanted) {
+            return valid.map((s, i) => ({
               ...s, id: `s${startNum + i}`, num: startNum + i,
               interventions: normalizeInterventions(s)
             }));
           }
-        } catch (e) {}
-        if (attempt < 3) await new Promise(r => setTimeout(r, 2500));
+          lastErr = new Error(`Google devolvió ${valid.length}/${wanted} escenas`);
+        } catch (e) { lastErr = e; }
+        if (attempt < 3) await new Promise(r => setTimeout(r, 1800));
       }
 
-      // Deterministic fallback by complete sentences.
-      const sentences = partText.match(/[^.!?…]+[.!?…]+["'»”)]*\s*/g) || [partText];
-      const totalWords = partText.split(/\s+/).filter(Boolean).length;
-      const perScene = Math.ceil(totalWords / wanted) || 1;
-      const chunks=[]; let cur='', words=0;
-      for (const sent of sentences) {
-        const w=sent.split(/\s+/).filter(Boolean).length;
-        if (cur && words + w > perScene && chunks.length < wanted - 1) { chunks.push(cur.trim()); cur=''; words=0; }
-        cur += sent; words += w;
-      }
-      if (cur.trim()) chunks.push(cur.trim());
-      while (chunks.length < wanted) chunks.push('');
-      return Array.from({length:wanted},(_,i) => {
-        const s={ id:`s${startNum+i}`, num:startNum+i, title:`Escena ${startNum+i}`, narration:chunks[i]||'' };
-        s.interventions=normalizeInterventions(s);
-        return s;
-      });
+      console.warn('Segmentación estructurada incompleta; usando división determinista del MISMO texto:', lastErr?.message);
+      const deterministic = splitTextExactly(partText, wanted, startNum);
+      return await tagFallbackCastScenes(deterministic);
     }
 
     async function splitStoryIntoScenes(storyParts) {
@@ -4186,7 +4296,10 @@ Responde SOLO JSON válido.`;
     // their reference images keep the same place fixed; only new places
     // from this story are appended.
     setProg(60, 'Paso 4/5: Extrayendo escenarios de la historia...');
-    await extractScenariosFromStory(fullStory);
+    const scenariosOK = await extractScenariosFromStory(fullStory);
+    if (!scenariosOK) {
+      throw new Error('Google no completó la extracción de escenarios. La generación queda pausada antes de crear fondos sin ancla; al continuar se reintentará esta misma etapa.');
+    }
 
     // ─── CALL 3: image prompts, based on the narration already written above.
     // This call does NOT continue the story — it only translates finished
@@ -4197,7 +4310,7 @@ Responde SOLO JSON válido.`;
 
     const imageSysPrompt = `Eres el DIRECTOR DE FOTOGRAFÍA de este anime. Tu tarea: decidir CUÁNTOS PLANOS necesita cada escena y escribir sus prompts de imagen en inglés, basados en la narración YA ESCRITA — no inventas historia nueva, solo decides el desglose visual de lo que ya ocurre.
 
-⚠️ DECISIÓN 1 — CUÁNTOS PLANOS (motion-anime de formato largo):
+⚠️ DECISIÓN 1 — CUÁNTOS PLANOS (montaje anime):
 La narración de una escena suele durar decenas de segundos. La imagen no puede quedarse congelada todo ese tiempo. Decide 1, 2 o 3 ILUSTRACIONES distintas por FUNCIÓN EDITORIAL:
 - 1 PLANO sólo para un beat realmente breve y autosuficiente: establishing corto, insert de objeto, reacción aislada, pensamiento corto o una acción cuya misma composición sostiene todo el fragmento.
 - 2 PLANOS para acción→reacción, pregunta→respuesta, llegada→descubrimiento, o una conversación corta que necesita ver al hablante y a quien escucha.
@@ -4217,16 +4330,14 @@ La narración de una escena suele durar decenas de segundos. La imagen no puede 
 - CÁMARA LIBRE EN EL LUGAR: a lo largo del episodio mostrá el MISMO lugar desde posiciones y ángulos DIFERENTES (desde la puerta, desde la ventana, ángulo bajo, over-shoulder, rincones distintos) — no repitas siempre el mismo encuadre del escenario.
 - VESTIMENTA FIEL AL MOMENTO: usa la prenda ACTUAL que corresponde a esta escena y conserva su material/condición entre planos. La ficha fija identidad, no obliga a llevar siempre la ropa de la primera referencia.
 
-⚠️ DECISIÓN 3 — MOVIMIENTO LIMITADO DE ANIME / MOTION COMIC:
-Para cada plano devuelve "tiposMovimiento": "still" | "limited" | "action".
-- still: ilustración fuerte que funcionará con corte, paneo o zoom de montaje. Conversaciones, miradas, reacciones, exposición y muchos planos de romance entran aquí.
-- limited: necesita vida mínima (parpadeo, boca sencilla, respiración, cabello/ropa, pequeño gesto) pero NO desplazamiento corporal complejo.
-- action: el acontecimiento pierde claridad si no se mueve: golpe, caída, transformación, carrera corta, objeto lanzado, efecto de poder, acción física decisiva.
-NO marques "action" por espectáculo. La mayoría de una historia larga debe poder sostenerse con still/limited, como motion anime.
+⚠️ DECISIÓN 3 — ¿ESTE PLANO MERECE VIDEO?
+Para CADA plano devuelve "videoRecomendado": true | false.
+- true cuando el movimiento aporta información o actuación que una ilustración con paneo/zoom no puede comunicar bien: golpe, caída, transformación, entrada/salida física importante, carrera, interacción compleja con un objeto, poder en acción, gesto corporal decisivo o actuación facial/corporal que sea el centro del beat.
+- false cuando una ilustración fuerte con un movimiento de cámara visible durante el montaje funciona bien: exposición, reacción, conversación estable, mirada, detalle, establecimiento del lugar o pose sostenida.
+No ahorres video artificialmente y tampoco lo marques por espectáculo: decide por función narrativa. El usuario puede generar manualmente un clip incluso cuando tú marques false; si ese clip existe, el montaje lo usará.
 
-Campo "movimientos": describe en INGLÉS únicamente el movimiento pequeño que Veo debe hacer SI ese plano se anima. El primer fotograma ya fija cámara, diseño, luz y escenario.
-- Nada de órbitas 3D, cámaras flotantes, transformación de perspectiva, movimientos de videojuego ni inventar acciones.
-- "limited" = un gesto y se aquieta. "action" = una acción clara, corta y legible.
+Campo "movimientos": describe en INGLÉS qué debe hacer Veo SI se genera video para ese plano. Debe ser una acción corta y clara que conserve el dibujo japonés 2D.
+- Nada de órbitas 3D, cámaras flotantes, transformación de perspectiva, movimientos de videojuego ni acciones inventadas.
 - Los CORTES son la norma. Devuelve "continuos": true únicamente cuando el plano N debe transformarse físicamente en el plano N+1 dentro de la MISMA acción continua. Si son dos ángulos de una conversación, es false.
 - El último plano siempre tiene continuo=false.
 - Devuelve "continuarAnterior": true sólo si el primer plano de esta escena debe usar el ÚLTIMO fotograma de la escena inmediatamente anterior como ancla física. No lo uses sólo porque el escenario se repite.
@@ -4281,7 +4392,7 @@ Responde SOLO JSON válido sin markdown`;
     function aplicarPlanos(s, p) {
       const [a, b, c] = p?.prompts || [];
       const [ma, mb, mc] = p?.movimientos || [];
-      const [ta, tb, tc] = p?.tiposMovimiento || [];
+      const [va, vb, vc] = p?.videoRecomendado || [];
       const [ca, cb, cc] = p?.continuos || [];
       // Long-form coverage is edited by CUTS. Repeating a medium or close shot
       // is perfectly valid when the dramatic function demands it; forcing an
@@ -4296,9 +4407,13 @@ Responde SOLO JSON válido sin markdown`;
         imagePromptA: a || '', imagePromptB: b || '', imagePromptC: c || '',
         tamanoA: a ? tam(0) : '', tamanoB: b ? tam(1) : '', tamanoC: c ? tam(2) : '',
         videoPromptA: ma || '', videoPromptB: mb || '', videoPromptC: mc || '',
-        motionA: a ? (['still','limited','action'].includes(ta) ? ta : 'still') : '',
-        motionB: b ? (['still','limited','action'].includes(tb) ? tb : 'still') : '',
-        motionC: c ? (['still','limited','action'].includes(tc) ? tc : 'still') : '',
+        videoRecommendedA: !!(a && va === true),
+        videoRecommendedB: !!(b && vb === true),
+        videoRecommendedC: !!(c && vc === true),
+        // Keep legacy motion fields so old UI/state helpers stay compatible.
+        motionA: a ? (va === true ? 'action' : 'still') : '',
+        motionB: b ? (vb === true ? 'action' : 'still') : '',
+        motionC: c ? (vc === true ? 'action' : 'still') : '',
         sueltoPlanoA: ca !== true, sueltoPlanoB: cb !== true, sueltoPlanoC: true,
         continuarAnterior: p?.continuarAnterior === true,
       };
@@ -4308,33 +4423,48 @@ Responde SOLO JSON válido sin markdown`;
       const scenesText = scenesForPrompt.map(s =>
         `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`
       ).join('\n\n');
-      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales y genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"continuarAnterior":false,"prompts":["Scene with..."],"tamanos":["general"],"tiposMovimiento":["still"],"movimientos":["subtle motion in English"],"continuos":[false]},...]} con exactamente ${scenesForPrompt.length} objetos. "prompts", "tamanos", "tiposMovimiento", "movimientos" y "continuos" llevan exactamente la cantidad de planos elegida.
+      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales y genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"continuarAnterior":false,"prompts":["Scene with..."],"tamanos":["general"],"videoRecomendado":[false],"movimientos":["visible purposeful motion in English"],"continuos":[false]},...]} con EXACTAMENTE ${scenesForPrompt.length} objetos. "prompts", "tamanos", "videoRecomendado", "movimientos" y "continuos" llevan exactamente la cantidad de planos elegida.
 
-⚠️ "tamanos": general | medio | cerca | escorzo | detalle. Elige el tamaño por FUNCIÓN DRAMÁTICA, no por alternancia automática. Repetir un plano medio o un primer plano en dos cortes consecutivos es válido si muestran interlocutores o reacciones diferentes. Sólo cuando "continuos" sea true, los dos fotogramas deben describir estados físicamente compatibles para una interpolación corta.`;
+⚠️ "tamanos": general | medio | cerca | escorzo | detalle. Elige el tamaño por FUNCIÓN DRAMÁTICA. "videoRecomendado" es true SÓLO cuando animar ese plano con Veo mejora materialmente la acción/actuación; false cuando una ilustración con montaje de cámara es suficiente. Esto es una recomendación del director, no un bloqueo: el usuario puede animar cualquier plano manualmente. Sólo cuando "continuos" sea true, dos fotogramas deben describir estados físicamente compatibles para una interpolación corta.`;
 
+      const accumulated = new Map();
+      let lastErr = null;
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callGemini(prompt, imageSysPrompt);
-          const parsed = safeParseJSON(raw);
-          const arr = parsed.imagePrompts || [];
-          const map = new Map(arr
-            .filter(p => p && p.num && Array.isArray(p.prompts) && p.prompts.filter(Boolean).length >= 1)
-            .map(p => [p.num, p]));
-          if (map.size >= scenesForPrompt.length) {
-            return scenesForPrompt.map(s => aplicarPlanos(s, map.get(s.num)));
+          const arr = safeParseJSON(raw).imagePrompts || [];
+          for (const p of arr) {
+            if (p && p.num && Array.isArray(p.prompts) && p.prompts.filter(Boolean).length >= 1) {
+              accumulated.set(Number(p.num), p);
+            }
           }
-          console.warn(`Image prompts intento ${attempt+1}: ${map.size}/${scenesForPrompt.length}`);
-          if (attempt === 3) {
-            return scenesForPrompt.map(s => aplicarPlanos(s, map.get(s.num)));
+          if (scenesForPrompt.every(s => accumulated.has(Number(s.num)))) {
+            return scenesForPrompt.map(s => aplicarPlanos(s, accumulated.get(Number(s.num))));
           }
-          await new Promise(r => setTimeout(r, 3000));
+          lastErr = new Error(`Dirección visual incompleta: ${accumulated.size}/${scenesForPrompt.length}`);
+          console.warn(`Dirección visual intento ${attempt+1}: ${accumulated.size}/${scenesForPrompt.length}`);
         } catch(e) {
-          console.error(`Image prompts intento ${attempt+1}:`, e.message);
-          if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
-          else return scenesForPrompt.map(s => aplicarPlanos(s, null));
+          lastErr = e;
+          console.error(`Dirección visual intento ${attempt+1}:`, e.message);
         }
+        if (attempt < 3) await new Promise(r => setTimeout(r, 1800));
       }
-      return scenesForPrompt.map(s => aplicarPlanos(s, null));
+
+      // Output truncation is different from a creative failure. If a five-scene
+      // response stays partial, automatically shrink the request instead of
+      // committing blanks and exposing a Repair button.
+      if (scenesForPrompt.length > 1) {
+        const mid = Math.ceil(scenesForPrompt.length / 2);
+        const left = await generateImagePromptsBatch(scenesForPrompt.slice(0, mid), prevContext);
+        const leftLast = left[left.length - 1];
+        const rightContext = leftLast
+          ? `Escena ${leftLast.num}: ${leftLast.narration}\nEstado visual final: ${leftLast.imagePromptC || leftLast.imagePromptB || leftLast.imagePromptA || ''}`
+          : prevContext;
+        const right = await generateImagePromptsBatch(scenesForPrompt.slice(mid), rightContext);
+        return [...left, ...right];
+      }
+
+      throw new Error(`Google no completó la dirección visual de la escena ${scenesForPrompt[0]?.num || '?'}. La generación queda pausada y reanudará esta misma escena. ${lastErr?.message || ''}`);
     }
 
     // Visual direction is generated in chunks of 5 scenes. Each scene may
@@ -4375,32 +4505,32 @@ Responde SOLO JSON válido sin markdown`;
       scenes = scenesNoImg.map(s => ({ ...s, escenario: '', imagePromptA: '', imagePromptB: '', imagePromptC: '' }));
     }
 
-    // The new story is written: now the old episode's material can go. Doing it
-    // here and not up front means a generation that fails loses nothing.
+    // Transactional completion: NOTHING becomes the new episode until every
+    // requested scene has story + title + at least one visual plan.
+    const incomplete = scenes.filter(s => !String(s.narration || '').trim() || !String(s.title || '').trim() || !String(s.imagePromptA || '').trim());
+    if (scenes.length !== fmt.scenes || incomplete.length) {
+      throw new Error(`Generación incompleta: ${scenes.length - incomplete.length}/${fmt.scenes} escenas válidas. El borrador queda guardado y continuará sin reparar ni inventar escenas aparte.`);
+    }
+
+    // Only now is it safe to replace an older episode.
     if (materialViejo.length) {
       setProg(96, 'Limpiando el material del episodio anterior...');
       const borrados = await borrarMaterialDelEpisodio();
       if (borrados) showToast(`${borrados} archivo(s) del episodio anterior borrados`, 'success');
     }
-    audioSecCache.clear();   // las duraciones medidas eran de la historia vieja
+    audioSecCache.clear();
 
     state.scenes = scenes;
     state.episodes[epNum] = scenes;
-    if (u.longformDrafts) delete u.longformDrafts[epNum];
+    if (u.generationDrafts) delete u.generationDrafts[epNum];
     saveState();
     renderScenes();
     renderScenarios();
     updateEpisodeNav();
 
-    const pendingCount = scenes.filter(s => !s.narration || !s.imagePromptA).length;
-    if (pendingCount > 0) {
-      setProg(100, `⚠️ ${scenes.length - pendingCount}/${fmt.scenes} escenas — ${pendingCount} pendientes`);
-      showToast(`${pendingCount} escenas pendientes. Usa "Reparar escenas vacías".`, 'error');
-    } else {
-      const planosTotales = scenes.reduce((n,s) => n + ['A','B','C'].filter(sl => s['imagePrompt'+sl]).length, 0);
-      setProg(100, `✅ Episodio ${epNum} completo — ${fmt.scenes} escenas · ${planosTotales} planos necesarios`);
-      showToast(`Episodio ${epNum}: ${state.characters.length} personajes y ${fmt.scenes} escenas listas`, 'success');
-    }
+    const planosTotales = scenes.reduce((n,s) => n + ['A','B','C'].filter(sl => s['imagePrompt'+sl]).length, 0);
+    setProg(100, `✅ Episodio ${epNum} completo — ${fmt.scenes} escenas · ${planosTotales} planos necesarios`);
+    showToast(`Episodio ${epNum}: ${state.characters.length} personajes y ${fmt.scenes} escenas listas`, 'success');
     setTimeout(() => { progress.style.display = 'none'; setProg(0, ''); }, 3000);
     updateEpisodeNav();
     // Clear new chars input after successful generation
@@ -4409,7 +4539,7 @@ Responde SOLO JSON válido sin markdown`;
 
   } catch(e) {
     saveState();
-    openErrorModal('Generación pausada', `${e.message}\n\nEl progreso de la historia larga quedó guardado. Pulsa “Generar Episodio” otra vez para reanudar desde el último bloque completado.`);
+    openErrorModal('Generación pausada', `${e.message}\n\nEl progreso quedó guardado. Pulsa “Generar Episodio” otra vez para continuar exactamente desde el último bloque completado, sin reparar escenas aparte.`);
     progress.style.display = 'none';
   } finally {
     btn.disabled = false;
@@ -4631,7 +4761,11 @@ async function extractScenariosFromStory(storyText) {
   try {
     const parsed = safeParseJSON(raw);
     const nuevos = (parsed.nuevos || []).filter(e => e && e.name && e.desc);
-    if (!nuevos.length && existing.length) return true; // nothing new, keep as-is
+    if (!nuevos.length && existing.length) return true; // no new place needed
+    if (!nuevos.length && !existing.length) {
+      console.warn('Extracción de escenarios devolvió lista vacía en el primer episodio.');
+      return false;
+    }
     // Sequential ids continuing after the highest existing locN
     let maxN = 0;
     existing.forEach(e => { const m = /^loc(\d+)$/.exec(e.id || ''); if (m) maxN = Math.max(maxN, parseInt(m[1], 10)); });
@@ -4953,23 +5087,10 @@ document.getElementById('climaSelect')?.addEventListener('change', function() {
 // ════════════════════════════════════════════════════════════════
 async function renderScenes() {
   const c = document.getElementById('scenesList');
-  const repairBtn = document.getElementById('btnRepairScenes');
 
   if (!state.scenes.length) {
     c.innerHTML = `<div class="empty"><div class="emoji">🎬</div><p>Genera un episodio primero</p></div>`;
-    if (repairBtn) repairBtn.style.display = 'none';
     return;
-  }
-
-  // Detect broken scenes (no narration, title or num)
-  const brokenCount = state.scenes.filter(s => !s.narration || !s.title || !s.imagePromptA || s.num === undefined || s.num === null).length;
-  if (repairBtn) {
-    if (brokenCount > 0) {
-      repairBtn.style.display = 'inline-flex';
-      repairBtn.innerHTML = `🔧 Reparar ${brokenCount} escena${brokenCount > 1 ? 's' : ''} vacía${brokenCount > 1 ? 's' : ''}`;
-    } else {
-      repairBtn.style.display = 'none';
-    }
   }
 
   const items = await Promise.all(state.scenes.map(async s => {
@@ -4998,6 +5119,7 @@ async function renderScenes() {
     const slotCell = (slot, img) => {
       const numLbl = slot === 'A' ? '1' : slot === 'B' ? '2' : '3';
       const vid = vids[slot];
+      const recommended = s['videoRecommended' + slot] === true || (!('videoRecommended' + slot in s) && s['motion' + slot] === 'action');
       // Encadenar sólo tiene sentido si hay un plano siguiente al que llegar.
       const iSlot = slots.indexOf(slot);
       const haySiguiente = iSlot >= 0 && iSlot < slots.length - 1;
@@ -5011,8 +5133,9 @@ async function renderScenes() {
             : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim)">Plano ${numLbl}</div>`}
         </div>
         <button class="btn-sec" style="font-size:10px;padding:3px 4px;min-width:0" onclick="generateSceneImageAB('${s.id}','${slot}')">${img ? '🔄' : '🖼️'} ${numLbl}</button>
-        <button id="btnVid_${s.id}_${slot}" class="btn-sec" style="font-size:10px;padding:3px 4px;min-width:0;border-color:rgba(0,229,255,0.3);color:var(--accent2)"
-          onclick="generateSceneVideo('${s.id}','${slot}')">${vid ? '🔄' : '🎬'} ${numLbl}</button>
+        <button id="btnVid_${s.id}_${slot}" class="btn-sec" style="font-size:10px;padding:3px 4px;min-width:0;border-color:${recommended ? 'rgba(0,229,255,0.75)' : 'rgba(0,229,255,0.3)'};color:var(--accent2)"
+          title="${recommended ? 'El director recomienda animar este plano. Puedes generar o regenerar el clip manualmente.' : 'Puedes animar este plano manualmente aunque el director no lo haya recomendado.'}"
+          onclick="generateSceneVideo('${s.id}','${slot}')">${vid ? '🔄' : '🎬'} ${numLbl}${recommended ? ' ★' : ''}</button>
         ${haySiguiente ? `
         <button id="btnCad_${s.id}_${slot}" class="btn-sec" onclick="alternarEncadenado('${s.id}','${slot}')"
           data-sig="${sigLbl}"
@@ -5631,7 +5754,16 @@ async function pollVideoStatus(operationName, projectId, onProgress, model) {
         body: JSON.stringify({ operationName, projectId, model }),
       });
       const data = await res.json();
-      if (data.error && data.done) throw new Error(data.error);
+      if (data.done && data.error) {
+        const err = new Error(data.error);
+        err.veoTerminal = true;
+        throw err;
+      }
+      if (data.done && !data.publicUrl) {
+        const err = new Error('Veo terminó sin devolver un video utilizable');
+        err.veoTerminal = true;
+        throw err;
+      }
       if (data.done) return data.publicUrl;
     } catch(e) {
       throw e;
@@ -5709,12 +5841,14 @@ window.alternarEncadenado = function(sceneId, slot) {
     dbGet(sceneVidKeyBy(sceneId, slot)).then(v => {
       if (v) showToast(`El clip ${num} de la escena ${s.num} ya no coincide — regeneralo`, 'error');
     });
+    dbDel(sceneVidOpKeyBy(sceneId, slot)).catch(() => {});
   }
 };
 
 window.generateSceneVideo = async function(sceneId, slot = 'A') {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
+  const opKey = sceneVidOpKeyBy(sceneId, slot);
   const btn = document.getElementById(`btnVid_${sceneId}_${slot}`);
   const statusEl = document.getElementById(`vidStatus_${sceneId}_${slot}`);
 
@@ -5767,16 +5901,38 @@ window.generateSceneVideo = async function(sceneId, slot = 'A') {
         + `o dale al botón 🔗 de ese plano para dejarlo suelto: así viaja una sola imagen.`);
     }
 
-    setStatus('Enviando a Veo...');
-    const res = await fetch('/api/video-start', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: cuerpo,
-    });
-    // Pasado el límite del transporte la respuesta no es JSON, y `res.json()`
-    // reventaba con un mensaje del navegador que no señalaba a nada.
-    const startData = await res.json().catch(() => ({
-      error: `el servidor respondió ${res.status} sin JSON (cuerpo de ${(cuerpo.length / 1048576).toFixed(1)} MB)`,
-    }));
-    if (!res.ok || startData.error) throw new Error(startData.error || `Error al iniciar video (${res.status})`);
+    let startData = null;
+    const savedOpRaw = await dbGet(opKey);
+    if (savedOpRaw) {
+      try {
+        const saved = typeof savedOpRaw === 'string' ? JSON.parse(savedOpRaw) : savedOpRaw;
+        if (saved?.operationName && saved?.projectId && saved?.model) {
+          startData = saved;
+          setStatus('Reanudando Veo ya iniciado...');
+        }
+      } catch (_) { await dbDel(opKey); }
+    }
+
+    if (!startData) {
+      setStatus('Enviando a Veo...');
+      const res = await fetch('/api/video-start', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: cuerpo,
+      });
+      // Pasado el límite del transporte la respuesta no es JSON, y `res.json()`
+      // reventaba con un mensaje del navegador que no señalaba a nada.
+      startData = await res.json().catch(() => ({
+        error: `el servidor respondió ${res.status} sin JSON (cuerpo de ${(cuerpo.length / 1048576).toFixed(1)} MB)`,
+      }));
+      if (!res.ok || startData.error) throw new Error(startData.error || `Error al iniciar video (${res.status})`);
+      // Persist immediately: if Safari reloads while Veo is rendering, the next
+      // tap resumes polling this operation instead of paying for a duplicate.
+      await dbSet(opKey, JSON.stringify({
+        operationName:startData.operationName,
+        projectId:startData.projectId,
+        model:startData.model,
+        startedAt:Date.now()
+      }));
+    }
     // Said once per session, not per clip: the answer is the same every time and
     // it is a property of the chosen model, not of this shot.
     if (startData.sinFotogramaFinal && !window.__avisoFotogramaFinal) {
@@ -5797,12 +5953,16 @@ window.generateSceneVideo = async function(sceneId, slot = 'A') {
     );
 
     await dbSet(sceneVidKeyBy(sceneId, slot), publicUrl);
+    await dbDel(opKey);
     await renderScenes();
     showToast(`Video ${s.num}${slot !== 'A' ? '-' + slot : ''} listo 🎬`, 'success');
   } catch(e) {
+    if (e?.veoTerminal) {
+      try { await dbDel(opKey); } catch (_) {}
+    }
     setBtn('🎬 Video', false);
     setStatus('');
-    showToast(`Error video ${s.num}${slot !== 'A' ? '-' + slot : ''}: ${e.message}`, 'error');
+    showToast(`${e?.veoTerminal ? 'Veo terminó con error' : 'Video pausado'} ${s.num}${slot !== 'A' ? '-' + slot : ''}: ${e.message}`, 'error');
   }
 };
 
@@ -5819,25 +5979,31 @@ window.generateSceneVideos = async function(sceneId) {
 window.generateAllVideos = async function() {
   const scenes = state.scenes.filter(s => s.narration && s.imagePromptA);
   if (!scenes.length) { showToast('Genera las escenas primero', 'error'); return; }
+  if (!empezarTanda()) return;
 
-  const profile = document.getElementById('motionProfileSelect')?.value || 'motion_comic';
-  const debeAnimar = (s, sl) => {
-    const tipo = s['motion' + sl] || 'still';
-    if (profile === 'full') return true;
-    if (profile === 'mixed') return tipo === 'limited' || tipo === 'action';
-    return tipo === 'action';
-  };
-
-  let done = 0, errors = 0, staticShots = 0;
-  for (const s of scenes) {
-    for (const sl of await sceneSlots(s)) {
-      if (!debeAnimar(s, sl)) { staticShots++; continue; }
-      if (await dbGet(sceneVidKeyBy(s.id, sl))) { done++; continue; }
-      try { await window.generateSceneVideo(s.id, sl); done++; }
-      catch(e) { errors++; console.warn(`Video ${s.num}-${sl}:`, e.message); }
+  let generated = 0, existing = 0, notRecommended = 0, errors = 0;
+  try {
+    for (const s of scenes) {
+      for (const sl of await sceneSlots(s)) {
+        if (tanda.detener) break;
+        const recommended = s['videoRecommended' + sl] === true
+          || (!('videoRecommended' + sl in s) && s['motion' + sl] === 'action');
+        if (!recommended) { notRecommended++; continue; }
+        if (await dbGet(sceneVidKeyBy(s.id, sl))) { existing++; continue; }
+        try {
+          await window.generateSceneVideo(s.id, sl);
+          if (await dbGet(sceneVidKeyBy(s.id, sl))) generated++;
+        } catch(e) {
+          errors++;
+          console.warn(`Video ${s.num}-${sl}:`, e.message);
+        }
+      }
+      if (tanda.detener) break;
     }
+    showToast(`Videos recomendados: ${generated} nuevos · ${existing} ya estaban · ${notRecommended} quedan como ilustración${errors ? ' · '+errors+' pendientes' : ''}`, errors ? 'error' : 'success');
+  } finally {
+    terminarTanda();
   }
-  showToast(`Veo: ${done} clips · ${staticShots} planos quedan como motion-comic${errors ? ' · ' + errors + ' fallidos' : ''}`, errors ? 'error' : 'success');
 };
 
 // ════════════════════════════════════════════════════════════════
@@ -6025,49 +6191,57 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
 
 document.getElementById('btnAllAudio').addEventListener('click', async () => {
   if (!state.scenes.length) { showToast('Genera escenas primero', 'error'); return; }
+  if (!empezarTanda()) return;
   const bp = document.getElementById('bulkProgress'); bp.style.display = 'block';
   const bt = document.getElementById('bulkText'), bb = document.getElementById('bulkBar');
 
-  let failed = 0;
-  let completed = 0;
+  let failed = 0, completed = 0, existingCount = 0;
   const total = state.scenes.length;
 
-  for (let i = 0; i < state.scenes.length; i++) {
-    const s = state.scenes[i];
-    const pct = Math.round((i / total) * 100);
-    bb.style.width = pct + '%';
-    bt.textContent = `Audio ${i+1}/${total} (escena ${s.num})...`;
+  try {
+    for (let i = 0; i < state.scenes.length; i++) {
+      if (tanda.detener) break;
+      const s = state.scenes[i];
+      bb.style.width = Math.round((i / total) * 100) + '%';
+      bt.textContent = `Audio ${i+1}/${total} (escena ${s.num})...`;
 
-    // Skip empty/broken scenes
-    if (!s.narration || s.narration.trim().length < 10) {
-      console.warn(`Escena ${s.num} sin narración, saltando audio`);
-      continue;
-    }
+      if (!s.narration || s.narration.trim().length < 10) {
+        throw new Error(`La escena ${s.num} no tiene narración completa. El episodio no debería haber sido confirmado así.`);
+      }
 
-    try {
       const existing = await dbGet(sceneAudKey(s.id));
-      if (!existing) {
-        const result = await generarAudioDeEscena(s);
+      if (existing) {
+        existingCount++;
+        continue;
+      }
+
+      try {
+        const result = await conEsperaDeCuota(
+          () => generarAudioDeEscena(s),
+          (seg) => { bt.textContent = `⏳ Cuota de audio de Google — reanudando en ${seg}s…`; }
+        );
         const mime = result.mimeType || 'audio/wav';
         await dbSet(sceneAudKey(s.id), `${mime}|${result.audioData}`);
         completed++;
-        // Live render every 3 audios
-        if (completed % 3 === 0) renderScenes();
+        if (completed % 3 === 0) await renderScenes();
+      } catch(e) {
+        console.error(`Audio ${s.num}:`, e.message);
+        failed++;
       }
-    } catch(e) {
-      console.error(`Audio ${s.num}:`, e.message);
-      failed++;
+
+      if (i < state.scenes.length - 1) await new Promise(r => setTimeout(r, 500));
     }
 
-    // Small pause to be nice to the API
-    if (i < state.scenes.length - 1) {
-      await new Promise(r => setTimeout(r, 500));
-    }
+    bb.style.width = '100%';
+    bt.textContent = `Audio: ${completed} nuevos · ${existingCount} ya existían${failed ? ' · '+failed+' pendientes' : ''}`;
+    await renderScenes();
+  } catch(e) {
+    bt.textContent = '⚠️ Audio pausado: ' + e.message;
+    showToast('La tanda de audio quedó pausada; lo terminado se conserva.', 'error');
+  } finally {
+    terminarTanda();
+    setTimeout(() => bp.style.display = 'none', 3000);
   }
-  bb.style.width = '100%';
-  bt.textContent = failed > 0 ? `⚠️ ${completed} audios — ${failed} fallaron` : '✅ Audios completados';
-  renderScenes();
-  setTimeout(() => bp.style.display = 'none', 3000);
 });
 
 // ════════════════════════════════════════════════════════════════
@@ -6092,193 +6266,10 @@ document.getElementById('btnNextEpisode').addEventListener('click', async () => 
 // Call updateEpisodeNav after load
 window.addEventListener('load', () => setTimeout(updateEpisodeNav, 500));
 
-// ════════════════════════════════════════════════════════════════
-// REPAIR EMPTY/UNDEFINED SCENES
-// ════════════════════════════════════════════════════════════════
-document.getElementById('btnRepairScenes').addEventListener('click', async () => {
-  if (!state.universe || !state.scenes.length) { showToast('No hay historia', 'error'); return; }
-  const u = state.universe;
-  const broken = state.scenes.map((s, idx) => ({ s, idx })).filter(({s}) =>
-    !s.narration || !s.title || s.num == null || !s.imagePromptA);
-  if (!broken.length) { showToast('No hay escenas que reparar', 'success'); return; }
-
-  const btn = document.getElementById('btnRepairScenes');
-  btn.disabled = true;
-  btn.innerHTML = `<div class="spinner"></div> Reparando ${broken.length} escena(s)...`;
-
-  try {
-    const subs = effectiveSubgenres(u.subgenres || [], u.demo);
-    const allAges = isAllAges(u.demo);
-    const hasEcchi = subs.some(x => ['ecchi','harem','harem_inverso'].includes(x));
-    const fmt = getEpisodeFormat();
-    const mode = u.storyMode || 'narrated';
-    const charRef = state.characters.map(ch =>
-      `- ${ch.id} = ${ch.name} (${ch.role}, ${ch.age || ''}): ${ch.appearance || ''}; personalidad: ${ch.personality || ''}`
-    ).join('\n');
-    const scenarioText = (u.escenarios || []).length
-      ? (u.escenarios || []).map(e => `${e.id} = "${e.name}": ${e.desc}`).join('\n')
-      : '(ninguno definido)';
-
-    const validSpeakerIds = new Set(['narrator','system', ...state.characters.map(ch => ch.id)]);
-    const normalizeInterventionsRepair = (scene) => {
-      if (mode !== 'cast') return [{ type:'narrator', speakerId:'narrator', text:String(scene.narration || '').trim() }].filter(x=>x.text);
-      const src = Array.isArray(scene.interventions) ? scene.interventions : [];
-      const out = src.map(x => {
-        const type = ['narrator','dialogue','thought','system'].includes(x?.type) ? x.type : 'narrator';
-        let speakerId = type === 'narrator' ? 'narrator' : type === 'system' ? 'system' : String(x?.speakerId || '');
-        if (!validSpeakerIds.has(speakerId)) speakerId = 'narrator';
-        return { type, speakerId, text:String(x?.text || '').trim() };
-      }).filter(x=>x.text);
-      return out.length ? out : [{ type:'narrator', speakerId:'narrator', text:String(scene.narration || '').trim() }].filter(x=>x.text);
-    };
-
-    // ── A. Repara primero la historia, escena por escena, usando ambos vecinos.
-    for (const item of broken.filter(x => !x.s.narration || !x.s.title || x.s.num == null)) {
-      const idx = item.idx;
-      const before = [...state.scenes.slice(0, idx)].reverse().find(x => x?.narration);
-      const after = state.scenes.slice(idx + 1).find(x => x?.narration);
-      const num = idx + 1;
-      const act = actForIndex(idx, state.scenes.length || fmt.scenes);
-      const target = Math.max(65, fmt.wordsPerScene || 100);
-
-      const modeRules = mode === 'cast'
-        ? `MODO DRAMATIZADO: devuelve "interventions" en orden. dialogue/thought usan speakerId exacto del personaje; narrator sólo para contexto que la imagen no puede mostrar; system sólo si el universo realmente tiene sistema. El campo narration sigue siendo el texto completo editable de la escena.`
-        : `MODO NARRADO: una sola voz leerá narration, incluyendo frases directas de personajes. No devuelvas etiquetas técnicas dentro del texto.`;
-
-      const sys = `Eres el editor de continuidad de una historia anime LARGA para YouTube. Reparas UNA escena perdida sin convertirla en un Reel ni cambiar la historia.
-${REGISTRO_LONGFORM_REFERENCIA}
-${VOZ_SOBRE_IMAGEN}
-${modeRules}
-Género: ${u.genero}. Subgéneros: ${subs.join(', ') || 'ninguno'}.
-${GENRE_PROMPTS[u.genero] || ''}
-${getSubgenreText(subs, u.genero)}
-${SUBGENRE_FIDELITY_CONTRACT}
-${allAges ? 'AUDIENCIA GENERAL: sin contenido adulto.' : ''}
-${hasEcchi ? 'ECCHI ADULTO: el fan service, si esta escena lo admite, nace de la situación; no conviertas la narración en catálogo corporal.' : ''}
-Mantén ${formaNarrativa(u.bible?.narrativa)}.
-La escena debe conectar CAUSALMENTE con lo anterior y lo posterior. No inventes un giro enorme sólo para rellenar un hueco.
-Objetivo aproximado: ${Math.round(target * .7)}-${Math.round(target * 1.3)} palabras; manda el beat dramático, no el conteo.
-Responde SOLO JSON válido.`;
-
-      const prompt = `UNIVERSO: ${u.title}
-CONCEPTO: ${u.concepto}
-CONFLICTO: ${u.conflicto}
-PERSONAJES:
-${charRef}
-
-${before ? `ESCENA ANTERIOR ${before.num}: ${before.title}\n${before.narration}` : 'No hay escena anterior: ésta pertenece al inicio.'}
-
-ESCENA PERDIDA A REPARAR: número ${num}, acto ${act}.
-
-${after ? `ESCENA SIGUIENTE ${after.num}: ${after.title}\n${after.narration}` : 'No hay escena posterior: ésta pertenece al cierre.'}
-
-Devuelve:
-{"title":"3-6 palabras","narration":"texto completo"${mode === 'cast' ? ',"interventions":[{"type":"narrator|dialogue|thought|system","speakerId":"ID","text":"..."}]' : ''}}`;
-
-      let repaired = null;
-      for (let attempt=0; attempt<4 && !repaired; attempt++) {
-        try {
-          const raw = await callGemini(prompt, sys);
-          const p = safeParseJSON(raw);
-          if (p?.narration && p?.title) repaired = p;
-        } catch(e) {
-          if (attempt === 3) throw e;
-          await new Promise(r => setTimeout(r, 1800));
-        }
-      }
-      if (!repaired) throw new Error(`No se pudo reparar la escena ${num}`);
-      state.scenes[idx] = {
-        ...state.scenes[idx],
-        id: state.scenes[idx]?.id || `s${num}`,
-        num, act, title: repaired.title, narration: repaired.narration,
-        interventions: normalizeInterventionsRepair(repaired),
-        imagePromptA:'', imagePromptB:'', imagePromptC:''
-      };
-      saveState();
-    }
-
-    // ── B. Genera puesta en escena sólo donde falte imagen.
-    const visualBroken = state.scenes.map((s, idx)=>({s,idx})).filter(x => x.s.narration && !x.s.imagePromptA);
-    for (let offset=0; offset<visualBroken.length; offset+=5) {
-      const batch = visualBroken.slice(offset, offset+5);
-      btn.innerHTML = `<div class="spinner"></div> Dirección visual ${Math.min(offset+5, visualBroken.length)}/${visualBroken.length}...`;
-
-      const sceneText = batch.map(({s}) => `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`).join('\n\n');
-      const sys = `Eres director de fotografía de una historia anime japonesa 2D de formato largo. Reparas la puesta en escena sin cambiar los acontecimientos.
-ESTILO FIJO: ${estiloCore()}
-${bibleVisualBrief()}
-REGLAS:
-- 1 plano sólo para un beat breve/autosuficiente. Una conversación sostenida normalmente necesita 2–3 ilustraciones de cobertura: hablante, reacción, conjunto o detalle significativo.
-- 2 para acción→reacción, pregunta→respuesta o llegada→descubrimiento; 3 para conversaciones largas, confrontaciones o tres focos informativos diferentes. No rellenes con clones.
-- Un corte normal NO exige que los personajes se muevan: cambiar a la reacción de otro personaje o a un objeto importante ya es una función editorial válida.
-- Elige tamaño por función dramática: general | medio | cerca | escorzo | detalle. Puede repetirse tras un corte.
-- Máximo 3 personajes visibles por imagen; presencia narrativa no obliga a estar en cuadro.
-- Referencias maestras fijan identidad, NO vestuario. El prompt nombra brevemente la ropa ACTUAL de la escena.
-- tiposMovimiento: still | limited | action. Usa action sólo cuando perder el movimiento volvería confusa la acción; limited para gesto/boca/parpadeo; la mayoría puede ser still.
-- continuos=true sólo entre dos planos de la MISMA acción física que realmente deben interpolarse. Último plano false.
-- continuarAnterior=true sólo si esta escena sucede segundos después de la anterior, mismo lugar/ropa y depende de su estado físico exacto.
-- El escenario asignado es inventario cerrado. Si el lugar no existe en la lista, escenario="" y descríbelo en el prompt.
-- Los prompts son INGLÉS y empiezan con "${estiloLeadIn()} Scene with [nombre exacto]:".
-- No pongas texto, logos, subtítulos ni personajes mirando al espectador.
-- ${hasEcchi ? 'Contenido adulto sugerente sólo cuando la escena lo justifica; el encuadre sigue siendo narrativo y no explícito.' : 'Respeta el tono del género.'}
-Responde SOLO JSON válido.`;
-
-      const prompt = `PERSONAJES:
-${charRef}
-
-ESCENARIOS:
-${scenarioText}
-
-ESCENAS:
-${sceneText}
-
-Devuelve {"imagePrompts":[{"num":1,"escenario":"","planos":1,"continuarAnterior":false,"prompts":["..."],"tamanos":["medio"],"tiposMovimiento":["still"],"movimientos":["subtle motion in English"],"continuos":[false]}]} con un objeto por escena.`;
-
-      let map = new Map();
-      for (let attempt=0; attempt<4 && map.size<batch.length; attempt++) {
-        try {
-          const raw=await callGemini(prompt,sys);
-          const arr=safeParseJSON(raw).imagePrompts || [];
-          map=new Map(arr.filter(p=>p?.num && Array.isArray(p.prompts) && p.prompts[0]).map(p=>[p.num,p]));
-        } catch(e) {
-          if (attempt===3) throw e;
-          await new Promise(r=>setTimeout(r,1800));
-        }
-      }
-
-      for (const {s,idx} of batch) {
-        const p=map.get(s.num);
-        if (!p) continue;
-        const prompts=p.prompts || [], sizes=p.tamanos || [], motions=p.movimientos || [];
-        const kinds=p.tiposMovimiento || [], continuous=p.continuos || [];
-        const validSize=i=>PLANOS_CORTO.some(x=>x.id===String(sizes[i]||'').toLowerCase()) ? String(sizes[i]).toLowerCase() : ['general','medio','cerca'][i];
-        const kind=i=>['still','limited','action'].includes(kinds[i]) ? kinds[i] : 'still';
-        state.scenes[idx]={
-          ...s,
-          escenario:p.escenario || s.escenario || '',
-          imagePromptA:prompts[0]||'', imagePromptB:prompts[1]||'', imagePromptC:prompts[2]||'',
-          tamanoA:prompts[0]?validSize(0):'', tamanoB:prompts[1]?validSize(1):'', tamanoC:prompts[2]?validSize(2):'',
-          videoPromptA:motions[0]||'', videoPromptB:motions[1]||'', videoPromptC:motions[2]||'',
-          motionA:prompts[0]?kind(0):'', motionB:prompts[1]?kind(1):'', motionC:prompts[2]?kind(2):'',
-          sueltoPlanoA:continuous[0]!==true, sueltoPlanoB:continuous[1]!==true, sueltoPlanoC:true,
-          continuarAnterior:p.continuarAnterior===true
-        };
-      }
-      saveState();
-    }
-
-    renderScenes();
-    audioSecCache.clear();
-    const remain=state.scenes.filter(s=>!s.narration || !s.imagePromptA).length;
-    if (remain) showToast(`⚠️ Quedan ${remain} escena(s) por reparar`, 'error');
-    else showToast('✅ Reparación completa', 'success');
-  } catch(e) {
-    openErrorModal('Error reparando escenas', e.message);
-  } finally {
-    btn.disabled=false;
-    btn.innerHTML='🔧 Reparar escenas vacías';
-  }
-});
+// Scene repair was intentionally removed.
+// Generation is transactional: incomplete story/scene/visual batches are never
+// committed as a finished episode. The same generation resumes from its saved
+// draft instead of inventing replacement scenes without full context.
 
 // ════════════════════════════════════════════════════════════════
 // CREATIVE DIRECTOR
@@ -6576,6 +6567,7 @@ async function generateEpisodeMusic() {
   const txt  = document.getElementById('musicProgressText');
   if (!state.universe) { showToast('Crea un universo primero', 'error'); return; }
   if (!(state.scenes || []).some(s => s.narration)) { showToast('Genera el episodio primero', 'error'); return; }
+  if (!empezarTanda()) return;
 
   const acts = episodeActs();
   btn.disabled = true;
@@ -6583,31 +6575,38 @@ async function generateEpisodeMusic() {
   const setProg = (p, m) => { bar.style.width = p + '%'; txt.textContent = m; };
 
   try {
-    // ─── Step 1: the creative director writes the musical direction ───
-    setProg(10, 'El director escribe la dirección musical...');
-    const briefs = await directMusic(acts);
+    let briefs = { ...(state.universe?.musicBriefs || {}) };
+    const missingBriefs = acts.filter(a => !briefs[a]?.prompt);
+    if (missingBriefs.length) {
+      setProg(10, 'El director completa la dirección musical que falta...');
+      const generated = await directMusic(acts);
+      for (const a of missingBriefs) if (generated?.[a]) briefs[a] = generated[a];
+      state.universe.musicBriefs = briefs;
+      saveState();
+    }
 
-    // ─── Step 2: Lyria composes each cue ───
-    let done = 0, failed = 0;
+    let done = 0, failed = 0, skipped = 0;
     for (const act of acts) {
+      if (tanda.detener) break;
       setProg(20 + Math.round((done / acts.length) * 75), `Componiendo ${ACT_LABELS[act] || act}...`);
+      const existing = await dbGet(musicKey(act));
+      if (existing) { skipped++; done++; continue; }
       const brief = briefs[act];
       if (!brief) { failed++; done++; continue; }
       try {
-        const res = await fetch('/api/music', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: brief.prompt, negativePrompt: brief.negative || '' }),
-        });
-        const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error || `Music proxy ${res.status}`);
+        const data = await conEsperaDeCuota(async () => {
+          const res = await fetch('/api/music', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: brief.prompt, negativePrompt: brief.negative || '' }),
+          });
+          const d = await res.json();
+          if (!res.ok || d.error) throw new Error(d.error || `Music proxy ${res.status}`);
+          return d;
+        }, (seg) => setProg(20 + Math.round((done / acts.length) * 75), `Cuota de música: reanudando en ${seg}s…`));
         const clip = data.clips?.[0];
         if (!clip?.audioData) throw new Error('sin audio');
         await dbSet(musicKey(act), `${clip.mimeType}|${clip.audioData}`);
-        if (state.universe) {
-          state.universe.musicBriefs = { ...(state.universe.musicBriefs || {}), [act]: brief };
-          saveState();
-        }
       } catch (e) {
         console.warn(`Música ${act}:`, e.message);
         failed++;
@@ -6617,12 +6616,12 @@ async function generateEpisodeMusic() {
     }
 
     setProg(100, failed ? `${acts.length - failed}/${acts.length} pistas listas` : 'Música lista');
-    showToast(failed ? `${acts.length - failed}/${acts.length} pistas generadas` : 'Música del episodio lista 🎵',
-              failed ? 'error' : 'success');
+    showToast(`Música: ${acts.length - failed} listas · ${skipped} ya existían${failed ? ' · '+failed+' pendientes' : ''}`, failed ? 'error' : 'success');
   } catch (e) {
     openErrorModal('Error generando música', e.message);
   } finally {
     btn.disabled = false;
+    terminarTanda();
     setTimeout(() => { prog.style.display = 'none'; }, 2500);
   }
 }
@@ -6743,6 +6742,7 @@ function buildMontarScript(scenes, opts) {
     '# ─── un segmento de video por escena, con la duración de su narración ───',
     ': > segs.txt');
 
+  let lastClipPath = null;
   scenes.forEach((s, i) => {
     const n = String(i).padStart(3, '0');
     // A scene made before shots existed carries its picture at the top level.
@@ -6760,7 +6760,13 @@ function buildMontarScript(scenes, opts) {
       // $T is what THIS shot lasts: its slice, or the whole scene when there is
       // only one shot.
       const T = planos.length === 1 ? '$D' : (k === planos.length - 1 ? '$PL' : '$P');
-      if (pl && pl.clip) {
+      const duplicateClip = !!(pl && pl.clip && lastClipPath && pl.clip === lastClipPath);
+      const useClip = !!(pl && pl.clip && !duplicateClip);
+      if (duplicateClip) {
+        p(`# mismo clip consecutivo detectado (${pl.clip}) — se usa su imagen en esta toma, nunca loop`);
+      }
+      if (useClip) {
+        lastClipPath = pl.clip;
         // RETIMED, never trimmed. The clip's last frame is the next shot's
         // still — cutting the end throws away exactly the frame that makes the
         // cut invisible, and looping to fill a gap jumps back to the start.
@@ -6768,28 +6774,27 @@ function buildMontarScript(scenes, opts) {
         // a shot that needs 3 s from a 4 s clip runs slightly faster, one that
         // needs 10 s from an 8 s clip runs slightly slower.
         //
-        // R is measured against the clip's REAL length (Veo does not always
-        // return the number of seconds it was asked for). It is capped at 2×
-        // slower, because past that the movement reads as slow motion instead
-        // of as timing; whatever is still missing holds on the final frame —
-        // which is the continuity frame, so the join survives either way.
+        // R = required duration / real clip duration. Example: an 8 s Veo clip
+        // covering a 12 s shot gets R=1.5, so setpts makes the full clip 12 s.
+        // Never loop video. Up to 3× slowdown is allowed; beyond that the last
+        // frame is held rather than restarting the action.
         p(`C=$(dur ${pl.clip})`,
-          `R=$(awk "BEGIN{r=${T}/$C; if(r>2)r=2; if(r<0.25)r=0.25; printf \\"%.6f\\", r}")`,
+          `R=$(awk "BEGIN{r=${T}/$C; if(r>3)r=3; if(r<0.35)r=0.35; printf \\"%.6f\\", r}")`,
           `PAD=$(awk "BEGIN{p=${T}-$C*$R; if(p<0)p=0; printf \\"%.3f\\", p}")`,
           `ffmpeg -y -i ${pl.clip} -t "${T}" ` +
           `-vf "scale=$W:$H:force_original_aspect_ratio=increase,crop=$W:$H,` +
           `setpts=PTS*$R,fps=$FPS,tpad=stop_mode=clone:stop_duration=$PAD" ` +
           `-an -c:v libx264 -preset veryfast -pix_fmt yuv420p seg_${sufijo}.mp4`);
       } else if (pl && pl.image) {
+        lastClipPath = null;
         // Motion-anime edit: a still illustration must not sit under narration
-        // for 30-40 seconds with one endless zoom. Every ~6 seconds the montage
-        // makes a clean editorial cut on the SAME drawing with a different
-        // crop/motion. This costs zero extra image/Veo generations and matches
-        // the visual cadence of long-form motion-comic references.
-        p(`NCUT=$(awk "BEGIN{n=int((${T}+5.999)/6); if(n<1)n=1; if(n>8)n=8; print n}")`,
+        // for tens of seconds with barely perceptible movement. Every ~5 s the
+        // montage makes an editorial cut on the SAME drawing with a clearly
+        // visible 15–20% zoom/pan. It should feel alive, not like a slideshow.
+        p(`NCUT=$(awk "BEGIN{n=int((${T}+4.999)/5); if(n<1)n=1; if(n>10)n=10; print n}")`,
           `if [ "$NCUT" -le 1 ]; then`,
           `  F=$(awk "BEGIN{printf \\"%d\\", ${T}*24+2}")`,
-          `  ffmpeg -y -loop 1 -i ${pl.image} -t "${T}" -vf "scale=$((W*2)):$((H*2)):force_original_aspect_ratio=increase,crop=$((W*2)):$((H*2)),zoompan=z='min(zoom+0.0006,1.10)':d=$F:s=${'${W}'}x${'${H}'}:fps=$FPS,format=yuv420p" -an -c:v libx264 -preset veryfast seg_${sufijo}.mp4`,
+          `  ffmpeg -y -loop 1 -i ${pl.image} -t "${T}" -vf "scale=$((W*2)):$((H*2)):force_original_aspect_ratio=increase,crop=$((W*2)):$((H*2)),zoompan=z='min(zoom+0.0018,1.18)':d=$F:s=${'${W}'}x${'${H}'}:fps=$FPS,format=yuv420p" -an -c:v libx264 -preset veryfast seg_${sufijo}.mp4`,
           `else`,
           `  BASE=$(awk "BEGIN{printf \\"%.3f\\", ${T}/$NCUT}")`,
           `  : > cam_${sufijo}.txt`,
@@ -6798,10 +6803,10 @@ function buildMontarScript(scenes, opts) {
           `    CF=$(awk "BEGIN{printf \\"%d\\", $CT*24+2}")`,
           `    MOD=$((J % 4))`,
           `    case "$MOD" in`,
-          `      1) Z="z='min(zoom+0.0011,1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'" ;;`,
-          `      2) Z="z='if(eq(on,0),1.12,max(zoom-0.0011,1.0))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'" ;;`,
-          `      3) Z="z='1.08':x='(iw-iw/zoom)*on/$CF':y='ih/2-(ih/zoom/2)'" ;;`,
-          `      0) Z="z='1.08':x='(iw-iw/zoom)*(1-on/$CF)':y='ih/2-(ih/zoom/2)'" ;;`,
+          `      1) Z="z='min(zoom+0.0018,1.20)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'" ;;`,
+          `      2) Z="z='if(eq(on,0),1.20,max(zoom-0.0018,1.02))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'" ;;`,
+          `      3) Z="z='1.16':x='(iw-iw/zoom)*on/$CF':y='ih/2-(ih/zoom/2)'" ;;`,
+          `      0) Z="z='1.16':x='(iw-iw/zoom)*(1-on/$CF)':y='ih/2-(ih/zoom/2)'" ;;`,
           `    esac`,
           `    ffmpeg -y -loop 1 -i ${pl.image} -t "$CT" -vf "scale=$((W*2)):$((H*2)):force_original_aspect_ratio=increase,crop=$((W*2)):$((H*2)),zoompan=$Z:d=$CF:s=${'${W}'}x${'${H}'}:fps=$FPS,format=yuv420p" -an -c:v libx264 -preset veryfast cam_${sufijo}_$J.mp4`,
           `    echo "file '$PWD/cam_${sufijo}_$J.mp4'" >> cam_${sufijo}.txt`,
@@ -6809,6 +6814,7 @@ function buildMontarScript(scenes, opts) {
           `  ffmpeg -y -f concat -safe 0 -i cam_${sufijo}.txt -c copy seg_${sufijo}.mp4`,
           `fi`);
       } else {
+        lastClipPath = null;
         // Neither asset: black, so the picture never drifts from the audio.
         p(`ffmpeg -y -f lavfi -i color=c=black:s=${'${W}'}x${'${H}'}:r=$FPS -t "${T}" ` +
           `-c:v libx264 -preset veryfast -pix_fmt yuv420p seg_${sufijo}.mp4`);
@@ -7050,6 +7056,8 @@ async function assembleEpisode() {
       descargas.push({ origen: `${material}/${nombre}`, destino: nombre });
     };
 
+    let lastClipObject = null;
+    let missingVisual = 0;
     for (let i = 0; i < scenes.length; i++) {
       const s = scenes[i];
       const n = String(i).padStart(3, '0');
@@ -7074,21 +7082,37 @@ async function assembleEpisode() {
         // downloading and re-uploading megabytes through the phone.
         const clipUrl = useClips ? await dbGet(sceneVidKeyBy(s.id, slots[k])) : null;
         const m = clipUrl && /storage\.googleapis\.com\/([^/]+)\/([^?]+)/.exec(clipUrl);
-        if (m) {
-          descargas.push({ origen: decodeURIComponent(m[2]), destino: `clip_${sufijo}.mp4` });
+        const clipObject = m ? decodeURIComponent(m[2]) : null;
+        const duplicateConsecutive = !!(clipObject && lastClipObject && clipObject === lastClipObject);
+
+        if (clipObject && !duplicateConsecutive) {
+          descargas.push({ origen: clipObject, destino: `clip_${sufijo}.mp4` });
           plano.clip = `clip_${sufijo}.mp4`;
+          lastClipObject = clipObject;
         } else {
+          // A repeated adjacent clip is replaced by THIS shot's illustration.
+          // Never loop the action back to frame 1.
           const img = await dbGet(sceneImgKeyBy(s.id, slots[k]));
-          if (img) { add(`img_${sufijo}.png`, img, 'image/png'); plano.image = `img_${sufijo}.png`; }
+          if (img) {
+            add(`img_${sufijo}.png`, img, 'image/png');
+            plano.image = `img_${sufijo}.png`;
+            lastClipObject = null;
+          } else {
+            missingVisual++;
+          }
         }
         if (plano.clip || plano.image) entry.planos.push(plano);
       }
-      if (!entry.planos.length) entry.planos.push({});
+      if (!entry.planos.length) missingVisual++;
       guion.push(entry);
     }
 
-    if (missingAudio === scenes.length) throw new Error('Ninguna escena tiene narración generada');
-    if (missingAudio) showToast(`${missingAudio} escenas sin audio — se rellenan con 2s`, 'error');
+    if (missingAudio) {
+      throw new Error(`Faltan ${missingAudio} audio(s). Pulsa “Toda la Narración” para continuar sólo los faltantes antes de montar.`);
+    }
+    if (missingVisual) {
+      throw new Error(`Faltan ${missingVisual} imagen(es) o tomas visuales. Pulsa “Todas las Imágenes” para continuar sólo las faltantes antes de montar.`);
+    }
 
     // ─── 2. Music, one cue per act ───
     // Apagada por defecto y a mano: generar una pista que quede bien por debajo
@@ -7120,7 +7144,7 @@ async function assembleEpisode() {
     const manifest = {
       carpeta: carpetaProy,
       episodio: epNum,
-      hoja: { titulo: state.universe?.title || '', episodio: epNum, escenas: guion.length, vertical, hasMusic, musicVol, motionProfile: document.getElementById('motionProfileSelect')?.value || 'motion_comic' },
+      hoja: { titulo: state.universe?.title || '', episodio: epNum, escenas: guion.length, vertical, hasMusic, musicVol },
       script: buildMontarScript(guion, { vertical, hasMusic, musicVol, episodio: epNum }),
       descargas,
     };

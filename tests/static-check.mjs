@@ -37,8 +37,13 @@ try {
   const build = new Function(fnText + '; return buildMontarScript;')();
   const shell = build([
     { audio:'narr_000.wav', planos:[{ image:'img_000.png' }] },
-    { audio:'narr_001.wav', planos:[{ clip:'vid_001.mp4' }, { image:'img_001.png' }] }
+    { audio:'narr_001.wav', planos:[
+      { clip:'vid_same.mp4', image:'img_001.png' },
+      { clip:'vid_same.mp4', image:'img_002.png' }
+    ] }
   ], { vertical:false, hasMusic:true, musicVol:25, episodio:1 });
+  const repeatedInputs = (shell.match(/-i vid_same\.mp4/g) || []).length;
+  if (repeatedInputs !== 1) throw new Error('el mismo clip consecutivo se usaría más de una vez');
   fs.writeFileSync('/tmp/anime-studio-montar-test.sh', shell);
   execFileSync('bash', ['-n', '/tmp/anime-studio-montar-test.sh'], { stdio:'pipe' });
   ok('buildMontarScript genera bash válido');
@@ -49,20 +54,31 @@ try {
 const required = [
   ['storyModeSelect', 'selector Narrada/Dramatizada'],
   ['endingModeSelect', 'selector de cierre'],
-  ['motionProfileSelect', 'perfil de movimiento'],
   ["hora:       { scenes: 84", 'formato de 60 minutos'],
   ["hora_media: { scenes: 120", 'formato de 90 minutos'],
   ["ESTILO_POR_DEFECTO = 'japon_2d'", 'anime japonés 2D por defecto'],
   ['REGISTRO_LONGFORM_REFERENCIA', 'motor narrativo largo'],
   ['generarAudioDeEscena', 'audio dramatizado por intervención'],
-  ['tiposMovimiento', 'dirección motion-comic'],
+  ['videoRecommendedA', 'recomendación de video por plano'],
   ['continuarAnterior', 'continuidad explícita entre escenas'],
   ['btnAllCharacterRefs', 'generación en lote de referencias maestras'],
-  ['longformDrafts', 'reanudación persistente de historias largas'],
-  ['creativeVersion', 'versionado compatible de proyectos'],
-  ['Motion anime', 'perfil motion-anime visible']
+  ['generationDrafts', 'reanudación persistente para cualquier duración'],
+  ['sceneVidOpKeyBy', 'reanudación de operaciones Veo en curso'],
+  ['creativeVersion', 'versionado compatible de proyectos']
 ];
 for (const [needle, label] of required) html.includes(needle) ? ok(label) : fail('Falta ' + label);
+
+if (/btnRepairScenes|Reparar escenas vacías/i.test(html)) fail('Volvió a aparecer reparación manual de escenas');
+else ok('No existe botón de reparación post-hoc');
+
+if (/motionProfileSelect/.test(html)) fail('Motion anime volvió a aparecer como un modo separado');
+else ok('Sólo los modos narrativos son seleccionables; el motion es interno al montaje');
+
+if (/if \(best\) return best/.test(html)) fail('El guion todavía acepta bloques cortos como éxito');
+else ok('Los bloques de historia insuficientes no se aceptan');
+
+if (/while \(chunks\.length < wanted\) chunks\.push\(''\)/.test(html)) fail('La división todavía puede fabricar escenas vacías');
+else ok('La división no rellena escenas con cadenas vacías');
 
 if (/reintentando sin refs/i.test(html)) fail('Todavía existe un fallback que elimina referencias de personaje');
 else ok('Nunca se eliminan referencias de identidad silenciosamente');
@@ -86,6 +102,8 @@ const gcp = fs.readFileSync('api/_lib/gcp.js','utf8');
 const setup = fs.readFileSync('setup.sh','utf8');
 if (!gcp.includes("anime-studio-montage") || !setup.includes('anime-studio-montage')) fail('El nombre del Job no coincide entre código e instalador');
 else ok('Montador y aplicación usan el mismo Job');
+if (!setup.includes("gcloud auth list") || !setup.includes("Cuenta Google activa")) fail('setup.sh no valida la cuenta activa de Cloud Shell');
+else ok('setup.sh usa la sesión/proyecto activos; no depende de un correo hardcodeado');
 
 if (process.exitCode) process.exit(process.exitCode);
 console.log('\nValidación estática completa.');
