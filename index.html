@@ -4119,40 +4119,102 @@ Responde SOLO JSON válido.`;
       return cleaned.length ? cleaned : [{ type: 'narrator', speakerId: 'narrator', text: String(scene.narration || '').trim() }].filter(x => x.text);
     }
 
+    function splitTextExactly(partText, wanted, startNum) {
+      const sentences = (String(partText).match(/[^.!?…]+[.!?…]+["'»”)]*\s*/g) || [])
+        .map(x => x.trim()).filter(Boolean);
+      const chunks = [];
+
+      if (sentences.length >= wanted) {
+        const counts = sentences.map(s => s.split(/\s+/).filter(Boolean).length);
+        let si = 0, usedWords = 0;
+        const totalWords = counts.reduce((a,b)=>a+b,0);
+        for (let part = 0; part < wanted; part++) {
+          const remainingParts = wanted - part;
+          const remainingSentences = sentences.length - si;
+          if (remainingParts === 1) {
+            chunks.push(sentences.slice(si).join(' ').trim());
+            break;
+          }
+          const targetEnd = Math.round(totalWords * (part + 1) / wanted);
+          let cur = [], curWords = 0;
+          while (si < sentences.length) {
+            const mustLeave = remainingParts - 1;
+            if (sentences.length - si <= mustLeave) break;
+            const w = counts[si];
+            if (cur.length && usedWords + curWords + w > targetEnd) break;
+            cur.push(sentences[si++]); curWords += w;
+          }
+          if (!cur.length) { cur.push(sentences[si]); curWords += counts[si]; si++; }
+          usedWords += curWords;
+          chunks.push(cur.join(' ').trim());
+        }
+      } else {
+        // Extremely punctuation-poor text: split by words rather than create
+        // empty scenes. The story content stays identical and ordered.
+        const words = String(partText).trim().split(/\s+/).filter(Boolean);
+        if (words.length < wanted) throw new Error(`El bloque tiene muy poco texto para ${wanted} escenas sin inventar contenido.`);
+        for (let i = 0; i < wanted; i++) {
+          const a = Math.round(i * words.length / wanted);
+          const b = Math.round((i + 1) * words.length / wanted);
+          chunks.push(words.slice(a, b).join(' ').trim());
+        }
+      }
+
+      if (chunks.length !== wanted || chunks.some(x => !x)) {
+        throw new Error(`No se pudo segmentar el bloque en ${wanted} escenas completas sin perder texto.`);
+      }
+
+      return chunks.map((narration, i) => {
+        const short = narration.replace(/[“”"'«»]/g,'').split(/\s+/).slice(0,5).join(' ');
+        return {
+          id:`s${startNum+i}`, num:startNum+i,
+          title: short || `Escena ${startNum+i}`,
+          narration,
+          interventions: storyMode === 'cast' ? [] : [{ type:'narrator', speakerId:'narrator', text:narration }]
+        };
+      });
+    }
+
+    async function tagFallbackCastScenes(scenes) {
+      if (storyMode !== 'cast') return scenes;
+      const prompt = `PERSONAJES E IDs:\n${charVoiceMap}\n\nESCENAS YA SEGMENTADAS (NO cambies narration ni inventes acciones):\n${JSON.stringify(scenes.map(s=>({num:s.num,title:s.title,narration:s.narration})))}\n\nPara cada escena devuelve solamente title + interventions. Mantén exactamente los mismos números y no omitas ninguna. Devuelve {"scenes":[{"num":1,"title":"...","interventions":[{"type":"narrator|dialogue|thought|system","speakerId":"ID","text":"..."}]}]}.`;
+      const raw = await callGemini(prompt, splitSysPrompt);
+      const arr = safeParseJSON(raw).scenes || [];
+      const byNum = new Map(arr.filter(x=>x?.num && Array.isArray(x.interventions)).map(x=>[Number(x.num),x]));
+      if (byNum.size !== scenes.length) {
+        throw new Error('Google no devolvió todas las voces del bloque. La generación queda pausada para reanudarla sin perder contexto.');
+      }
+      return scenes.map(s => {
+        const tagged = byNum.get(s.num);
+        const merged = { ...s, title: tagged.title || s.title, interventions: tagged.interventions };
+        merged.interventions = normalizeInterventions(merged);
+        if (!merged.interventions.length) throw new Error(`La escena ${s.num} quedó sin intervenciones de voz.`);
+        return merged;
+      });
+    }
+
     async function splitStoryPart(partText, wanted, startNum) {
-      const prompt = `BLOQUE A DIVIDIR:\n\n${partText}\n\nDivídelo en EXACTAMENTE ${wanted} escenas consecutivas. Devuelve {"scenes":[${narrationShape},...]} con ${wanted} objetos.`;
+      const prompt = `BLOQUE A DIVIDIR:\n\n${partText}\n\nDivídelo en EXACTAMENTE ${wanted} escenas consecutivas. No resumas, no repitas y no inventes. Devuelve {"scenes":[${narrationShape},...]} con EXACTAMENTE ${wanted} objetos.`;
+      let lastErr = null;
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callGemini(prompt, splitSysPrompt);
           const arr = safeParseJSON(raw).scenes || [];
-          const valid = arr.filter(s => s && s.narration && s.title);
-          if (valid.length >= wanted) {
-            return valid.slice(0, wanted).map((s, i) => ({
+          const valid = arr.filter(s => s && String(s.narration || '').trim() && String(s.title || '').trim());
+          if (valid.length === wanted) {
+            return valid.map((s, i) => ({
               ...s, id: `s${startNum + i}`, num: startNum + i,
               interventions: normalizeInterventions(s)
             }));
           }
-        } catch (e) {}
-        if (attempt < 3) await new Promise(r => setTimeout(r, 2500));
+          lastErr = new Error(`Google devolvió ${valid.length}/${wanted} escenas`);
+        } catch (e) { lastErr = e; }
+        if (attempt < 3) await new Promise(r => setTimeout(r, 1800));
       }
 
-      // Deterministic fallback by complete sentences.
-      const sentences = partText.match(/[^.!?…]+[.!?…]+["'»”)]*\s*/g) || [partText];
-      const totalWords = partText.split(/\s+/).filter(Boolean).length;
-      const perScene = Math.ceil(totalWords / wanted) || 1;
-      const chunks=[]; let cur='', words=0;
-      for (const sent of sentences) {
-        const w=sent.split(/\s+/).filter(Boolean).length;
-        if (cur && words + w > perScene && chunks.length < wanted - 1) { chunks.push(cur.trim()); cur=''; words=0; }
-        cur += sent; words += w;
-      }
-      if (cur.trim()) chunks.push(cur.trim());
-      while (chunks.length < wanted) chunks.push('');
-      return Array.from({length:wanted},(_,i) => {
-        const s={ id:`s${startNum+i}`, num:startNum+i, title:`Escena ${startNum+i}`, narration:chunks[i]||'' };
-        s.interventions=normalizeInterventions(s);
-        return s;
-      });
+      console.warn('Segmentación estructurada incompleta; usando división determinista del MISMO texto:', lastErr?.message);
+      const deterministic = splitTextExactly(partText, wanted, startNum);
+      return await tagFallbackCastScenes(deterministic);
     }
 
     async function splitStoryIntoScenes(storyParts) {
