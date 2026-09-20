@@ -4012,24 +4012,21 @@ Responde SOLO JSON válido sin markdown.`;
       : `{"id":"s1","num":1,"title":"título corto","narration":"fragmento completo y natural de la historia"}`;
 
     async function generateStoryPart(prompt, minWords) {
-      let best = '', lastErr = '';
+      let lastErr = '';
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callGemini(prompt, sysBase + genreExtra);
           const parsed = safeParseJSON(raw);
           const story = String(parsed.story || '').trim();
           const wc = story.split(/\s+/).filter(Boolean).length;
-          if (story.length > best.length) best = story;
           if (story && wc >= minWords) return story;
           lastErr = story ? `demasiado corto (${wc} palabras, mínimo ${minWords})` : 'respuesta vacía o sin campo "story"';
-          if (attempt < 3) await new Promise(r => setTimeout(r, 2500));
         } catch (e) {
           lastErr = e.message;
-          if (attempt < 3) await new Promise(r => setTimeout(r, 2500));
         }
+        if (attempt < 3) await new Promise(r => setTimeout(r, 1800));
       }
-      if (best) return best;
-      throw new Error(`No se pudo escribir esta parte de la historia: ${lastErr}`);
+      throw new Error(`Google no completó este bloque de historia: ${lastErr}. No se aceptará un bloque corto para rellenarlo después con escenas inventadas.`);
     }
 
     function buildLongformPartBriefs(parts, completeEnding) {
@@ -4049,6 +4046,7 @@ Responde SOLO JSON válido sin markdown.`;
     async function generateFullStory(baseCtx) {
       const briefs = buildLongformPartBriefs(fmt.parts, endingMode === 'complete');
       const perPart = Math.round(wordTarget.total / fmt.parts);
+      const minPerPart = Math.ceil(wordTarget.min / fmt.parts);
       const partsOut = Array.isArray(longDraft.storyParts)
         ? longDraft.storyParts.slice(0, briefs.length).map(x => String(x || '').trim())
         : [];
@@ -4072,12 +4070,17 @@ ${i > 0 ? 'Comienza exactamente después de la última acción/decisión previa.
 ${i < briefs.length - 1 ? 'Este bloque NO es el final. Déjalo avanzar hacia el siguiente sin un cliffhanger artificial interno.' : ''}
 
 Devuelve SOLO {"story":"..."}.`;
-        partsOut[i] = await generateStoryPart(prompt, Math.round(perPart * 0.72));
+        partsOut[i] = await generateStoryPart(prompt, minPerPart);
         longDraft.storyParts = partsOut.slice();
         longDraft.updatedAt = Date.now();
         saveState();
       }
-      return { story: partsOut.join('\n\n'), parts: partsOut };
+      const story = partsOut.join('\n\n');
+      const totalWords = story.split(/\s+/).filter(Boolean).length;
+      if (totalWords < wordTarget.min) {
+        throw new Error(`Historia demasiado corta: ${totalWords} palabras; mínimo ${wordTarget.min}. El borrador se conserva y no se crearán escenas artificiales para aparentar duración.`);
+      }
+      return { story, parts: partsOut };
     }
 
     function scenesInPart(i, parts, total) {
