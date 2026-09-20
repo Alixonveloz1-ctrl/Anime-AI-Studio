@@ -1667,70 +1667,271 @@ window.switchEpisode = function(ep) {
 // ════════════════════════════════════════════════════════════════
 // FRAME CAPTURE → Image B
 // ════════════════════════════════════════════════════════════════
-function saveState() {
-  if (!state.projectId) return;
-  // Sync current episode scenes into episodes map
+function stateDataSnapshot() {
   if (!state.episodes) state.episodes = {};
   state.episodes[state.currentEpisode || 1] = state.scenes;
-  const data = {
+  return {
     universe: state.universe,
     characters: state.characters,
     episodes: state.episodes,
     currentEpisode: state.currentEpisode || 1,
     episodeDirection: state.episodeDirection || {},
   };
-  localStorage.setItem(`proj_${state.projectId}`, JSON.stringify(data));
-  const i = projects.findIndex(p => p.id === state.projectId);
-  if (i >= 0) { projects[i].name = state.universe?.title || projects[i].name; projects[i].updated = Date.now(); saveProjects(); }
 }
-function loadStateFor(pid) {
-  const raw = localStorage.getItem(`proj_${pid}`);
-  state = { projectId: pid, universe: null, characters: [], episodes: { 1: [] }, currentEpisode: 1, scenes: [], episodeDirection: {} };
-  if (!raw) return;
-  try {
-    const d = JSON.parse(raw);
-    state.universe   = d.universe;
-    state.characters = d.characters || [];
-    state.episodeDirection = d.episodeDirection || {};
-    if (d.episodes) {
-      // New multi-episode format
-      state.episodes      = d.episodes;
-      state.currentEpisode = d.currentEpisode || 1;
-    } else {
-      // Old single-episode format — migrate to episode 1
-      state.episodes      = { 1: d.scenes || [] };
-      state.currentEpisode = 1;
+
+let cloudSaveTimer = null;
+let pendingCloudSave = null;
+let cloudSyncWarningShown = false;
+
+async function cloudSaveProject(projectId, data, meta = {}) {
+  const r = await fetch('/api/project-store', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      id:projectId,
+      name:meta.name || data?.universe?.title || 'Proyecto',
+      created:meta.created || Date.now(),
+      updated:meta.updated || Date.now(),
+      data,
+    }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.ok) throw new Error(d.error || `project-store ${r.status}`);
+  return d.project;
+}
+
+function queueCloudProjectSave(projectId, data, meta) {
+  // Only the newest snapshot matters. localStorage is a cache; GCS receives the
+  // latest canonical JSON after a short debounce so one generation step does
+  // not produce dozens of writes while state fields are being filled.
+  pendingCloudSave = {
+    projectId,
+    data: JSON.parse(JSON.stringify(data)),
+    meta: { ...meta },
+  };
+  clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = setTimeout(async () => {
+    const job = pendingCloudSave;
+    pendingCloudSave = null;
+    if (!job) return;
+    try {
+      await cloudSaveProject(job.projectId, job.data, job.meta);
+      cloudSyncWarningShown = false;
+    } catch (e) {
+      console.error('Sincronización GCS:', e);
+      if (!cloudSyncWarningShown) {
+        cloudSyncWarningShown = true;
+        showToast('⚠️ No se pudo sincronizar el proyecto con Google Cloud. Se reintentará al abrir la app.', 'error');
+      }
     }
-    state.scenes = state.episodes[state.currentEpisode] || [];
-  } catch(e) {}
+  }, 350);
 }
-function saveProjects() { localStorage.setItem('projects_index', JSON.stringify(projects)); }
-function loadProjects() { try { projects = JSON.parse(localStorage.getItem('projects_index') || '[]'); } catch(e) { projects = []; } }
+
+function saveState() {
+  if (!state.projectId) return;
+  const data = stateDataSnapshot();
+  // Browser copy = cache only. The durable copy is project.json in GCS.
+  try { localStorage.setItem(`proj_${state.projectId}`, JSON.stringify(data)); } catch (_) {}
+
+  const now = Date.now();
+  let i = projects.findIndex(p => p.id === state.projectId);
+  if (i < 0) {
+    projects.push({ id:state.projectId, name:state.universe?.title || 'Proyecto', created:now, updated:now });
+    i = projects.length - 1;
+  }
+  projects[i].name = state.universe?.title || projects[i].name || 'Proyecto';
+  projects[i].created = projects[i].created || now;
+  projects[i].updated = now;
+  saveProjects();
+
+  queueCloudProjectSave(state.projectId, data, projects[i]);
+}
+
+function applyStateData(pid, d) {
+  state = { projectId: pid, universe: null, characters: [], episodes: { 1: [] }, currentEpisode: 1, scenes: [], episodeDirection: {} };
+  if (!d || typeof d !== 'object') return;
+  state.universe = d.universe || null;
+  state.characters = d.characters || [];
+  state.episodeDirection = d.episodeDirection || {};
+  if (d.episodes) {
+    state.episodes = d.episodes;
+    state.currentEpisode = d.currentEpisode || 1;
+  } else {
+    state.episodes = { 1: d.scenes || [] };
+    state.currentEpisode = 1;
+  }
+  state.scenes = state.episodes[state.currentEpisode] || [];
+}
+
+async function cloudLoadProject(pid) {
+  const r = await fetch('/api/project-store?id=' + encodeURIComponent(pid), { cache:'no-store' });
+  if (r.status === 404) return null;
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.project) throw new Error(d.error || `project-store ${r.status}`);
+  return d.project;
+}
+
+async function loadStateFor(pid) {
+  // Cloud FIRST. The device copy is only an offline/emergency cache.
+  try {
+    const remote = await cloudLoadProject(pid);
+    if (remote?.data) {
+      applyStateData(pid, remote.data);
+      try { localStorage.setItem(`proj_${pid}`, JSON.stringify(remote.data)); } catch (_) {}
+      return true;
+    }
+  } catch (e) {
+    console.warn('Carga desde bucket:', e.message);
+  }
+
+  const raw = localStorage.getItem(`proj_${pid}`);
+  if (!raw) { applyStateData(pid, null); return false; }
+  try { applyStateData(pid, JSON.parse(raw)); return false; }
+  catch (_) { applyStateData(pid, null); return false; }
+}
+
+function saveProjects() {
+  // Small summary cache for fast paint/offline fallback. The real list comes
+  // from GCS every time the app starts or Proyectos is opened.
+  try { localStorage.setItem('projects_index', JSON.stringify(projects)); } catch (_) {}
+}
+function loadProjects() {
+  try { projects = JSON.parse(localStorage.getItem('projects_index') || '[]'); }
+  catch (_) { projects = []; }
+  if (!Array.isArray(projects)) projects = [];
+}
+
+async function cloudListProjects() {
+  const r = await fetch('/api/project-store', { cache:'no-store' });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !Array.isArray(d.projects)) throw new Error(d.error || `project-store ${r.status}`);
+  return d.projects;
+}
+
+async function migrateThisBrowserToCloud() {
+  const marker = 'anime_cloud_migrated_v1';
+  if (localStorage.getItem(marker) === '1') return;
+
+  const locals = Array.isArray(projects) ? projects.slice() : [];
+  let remote = [];
+  try { remote = await cloudListProjects(); } catch (e) {
+    console.warn('No se pudo iniciar migración cloud:', e.message);
+    return;
+  }
+  const remoteMap = new Map(remote.map(p => [p.id, p]));
+
+  // 1) Every old local project gets a project.json before we remove ANY cache.
+  for (const p of locals) {
+    const raw = localStorage.getItem(`proj_${p.id}`);
+    if (!raw) continue;
+    try {
+      const data = JSON.parse(raw);
+      const rp = remoteMap.get(p.id);
+      if (!rp || Number(p.updated || 0) >= Number(rp.updated || 0)) {
+        await cloudSaveProject(p.id, data, {
+          name:p.name || data?.universe?.title || 'Proyecto',
+          created:p.created || p.updated || Date.now(),
+          updated:p.updated || Date.now(),
+        });
+      }
+    } catch (e) {
+      console.error('Migración proyecto', p.id, e);
+      return; // no marker: next load retries; never purge first
+    }
+  }
+
+  // 2) Mirror ALL old IndexedDB media from every local anime into its project.
+  // Existing videos are normalized to durable gs:// URIs before upload.
+  const keys = await localDbKeys();
+  for (let i = 0; i < keys.length; i++) {
+    const k = String(keys[i]);
+    const pid = projectIdFromDbKey(k);
+    if (!pid || !locals.some(p => p.id === pid)) continue;
+    const v = await localDbGet(k);
+    if (v == null) continue;
+    try {
+      await cloudPutDbValue(k, isVideoDbKey(k) ? canonicalVideoValue(v) : v);
+    } catch (e) {
+      console.error('Migración medio', k, e);
+      return; // keep everything local and retry automatically next load
+    }
+  }
+
+  localStorage.setItem(marker, '1');
+}
+
+async function refreshProjectsFromCloud() {
+  const remote = await cloudListProjects();
+  projects = remote;
+  saveProjects();
+  return remote;
+}
+
+async function pruneDeviceCacheExcept(projectId) {
+  // Once migration succeeded, browser storage must not grow with the number of
+  // animes. Keep only the active project's state/media on this device.
+  if (localStorage.getItem('anime_cloud_migrated_v1') !== '1') return;
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k?.startsWith('proj_') && k !== `proj_${projectId}`) localStorage.removeItem(k);
+    }
+  } catch (_) {}
+  const keys = await localDbKeys();
+  for (const k0 of keys) {
+    const k = String(k0);
+    const pid = projectIdFromDbKey(k);
+    if (pid && pid !== projectId) await localDbDel(k);
+  }
+}
 
 async function newProject() {
   const pid = 'p' + Date.now();
-  projects.push({ id: pid, name: 'Nuevo proyecto', updated: Date.now() });
+  const now = Date.now();
+  projects.unshift({ id: pid, name: 'Nuevo proyecto', created:now, updated:now });
   saveProjects();
-  state = { projectId: pid, universe: null, characters: [], scenes: [], episodeDirection: {} };
-  saveState();
+  state = { projectId: pid, universe: null, characters: [], episodes:{1:[]}, currentEpisode:1, scenes: [], episodeDirection: {} };
+  // Create the cloud manifest immediately: even an empty new project exists on
+  // every device from the moment it is created.
+  const data = stateDataSnapshot();
+  await cloudSaveProject(pid, data, projects[0]);
+  try { localStorage.setItem(`proj_${pid}`, JSON.stringify(data)); } catch (_) {}
+  await pruneDeviceCacheExcept(pid);
   renderAll();
 }
-function switchProject(pid) {
-  loadStateFor(pid);
+
+async function switchProject(pid) {
+  await loadStateFor(pid);
+  await pruneDeviceCacheExcept(pid);
   renderAll();
   closeModal();
-  showToast('Proyecto cargado', 'success');
+  showToast('Proyecto cargado desde Google Cloud', 'success');
 }
+
 async function deleteProject(pid) {
-  if (!confirm('¿Eliminar este proyecto?')) return;
+  if (!confirm('¿Eliminar este proyecto de Google Cloud y de todos tus dispositivos?')) return;
+  try {
+    const r = await fetch('/api/project-store', {
+      method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:pid}),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) throw new Error(d.error || `project-store ${r.status}`);
+  } catch (e) {
+    openErrorModal('No se pudo borrar del bucket', e.message);
+    return;
+  }
+
   localStorage.removeItem(`proj_${pid}`);
+  // local media for this project is cache and can now be dropped.
+  for (const k0 of await localDbKeys()) if (projectIdFromDbKey(String(k0)) === pid) await localDbDel(k0);
   projects = projects.filter(p => p.id !== pid);
   saveProjects();
+
   if (state.projectId === pid) {
-    if (projects.length) switchProject(projects[0].id);
-    else { await newProject(); }
+    if (projects.length) await switchProject(projects[0].id);
+    else await newProject();
   }
-  openProjectsModal();
+  await openProjectsModal();
 }
 
 // ════════════════════════════════════════════════════════════════
