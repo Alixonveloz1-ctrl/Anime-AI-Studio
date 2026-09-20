@@ -324,7 +324,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-19.108 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-19.109 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -880,30 +880,29 @@ const planoEn = id => (PLANOS_ANIME.find(p => p.id === id) || PLANOS_ANIME[0]).e
 const MODOS_NARRATIVOS = {
   primera_presente: {
     nombre: 'Primera persona, presente',
-    regla: 'PRIMERA PERSONA EN PRESENTE para el protagonista ("compro", "miro", "no puedo quedarme mirando"). '
-      + 'Cuenta lo que le pasa MIENTRAS le pasa, nunca como recuerdo. Su voz interior es seca e irónica y comenta lo que ve '
-      + '("ochocientos bien gastados", "el nivel de detalle es increíble"). '
-      + 'Si la historia tiene un SEGUNDO frente —otro personaje, otro mundo, el bando contrario— ése se cuenta en TERCERA '
-      + 'PERSONA y también en presente, y el salto se marca con una frase corta de bisagra ("Mientras tanto...", '
-      + '"De vuelta en mi escritorio...", "En otro lugar..."). Ese vaivén entre los dos lados ES el motor del relato.',
+    regla: 'PRIMERA PERSONA EN PRESENTE para el protagonista ("entro", "veo", "no entiendo qué está pasando"). '
+      + 'La voz vive el hecho AHORA, no lo recuerda desde el futuro. Es conversacional, concreta y pegada a sus decisiones: '
+      + 'qué ve, qué entiende, qué teme, qué decide y qué cambia por eso. El tono lo manda el género; NO fuerces ironía, sarcasmo '
+      + 'ni introspección si la escena no los necesita. Si hay un segundo frente, se cuenta brevemente en tercera persona presente '
+      + 'y se vuelve al protagonista sin convertir la historia en narrador omnisciente.',
   },
   tercera_presente: {
     nombre: 'Tercera persona, presente',
-    regla: 'TERCERA PERSONA EN PRESENTE, con el protagonista siempre por su nombre ("[NOMBRE] cruza el patio"). '
-      + 'Todo ocurre delante del espectador, ahora mismo — nunca como algo que ya pasó.',
+    regla: 'TERCERA PERSONA CERCANA EN PRESENTE. La cámara narrativa sigue a un personaje por vez: "[NOMBRE] entra, ve X y decide Y". '
+      + 'No narres desde una voz omnisciente que conoce todo a la vez. El espectador descubre la información cuando el personaje la descubre, '
+      + 'salvo una asimetría de información deliberada que la historia haya sembrado.',
   },
   tercera_pasado: {
     nombre: 'Tercera persona, pasado',
-    regla: 'TERCERA PERSONA omnisciente en pasado inmediato, con el protagonista siempre por su nombre '
-      + '("[NOMBRE] cruzó el patio"). Nunca "yo".',
+    regla: 'TERCERA PERSONA CERCANA EN PASADO INMEDIATO, conservada sólo para proyectos anteriores. Mantén el punto de vista pegado al personaje '
+      + 'y evita la narración literaria omnisciente.',
   },
   segunda: {
     nombre: 'Segunda persona ("tú")',
-    regla: 'SEGUNDA PERSONA EN PRESENTE: el espectador ES el protagonista ("abres la caja", "no puedes apartar la vista"). '
-      + 'Sostenela sin salirte ni una frase — en cuanto aparece un "él" para el protagonista, se rompe.',
+    regla: 'SEGUNDA PERSONA EN PRESENTE, conservada sólo por compatibilidad con proyectos antiguos. Los proyectos nuevos no la eligen automáticamente.',
   },
 };
-const MODO_NARRATIVO_POR_DEFECTO = 'tercera_pasado';
+const MODO_NARRATIVO_POR_DEFECTO = 'primera_presente';
 
 function modoNarrativo(id) {
   return MODOS_NARRATIVOS[id] || MODOS_NARRATIVOS[MODO_NARRATIVO_POR_DEFECTO];
@@ -980,18 +979,22 @@ se le encienden los ojos porque así ocurre en ese mundo, se dibuja tal cual y c
 // puesta. Decir otra vez que la bata es translúcida no dibuja nada nuevo — sólo
 // pone en el texto la frase que hace saltar el filtro, y esa escena se queda en
 // negro.
-const REGISTRO_LONGFORM_REFERENCIA = `MOTOR DE HISTORIA LARGA — aprendido de las referencias estudiadas:
-- El gancho de los primeros 60-90 segundos plantea una situación concreta, un deseo y una fricción que prometen una transformación. No hace falta resolver nada ahí.
-- CAUSALIDAD: una solución cambia la situación y crea la siguiente necesidad. Evita episodios intercambiables del tipo "aparece rival → gana → aparece rival más fuerte" si nada más cambia.
-- Cada revelación tiene REACCIÓN visible: alguien cambia de decisión, relación, posición, información o recursos. No saltes al siguiente asunto antes de cobrar el efecto de lo que acabas de revelar.
-- Aprovecha ASIMETRÍA DE INFORMACIÓN cuando el concepto la permita: el espectador sabe algo que un personaje ignora, o dos personajes interpretan el mismo hecho de forma distinta. Esa diferencia genera decisiones.
-- Alterna presión, descubrimiento, relación, consecuencia y respiración. Una historia de una hora NO es un Reel repetido doce veces ni necesita un mini-clímax artificial cada minuto.
-- Mantén preguntas abiertas simultáneas, pero paga regularmente algunas de ellas. Introduce una nueva pregunta antes de cerrar todas las anteriores.
-- Diálogo corto y funcional. Los personajes hablan para querer algo, ocultar algo, provocar, negociar, mentir, rechazar o revelar. Evita conversaciones que sólo repiten exposición.
-- La narración aporta lo que la cámara no puede mostrar: intención, información previa, cálculo, ironía y contexto. No describe por duplicado pelo, ropa, muebles o expresiones que ya están en pantalla.
-- Antes de cerrar una secuencia, comprueba de forma ORGÁNICA: expectativa → decisión → consecuencia → reacción → nueva necesidad. Es una prueba de causalidad, NO una plantilla que deba aparecer con el mismo ritmo en cada escena.
-- Varía el mecanismo. Progresión, malentendido, romance, misterio, venganza o poder oculto sólo aparecen si pertenecen al concepto y género elegidos. Nunca metas "sistema", humillación o romance porque una referencia los usara.
-- El final respeta el tipo de cierre elegido: una historia completa paga su conflicto central; un cliffhanger resuelve un tramo y abre un problema concreto. Nunca cortes por falta de texto.`;
+const REGISTRO_LONGFORM_REFERENCIA = `HUELLA NARRATIVA DE LAS REFERENCIAS ESTUDIADAS — esto manda sobre la prosa:
+- SUENA A HISTORIA CONTADA EN YOUTUBE, NO A NOVELA. Español oral, claro y directo. El tiempo avanza oración por oración.
+- ARRANQUE: en las primeras 2-4 frases ya hay una persona concreta dentro de un problema concreto. Prohibido abrir con clima, paisaje, historia del mundo o una reflexión abstracta.
+- FRASE: normalmente 8-18 palabras, una acción/idea principal por oración. Evita cadenas de subordinadas, prosa ornamental y párrafos que "ambientan" sin mover nada.
+- RITMO DE VOZ: acción o dato -> frase directa/pensamiento -> reacción o consecuencia. Varía el patrón, pero no dejes bloques largos donde sólo el narrador explica.
+- DIÁLOGO REAL: cuando una confrontación, negociación, broma, amenaza o confesión importa, deja que el personaje la diga. No la resumas como "discutieron" o "él le explicó". En modo narrado, la misma voz leerá esas frases; siguen siendo diálogo directo.
+- PUNTO DE VISTA CERCANO: el espectador sabe lo que el protagonista acaba de ver/entender, no una explicación total del narrador. Evita "sin saber que...", "el destino tenía otros planes", "lo que nadie sabía era..." salvo que la historia cambie deliberadamente de frente y muestre esa información.
+- MICROCAMBIOS: cada 30-60 segundos debe ocurrir algo concreto que altere información, relación, objetivo, recurso, amenaza o posición. Cada 5-8 minutos debe haber un giro de mayor peso. No significa pelea: significa CAMBIO.
+- COBRAR LOS GIROS: después de una revelación importante, muestra quién reacciona, qué decide y qué cambia. No saltes a otro tema como una lista de acontecimientos.
+- COMPRESIÓN, NO RESUMEN VACÍO: omite trayectos y explicaciones obvias, pero dramatiza los momentos donde cambia algo. "Pasaron tres días" puede durar una frase; una traición, una decisión o una humillación necesita acción + frase + reacción.
+- LENGUAJE CONCRETO: dinero, tiempo, rangos, objetos, promesas, puertas, heridas, mensajes, contratos, comida, recursos. Menos "sentía una mezcla indescriptible"; más qué hace porque siente eso.
+- PROHIBIDO EL TONO IA/LITERARIO: nada de "el aire estaba cargado de tensión", "sus ojos reflejaban mil emociones", "un silencio ensordecedor llenó la habitación", "el destino estaba a punto de cambiar", ni moralejas al final de cada bloque.
+- PROHIBIDO REEXPLICAR: si el espectador ya sabe una regla, una relación o un objetivo, no vuelvas a explicarlo salvo que nueva información lo cambie.
+- NO HAY MINI-REEL POR ESCENA. Una historia de 60-90 minutos respira, pero incluso la respiración cambia relación, información o expectativa.
+- La historia puede usar progresión, romance, misterio, venganza, sistema, reencarnación o poder oculto sólo si pertenecen al concepto elegido. No copies una trama de referencia; copia su MECÁNICA DE NARRACIÓN Y RETENCIÓN.
+`;
 
 const PROMPT_ES_UN_PLANO = `⚠️ EL PROMPT DE IMAGEN NO ES LA NARRACIÓN: ES LA ORDEN DE UN PLANO.
 La narración puede ser todo lo explícita que el género pida — a ella no la filtra nadie. Al generador de
@@ -3580,15 +3583,18 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
       || 'un personaje con nombre ya metido en lo que el género considera un problema';
 
     const storyModeRules = storyMode === 'cast'
-      ? `MODO DRAMATIZADO — VOCES POR PERSONAJE:
-- Escribe una historia muy dialogada. El narrador sólo une saltos temporales, antecedentes o información imposible de ver.
-- Los pensamientos pertenecen al personaje que los piensa y deben poder leerse con SU misma voz.
-- Cada intervención debe dejar claro por contexto quién habla; evita párrafos donde tres voces se mezclen sin anclaje.
-- No escribas acotaciones teatrales para ser pronunciadas. La acción se cuenta brevemente o se muestra visualmente.`
+      ? `MODO VOCES POR PERSONAJE:
+- El diálogo y los pensamientos son el cuerpo de la escena. Como objetivo editorial, cuando la situación lo permita, 60-80% de las palabras pronunciadas vienen de personajes; el narrador sólo conecta tiempo, lugar, antecedentes o información imposible de decir naturalmente.
+- Cada frase importante se escucha DIRECTAMENTE del personaje que la piensa o la dice. No conviertas una discusión en "ellos discutieron durante varios minutos".
+- El narrador jamás describe una emoción que el diálogo y la acción ya dejan clara.
+- No escribas nombres de hablante ni acotaciones teatrales dentro de la frase; el etiquetado de voces se hace después.
+- Las intervenciones son cortas y reactivas: alguien quiere algo, otro responde, eso cambia la situación.`
       : `MODO NARRADO — UNA VOZ PRINCIPAL:
-- Una sola voz contará la historia y también leerá las frases de los personajes, como en un resumen dramatizado.
-- La prosa debe fluir al oído: narración, pensamiento y diálogo se distinguen por redacción y contexto, no por etiquetas técnicas.
-- Usa diálogo directo con frecuencia, pero el narrador puede enlazar acciones y saltos sin convertirlo en una obra teatral.`;
+- Copia la cadencia de los resúmenes largos estudiados: una sola voz conduce, pero LOS PERSONAJES SIGUEN HABLANDO EN DIRECTO dentro de la narración.
+- No suena a audiolibro. Suena a alguien contándote lo que acaba de pasar, paso a paso, con frases cortas y hechos concretos.
+- Cuando el protagonista habla o piensa algo que mueve la escena, escribe esa frase. No la sustituyas por "le dijo que..." o "pensó que...".
+- La narración comprime lo rutinario y se detiene en el cambio: decisión, amenaza, revelación, humillación, descubrimiento, negociación, giro afectivo.
+- EJEMPLO DE CADENCIA (inventado, no pertenece a ninguna referencia): "Vuelvo a casa y la puerta está abierta. No debería haber nadie. Entro y veo a mi hermano sentado en mi sofá. —Pensé que no volverías. Hace tres años que no lo veo, y lo primero que hace es pedirme dinero." Ese es el registro: acción -> frase -> reacción; no descripción ornamental.`;
 
     const endingRule = endingMode === 'complete'
       ? `CIERRE COMPLETO: el conflicto central de ESTA historia queda pagado. Puede quedar mundo para otras historias, pero el espectador no termina sintiendo que faltó el último acto. La última secuencia muestra la consecuencia de la decisión final.`
@@ -3877,7 +3883,7 @@ Responde SOLO JSON válido sin markdown.`;
     // Pressing Generate again resumes from the first missing block.
     const episodeInstructionsNow = document.getElementById('episodeInstructions')?.value.trim() || '';
     const draftSignature = JSON.stringify({
-      v: 2, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
+      v: 3, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
       storyMode, endingMode, instructions: episodeInstructionsNow,
       title: u.title || '', concept: u.concepto || '', conflict: u.conflicto || '',
       demo: u.demo || '', genero: u.genero || '', subgenres,
@@ -3912,22 +3918,74 @@ Responde SOLO JSON válido sin markdown.`;
       ? `{"id":"s1","num":1,"title":"título corto","narration":"texto legible de la escena","interventions":[{"type":"narrator|dialogue|thought|system","speakerId":"narrator|system|ID_DEL_PERSONAJE","text":"texto que se pronuncia"}]}`
       : `{"id":"s1","num":1,"title":"título corto","narration":"fragmento completo y natural de la historia"}`;
 
+    function problemasDeRegistroReferencia(story, esApertura) {
+      const txt = String(story || '').trim();
+      const sentences = (txt.match(/[^.!?…]+[.!?…]+/g) || []).map(x => x.trim()).filter(Boolean);
+      const counts = sentences.map(x => x.split(/\s+/).filter(Boolean).length);
+      const avg = counts.length ? counts.reduce((a,b)=>a+b,0) / counts.length : 999;
+      const longRatio = counts.length ? counts.filter(n => n > 30).length / counts.length : 1;
+      const low = txt.toLowerCase();
+      const problems = [];
+
+      if (avg > 22) problems.push(`frases demasiado largas (media ${avg.toFixed(1)} palabras)`);
+      if (longRatio > 0.22) problems.push('demasiadas frases de más de 30 palabras');
+
+      if (esApertura) {
+        const first = low.split(/\s+/).slice(0, 45).join(' ');
+        if (/^(el sol|la lluvia|el cielo|la noche|el viento|el aire|era una|en un mundo|desde tiempos|la ciudad|aquella mañana)/.test(first)) {
+          problems.push('abre con ambientación en vez de una persona dentro del problema');
+        }
+      }
+
+      const literary = [
+        /el aire (?:estaba|se sentía) cargado/,
+        /sus ojos reflejaban/,
+        /silencio ensordecedor/,
+        /el destino (?:tenía|estaba)/,
+        /una mezcla (?:de emociones|indescriptible)/,
+        /no podía evitar preguntarse/,
+        /en lo más profundo de su (?:ser|corazón)/,
+        /como si el tiempo se hubiera detenido/
+      ];
+      const literaryHits = literary.reduce((n,re)=>n+(re.test(low)?1:0),0);
+      if (literaryHits >= 2) problems.push('prosa literaria/IA en lugar de voz oral directa');
+
+      // Direct speech is part of both reference families. The dash/quotes are
+      // only writing punctuation; TTS does not read them as speaker labels.
+      const directMarks = (txt.match(/[—“”«»]/g) || []).length + (txt.match(/"[^"]{3,}"/g) || []).length;
+      const wc = txt.split(/\s+/).filter(Boolean).length;
+      const minDirect = storyMode === 'cast'
+        ? Math.max(4, Math.floor(wc / 180))
+        : Math.max(2, Math.floor(wc / 450));
+      if (directMarks < minDirect) problems.push('casi no hay diálogo directo; suena a resumen expositivo');
+
+      return problems;
+    }
+
     async function generateStoryPart(prompt, minWords) {
       let lastErr = '';
+      let styleFeedback = '';
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
-          const raw = await callGemini(prompt, sysBase + genreExtra);
+          const attemptPrompt = prompt + styleFeedback;
+          const raw = await callGemini(attemptPrompt, sysBase + genreExtra);
           const parsed = safeParseJSON(raw);
           const story = String(parsed.story || '').trim();
           const wc = story.split(/\s+/).filter(Boolean).length;
-          if (story && wc >= minWords) return story;
-          lastErr = story ? `demasiado corto (${wc} palabras, mínimo ${minWords})` : 'respuesta vacía o sin campo "story"';
+          if (story && wc >= minWords) {
+            const problems = problemasDeRegistroReferencia(story, prompt.includes('BLOQUE DE APERTURA'));
+            if (!problems.length) return story;
+            lastErr = 'registro narrativo fuera de la referencia: ' + problems.join('; ');
+            styleFeedback = `\n\nREINTENTO OBLIGATORIO: el bloque anterior fue rechazado por el editor porque ${problems.join('; ')}. Conserva los mismos acontecimientos pedidos, pero vuelve a escribir DESDE CERO con la huella narrativa indicada: español oral, frases cortas, diálogo directo y progresión concreta. Devuelve otra vez sólo {"story":"..."}.`;
+          } else {
+            lastErr = story ? `demasiado corto (${wc} palabras, mínimo ${minWords})` : 'respuesta vacía o sin campo "story"';
+          }
         } catch (e) {
           lastErr = e.message;
         }
         if (attempt < 3) await new Promise(r => setTimeout(r, 1800));
       }
-      throw new Error(`Google no completó este bloque de historia: ${lastErr}. No se aceptará un bloque corto para rellenarlo después con escenas inventadas.`);
+      throw new Error(`Google no completó este bloque de historia con el registro requerido: ${lastErr}. El borrador se conserva; no se aceptará prosa fuera de la fórmula ni un bloque corto para rellenarlo después.`);
     }
 
     function buildLongformPartBriefs(parts, completeEnding) {
@@ -4234,8 +4292,11 @@ Decide 1, 2 o 3 ILUSTRACIONES distintas por FUNCIÓN EDITORIAL:
 - Los planos son momentos CONSECUTIVOS: prompt 1 = primer beat, y el último = la consecuencia o revelación con la que cierra el fragmento.
 - COBERTURA TOTAL: entre todos quedan ilustrados los eventos del texto en orden cronológico. Si la narración cuenta dos acciones (ej.: repara el grifo Y cuenta los granos de arroz), los planos las REPARTEN — PROHIBIDO gastar varios planos en la misma acción.
 - ⚠️ CAUSALIDAD ESTRICTA — cada prompt describe SOLO el estado del mundo en SU momento: lo que se revela DESPUÉS no puede verse ANTES (si todavía no abrió la puerta, el interior, el cuerpo o la sangre NO son visibles en ese prompt; si todavía no agarró el frasco, no lo tiene en la mano). Y lo ya ocurrido NO se deshace (si la puerta ya se abrió en el beat 2, en el beat 3 sigue abierta).
+- PROHIBIDO ADELANTAR EL PLANO 1: el primer plano representa el PRIMER beat visible de la narración, no el momento más dramático de toda la escena. Si más tarde alguien cae, se sienta, se hiere, entra o desaparece, esa condición NO existe todavía en el plano 1.
+- ESTADO FÍSICO ACUMULATIVO: entre plano 1→2→3 llevas una cuenta mental de QUIÉN está presente, DÓNDE está, qué sostiene, qué puertas/objetos están abiertos/cerrados y qué lesión/ropa tiene. Nada cambia sin que la narración lo cambie. Un corte de cámara NO teletransporta ni borra personajes.
+- FUERA DE CUADRO ≠ DESAPARECIDO: un personaje puede no verse porque el encuadre cambió, pero sólo uses ese recurso si el beat realmente enfoca otra cosa. Si la acción sigue siendo del protagonista, mantenlo visible y espacialmente coherente.
 - LA POSICIÓN AVANZA: si el texto dice que el personaje se mueve (entra, cruza, se agacha, sale, llega a otra parte del lugar), el prompt de ese beat lo muestra YA en la nueva posición con la acción completada — ej.: beat "gira el pomo y entra" → el prompt lo muestra DENTRO de la habitación con la puerta abierta detrás de él viendo lo que hay, NO tocando la puerta otra vez.
-- CONTINUIDAD OBLIGATORIA entre los planos de una escena: MISMO escenario asignado, MISMA ropa y peinado de cada personaje, MISMA iluminación y clima. Lo que SÍ cambia: la acción (avanza), la posición de los personajes en el espacio, el estado de los objetos según el texto, y el ÁNGULO de cámara — los encuadres deben ser claramente distintos entre sí, y el ángulo se elige al servicio de cada beat (no uses una plantilla fija).
+- CONTINUIDAD OBLIGATORIA entre los planos de una escena: MISMO escenario asignado, MISMA ropa y peinado de cada personaje, MISMA iluminación y clima, MISMO estado acumulado de objetos y cuerpos. Lo que SÍ cambia: la acción cuando el texto la cambia, la posición cuando el texto la cambia, y el ÁNGULO de cámara. Los encuadres deben ser claramente distintos entre sí, pero el espacio y los cuerpos siguen siendo el mismo mundo físico.
 - CONTINUIDAD ENTRE ESCENAS: un CORTE es normal. Marca "continuarAnterior": true SOLO cuando la nueva escena ocurre segundos después, en el mismo lugar, con la misma ropa y la acción depende físicamente del estado exacto del plano anterior. Un mismo escenario visitado horas después NO es continuidad de fotograma.
 - INTEGRACIÓN FÍSICA: el personaje está DENTRO del espacio — apoyado, sentado o de pie sobre algo que ESE lugar ya tiene, con sombras e iluminación coherentes. NUNCA debe verse como un personaje pegado sobre un fondo. Para lograrlo usá el mobiliario que la descripción del escenario ya menciona; no inventes un mueble nuevo solo para tener con qué interactuar.
 - CÁMARA LIBRE EN EL LUGAR: a lo largo del episodio mostrá el MISMO lugar desde posiciones y ángulos DIFERENTES (desde la puerta, desde la ventana, ángulo bajo, over-shoulder, rincones distintos) — no repitas siempre el mismo encuadre del escenario.
@@ -4310,6 +4371,49 @@ Responde SOLO JSON válido sin markdown`;
       return 1;
     }
 
+    // Every planned shot must prove WHICH exact words of the narration it covers.
+    // This prevents a late event ("ya está tirado en el suelo") from leaking into
+    // shot 1 just because the art model saw the whole scene at once.
+    function tokensCronologia(texto) {
+      return String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().replace(/[^a-z0-9ñü]+/gi, ' ').trim().split(/\s+/).filter(Boolean);
+    }
+    function buscarSecuencia(haystack, needle, desde = 0) {
+      if (!needle.length || needle.length > haystack.length) return -1;
+      outer: for (let i = Math.max(0, desde); i <= haystack.length - needle.length; i++) {
+        for (let j = 0; j < needle.length; j++) if (haystack[i + j] !== needle[j]) continue outer;
+        return i;
+      }
+      return -1;
+    }
+    function validarAnclasNarrativas(scene, plan) {
+      const prompts = (plan?.prompts || []).filter(Boolean);
+      const anclas = (plan?.anclasNarrativas || []).slice(0, prompts.length);
+      if (!prompts.length || anclas.length !== prompts.length) return false;
+      const narr = tokensCronologia(scene?.narration);
+      if (!narr.length) return false;
+      const pos = [];
+      let desde = 0;
+      for (const a of anclas) {
+        const tok = tokensCronologia(a);
+        // 4-14 consecutive words copied from the narration: enough to prove
+        // chronology without turning the anchor into another prompt.
+        if (tok.length < 4 || tok.length > 14) return false;
+        const p = buscarSecuencia(narr, tok, desde);
+        if (p < 0) return false;
+        pos.push(p);
+        desde = p + tok.length;
+      }
+      if (prompts.length >= 2) {
+        // Shot 1 must genuinely cover the beginning, not jump to a later state.
+        if (pos[0] > narr.length * 0.38) return false;
+        // The last shot must reach the later half of the scene rather than
+        // spending every composition on the same opening beat.
+        if (pos[pos.length - 1] < narr.length * 0.45) return false;
+      }
+      return true;
+    }
+
     // Shot prompts + the motion of each shot, onto the scene.
     function aplicarPlanos(s, p) {
       const [a, b, c] = p?.prompts || [];
@@ -4317,6 +4421,7 @@ Responde SOLO JSON válido sin markdown`;
       const [va, vb, vc] = p?.videoRecomendado || [];
       const [ca, cb, cc] = p?.continuos || [];
       const [pa, pb, pc] = p?.pesos || [];
+      const [na, nb, nc] = p?.anclasNarrativas || [];
       const peso = v => {
         const n = Number(v);
         return Number.isFinite(n) && n > 0 ? Math.min(5, Math.max(1, n)) : 1;
@@ -4332,6 +4437,7 @@ Responde SOLO JSON válido sin markdown`;
         ...s,
         escenario: p?.escenario || '',
         imagePromptA: a || '', imagePromptB: b || '', imagePromptC: c || '',
+        anclaNarrativaA: a ? (na || '') : '', anclaNarrativaB: b ? (nb || '') : '', anclaNarrativaC: c ? (nc || '') : '',
         tamanoA: a ? tam(0) : '', tamanoB: b ? tam(1) : '', tamanoC: c ? tam(2) : '',
         videoPromptA: ma || '', videoPromptB: mb || '', videoPromptC: mc || '',
         videoRecommendedA: !!(a && va === true),
@@ -4354,8 +4460,9 @@ Responde SOLO JSON válido sin markdown`;
       const scenesText = scenesForPrompt.map(s =>
         `Escena ${s.num} [${s.act}] "${s.title}" — MÍNIMO ${minPlanosPorTexto(s.narration)} plano(s): ${s.narration}`
       ).join('\n\n');
-      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales. El texto ya te indica el MÍNIMO permitido por su duración estimada. Genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":3,"continuarAnterior":false,"prompts":["Scene with...","Scene with...","Scene with..."],"tamanos":["general","cerca","medio"],"pesos":[2,1,2],"videoRecomendado":[false,false,true],"movimientos":["...","...","..."],"continuos":[false,false,false]},...]} con EXACTAMENTE ${scenesForPrompt.length} objetos. "prompts", "tamanos", "pesos", "videoRecomendado", "movimientos" y "continuos" llevan exactamente la cantidad de planos elegida.
+      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales. El texto ya te indica el MÍNIMO permitido por su duración estimada. Genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":3,"continuarAnterior":false,"anclasNarrativas":["4-14 palabras consecutivas COPIADAS de la narración para el plano 1","...plano 2","...plano 3"],"prompts":["Scene with...","Scene with...","Scene with..."],"tamanos":["general","cerca","medio"],"pesos":[2,1,2],"videoRecomendado":[false,false,true],"movimientos":["...","...","..."],"continuos":[false,false,false]},...]} con EXACTAMENTE ${scenesForPrompt.length} objetos. "anclasNarrativas", "prompts", "tamanos", "pesos", "videoRecomendado", "movimientos" y "continuos" llevan exactamente la cantidad de planos elegida.
 
+⚠️ "anclasNarrativas": para CADA plano copia literalmente 4-14 PALABRAS CONSECUTIVAS de la narración que ese plano ilustra. Deben aparecer EN ORDEN y sin solaparse. Es una prueba mecánica de cronología: plano 1 usa palabras del inicio real; el último llega a la mitad/final real. Si el personaje cae al suelo más tarde, el plano 1 NO puede mostrarlo en el suelo.
 ⚠️ "tamanos": general | medio | cerca | escorzo | detalle. Elige el tamaño por FUNCIÓN DRAMÁTICA.
 ⚠️ "pesos": enteros 1–5 y representan DURACIÓN RELATIVA EN PANTALLA, no calidad. 1 = insert/reacción muy corta; 2–3 = frase o beat normal; 4–5 = beat dominante. Úsalos para que el corte visual caiga donde cambia la frase/acción, no en tercios matemáticos.
 "videoRecomendado" es true SÓLO cuando el movimiento temporal necesita Veo; false cuando una ilustración con montaje de cámara es suficiente. Esto es una recomendación del director, no un bloqueo: el usuario puede animar cualquier plano manualmente. Sólo cuando "continuos" sea true, dos fotogramas deben describir estados físicamente compatibles para una interpolación corta.`;
@@ -4369,8 +4476,12 @@ Responde SOLO JSON válido sin markdown`;
           for (const p of arr) {
             const scene = scenesForPrompt.find(s => Number(s.num) === Number(p?.num));
             const min = scene ? minPlanosPorTexto(scene.narration) : 1;
-            if (p && p.num && Array.isArray(p.prompts) && p.prompts.filter(Boolean).length >= min) {
+            if (p && p.num && Array.isArray(p.prompts)
+                && p.prompts.filter(Boolean).length >= min
+                && validarAnclasNarrativas(scene, p)) {
               accumulated.set(Number(p.num), p);
+            } else if (scene && p?.num) {
+              console.warn(`Dirección visual rechazada en escena ${scene.num}: los planos no prueban la cronología del texto`);
             }
           }
           if (scenesForPrompt.every(s => accumulated.has(Number(s.num)))) {
@@ -5282,6 +5393,15 @@ function buildSceneEnvContext(s) {
   return { envText };
 }
 
+// The DP stores a literal excerpt of the narration for each shot. Sending that
+// excerpt to the image model as a chronology LIMIT prevents it from choosing a
+// more dramatic event that occurs later in the same scene.
+function limiteCronologicoPlano(s, slot) {
+  const a = String(s?.['anclaNarrativa' + slot] || '').trim();
+  if (!a) return '';
+  return ` CHRONOLOGY LIMIT — this shot corresponds EXACTLY to this narration beat: "${a}". Depict the world at this moment only. Do NOT include actions, injuries, positions, objects or reveals that occur later in the scene. Preserve every state already established before this beat unless this beat changes it.`;
+}
+
 // The location anchor, appended BEHIND the shot prompt before it goes to the
 // image model. Both were arriving as mandatory at once, which is how a desk from
 // a classroom prompt and a corridor description ended up drawn on top of each
@@ -5341,7 +5461,7 @@ async function armarEnvioDeEscena(s, slot) {
     env.planoPrevio = previo && s[previo] ? planoEn(s[previo]) : '';
     env.planoNuevo = planoEn(tam);
   }
-  return { base, tuTexto: base, prompt: conPlano + ancla, refs, ancla, sinFicha, env, desdeNarracion };
+  return { base, tuTexto: base, prompt: conPlano + ancla + limiteCronologicoPlano(s, slot), refs, ancla, sinFicha, env, desdeNarracion };
 }
 
 // El texto COMPLETO tal y como lo lee Google, con el añadido del cliente incluido.
@@ -5421,12 +5541,16 @@ window.generateSceneImageAB = async function(sceneId, slot) {
   const conPlano = tam ? `${planoEn(tam)}. ${base}` : base;
   showToast(`Generando imagen ${slot} escena ${s.num}...`, 'success');
   try {
+    const faltanRefs = await referenciasNombradasFaltantes(conPlano);
+    if (faltanRefs.length) {
+      throw new Error(`Antes de gastar otra imagen, genera la referencia maestra de: ${faltanRefs.join(', ')} en la pestaña Personajes. Sin esa ficha, la cara puede cambiar entre planos.`);
+    }
     // Quién sale, su ficha dibujada si la tiene, y su descripción si no.
     const { refs, ancla, sinFicha } = await repartoDeLaEscena(conPlano, s);
     if (sinFicha.length) {
-      showToast(`${sinFicha.join(', ')} sin ficha generada: se dibuja del texto`, 'error');
+      showToast(`${sinFicha.join(', ')} no fue reconocido de forma explícita en el plano; se usa el ancla textual`, 'error');
     }
-    const prompt = conPlano + ancla;
+    const prompt = conPlano + ancla + limiteCronologicoPlano(s, slot);
     const env = buildSceneEnvContext(s);
     env.desdeNarracion = desdeNarracion;
     env.continuityRef = await getContinuityRef(s, slot);
@@ -5560,6 +5684,18 @@ async function repartoDeLaEscena(prompt, escena) {
     ancla: anclaDeFicha(conEstado),
     sinFicha: conEstado.filter(c => !c.tieneImagen).map(c => c.name),
   };
+}
+
+// If the director explicitly names a recurring character in a shot, generating
+// without that character's master reference is a quality bug, not a harmless
+// fallback. The batch path already refused this; the single-shot path did not.
+async function referenciasNombradasFaltantes(prompt) {
+  const named = seleccionarRefs(prompt, state.characters || []);
+  const missing = [];
+  for (const ch of named) {
+    if (!(await dbGet(charImgKey(ch.id)))) missing.push(ch.name);
+  }
+  return missing;
 }
 
 async function getRefsForPrompt(prompt) {
@@ -6027,7 +6163,7 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
       const imgB64 = await conEsperaDeCuota(async () => {
         const contRef = await getContinuityRef(s, ab);
         const previo = { B: 'tamanoA', C: 'tamanoB' }[ab];
-        return generateImageRaw(prompt + anclaDeEscena(prompt, s), refsDeEscena(prompt, s), {
+        return generateImageRaw(prompt + anclaDeEscena(prompt, s) + limiteCronologicoPlano(s, ab), refsDeEscena(prompt, s), {
           ...envForScene(s), continuityRef: contRef, desdeNarracion,
           planoPrevio: (contRef && tam && previo && s[previo]) ? planoEn(s[previo]) : '',
           planoNuevo: (contRef && tam) ? planoEn(tam) : '',
@@ -6283,7 +6419,7 @@ Escribe la BIBLIA DE DIRECCIÓN. El universo y la sinopsis ya son buenos: proté
 Devuelve JSON:
 {
   "direccionVisual": "SOLO paleta concreta (3-4 colores), tratamiento de luz, composición y motivos visuales. El render ya está fijado como anime japonés 2D; no lo redefinas. 3-4 frases ejecutables.",
-  "narrativa": "La VOZ del relato. Elige UNA: primera_presente | tercera_presente | tercera_pasado | segunda. Elige la que sirva al concepto, no por una regla de manhua. Sólo el identificador.",
+  "narrativa": "${u.storyMode === 'cast' ? 'tercera_presente' : 'Para modo narrado elige UNA: primera_presente | tercera_presente. Prefiere primera_presente cuando hay un protagonista claro; usa tercera_presente sólo si la historia necesita seguir varios frentes. Nunca segunda ni tercera_pasado en proyectos nuevos. Devuelve sólo el identificador.'}",
   "identidadMusical": "Familia instrumental, textura y tempo del colchón musical. Debe acompañar voz durante mucho tiempo sin competir con ella. 2-3 frases.",
   "ritmo": "Cómo respira una historia LARGA: dónde acelera, dónde deja reaccionar una revelación y cómo alterna presión/relación/descubrimiento. 2-3 frases.",
   "ritmoVisual": "Cadencia de MONTAJE para esta serie dentro de la fórmula base: composición nueva normalmente cada 3–7 s, 4–6 s en diálogo estable y 2–4 s en tensión/acción/comedia. Explica en 1–2 frases cuándo esta serie usa el extremo rápido o el lento, sin romper esos rangos.",
@@ -6294,6 +6430,12 @@ Devuelve JSON:
 
   const raw = await callGemini(prompt, directorSystemPrompt(u.genero, comedyMode));
   const bible = safeParseJSON(raw);
+  const allowedNarratives = u.storyMode === 'cast'
+    ? ['tercera_presente']
+    : ['primera_presente', 'tercera_presente'];
+  if (!allowedNarratives.includes(bible.narrativa)) {
+    bible.narrativa = u.storyMode === 'cast' ? 'tercera_presente' : 'primera_presente';
+  }
   state.universe.bible = bible;
   saveState();
   return bible;
