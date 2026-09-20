@@ -140,7 +140,7 @@ El correo de tu cuenta de Google **no está hardcodeado**. Abre Cloud Shell desd
 bash setup.sh
 ```
 
-El instalador muestra primero la **cuenta Google activa** y el **proyecto activo**; si no puede acceder a ese proyecto, se detiene sin crear recursos. Después prepara APIs, un bucket propio para Anime-AI-Studio y el montador. Para la cuenta de servicio, **reutiliza automáticamente una cuenta existente si solo hay una**; si hay varias, las muestra por número para elegir sin escribir correos largos. No hay ningún correo, project ID, clave ni token hardcodeado en el repositorio. Finalmente actualiza en Vercel `GCP_SERVICE_ACCOUNT` y `GCS_OUTPUT_BUCKET` y haz redeploy.
+El instalador muestra primero la **cuenta Google activa** y el **proyecto activo**; si no puede acceder a ese proyecto, se detiene sin crear recursos. Después prepara APIs, un bucket propio para Anime-AI-Studio y el montador. Para la cuenta de servicio, **reutiliza automáticamente una cuenta existente si solo hay una**; si hay varias, las muestra por número para elegir sin escribir correos largos. Después busca en Cloud Shell una **clave JSON ya existente que pertenezca exactamente a esa misma service account** y la reutiliza; `./i` no crea una clave nueva por defecto. Sólo `bash setup.sh key` crea otra si de verdad no existe una utilizable. No hay ningún correo, project ID, clave ni token hardcodeado en el repositorio. Finalmente actualiza en Vercel `GCP_SERVICE_ACCOUNT` y `GCS_OUTPUT_BUCKET` y haz redeploy.
 
 En el proyecto nuevo hacen falta:
 
