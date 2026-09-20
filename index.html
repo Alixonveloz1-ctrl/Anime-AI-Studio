@@ -6296,6 +6296,7 @@ window.generateSceneVideo = async function(sceneId, slot = 'A') {
       lastFrameMimeType: final ? final.mimeType : undefined,
       durationSeconds: segundos,
       aspectRatio,
+      studioProjectId: state.projectId,
       generateAudio: false,
       veoModel: document.getElementById('veoModelSelect')?.value || undefined,
     });
