@@ -2499,7 +2499,7 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
 
   const styleSpec = estiloCore(opts.estilo);
   const fullBleed = ' FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side. The artwork must extend completely to all four edges of the image.';
-  const sceneIntegration = ' ALL characters named in this prompt are visible in the frame, actively in the scene, NOT posing, NOT looking at camera. Side angle or 3/4 view. Characters drawn at true real-world scale inside the environment — feet grounded with contact shadows, natural headroom, matching the perspective and lighting of the scene; never oversized or pasted over the background.';
+  const sceneIntegration = ' NARRATIVE ANIME FRAME — this is a moment from an ongoing scene, NEVER a character portrait, poster, model sheet or promotional pose. Characters act toward each other, toward an object, or toward the event described; they do NOT pose, do NOT stand front-and-center just to be seen, and do NOT look at the camera. Preserve the established blocking: a camera cut changes framing, not where people physically are. All characters named for THIS shot are visible when the shot requires them; characters intentionally outside the crop still remain in their established off-screen position. Use side, 3/4, over-shoulder, from-behind or contextual wide framing as the beat requires. Characters stay at true real-world scale inside the environment — feet grounded with contact shadows, natural headroom, matching perspective and lighting; never oversized or pasted over the background.';
   const noLookSuffix = opts.charSheet ? (' ' + styleSpec + fullBleed) : (' ' + styleSpec + sceneIntegration + fullBleed);
   const cleanPrompt = (String(prompt || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
@@ -4999,6 +4999,20 @@ Decide 1, 2 o 3 ILUSTRACIONES distintas por FUNCIÓN EDITORIAL:
 - CÁMARA LIBRE EN EL LUGAR: a lo largo del episodio mostrá el MISMO lugar desde posiciones y ángulos DIFERENTES (desde la puerta, desde la ventana, ángulo bajo, over-shoulder, rincones distintos) — no repitas siempre el mismo encuadre del escenario.
 - VESTIMENTA FIEL AL MOMENTO: usa la prenda ACTUAL que corresponde a esta escena y conserva su material/condición entre planos. La ficha fija identidad, no obliga a llevar siempre la ropa de la primera referencia.
 
+⚠️ DECISIÓN 2B — BLOQUEO Y CONTINUIDAD FÍSICA (OBLIGATORIO EN TODAS LAS HISTORIAS):
+Antes de escribir los prompts, construí un mapa físico de la escena. La cámara puede cortar; los cuerpos no se teletransportan.
+- "layoutEscena": EN INGLÉS, dónde está cada personaje respecto de los demás y de los elementos fijos al COMENZAR la escena: izquierda/derecha/fondo, de pie/sentado/arrodillado, orientación, objetos que sostiene, heridas y puertas/objetos abiertos o cerrados.
+- "estadoEscenaInicial": EN INGLÉS, el estado físico acumulado justo antes del plano 1.
+- Para CADA plano:
+  - "funciones": establishing | interaction | action | speaker | reaction | insert | consequence. NUNCA portrait.
+  - "personajesVisibles": nombres EXACTOS de quienes están dentro del encuadre; máximo 3. Quien queda fuera de cuadro NO desaparece: sigue en su posición del layout.
+  - "cambios": el cambio visible que ocurre DURANTE ese plano. Si nadie cambia de posición, decilo.
+  - "estadosDespues": el estado físico acumulado DESPUÉS del plano. El plano siguiente parte de ese estado; jamás reinicia la escena.
+- Si interactúan 2+ personajes, al menos un plano establece o recuerda claramente su relación espacial (establishing o interaction). PROHIBIDO resolver una interacción como retratos aislados A → B → C sin geografía compartida.
+- Un primer plano o reacción puede aislar a una persona, pero se comporta como cobertura cinematográfica: esa persona responde a alguien/algo fuera de cuadro, nunca posa para el espectador.
+- No pongas a distintos personajes ocupando mágicamente la misma marca física entre cortes. Si alguien cruza el espacio, la narración tiene que justificarlo y "cambios" tiene que declararlo.
+- La imagen muestra el BEAT correspondiente, no un resumen ni sólo la acción final de toda la escena.
+
 ⚠️ DECISIÓN 3 — ¿ESTE PLANO MERECE VIDEO?
 Para CADA plano devuelve "videoRecomendado": true | false.
 La referencia real usa MAYORITARIAMENTE ilustraciones 2D con cortes, paneos y zooms; el video completo se reserva para momentos donde el TIEMPO del movimiento comunica algo que una imagen no puede.
@@ -5111,6 +5125,41 @@ Responde SOLO JSON válido sin markdown`;
       return true;
     }
 
+    function validarPuestaEnEscena(scene, plan) {
+      const prompts = (plan?.prompts || []).filter(Boolean);
+      const n = prompts.length;
+      if (!n) return false;
+      if (String(plan?.layoutEscena || '').trim().length < 40) return false;
+      if (String(plan?.estadoEscenaInicial || '').trim().length < 20) return false;
+
+      const funciones = (plan?.funciones || []).slice(0, n);
+      const visibles = (plan?.personajesVisibles || []).slice(0, n);
+      const cambios = (plan?.cambios || []).slice(0, n);
+      const estados = (plan?.estadosDespues || []).slice(0, n);
+      if ([funciones, visibles, cambios, estados].some(a => a.length !== n)) return false;
+
+      const permitidas = new Set(['establishing','interaction','action','speaker','reaction','insert','consequence']);
+      if (funciones.some(f => !permitidas.has(String(f || '').toLowerCase()))) return false;
+      if (visibles.some(v => !Array.isArray(v) || v.length > 3)) return false;
+      if (cambios.some(x => String(x || '').trim().length < 8)) return false;
+      if (estados.some(x => String(x || '').trim().length < 20)) return false;
+
+      if (n > 1 && new Set(funciones.map(f => String(f).toLowerCase())).size === 1
+          && ['speaker','reaction'].includes(String(funciones[0]).toLowerCase())) return false;
+
+      const narr = String(scene?.narration || '').toLowerCase();
+      const mentioned = (state.characters || []).filter(ch => {
+        const parts = String(ch.name || '').toLowerCase().split(/\s+/).filter(p => p.length >= 3);
+        return parts.some(p => narr.includes(p));
+      });
+      if (mentioned.length >= 2) {
+        const shared = visibles.some(v => v.length >= 2)
+          || funciones.some(f => ['establishing','interaction'].includes(String(f).toLowerCase()));
+        if (!shared) return false;
+      }
+      return true;
+    }
+
     // Shot prompts + the motion of each shot, onto the scene.
     function aplicarPlanos(s, p) {
       const [a, b, c] = p?.prompts || [];
@@ -5119,6 +5168,10 @@ Responde SOLO JSON válido sin markdown`;
       const [ca, cb, cc] = p?.continuos || [];
       const [pa, pb, pc] = p?.pesos || [];
       const [na, nb, nc] = p?.anclasNarrativas || [];
+      const [fa, fb, fc] = p?.funciones || [];
+      const [vaVis, vbVis, vcVis] = p?.personajesVisibles || [];
+      const [xa, xb, xc] = p?.cambios || [];
+      const [ea, eb, ec] = p?.estadosDespues || [];
       const peso = v => {
         const n = Number(v);
         return Number.isFinite(n) && n > 0 ? Math.min(5, Math.max(1, n)) : 1;
@@ -5133,6 +5186,15 @@ Responde SOLO JSON válido sin markdown`;
       return {
         ...s,
         escenario: p?.escenario || '',
+        visualEngineVersion: 2,
+        layoutEscena: String(p?.layoutEscena || '').trim(),
+        estadoEscenaInicial: String(p?.estadoEscenaInicial || '').trim(),
+        funcionA: a ? (fa || '') : '', funcionB: b ? (fb || '') : '', funcionC: c ? (fc || '') : '',
+        personajesVisiblesA: a ? (Array.isArray(vaVis) ? vaVis : []) : [],
+        personajesVisiblesB: b ? (Array.isArray(vbVis) ? vbVis : []) : [],
+        personajesVisiblesC: c ? (Array.isArray(vcVis) ? vcVis : []) : [],
+        cambioVisibleA: a ? (xa || '') : '', cambioVisibleB: b ? (xb || '') : '', cambioVisibleC: c ? (xc || '') : '',
+        estadoDespuesA: a ? (ea || '') : '', estadoDespuesB: b ? (eb || '') : '', estadoDespuesC: c ? (ec || '') : '',
         imagePromptA: a || '', imagePromptB: b || '', imagePromptC: c || '',
         anclaNarrativaA: a ? (na || '') : '', anclaNarrativaB: b ? (nb || '') : '', anclaNarrativaC: c ? (nc || '') : '',
         tamanoA: a ? tam(0) : '', tamanoB: b ? tam(1) : '', tamanoC: c ? tam(2) : '',
@@ -5157,9 +5219,11 @@ Responde SOLO JSON válido sin markdown`;
       const scenesText = scenesForPrompt.map(s =>
         `Escena ${s.num} [${s.act}] "${s.title}" — MÍNIMO ${minPlanosPorTexto(s.narration)} plano(s): ${s.narration}`
       ).join('\n\n');
-      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales. El texto ya te indica el MÍNIMO permitido por su duración estimada. Genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":3,"continuarAnterior":false,"anclasNarrativas":["4-14 palabras consecutivas COPIADAS de la narración para el plano 1","...plano 2","...plano 3"],"prompts":["Scene with...","Scene with...","Scene with..."],"tamanos":["general","cerca","medio"],"pesos":[2,1,2],"videoRecomendado":[false,false,true],"movimientos":["...","...","..."],"continuos":[false,false,false]},...]} con EXACTAMENTE ${scenesForPrompt.length} objetos. "anclasNarrativas", "prompts", "tamanos", "pesos", "videoRecomendado", "movimientos" y "continuos" llevan exactamente la cantidad de planos elegida.
+      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales. El texto ya te indica el MÍNIMO permitido por su duración estimada. Genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":3,"continuarAnterior":false,"layoutEscena":"physical blocking in English","estadoEscenaInicial":"cumulative physical state before shot 1","anclasNarrativas":["4-14 palabras consecutivas COPIADAS de la narración para el plano 1","...plano 2","...plano 3"],"funciones":["establishing","interaction","reaction"],"personajesVisibles":[["Nombre A","Nombre B"],["Nombre A","Nombre B"],["Nombre C"]],"cambios":["visible change during shot 1","visible change during shot 2","visible change during shot 3"],"estadosDespues":["cumulative state after shot 1","cumulative state after shot 2","cumulative state after shot 3"],"prompts":["Scene with...","Scene with...","Scene with..."],"tamanos":["general","medio","cerca"],"pesos":[2,2,1],"videoRecomendado":[false,false,false],"movimientos":["...","...","..."],"continuos":[false,false,false]},...]} con EXACTAMENTE ${scenesForPrompt.length} objetos. Todos los arrays por plano llevan EXACTAMENTE la cantidad de planos elegida.
 
 ⚠️ "anclasNarrativas": para CADA plano copia literalmente 4-14 PALABRAS CONSECUTIVAS de la narración que ese plano ilustra. Deben aparecer EN ORDEN y sin solaparse. Es una prueba mecánica de cronología: plano 1 usa palabras del inicio real; el último llega a la mitad/final real. Si el personaje cae al suelo más tarde, el plano 1 NO puede mostrarlo en el suelo.
+⚠️ "layoutEscena", "estadoEscenaInicial", "cambios" y "estadosDespues" son el contrato físico. Los prompts DEBEN obedecerlos. Un corte cambia la cámara, no la realidad. "personajesVisibles" usa sólo nombres exactos del reparto y NO significa que los demás abandonaron el lugar.
+⚠️ PROHIBIDO RETRATO PROMOCIONAL: ningún plano existe para enseñar lo bonito que se ve un personaje. Cada encuadre muestra una acción, interacción, reacción, información o consecuencia de ESTE beat.
 ⚠️ "tamanos": general | medio | cerca | escorzo | detalle. Elige el tamaño por FUNCIÓN DRAMÁTICA.
 ⚠️ "pesos": enteros 1–5 y representan DURACIÓN RELATIVA EN PANTALLA, no calidad. 1 = insert/reacción muy corta; 2–3 = frase o beat normal; 4–5 = beat dominante. Úsalos para que el corte visual caiga donde cambia la frase/acción, no en tercios matemáticos.
 "videoRecomendado" es true SÓLO cuando el movimiento temporal necesita Veo; false cuando una ilustración con montaje de cámara es suficiente. Esto es una recomendación del director, no un bloqueo: el usuario puede animar cualquier plano manualmente. Sólo cuando "continuos" sea true, dos fotogramas deben describir estados físicamente compatibles para una interpolación corta.`;
@@ -5175,10 +5239,11 @@ Responde SOLO JSON válido sin markdown`;
             const min = scene ? minPlanosPorTexto(scene.narration) : 1;
             if (p && p.num && Array.isArray(p.prompts)
                 && p.prompts.filter(Boolean).length >= min
-                && validarAnclasNarrativas(scene, p)) {
+                && validarAnclasNarrativas(scene, p)
+                && validarPuestaEnEscena(scene, p)) {
               accumulated.set(Number(p.num), p);
             } else if (scene && p?.num) {
-              console.warn(`Dirección visual rechazada en escena ${scene.num}: los planos no prueban la cronología del texto`);
+              console.warn(`Dirección visual rechazada en escena ${scene.num}: cronología o puesta en escena física inválida`);
             }
           }
           if (scenesForPrompt.every(s => accumulated.has(Number(s.num)))) {
@@ -5225,14 +5290,14 @@ Responde SOLO JSON válido sin markdown`;
         let done = null;
         const cachedVisual = longDraft.visualChunks[chunkIndex];
         const expectedNums = chunk.map(s => s.num).join(',');
-        if (cachedVisual?.nums === expectedNums && Array.isArray(cachedVisual.scenes) && cachedVisual.scenes.length === chunk.length) {
+        if (cachedVisual?.version === 2 && cachedVisual?.nums === expectedNums && Array.isArray(cachedVisual.scenes) && cachedVisual.scenes.length === chunk.length) {
           done = cachedVisual.scenes;
         } else {
           done = await generateImagePromptsBatch(chunk, prevContext);
           // The art director reviews what the DP just wrote before it is cached.
           const { correcciones } = await revisarPlanos(done);
           if (correcciones.length) console.log('Puesta en escena corregida:', aplicarCorrecciones(done, correcciones).motivos);
-          longDraft.visualChunks[chunkIndex] = { nums: expectedNums, scenes: done };
+          longDraft.visualChunks[chunkIndex] = { version: 2, nums: expectedNums, scenes: done };
           longDraft.updatedAt = Date.now();
           saveState();
         }
