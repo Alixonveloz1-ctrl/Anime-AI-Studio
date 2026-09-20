@@ -779,6 +779,7 @@ const sceneVidKeyA = id => `sva_${state.projectId}${epSfx()}_${id}`;
 // existed are still found.
 const sceneVidKeyBy = (id, slot) => slot === 'A' ? sceneVidKeyA(id)
   : `sv${slot.toLowerCase()}_${state.projectId}${epSfx()}_${id}`;
+const sceneVidOpKeyBy = (id, slot) => `vop${slot.toLowerCase()}_${state.projectId}${epSfx()}_${id}`;
 
 // Every stored file belonging to ONE episode of this project: the shot images,
 // the narration, the clips and the music.
@@ -786,7 +787,7 @@ const sceneVidKeyBy = (id, slot) => slot === 'A' ? sceneVidKeyA(id)
 // Careful with episode 1: its keys have no episode suffix (they predate
 // multi-episode), so its prefix `sia_<proj>_` also matches `sia_<proj>_ep2_s1`.
 // Anything that looks like another episode has to be excluded by hand.
-const MEDIA_TIPOS = ['sia', 'sib', 'sic', 'sa', 'sva', 'svb', 'svc', 'mus'];
+const MEDIA_TIPOS = ['sia', 'sib', 'sic', 'sa', 'sva', 'svb', 'svc', 'vopa', 'vopb', 'vopc', 'mus'];
 function esDeEsteEpisodio(k) {
   if (typeof k !== 'string') return false;
   const sfx = epSfx();                       // '' en el episodio 1, '_ep2' en el 2
@@ -5090,6 +5091,7 @@ async function renderScenes() {
     const slotCell = (slot, img) => {
       const numLbl = slot === 'A' ? '1' : slot === 'B' ? '2' : '3';
       const vid = vids[slot];
+      const recommended = s['videoRecommended' + slot] === true || (!('videoRecommended' + slot in s) && s['motion' + slot] === 'action');
       // Encadenar sólo tiene sentido si hay un plano siguiente al que llegar.
       const iSlot = slots.indexOf(slot);
       const haySiguiente = iSlot >= 0 && iSlot < slots.length - 1;
@@ -5103,8 +5105,9 @@ async function renderScenes() {
             : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim)">Plano ${numLbl}</div>`}
         </div>
         <button class="btn-sec" style="font-size:10px;padding:3px 4px;min-width:0" onclick="generateSceneImageAB('${s.id}','${slot}')">${img ? '🔄' : '🖼️'} ${numLbl}</button>
-        <button id="btnVid_${s.id}_${slot}" class="btn-sec" style="font-size:10px;padding:3px 4px;min-width:0;border-color:rgba(0,229,255,0.3);color:var(--accent2)"
-          onclick="generateSceneVideo('${s.id}','${slot}')">${vid ? '🔄' : '🎬'} ${numLbl}</button>
+        <button id="btnVid_${s.id}_${slot}" class="btn-sec" style="font-size:10px;padding:3px 4px;min-width:0;border-color:${recommended ? 'rgba(0,229,255,0.75)' : 'rgba(0,229,255,0.3)'};color:var(--accent2)"
+          title="${recommended ? 'El director recomienda animar este plano. Puedes generar o regenerar el clip manualmente.' : 'Puedes animar este plano manualmente aunque el director no lo haya recomendado.'}"
+          onclick="generateSceneVideo('${s.id}','${slot}')">${vid ? '🔄' : '🎬'} ${numLbl}${recommended ? ' ★' : ''}</button>
         ${haySiguiente ? `
         <button id="btnCad_${s.id}_${slot}" class="btn-sec" onclick="alternarEncadenado('${s.id}','${slot}')"
           data-sig="${sigLbl}"
@@ -5859,16 +5862,39 @@ window.generateSceneVideo = async function(sceneId, slot = 'A') {
         + `o dale al botón 🔗 de ese plano para dejarlo suelto: así viaja una sola imagen.`);
     }
 
-    setStatus('Enviando a Veo...');
-    const res = await fetch('/api/video-start', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: cuerpo,
-    });
-    // Pasado el límite del transporte la respuesta no es JSON, y `res.json()`
-    // reventaba con un mensaje del navegador que no señalaba a nada.
-    const startData = await res.json().catch(() => ({
-      error: `el servidor respondió ${res.status} sin JSON (cuerpo de ${(cuerpo.length / 1048576).toFixed(1)} MB)`,
-    }));
-    if (!res.ok || startData.error) throw new Error(startData.error || `Error al iniciar video (${res.status})`);
+    const opKey = sceneVidOpKeyBy(sceneId, slot);
+    let startData = null;
+    const savedOpRaw = await dbGet(opKey);
+    if (savedOpRaw) {
+      try {
+        const saved = typeof savedOpRaw === 'string' ? JSON.parse(savedOpRaw) : savedOpRaw;
+        if (saved?.operationName && saved?.projectId && saved?.model) {
+          startData = saved;
+          setStatus('Reanudando Veo ya iniciado...');
+        }
+      } catch (_) { await dbDel(opKey); }
+    }
+
+    if (!startData) {
+      setStatus('Enviando a Veo...');
+      const res = await fetch('/api/video-start', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: cuerpo,
+      });
+      // Pasado el límite del transporte la respuesta no es JSON, y `res.json()`
+      // reventaba con un mensaje del navegador que no señalaba a nada.
+      startData = await res.json().catch(() => ({
+        error: `el servidor respondió ${res.status} sin JSON (cuerpo de ${(cuerpo.length / 1048576).toFixed(1)} MB)`,
+      }));
+      if (!res.ok || startData.error) throw new Error(startData.error || `Error al iniciar video (${res.status})`);
+      // Persist immediately: if Safari reloads while Veo is rendering, the next
+      // tap resumes polling this operation instead of paying for a duplicate.
+      await dbSet(opKey, JSON.stringify({
+        operationName:startData.operationName,
+        projectId:startData.projectId,
+        model:startData.model,
+        startedAt:Date.now()
+      }));
+    }
     // Said once per session, not per clip: the answer is the same every time and
     // it is a property of the chosen model, not of this shot.
     if (startData.sinFotogramaFinal && !window.__avisoFotogramaFinal) {
@@ -5889,6 +5915,7 @@ window.generateSceneVideo = async function(sceneId, slot = 'A') {
     );
 
     await dbSet(sceneVidKeyBy(sceneId, slot), publicUrl);
+    await dbDel(opKey);
     await renderScenes();
     showToast(`Video ${s.num}${slot !== 'A' ? '-' + slot : ''} listo 🎬`, 'success');
   } catch(e) {
@@ -5911,25 +5938,31 @@ window.generateSceneVideos = async function(sceneId) {
 window.generateAllVideos = async function() {
   const scenes = state.scenes.filter(s => s.narration && s.imagePromptA);
   if (!scenes.length) { showToast('Genera las escenas primero', 'error'); return; }
+  if (!empezarTanda()) return;
 
-  const profile = document.getElementById('motionProfileSelect')?.value || 'motion_comic';
-  const debeAnimar = (s, sl) => {
-    const tipo = s['motion' + sl] || 'still';
-    if (profile === 'full') return true;
-    if (profile === 'mixed') return tipo === 'limited' || tipo === 'action';
-    return tipo === 'action';
-  };
-
-  let done = 0, errors = 0, staticShots = 0;
-  for (const s of scenes) {
-    for (const sl of await sceneSlots(s)) {
-      if (!debeAnimar(s, sl)) { staticShots++; continue; }
-      if (await dbGet(sceneVidKeyBy(s.id, sl))) { done++; continue; }
-      try { await window.generateSceneVideo(s.id, sl); done++; }
-      catch(e) { errors++; console.warn(`Video ${s.num}-${sl}:`, e.message); }
+  let generated = 0, existing = 0, notRecommended = 0, errors = 0;
+  try {
+    for (const s of scenes) {
+      for (const sl of await sceneSlots(s)) {
+        if (tanda.detener) break;
+        const recommended = s['videoRecommended' + sl] === true
+          || (!('videoRecommended' + sl in s) && s['motion' + sl] === 'action');
+        if (!recommended) { notRecommended++; continue; }
+        if (await dbGet(sceneVidKeyBy(s.id, sl))) { existing++; continue; }
+        try {
+          await window.generateSceneVideo(s.id, sl);
+          if (await dbGet(sceneVidKeyBy(s.id, sl))) generated++;
+        } catch(e) {
+          errors++;
+          console.warn(`Video ${s.num}-${sl}:`, e.message);
+        }
+      }
+      if (tanda.detener) break;
     }
+    showToast(`Videos recomendados: ${generated} nuevos · ${existing} ya estaban · ${notRecommended} quedan como ilustración${errors ? ' · '+errors+' pendientes' : ''}`, errors ? 'error' : 'success');
+  } finally {
+    terminarTanda();
   }
-  showToast(`Veo: ${done} clips · ${staticShots} planos quedan como motion-comic${errors ? ' · ' + errors + ' fallidos' : ''}`, errors ? 'error' : 'success');
 };
 
 // ════════════════════════════════════════════════════════════════
