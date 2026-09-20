@@ -324,7 +324,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-19.108 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-19.109 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -880,30 +880,29 @@ const planoEn = id => (PLANOS_ANIME.find(p => p.id === id) || PLANOS_ANIME[0]).e
 const MODOS_NARRATIVOS = {
   primera_presente: {
     nombre: 'Primera persona, presente',
-    regla: 'PRIMERA PERSONA EN PRESENTE para el protagonista ("compro", "miro", "no puedo quedarme mirando"). '
-      + 'Cuenta lo que le pasa MIENTRAS le pasa, nunca como recuerdo. Su voz interior es seca e irónica y comenta lo que ve '
-      + '("ochocientos bien gastados", "el nivel de detalle es increíble"). '
-      + 'Si la historia tiene un SEGUNDO frente —otro personaje, otro mundo, el bando contrario— ése se cuenta en TERCERA '
-      + 'PERSONA y también en presente, y el salto se marca con una frase corta de bisagra ("Mientras tanto...", '
-      + '"De vuelta en mi escritorio...", "En otro lugar..."). Ese vaivén entre los dos lados ES el motor del relato.',
+    regla: 'PRIMERA PERSONA EN PRESENTE para el protagonista ("entro", "veo", "no entiendo qué está pasando"). '
+      + 'La voz vive el hecho AHORA, no lo recuerda desde el futuro. Es conversacional, concreta y pegada a sus decisiones: '
+      + 'qué ve, qué entiende, qué teme, qué decide y qué cambia por eso. El tono lo manda el género; NO fuerces ironía, sarcasmo '
+      + 'ni introspección si la escena no los necesita. Si hay un segundo frente, se cuenta brevemente en tercera persona presente '
+      + 'y se vuelve al protagonista sin convertir la historia en narrador omnisciente.',
   },
   tercera_presente: {
     nombre: 'Tercera persona, presente',
-    regla: 'TERCERA PERSONA EN PRESENTE, con el protagonista siempre por su nombre ("[NOMBRE] cruza el patio"). '
-      + 'Todo ocurre delante del espectador, ahora mismo — nunca como algo que ya pasó.',
+    regla: 'TERCERA PERSONA CERCANA EN PRESENTE. La cámara narrativa sigue a un personaje por vez: "[NOMBRE] entra, ve X y decide Y". '
+      + 'No narres desde una voz omnisciente que conoce todo a la vez. El espectador descubre la información cuando el personaje la descubre, '
+      + 'salvo una asimetría de información deliberada que la historia haya sembrado.',
   },
   tercera_pasado: {
     nombre: 'Tercera persona, pasado',
-    regla: 'TERCERA PERSONA omnisciente en pasado inmediato, con el protagonista siempre por su nombre '
-      + '("[NOMBRE] cruzó el patio"). Nunca "yo".',
+    regla: 'TERCERA PERSONA CERCANA EN PASADO INMEDIATO, conservada sólo para proyectos anteriores. Mantén el punto de vista pegado al personaje '
+      + 'y evita la narración literaria omnisciente.',
   },
   segunda: {
     nombre: 'Segunda persona ("tú")',
-    regla: 'SEGUNDA PERSONA EN PRESENTE: el espectador ES el protagonista ("abres la caja", "no puedes apartar la vista"). '
-      + 'Sostenela sin salirte ni una frase — en cuanto aparece un "él" para el protagonista, se rompe.',
+    regla: 'SEGUNDA PERSONA EN PRESENTE, conservada sólo por compatibilidad con proyectos antiguos. Los proyectos nuevos no la eligen automáticamente.',
   },
 };
-const MODO_NARRATIVO_POR_DEFECTO = 'tercera_pasado';
+const MODO_NARRATIVO_POR_DEFECTO = 'primera_presente';
 
 function modoNarrativo(id) {
   return MODOS_NARRATIVOS[id] || MODOS_NARRATIVOS[MODO_NARRATIVO_POR_DEFECTO];
@@ -980,18 +979,22 @@ se le encienden los ojos porque así ocurre en ese mundo, se dibuja tal cual y c
 // puesta. Decir otra vez que la bata es translúcida no dibuja nada nuevo — sólo
 // pone en el texto la frase que hace saltar el filtro, y esa escena se queda en
 // negro.
-const REGISTRO_LONGFORM_REFERENCIA = `MOTOR DE HISTORIA LARGA — aprendido de las referencias estudiadas:
-- El gancho de los primeros 60-90 segundos plantea una situación concreta, un deseo y una fricción que prometen una transformación. No hace falta resolver nada ahí.
-- CAUSALIDAD: una solución cambia la situación y crea la siguiente necesidad. Evita episodios intercambiables del tipo "aparece rival → gana → aparece rival más fuerte" si nada más cambia.
-- Cada revelación tiene REACCIÓN visible: alguien cambia de decisión, relación, posición, información o recursos. No saltes al siguiente asunto antes de cobrar el efecto de lo que acabas de revelar.
-- Aprovecha ASIMETRÍA DE INFORMACIÓN cuando el concepto la permita: el espectador sabe algo que un personaje ignora, o dos personajes interpretan el mismo hecho de forma distinta. Esa diferencia genera decisiones.
-- Alterna presión, descubrimiento, relación, consecuencia y respiración. Una historia de una hora NO es un Reel repetido doce veces ni necesita un mini-clímax artificial cada minuto.
-- Mantén preguntas abiertas simultáneas, pero paga regularmente algunas de ellas. Introduce una nueva pregunta antes de cerrar todas las anteriores.
-- Diálogo corto y funcional. Los personajes hablan para querer algo, ocultar algo, provocar, negociar, mentir, rechazar o revelar. Evita conversaciones que sólo repiten exposición.
-- La narración aporta lo que la cámara no puede mostrar: intención, información previa, cálculo, ironía y contexto. No describe por duplicado pelo, ropa, muebles o expresiones que ya están en pantalla.
-- Antes de cerrar una secuencia, comprueba de forma ORGÁNICA: expectativa → decisión → consecuencia → reacción → nueva necesidad. Es una prueba de causalidad, NO una plantilla que deba aparecer con el mismo ritmo en cada escena.
-- Varía el mecanismo. Progresión, malentendido, romance, misterio, venganza o poder oculto sólo aparecen si pertenecen al concepto y género elegidos. Nunca metas "sistema", humillación o romance porque una referencia los usara.
-- El final respeta el tipo de cierre elegido: una historia completa paga su conflicto central; un cliffhanger resuelve un tramo y abre un problema concreto. Nunca cortes por falta de texto.`;
+const REGISTRO_LONGFORM_REFERENCIA = `HUELLA NARRATIVA DE LAS REFERENCIAS ESTUDIADAS — esto manda sobre la prosa:
+- SUENA A HISTORIA CONTADA EN YOUTUBE, NO A NOVELA. Español oral, claro y directo. El tiempo avanza oración por oración.
+- ARRANQUE: en las primeras 2-4 frases ya hay una persona concreta dentro de un problema concreto. Prohibido abrir con clima, paisaje, historia del mundo o una reflexión abstracta.
+- FRASE: normalmente 8-18 palabras, una acción/idea principal por oración. Evita cadenas de subordinadas, prosa ornamental y párrafos que "ambientan" sin mover nada.
+- RITMO DE VOZ: acción o dato -> frase directa/pensamiento -> reacción o consecuencia. Varía el patrón, pero no dejes bloques largos donde sólo el narrador explica.
+- DIÁLOGO REAL: cuando una confrontación, negociación, broma, amenaza o confesión importa, deja que el personaje la diga. No la resumas como "discutieron" o "él le explicó". En modo narrado, la misma voz leerá esas frases; siguen siendo diálogo directo.
+- PUNTO DE VISTA CERCANO: el espectador sabe lo que el protagonista acaba de ver/entender, no una explicación total del narrador. Evita "sin saber que...", "el destino tenía otros planes", "lo que nadie sabía era..." salvo que la historia cambie deliberadamente de frente y muestre esa información.
+- MICROCAMBIOS: cada 30-60 segundos debe ocurrir algo concreto que altere información, relación, objetivo, recurso, amenaza o posición. Cada 5-8 minutos debe haber un giro de mayor peso. No significa pelea: significa CAMBIO.
+- COBRAR LOS GIROS: después de una revelación importante, muestra quién reacciona, qué decide y qué cambia. No saltes a otro tema como una lista de acontecimientos.
+- COMPRESIÓN, NO RESUMEN VACÍO: omite trayectos y explicaciones obvias, pero dramatiza los momentos donde cambia algo. "Pasaron tres días" puede durar una frase; una traición, una decisión o una humillación necesita acción + frase + reacción.
+- LENGUAJE CONCRETO: dinero, tiempo, rangos, objetos, promesas, puertas, heridas, mensajes, contratos, comida, recursos. Menos "sentía una mezcla indescriptible"; más qué hace porque siente eso.
+- PROHIBIDO EL TONO IA/LITERARIO: nada de "el aire estaba cargado de tensión", "sus ojos reflejaban mil emociones", "un silencio ensordecedor llenó la habitación", "el destino estaba a punto de cambiar", ni moralejas al final de cada bloque.
+- PROHIBIDO REEXPLICAR: si el espectador ya sabe una regla, una relación o un objetivo, no vuelvas a explicarlo salvo que nueva información lo cambie.
+- NO HAY MINI-REEL POR ESCENA. Una historia de 60-90 minutos respira, pero incluso la respiración cambia relación, información o expectativa.
+- La historia puede usar progresión, romance, misterio, venganza, sistema, reencarnación o poder oculto sólo si pertenecen al concepto elegido. No copies una trama de referencia; copia su MECÁNICA DE NARRACIÓN Y RETENCIÓN.
+`;
 
 const PROMPT_ES_UN_PLANO = `⚠️ EL PROMPT DE IMAGEN NO ES LA NARRACIÓN: ES LA ORDEN DE UN PLANO.
 La narración puede ser todo lo explícita que el género pida — a ella no la filtra nadie. Al generador de
@@ -3580,15 +3583,18 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
       || 'un personaje con nombre ya metido en lo que el género considera un problema';
 
     const storyModeRules = storyMode === 'cast'
-      ? `MODO DRAMATIZADO — VOCES POR PERSONAJE:
-- Escribe una historia muy dialogada. El narrador sólo une saltos temporales, antecedentes o información imposible de ver.
-- Los pensamientos pertenecen al personaje que los piensa y deben poder leerse con SU misma voz.
-- Cada intervención debe dejar claro por contexto quién habla; evita párrafos donde tres voces se mezclen sin anclaje.
-- No escribas acotaciones teatrales para ser pronunciadas. La acción se cuenta brevemente o se muestra visualmente.`
+      ? `MODO VOCES POR PERSONAJE:
+- El diálogo y los pensamientos son el cuerpo de la escena. Como objetivo editorial, cuando la situación lo permita, 60-80% de las palabras pronunciadas vienen de personajes; el narrador sólo conecta tiempo, lugar, antecedentes o información imposible de decir naturalmente.
+- Cada frase importante se escucha DIRECTAMENTE del personaje que la piensa o la dice. No conviertas una discusión en "ellos discutieron durante varios minutos".
+- El narrador jamás describe una emoción que el diálogo y la acción ya dejan clara.
+- No escribas nombres de hablante ni acotaciones teatrales dentro de la frase; el etiquetado de voces se hace después.
+- Las intervenciones son cortas y reactivas: alguien quiere algo, otro responde, eso cambia la situación.`
       : `MODO NARRADO — UNA VOZ PRINCIPAL:
-- Una sola voz contará la historia y también leerá las frases de los personajes, como en un resumen dramatizado.
-- La prosa debe fluir al oído: narración, pensamiento y diálogo se distinguen por redacción y contexto, no por etiquetas técnicas.
-- Usa diálogo directo con frecuencia, pero el narrador puede enlazar acciones y saltos sin convertirlo en una obra teatral.`;
+- Copia la cadencia de los resúmenes largos estudiados: una sola voz conduce, pero LOS PERSONAJES SIGUEN HABLANDO EN DIRECTO dentro de la narración.
+- No suena a audiolibro. Suena a alguien contándote lo que acaba de pasar, paso a paso, con frases cortas y hechos concretos.
+- Cuando el protagonista habla o piensa algo que mueve la escena, escribe esa frase. No la sustituyas por "le dijo que..." o "pensó que...".
+- La narración comprime lo rutinario y se detiene en el cambio: decisión, amenaza, revelación, humillación, descubrimiento, negociación, giro afectivo.
+- EJEMPLO DE CADENCIA (inventado, no pertenece a ninguna referencia): "Vuelvo a casa y la puerta está abierta. No debería haber nadie. Entro y veo a mi hermano sentado en mi sofá. —Pensé que no volverías. Hace tres años que no lo veo, y lo primero que hace es pedirme dinero." Ese es el registro: acción -> frase -> reacción; no descripción ornamental.`;
 
     const endingRule = endingMode === 'complete'
       ? `CIERRE COMPLETO: el conflicto central de ESTA historia queda pagado. Puede quedar mundo para otras historias, pero el espectador no termina sintiendo que faltó el último acto. La última secuencia muestra la consecuencia de la decisión final.`
@@ -3877,7 +3883,7 @@ Responde SOLO JSON válido sin markdown.`;
     // Pressing Generate again resumes from the first missing block.
     const episodeInstructionsNow = document.getElementById('episodeInstructions')?.value.trim() || '';
     const draftSignature = JSON.stringify({
-      v: 2, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
+      v: 3, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
       storyMode, endingMode, instructions: episodeInstructionsNow,
       title: u.title || '', concept: u.concepto || '', conflict: u.conflicto || '',
       demo: u.demo || '', genero: u.genero || '', subgenres,
