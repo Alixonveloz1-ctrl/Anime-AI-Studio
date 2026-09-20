@@ -324,7 +324,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-19.110 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-19.111 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -2270,7 +2270,7 @@ document.getElementById('btnProjects').addEventListener('click', () => openProje
 // ════════════════════════════════════════════════════════════════
 // GEMINI TEXT API (via /api/script → Vertex AI, gemini-3.1-pro-preview)
 // ════════════════════════════════════════════════════════════════
-async function callGeminiOnce(prompt, system) {
+async function callGeminiOnce(prompt, system, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 85000);
   let res;
@@ -2281,6 +2281,8 @@ async function callGeminiOnce(prompt, system) {
       body: JSON.stringify({
         messages: [{ role: 'user', parts: [{ text: prompt }] }],
         system: system || '',
+        ...(Number.isFinite(options.temperature) ? { temperature: options.temperature } : {}),
+        ...(Number.isFinite(options.maxOutputTokens) ? { maxOutputTokens: options.maxOutputTokens } : {}),
       }),
       signal: controller.signal,
     });
@@ -2302,7 +2304,7 @@ async function callGeminiOnce(prompt, system) {
   return data.text;
 }
 
-async function callGemini(prompt, system) {
+async function callGemini(prompt, system, options = {}) {
   // Text generation uses one shared resilience policy. A Vertex 429 is Google's
   // project/model quota, not a Vercel rate limit. We wait and retry the SAME
   // request instead of returning a partial episode that later needs "repair".
@@ -2312,7 +2314,7 @@ async function callGemini(prompt, system) {
 
   for (;;) {
     try {
-      return await callGeminiOnce(prompt, system);
+      return await callGeminiOnce(prompt, system, options);
     } catch(e) {
       const msg = String(e?.message || '');
       const quota = /\b429\b|resource_exhausted|exhausted|quota|rate.?limit|sin capacidad/i.test(msg);
@@ -4595,7 +4597,7 @@ Responde SOLO JSON válido sin markdown.`;
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const attemptPrompt = prompt + styleFeedback;
-          const raw = await callGemini(attemptPrompt, sysBase + genreExtra);
+          const raw = await callGemini(attemptPrompt, sysBase + genreExtra, { temperature: 0.55, maxOutputTokens: 32768 });
           const parsed = safeParseJSON(raw);
           const story = String(parsed.story || '').trim();
           const wc = story.split(/\s+/).filter(Boolean).length;
@@ -6996,10 +6998,11 @@ window.addEventListener('load', () => setTimeout(updateEpisodeNav, 500));
 // same fidelity contract is included in its prompt.
 // ════════════════════════════════════════════════════════════════
 function directorSystemPrompt(genero, comedyMode) {
-  return `Eres un DIRECTOR CREATIVO de anime con veinte años de experiencia: has dirigido series completas, sabes qué hace que un capítulo se sienta de autor y no de plantilla, y conoces las convenciones reales de cada género.
+  return `Eres un DIRECTOR CREATIVO de historias anime para YouTube con veinte años de experiencia. Tu prioridad es RETENCIÓN: sabes ejecutar una fórmula probada sin diluirla por querer "ser original", y conoces las convenciones reales de cada género.
 
 TU AUTORIDAD Y SUS LÍMITES:
 - Decides la identidad visual, sonora y de ritmo de la serie, y qué debe lograr cada capítulo.
+- NO eres un director de autor que deba escapar de una plantilla exitosa. La FÓRMULA VIRAL seleccionada es un encargo cerrado: tu trabajo es ejecutarla con claridad y escalada.
 - NO decides el género: el género "${genero}" y los subgéneros seleccionados son un encargo cerrado. Tu trabajo es hacer que ESE género se sienta excelente, no reinterpretarlo ni suavizarlo.
 - NO inventas mecánicas que el género no tiene (sistemas, poderes, tropos de subgéneros no seleccionados).
 ${comedyMode ? '- Esta serie es una comedia: la dirección debe servir al humor sin volverla una parodia sin stakes.' : '- Esta serie NO es una comedia: dirige con el tono serio real del género.'}
@@ -7032,6 +7035,8 @@ ${GENRE_PROMPTS[u.genero] || ''}
 
 ${getSubgenreText(subs, u.genero)}
 
+${formulaViralBrief(u)}
+
 ${SUBGENRE_FIDELITY_CONTRACT}
 ${cast ? `\nELENCO:\n${cast}` : ''}`;
 }
@@ -7049,7 +7054,7 @@ Formato objetivo de la primera historia: ~${fmt.minutes} minutos, ${fmt.scenes} 
 Modo de audio: ${u.storyMode === 'cast' ? 'dramatizado con voces por personaje' : 'narrado por una voz principal'}.
 Tipo de cierre: ${u.endingMode === 'cliffhanger' ? 'continuará' : 'historia completa'}.
 
-Escribe la BIBLIA DE DIRECCIÓN. El universo y la sinopsis ya son buenos: protégelos. La biblia debe ayudar a DESARROLLARLOS, no sustituirlos con otra fórmula.
+Escribe la BIBLIA DE DIRECCIÓN. El universo, la sinopsis Y la FÓRMULA VIRAL seleccionada son canon. La biblia debe ayudar a EJECUTAR esa fórmula durante 60-90 minutos; no la suavices, no la vuelvas "más original" y no la sustituyas por un arco de autor distinto.
 
 Devuelve JSON:
 {
@@ -7058,7 +7063,7 @@ Devuelve JSON:
   "identidadMusical": "Familia instrumental, textura y tempo del colchón musical. Debe acompañar voz durante mucho tiempo sin competir con ella. 2-3 frases.",
   "ritmo": "Cómo respira una historia LARGA: dónde acelera, dónde deja reaccionar una revelación y cómo alterna presión/relación/descubrimiento. 2-3 frases.",
   "ritmoVisual": "Cadencia de MONTAJE para esta serie dentro de la fórmula base: composición nueva normalmente cada 3–7 s, 4–6 s en diálogo estable y 2–4 s en tensión/acción/comedia. Explica en 1–2 frases cuándo esta serie usa el extremo rápido o el lento, sin romper esos rangos.",
-  "arcoTemporada": ["Macroacto 1: gancho y primera alteración", "Macroacto 2: consecuencias y relaciones", "Macroacto 3: punto medio/revelación", "Macroacto 4: escalada y costo", "Macroacto 5: clímax y consecuencia"],
+  "arcoTemporada": ["Macroacto 1: problema/humillación + activación de la ventaja", "Macroacto 2: primera prueba + reacción + recompensa visible", "Macroacto 3: progresión + regreso/aparición de quien subestima", "Macroacto 4: inversión pública de estatus + consecuencia", "Macroacto 5: payoff mayor + nueva escala o cierre"],
   "motivosRecurrentes": ["objeto, gesto o encuadre que reaparece con sentido", "otro", "otro"],
   "reglasDeOro": ["regla causal concreta que esta historia nunca rompe", "regla de personaje", "regla de tono", "regla de continuidad"]
 }`;
@@ -7121,7 +7126,7 @@ ${bibleBrief()}
 
 ${arc.length ? `ARCO DE TEMPORADA:\n${arc.map((a, i) => `${i + 1}. ${a}`).join('\n')}\n` : ''}
 ${prevSummary ? `LO QUE YA PASÓ EN CAPÍTULOS ANTERIORES:\n${prevSummary}\n` : ''}
-Estás dirigiendo la HISTORIA/ENTREGA ${epNum}. Da una nota al guionista para que el universo aprobado se desarrolle con causalidad y personalidad.
+Estás dirigiendo la HISTORIA/ENTREGA ${epNum}. Da una nota al guionista para que el universo aprobado EJECUTE la fórmula viral de referencia con causalidad, recompensas y escalada. Personalidad sí; desviarse de la fórmula para buscar originalidad, no.
 Tipo de cierre: ${u.endingMode === 'cliffhanger' ? 'CONTINUARÁ' : 'COMPLETO'}.
 ${u.endingMode === 'complete'
   ? 'El conflicto central de esta entrega DEBE cerrarse. Puede quedar una posibilidad futura, pero no conviertas el último acto en un teaser que roba la resolución.'
