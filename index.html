@@ -432,11 +432,18 @@
 
       <label>Número de personajes</label>
       <select id="numCharsSelect">
-        <option value="auto">Auto (3-5 según la historia)</option>
+        <option value="auto">Auto (según duración y concepto)</option>
         <option value="2">2 personajes</option>
         <option value="3">3 personajes</option>
         <option value="4">4 personajes</option>
         <option value="5">5 personajes</option>
+        <option value="6">6 personajes</option>
+        <option value="7">7 personajes</option>
+        <option value="8">8 personajes</option>
+        <option value="9">9 personajes</option>
+        <option value="10">10 personajes</option>
+        <option value="11">11 personajes</option>
+        <option value="12">12 personajes</option>
       </select>
 
       <label style="margin-top:12px">Instrucciones para este episodio <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
@@ -3659,6 +3666,7 @@ REGLAS DE DESARROLLO:
 - Cada bloque de 6-10 minutos debe modificar al menos una de estas cosas: objetivo, relación, poder/recursos, información, amenaza o precio de una decisión.
 - Si un personaje demuestra algo extraordinario, deja que otros reaccionen y actúen por ello. La reacción es parte del acontecimiento.
 - Los secundarios no existen para hacer fila y admirar al protagonista: tienen objetivos, información parcial y capacidad de empeorar o mejorar la situación.
+- REPARTO CERRADO PARA PERSONAJES RECURRENTES: los personajes con nombre que reaparecen a lo largo de la historia deben salir del reparto proporcionado. Puedes usar extras puntuales sin nombre ("la camarera", "un guardia", "dos clientes"), pero no inventes a mitad del guion un nuevo coprotagonista o antagonista recurrente sin ficha.
 - Evita repetir exactamente el mismo ciclo de problema/recompensa. Si una mecánica reaparece, cambia el costo, la interpretación o la consecuencia.
 - No hagas resúmenes de acontecimientos que merecen escena. Las decisiones, confrontaciones, descubrimientos y revelaciones importantes ocurren delante del espectador.
 - Usa elipsis para trayectos, rutinas y repeticiones que no cambian nada.
@@ -3749,20 +3757,25 @@ Los personajes sirven al género "${genero}" y al concepto aprobado: tienen dese
       let numChars, numFemales, numMales, protagonistGender;
       const numCharsChoice = document.getElementById('numCharsSelect')?.value || 'auto';
 
+      const autoCastSize = fmt.minutes >= 75 ? 10
+        : fmt.minutes >= 50 ? 8
+        : fmt.minutes >= 25 ? 7
+        : fmt.minutes >= 12 ? 6
+        : fmt.minutes >= 7 ? 5 : 4;
       if (mod === 'harem') {
-        numChars = numCharsChoice !== 'auto' ? Math.max(4, parseInt(numCharsChoice)) : (4 + Math.floor(Math.random() * 2));
+        numChars = numCharsChoice !== 'auto' ? Math.max(4, parseInt(numCharsChoice)) : Math.max(6, autoCastSize);
         numMales = 1; numFemales = numChars - 1;
         protagonistGender = 'male';
       } else if (mod === 'harem_inverso') {
-        numChars = numCharsChoice !== 'auto' ? Math.max(4, parseInt(numCharsChoice)) : (4 + Math.floor(Math.random() * 2));
+        numChars = numCharsChoice !== 'auto' ? Math.max(4, parseInt(numCharsChoice)) : Math.max(6, autoCastSize);
         numFemales = 1; numMales = numChars - 1;
         protagonistGender = 'female';
       } else if (numCharsChoice !== 'auto') {
-        numChars = parseInt(numCharsChoice);
+        numChars = Math.max(2, Math.min(12, parseInt(numCharsChoice) || autoCastSize));
         numFemales = null; numMales = null;
         protagonistGender = 'libre (el que mejor sirva al género y la historia)';
       } else {
-        numChars = 3 + Math.floor(Math.random() * 3);
+        numChars = autoCastSize;
         numFemales = null; numMales = null;
         protagonistGender = 'libre (el que mejor sirva al género y la historia)';
       }
@@ -3774,8 +3787,9 @@ Los personajes sirven al género "${genero}" y al concepto aprobado: tienen dese
 - Protagonista: ${protagonistGender}
 - Nombres coherentes con la demografía y época del setting (japoneses, chinos, occidentales, según corresponda) — SOLO para personajes NUEVOS que no estén ya nombrados en el concepto semilla
 - Variedad visual: distintos colores de cabello, ojos, estilos de ropa
-- Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${(mod === 'ecchi' || mod === 'harem') ? '\n- Personajes femeninos con arquetipos marcados y DISTINTOS entre sí (tsundere, kuudere, genki, dandere, onee-san, etc) — uno por personaje, sin repetir' : ''}${mod === 'harem_inverso' ? '\n- Personajes masculinos con arquetipos marcados y DISTINTOS entre sí (cool, principesco, deportista, intelectual, salvaje, etc) — uno por personaje, sin repetir' : ''}
-${comedyMode ? `- Evalúa si esta historia necesita un COMPAÑERO (con rasgo cómico fijo "${getCompanionQuirk()}", no otro) y/o una FIGURA DE AUTORIDAD que sufre las consecuencias de los éxitos accidentales del protagonista. Estos son roles PROBADOS para el humor viral y son un buen default para isekai/videojuego/donghua/sistema — pero NO son obligatorios: si el concepto proporcionado por el usuario no sugiere estos roles, o si no encajan naturalmente con la historia (ej: dramas serios, slice of life íntimo, conceptos con reparto reducido específico), NO los agregues forzosamente. Prioriza fidelidad al concepto del usuario sobre completar la fórmula.` : `- Roles y relaciones fieles al género "${genero}" y al concepto — sin roles cómicos de fórmula (compañero de chiste, autoridad que sufre gags).`}
+- Cada personaje debe tener un rol claro y FUNCIÓN CAUSAL en la trama: quiere algo, puede tomar decisiones y su presencia modifica al menos una relación, objetivo o consecuencia.
+- Diferencia personalidades por valores, deseos, defectos y forma de actuar; no repartas etiquetas de arquetipo como si fueran una lista obligatoria.
+${comedyMode ? `- Si la premisa necesita contraste cómico, dáselo a relaciones concretas entre personajes. Un compañero o figura de autoridad sólo entra si crea decisiones y consecuencias propias de ESTA historia.` : `- Roles y relaciones fieles al género "${genero}" y al concepto, sin insertar personajes de fórmula.`}
 
 ⚠️ PERSONAJE NO-HUMANO — LEE EL CONCEPTO CON MUCHO CUIDADO:
 Si el CONCEPTO SEMILLA ORIGINAL menciona EXPLÍCITAMENTE que un personaje específico (normalmente el protagonista) transmigró, se reencarnó, o habita el cuerpo de un animal, criatura, objeto u otra entidad NO humana — SOLO ESE personaje específico debe crearse como no-humano, respetando el esquema JSON completo (name, role, gender, age, appearance, personality, backstory). NO lo omitas y NO lo conviertas en humano.
@@ -3800,7 +3814,7 @@ REGLAS DE VESTIMENTA PARA PERSONAJES HUMANOS (OBLIGATORIO):
 - POBREZA en época ANTIGUA/feudal (o miseria extrema que el concepto declare): telas bastas (cáñamo, algodón crudo, lana burda), colores desteñidos, PARCHES visibles, dobladillos deshilachados — ej.: "yukata de algodón basto color índigo desteñido, con parches cuadrados en el hombro y el costado, dobladillo deshilachado".
 - Historia CONTEMPORÁNEA o personaje común/clase media: ropa moderna normal, limpia y en buen estado aunque sea sencilla y sin marca (jeans, camiseta, sudadera, uniforme de trabajo) — hoy en día la ropa modesta también se ve bien: NADA de parches ni telas burdas en settings actuales salvo que el concepto declare indigencia explícita.
 - Personaje ADINERADO o contexto formal: telas finas (seda, lino fino), colores vivos, prendas impecables — SOLO si el estatus de ese personaje lo justifica.
-- El desgaste, cuando aplica, es DIGNO al estilo anime/donghua: parches limpios, tela desteñida, bordes gastados — la ropa siempre bien puesta y entera en silueta; nada de harapos grotescos ni suciedad exagerada.
+- El desgaste, cuando aplica, se dibuja con lenguaje de anime japonés 2D: tela desteñida, costuras, bordes gastados o parches coherentes; nada de suciedad exagerada salvo que la historia lo exija.
 - PROHIBIDO el default de lujo: nunca seda, telas finas ni ropa "impecable" en personajes cuya historia dice que son pobres.
 
 ${isEcchi ? `MODIFICADOR ECCHI ACTIVO — DISEÑO ADULTO:
