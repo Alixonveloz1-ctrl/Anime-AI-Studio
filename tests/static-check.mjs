@@ -74,8 +74,11 @@ const required = [
   ['seleccionarFormulaViral', 'selección de fórmula viral por concepto/género'],
   ['formulaBeatForPart', 'hitos virales distribuidos por bloque'],
   ['FÓRMULA VIRAL DE REFERENCIA', 'contrato viral inyectado en el guion'],
-  ['v: 4, epNum', 'borrador versionado para no reutilizar guiones anteriores'],
+  ['v: 5, epNum', 'borrador versionado para no reutilizar guiones anteriores'],
   ['temperature: 0.55', 'menor deriva creativa en el guion largo'],
+  ['viralEvidence', 'evidencia literal de ejecución del hito viral'],
+  ['evidenciaViralValida', 'validación mecánica del hito viral'],
+  ['storyEngineVersion = 2', 'migración automática de proyectos existentes al motor viral'],
   ['cloudSaveProject', 'estado permanente de proyectos en GCS'],
   ['migrateThisBrowserToCloud', 'migración automática del primer almacenamiento local'],
   ['refreshProjectsFromCloud', 'lista de proyectos reconstruida desde el bucket'],
@@ -126,6 +129,11 @@ if (/Crea un universo ORIGINAL y único|No añadas arquetipos virales|sin insert
 if (!/la originalidad NO es un objetivo/i.test(html) || !/no lo alejes para "hacerlo diferente"/i.test(html)) {
   fail('La prioridad de fórmula probada no quedó explícita');
 } else ok('La fórmula probada tiene prioridad explícita sobre la originalidad');
+
+if (!/HITO VIRAL QUE TIENES QUE PODER DEMOSTRAR/.test(html)
+    || !/no demostró dentro del propio texto que ejecutó el hito viral obligatorio/.test(html)) {
+  fail('El guion puede aceptar un bloque que no ejecute su hito viral');
+} else ok('Cada bloque debe probar dentro del propio texto que ejecutó el hito viral');
 
 if (/REGLAS DE PERSONAJES FEMENINOS/.test(html)) fail('Persisten reglas de apariencia femenina de fórmula');
 else ok('El reparto no usa un molde femenino obligatorio');
