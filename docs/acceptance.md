@@ -1,89 +1,94 @@
-# Criterios de aceptación · Long-form Story Engine
+# Criterios de aceptación · Anime AI Studio
 
-Esta lista define cuándo la rama puede considerarse lista para `main`.
-No reemplaza una prueba creativa real con Google Cloud; separa claramente lo que
-puede comprobar CI de lo que debe escucharse/verse en una muestra.
+Esta lista define cuándo una versión puede considerarse lista para producción.
 
 ## Automático en GitHub Actions
 
 - `index.html` y todos los endpoints JavaScript parsean.
 - `setup.sh` y `worker/montage/runner.sh` pasan `bash -n`.
 - `buildMontarScript()` genera un shell válido.
-- Existe formato de 60 y 90 minutos.
-- Existen modos Narrado y Dramatizado.
-- Existe perfil Motion anime.
-- Anime japonés 2D es el estilo por defecto.
+- Existen formatos aproximados de 5, 8, 15, 30, 60 y 90 minutos.
+- Sólo existen dos modos de historia seleccionables: **Narrada** y **Dramatizada**.
+- No existe selector Motion Anime / Mixto / Animar todo.
+- No existe botón de reparar escenas.
+- Un episodio no se confirma si faltan escenas, texto, título o dirección visual.
+- Un bloque de historia demasiado corto no se acepta como éxito.
+- La división de escenas nunca rellena con escenas vacías.
+- Vertex AI 429/RESOURCE_EXHAUSTED usa espera y reintento central.
+- Los borradores de generación se guardan para cualquier duración.
+- Referencias, imágenes, audio, música y videos ya terminados se omiten al continuar una tanda.
+- Las operaciones de Veo iniciadas se guardan y pueden seguir consultándose después de una recarga.
+- El director guarda una recomendación de video por plano, pero el usuario conserva el botón manual de video.
+- Anime japonés 2D es el contrato visual predeterminado.
 - Ningún error de referencia vuelve a generar silenciosamente sin identidad.
-- Las historias largas guardan borrador y pueden reanudarse.
 - Los proyectos anteriores conservan su número real de escenas.
-- El servidor de imagen no fuerza fan service genérico en cada fotograma.
+- El servidor de imagen no fuerza fan service genérico en todos los fotogramas.
+- El montador no usa el mismo clip dos veces consecutivas para rellenar tiempo.
+- Los clips se retiman a la duración de su toma sin loop.
+- Las imágenes fijas reciben movimientos de cámara visibles durante el montaje.
+- `setup.sh` detecta la cuenta Google y el proyecto activos; no depende de un correo hardcodeado.
 
-## Prueba creativa mínima tras desplegar
+## Prueba creativa mínima
 
-Antes de producir una hora completa, generar **una sola prueba de 5–8 minutos**
-con el mismo motor:
+Antes de producir una hora completa, generar una prueba de 5–8 minutos con el mismo motor.
 
 ### Narrada
-- Gancho comprensible en 60–90 s.
-- Sinopsis/universo conservados; el desarrollo no se convierte en tesis.
-- Cada solución produce una consecuencia o necesidad nueva.
-- Revelaciones tienen reacción antes de cambiar de asunto.
-- Una sola voz se mantiene estable.
-- La narración no describe por duplicado lo que ya está en pantalla.
+
+- La premisa y el universo aprobados se conservan.
+- El desarrollo no se convierte en tesis ni resumen plano.
+- Cada solución produce una consecuencia o una nueva necesidad.
+- Las revelaciones reciben reacción antes de cambiar de asunto.
+- Una sola voz conduce narración, pensamientos y diálogos.
 
 ### Dramatizada
+
 - Cada personaje recurrente conserva su voz.
-- Pensamientos usan la voz de su personaje.
-- Narrador aparece sólo donde aporta contexto útil.
-- Las intervenciones tienen pequeñas pausas naturales.
-- No se mezclan speakerId entre personajes.
+- Pensamientos usan la voz del personaje.
+- El narrador aparece sólo cuando aporta contexto útil.
+- Las intervenciones tienen pausas naturales.
+- No se mezclan speakerId.
 
 ### Imagen
+
 - Una sola referencia limpia por personaje.
-- Rostro/proporciones se mantienen entre escenas.
-- Vestuario puede cambiar por escena sin cambiar identidad.
-- Resultado parece fotograma de anime japonés 2D: línea dibujada, cel-shading,
-  piel mate y cabello por masas; no CGI, videojuego, donghua/manhua ni retrato semirrealista.
-- Conversaciones largas usan cobertura (hablante/reacción/conjunto/detalle), no
-  una sola ilustración inmóvil durante decenas de segundos.
+- Rostro y proporciones se mantienen.
+- El vestuario puede cambiar por escena sin cambiar identidad.
+- El resultado se ve como anime japonés 2D: línea dibujada, cel-shading definido, piel mate.
+- Conversaciones largas usan cobertura: hablante, reacción, conjunto o detalle según haga falta.
 
-### Movimiento y montaje
-- Perfil Motion anime genera Veo sólo para acciones marcadas `action`.
-- Planos still/limited se montan con cortes, zooms/paneos discretos.
-- No hay órbitas 3D ni movimiento de cámara de videojuego.
-- El MP4 mantiene exactamente la duración del audio.
-- Música no tapa la voz.
-- Cortes normales no intentan interpolar entre ángulos incompatibles.
+### Video y montaje
 
-### iPhone / recuperación
-- Generación de referencias maestras disponible en un solo botón.
-- "Todas las imágenes" se niega a empezar si falta una referencia.
-- Si la página se recarga durante una historia larga, al volver a pulsar Generar
-  continúa desde los bloques guardados.
-- Imágenes/audio/video ya terminados se omiten al reanudar sus lotes.
+- El director recomienda qué planos animar.
+- **Videos recomendados** genera sólo esos clips faltantes.
+- Cada imagen conserva su botón 🎬 manual.
+- Si el usuario generó un clip manual, el montaje lo usa aunque el director no lo hubiera recomendado.
+- Un clip de 8 s puede ralentizarse para ocupar, por ejemplo, 12 s.
+- Un clip nunca se repite inmediatamente detrás de sí mismo.
+- Si no hay clip, la ilustración recibe zoom/paneo claramente visible.
+- No hay órbitas 3D ni movimiento tipo videojuego.
+- El MP4 mantiene la duración del audio.
 
-## Prueba final de una hora
+### Recuperación
 
-Sólo después de aprobar la muestra corta:
+Probar en una historia corta y en una larga:
 
-1. Generar historia completa de ~60 min.
-2. Confirmar que el conflicto central llega a un cierre cuando se eligió
-   `Historia completa`.
-3. Confirmar reparto, referencias y escenarios.
-4. Generar imágenes.
-5. Generar audio.
-6. Generar sólo clips Veo necesarios en Motion anime.
-7. Montar MP4.
-8. Revisar inicio, 25 %, 50 %, 75 % y final antes de publicar.
+1. Interrumpir después de varios bloques de guion.
+2. Continuar y verificar que no reescribe lo ya terminado.
+3. Interrumpir una tanda de imágenes; continuar y verificar que omite las existentes.
+4. Interrumpir audio; continuar y verificar que omite los existentes.
+5. Iniciar Veo, recargar después de recibir operationName y verificar que se retoma esa operación.
+6. Interrumpir música; continuar y verificar que las pistas existentes no se regeneran.
 
 ## Google Cloud nuevo
 
-La infraestructura se instala al final, en Cloud Shell:
+La infraestructura se instala al final.
+
+Desde la cuenta Google nueva, abre Cloud Shell, selecciona el proyecto que vas a usar y ejecuta:
 
 ```bash
 bash setup.sh
 ```
 
-El instalador prepara APIs, bucket, cuenta de servicio, Artifact Registry y el
-Cloud Run Job de montaje. No se ejecuta desde CI porque requiere el proyecto real
-y puede generar recursos facturables.
+El script muestra la cuenta activa y el proyecto activo antes de crear recursos. El correo de inicio de sesión no se escribe en el código.
+
+El instalador prepara APIs, bucket, cuenta de servicio, Artifact Registry y el Cloud Run Job `anime-studio-montage`. No se ejecuta desde CI porque crea recursos reales.
