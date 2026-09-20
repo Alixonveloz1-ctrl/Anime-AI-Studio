@@ -74,12 +74,12 @@ const required = [
   ['seleccionarFormulaViral', 'selección de fórmula viral por concepto/género'],
   ['formulaBeatForPart', 'hitos virales distribuidos por bloque'],
   ['FÓRMULA VIRAL DE REFERENCIA', 'contrato viral inyectado en el guion'],
-  ['v: 6, epNum', 'borrador versionado para no reutilizar guiones anteriores'],
+  ['v: 7, epNum', 'borrador versionado para no reutilizar guiones anteriores'],
   ['temperature: 0.55', 'menor deriva creativa en el guion largo'],
   ['viralEvidence', 'evidencia literal de ejecución del hito viral'],
   ['viralConsequence', 'evidencia literal de la consecuencia posterior'],
   ['evidenciasViralesValidas', 'validación mecánica de hito y consecuencia en orden'],
-  ['storyEngineVersion = 3', 'migración automática de proyectos existentes al motor viral final'],
+  ['storyEngineVersion = 4', 'migración automática al motor narrativo calibrado con referencias'],
   ['cloudSaveProject', 'estado permanente de proyectos en GCS'],
   ['migrateThisBrowserToCloud', 'migración automática del primer almacenamiento local'],
   ['refreshProjectsFromCloud', 'lista de proyectos reconstruida desde el bucket'],
@@ -123,6 +123,11 @@ else ok('Nunca se eliminan referencias de identidad silenciosamente');
 
 if (/on\/CF/.test(html)) fail('Montaje contiene CF sin expansión en un paneo');
 else ok('Paneos de montaje expanden el conteo de fotogramas');
+
+if (!/primera_referencia/.test(html) || !/frase típica tiene alrededor de 6-10 palabras/.test(html)
+    || !/poco diálogo directo/.test(html) || !/cadencia demasiado larga/.test(html)) {
+  fail('El motor narrativo no está calibrado a la cadencia real de las referencias');
+} else ok('Guion calibrado a frase corta, primera persona y diálogo directo de las referencias');
 
 if (/Facebook Reels/i.test(html)) fail('El motor largo todavía contiene reglas editoriales de Facebook Reels');
 else ok('El motor largo no hereda reglas de Facebook Reels');
