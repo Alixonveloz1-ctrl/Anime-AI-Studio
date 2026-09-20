@@ -3719,7 +3719,9 @@ document.getElementById('btnGenerarUniverso').addEventListener('click', async ()
   try {
     const comedyMode = isComedyMode(genero, subgenres);
     const allAgesUni = isAllAges(demo);
-    const system = `Eres un creador de universos para historias anime de YouTube. Tu trabajo aquí es sólo diseñar una premisa, conflicto y mundo fuertes; NO desarrollar todavía el guion largo.
+    const viralFormula = seleccionarFormulaViral(genero, subgenres, concepto);
+    const viralFormulaId = idFormulaViral(viralFormula);
+    const system = `Eres un creador de universos para historias anime LARGAS de YouTube. Tu prioridad es RETENCIÓN y reproducir la fantasía de audiencia/arquitectura que ya funcionó en las referencias estudiadas; la originalidad NO es un objetivo. Tu trabajo aquí es diseñar la premisa, conflicto y mundo sobre esa fórmula; NO desarrollar todavía el guion largo.
 REGLAS ABSOLUTAS:
 ${briefDeNombres(genero, concepto)}
 ${comedyMode
@@ -3730,7 +3732,9 @@ ${comedyMode
 - En "hook" describe UNA situación concreta e impactante del primer episodio, fiel al género, no una promesa vaga.`}
 - NO mezclar géneros no solicitados.
 ${SUBGENRE_FIDELITY_CONTRACT}
-${concepto ? `- ⚠️ CRÍTICO — HAY UN CONCEPTO SEMILLA PROPORCIONADO POR EL USUARIO: ese concepto es CANON OBLIGATORIO, no una sugerencia. DEBES preservar EXACTAMENTE: los nombres de personajes que menciona (no los cambies, no los reemplaces con otros), la premisa central, y cada detalle específico que describe. Tu trabajo es EXPANDIR ese concepto (agregar ambientación, personajes secundarios coherentes, detalles del mundo) — NUNCA inventar una historia distinta ni renombrar lo que ya está definido. Si el concepto dice que un personaje se llama "Sofía", el universo resultante DEBE tener un personaje llamado "Sofía" — no "Yuki", no "Yuri", no ningún otro nombre.` : '- No hay concepto semilla: tienes libertad creativa total para inventar un universo ORIGINAL fiel al género.'}
+${concepto ? `- ⚠️ CRÍTICO — HAY UN CONCEPTO SEMILLA PROPORCIONADO POR EL USUARIO: ese concepto es CANON OBLIGATORIO, no una sugerencia. DEBES preservar EXACTAMENTE nombres, relaciones, premisa y detalles específicos. NO lo "mejores" alejándolo de una fórmula conocida: si se parece mucho a una historia que ya funcionó, CONSERVA esa cercanía y explota el mismo tipo de recompensa/escalada.` : '- No hay concepto semilla: construye una premisa deliberadamente cercana a la FÓRMULA VIRAL seleccionada. No busques ser novedoso por ser novedoso.'}
+- PROHIBIDO introducir diferencias sólo para "hacerlo original". Diferencia nombres, lugares y detalles únicamente cuando la coherencia de esta historia lo necesite.
+- Nunca copies frases literales de otro guion; sí puedes reutilizar la misma fantasía, secuencia de progresión, tipo de antagonista, inversiones de estatus y ritmo de revelaciones.
 - Responde SOLO JSON válido sin markdown`;
 
     const prompt = `${DEMO_PROMPTS[demo] || ''}
@@ -3738,6 +3742,10 @@ ${concepto ? `- ⚠️ CRÍTICO — HAY UN CONCEPTO SEMILLA PROPORCIONADO POR EL
 ${GENRE_PROMPTS[genero] || ''}
 
 ${subgenreText}
+
+FÓRMULA VIRAL SELECCIONADA — ${viralFormula.label}
+${viralFormula.contract}
+La fórmula anterior es una ESTRUCTURA OBLIGATORIA de recompensa/retención, no una sugerencia decorativa.
 
 Tono: ${tono || 'neutral'}
 ${concepto ? `
@@ -3750,7 +3758,7 @@ CONCEPTO SEMILLA — TEXTO LITERAL DEL USUARIO (CANON OBLIGATORIO):
 INSTRUCCIÓN: El universo que generes DEBE ser este concepto, expandido con más detalle — no una historia diferente "inspirada" en él. Conserva cada nombre propio, cada relación entre personajes, y la premisa exacta tal como está escrita arriba. Tu única tarea creativa es AÑADIR: ambientación específica, personajes secundarios que complementen (sin reemplazar a los ya mencionados), y estructura narrativa para el episodio 1.
 ` : ''}
 
-${concepto ? 'Expande el concepto semilla de arriba en un universo completo' : 'Crea un universo ORIGINAL y único'} que sea ESTRICTAMENTE FIEL al género "${genero}" con los subgéneros seleccionados integrados naturalmente.
+${concepto ? 'Expande el concepto semilla de arriba SIN alejarlo de su fantasía central' : 'Construye el universo sobre la fórmula viral seleccionada'} y mantenlo ESTRICTAMENTE FIEL al género "${genero}" y a los subgéneros seleccionados. La cercanía a una fórmula que ya funcionó es una VENTAJA, no un defecto.
 ${!genreAllowsSupernatural(genero, subgenres) ? `\n⚠️ RESTRICCIÓN DEL GÉNERO "${genero}": este universo NO tiene magia, poderes, sistemas de estado ni fenómenos sobrenaturales. El conflicto y el hook se sostienen con causas del mundo real. (Esta misma restricción se aplica al escribir los episodios — no generes un universo que después no se pueda contar.)` : ''}
 ${allAgesUni ? `\n⚠️ DEMOGRAFÍA KODOMOMUKE: universo apto para público infantil — sin violencia explícita, sin contenido sexual o sugerente, sin temas adultos. El conflicto es comprensible para un niño y deja una moraleja clara.` : ''}
 
@@ -3792,6 +3800,8 @@ Devuelve JSON:
     state.universe.demo      = demo;
     state.universe.genero    = genero;
     state.universe.subgenres = subgenres;
+    state.universe.viralFormulaId = viralFormulaId;
+    state.universe.viralFormulaLabel = viralFormula.label;
     state.universe.creativeVersion = 2;
     state.universe.epFormat  = document.getElementById('epLengthSelect')?.value || 'hora';
     state.universe.storyMode = document.getElementById('storyModeSelect')?.value || 'narrated';
@@ -4012,6 +4022,7 @@ function renderUniverse() {
       ${clasificacion ? `<div class="field"><div class="field-label">Clasificación</div>${clasificacion}</div>` : ''}
       <div class="field"><div class="field-label">Carpeta en el bucket</div><code>proyectos/${carpetaProyecto()}/</code></div>
       ${subs.length ? `<div class="field"><div class="field-label">Subgéneros</div>${subs.map(s => SUBGENERO_LABELS[s] || s).join(' · ')}</div>` : ''}
+      <div class="field"><div class="field-label">🔥 Fórmula de referencia</div>${u.viralFormulaLabel || formulaViralActual(u).label}</div>
       <div class="field"><div class="field-label">Concepto</div>${u.concepto || ''}</div>
       <div class="field"><div class="field-label">Conflicto</div>${u.conflicto || ''}</div>
       <div class="field"><div class="field-label">Setting</div>${u.setting || ''}</div>
