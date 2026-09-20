@@ -4297,8 +4297,8 @@ Responde SOLO JSON válido.`;
     // from this story are appended.
     setProg(60, 'Paso 4/5: Extrayendo escenarios de la historia...');
     const scenariosOK = await extractScenariosFromStory(fullStory);
-    if (!scenariosOK && !(u.escenarios || []).length) {
-      throw new Error('Google no completó la extracción de escenarios. No se generarán fondos sin ancla; vuelve a pulsar Generar para reanudar esta misma historia.');
+    if (!scenariosOK) {
+      throw new Error('Google no completó la extracción de escenarios. La generación queda pausada antes de crear fondos sin ancla; al continuar se reintentará esta misma etapa.');
     }
 
     // ─── CALL 3: image prompts, based on the narration already written above.
@@ -4761,7 +4761,11 @@ async function extractScenariosFromStory(storyText) {
   try {
     const parsed = safeParseJSON(raw);
     const nuevos = (parsed.nuevos || []).filter(e => e && e.name && e.desc);
-    if (!nuevos.length && existing.length) return true; // nothing new, keep as-is
+    if (!nuevos.length && existing.length) return true; // no new place needed
+    if (!nuevos.length && !existing.length) {
+      console.warn('Extracción de escenarios devolvió lista vacía en el primer episodio.');
+      return false;
+    }
     // Sequential ids continuing after the highest existing locN
     let maxN = 0;
     existing.forEach(e => { const m = /^loc(\d+)$/.exec(e.id || ''); if (m) maxN = Math.max(maxN, parseInt(m[1], 10)); });
