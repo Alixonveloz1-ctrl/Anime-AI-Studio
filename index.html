@@ -5341,6 +5341,15 @@ function buildSceneEnvContext(s) {
   return { envText };
 }
 
+// The DP stores a literal excerpt of the narration for each shot. Sending that
+// excerpt to the image model as a chronology LIMIT prevents it from choosing a
+// more dramatic event that occurs later in the same scene.
+function limiteCronologicoPlano(s, slot) {
+  const a = String(s?.['anclaNarrativa' + slot] || '').trim();
+  if (!a) return '';
+  return ` CHRONOLOGY LIMIT — this shot corresponds EXACTLY to this narration beat: "${a}". Depict the world at this moment only. Do NOT include actions, injuries, positions, objects or reveals that occur later in the scene. Preserve every state already established before this beat unless this beat changes it.`;
+}
+
 // The location anchor, appended BEHIND the shot prompt before it goes to the
 // image model. Both were arriving as mandatory at once, which is how a desk from
 // a classroom prompt and a corridor description ended up drawn on top of each
@@ -5400,7 +5409,7 @@ async function armarEnvioDeEscena(s, slot) {
     env.planoPrevio = previo && s[previo] ? planoEn(s[previo]) : '';
     env.planoNuevo = planoEn(tam);
   }
-  return { base, tuTexto: base, prompt: conPlano + ancla, refs, ancla, sinFicha, env, desdeNarracion };
+  return { base, tuTexto: base, prompt: conPlano + ancla + limiteCronologicoPlano(s, slot), refs, ancla, sinFicha, env, desdeNarracion };
 }
 
 // El texto COMPLETO tal y como lo lee Google, con el añadido del cliente incluido.
@@ -5485,7 +5494,7 @@ window.generateSceneImageAB = async function(sceneId, slot) {
     if (sinFicha.length) {
       showToast(`${sinFicha.join(', ')} sin ficha generada: se dibuja del texto`, 'error');
     }
-    const prompt = conPlano + ancla;
+    const prompt = conPlano + ancla + limiteCronologicoPlano(s, slot);
     const env = buildSceneEnvContext(s);
     env.desdeNarracion = desdeNarracion;
     env.continuityRef = await getContinuityRef(s, slot);
@@ -6086,7 +6095,7 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
       const imgB64 = await conEsperaDeCuota(async () => {
         const contRef = await getContinuityRef(s, ab);
         const previo = { B: 'tamanoA', C: 'tamanoB' }[ab];
-        return generateImageRaw(prompt + anclaDeEscena(prompt, s), refsDeEscena(prompt, s), {
+        return generateImageRaw(prompt + anclaDeEscena(prompt, s) + limiteCronologicoPlano(s, ab), refsDeEscena(prompt, s), {
           ...envForScene(s), continuityRef: contRef, desdeNarracion,
           planoPrevio: (contRef && tam && previo && s[previo]) ? planoEn(s[previo]) : '',
           planoNuevo: (contRef && tam) ? planoEn(tam) : '',
