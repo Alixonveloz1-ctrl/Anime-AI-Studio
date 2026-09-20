@@ -3329,6 +3329,268 @@ personas conversando sin que nada cambie.`;
 const HUMILLACION_LAYER = `
 CAPA DE HUMILLACIÓN Y REVANCHA (la selección del usuario SÍ la pide): la injusticia es PÚBLICA y con testigos que tienen nombre — no basta con que el protagonista lo pase mal en privado. Quien humilla sube la apuesta con actos concretos y visibles; el protagonista aguanta por un motivo material que el espectador entiende (una deuda, alguien a quien protege, una prueba que todavía no tiene); y el desquite llega con algo que TODOS los testigos ven: un papel, una cifra, un objeto, un nombre dicho en voz alta. Quien humilló reacciona EN PANTALLA — su cara, su frase, su silencio. Prohibido narrar la revancha en resumen, prohibido que la justicia llegue fuera de escena y prohibido el salvador externo: el vuelco lo produce algo que el protagonista hizo o supo antes y que el espectador ya vio.`;
 
+
+// ════════════════════════════════════════════════════════════════
+// VIRAL REFERENCE FORMULAS — derived from the channels/videos studied.
+//
+// These are NOT "inspiration themes". They are structural contracts. The user
+// explicitly wants the app to prioritize proven audience mechanics over novelty.
+// We still never copy literal dialogue or prose from a source video; we reuse the
+// premise fantasy, progression logic, reveal cadence and payoff architecture.
+// ════════════════════════════════════════════════════════════════
+const VIRAL_REFERENCE_FORMULAS = {
+  apocalipsis_base: {
+    label: 'Expulsado → sistema/base → recursos → reclutas → regreso del agresor',
+    genero: ['supervivencia','videojuego'],
+    subgenres: ['apocalipsis','sistema_awakening','overpowered','revenge'],
+    keywords: ['apocalipsis','zombi','zombie','base','refugio','refugio','recursos','supervivientes','almacen','almacén'],
+    contract: `FÓRMULA PROBADA — APOCALIPSIS + BASE/SISTEMA:
+1) ABRE con el protagonista ya humillado, expulsado, abandonado o reducido a un recurso para otros.
+2) La ventaja extraordinaria aparece MUY PRONTO y se demuestra con algo pequeño y concreto.
+3) Primera prueba: comida, refugio, mejora, habilidad o recurso visible; alguien reacciona.
+4) La ventaja empieza a crear una BASE/RED/GRUPO, no sólo poder individual.
+5) Recluta a personas descartadas por otros y conviértelas en valor real.
+6) Cada mejora abre una necesidad nueva: cristales, gente, territorio, defensa, comercio.
+7) El antiguo abusador regresa creyendo que nada cambió.
+8) PAYOFF PÚBLICO: ve con sus propios ojos que el "inútil" ahora controla lo que necesita.
+9) Después del primer desquite, aparece una amenaza/escala mayor para impedir que la historia muera.
+10) Progresión visible y cuantificable. Nada de capítulos enteros reflexionando sobre el apocalipsis.`,
+    beats: [
+      'humillación/exclusión material ya ocurriendo',
+      'activación o descubrimiento de la ventaja con una prueba pequeña',
+      'primer recurso/mejora que cambia su supervivencia de inmediato',
+      'primer recluta o aliado que los demás habían descartado',
+      'segunda mejora que amplía lo que la base puede hacer',
+      'reacción externa: otros descubren que ahí hay comida/poder/seguridad',
+      'regresa alguien que antes lo explotaba o despreciaba',
+      'inversión pública de estatus y primera revancha',
+      'nuevo riesgo, traición o enemigo que supera la escala anterior',
+      'cierre con expansión clara: más territorio, más poder o una amenaza mayor'
+    ]
+  },
+  divorcio_retorno: {
+    label: 'Despreciado → separación → talento/identidad oculta → regreso profesional → inversión pública',
+    genero: ['drama'],
+    subgenres: ['revenge','romance','mafia','overpowered'],
+    keywords: ['esposa','esposo','divorcio','prometida','mantenido','empresa','tecnologia','tecnología','secretario','fundador'],
+    contract: `FÓRMULA PROBADA — RELACIÓN ROTA + INVERSIÓN DE ESTATUS:
+1) ABRE con una humillación sentimental concreta, no con recuerdos vagos.
+2) El protagonista deja de perseguir, insistir o sacrificarse. Toma una decisión irreversible.
+3) Sale del entorno donde era invisible: renuncia, se va, firma, devuelve algo, corta contacto.
+4) Reactiva una capacidad/identidad/red profesional que había abandonado por esa relación.
+5) La otra parte nota su ausencia pero la interpreta mal al principio.
+6) El rival/amor platónico/figura admirada parece tener ventaja social.
+7) El protagonista acumula validaciones REALES: talento, contrato, mentor, producto, empresa, evento.
+8) La ex pareja descubre piezas de la verdad por terceros y demasiado tarde.
+9) PAYOFF PÚBLICO: una escena donde quienes lo subestimaban ven su verdadero estatus/capacidad.
+10) El final paga la elección emocional: no basta con "ahora soy rico"; decide qué quiere hacer con esa vida recuperada.`,
+    beats: [
+      'humillación sentimental o ruptura concreta',
+      'decisión de dejar de perseguir y cortar una rutina vieja',
+      'salida material del entorno: renuncia, mudanza, firma o separación',
+      'primer regreso al talento/red/empresa abandonada',
+      'la ex pareja nota la ausencia y la interpreta mal',
+      'primer reconocimiento externo fuerte del protagonista',
+      'el rival parece ganar terreno mientras el protagonista crece fuera de cuadro',
+      'descubrimiento parcial de la verdadera capacidad/estatus',
+      'revelación pública donde cambia quién tiene poder social',
+      'cierre emocional que demuestra que el protagonista ya no vive para esa relación'
+    ]
+  },
+  compromiso_mente: {
+    label: 'Compromiso impuesto → finge ser basura → ella sabe la verdad → planes que se vuelven contra él',
+    genero: ['romcom','drama'],
+    subgenres: ['romance','comedia','misterio'],
+    keywords: ['compromiso','prometida','prometido','matrimonio','contrato','pensamientos','leer la mente','leer mentes'],
+    contract: `FÓRMULA PROBADA — COMPROMISO/MATRIMONIO + ASIMETRÍA DE INFORMACIÓN:
+1) ABRE con la obligación sentimental ya encima: compromiso, matrimonio, convivencia o acuerdo.
+2) El protagonista QUIERE romperlo y adopta una estrategia concreta para parecer indeseable/inútil/sinvergüenza.
+3) La otra persona posee una ventaja de información que él ignora: oye pensamientos, conoce su identidad, sabe el plan o descubre la mentira.
+4) Cada plan del protagonista tiene un resultado contrario y visible.
+5) La gracia/tensión está en que el espectador sabe ambas intenciones.
+6) Introduce terceros que empeoran el malentendido: familia, pretendiente, rival, socio.
+7) La pareja empieza a protegerlo o sabotear su plan sin admitir por qué.
+8) Un momento vulnerable revela que la máscara no coincide con lo que hace.
+9) PAYOFF: él descubre que ella sabía más de lo que parecía, o ella obliga a que deje de fingir.
+10) Cierra pagando la relación, no sólo la broma.`,
+    beats: [
+      'obligación sentimental ya impuesta',
+      'primer plan para parecer indeseable o romper el acuerdo',
+      'prueba de que la otra persona conoce algo que él ignora',
+      'primer plan que sale exactamente al revés',
+      'tercero que complica la relación',
+      'ella empieza a intervenir activamente para frustrar su salida',
+      'la máscara del protagonista se resquebraja por una acción genuina',
+      'malentendido o revelación que eleva la tensión sentimental',
+      'descubrimiento de la asimetría de información',
+      'decisión final sobre la relación'
+    ]
+  },
+  bestia_evolucion: {
+    label: 'Criatura débil → sistema/evolución → devora/vence → nueva forma → linaje/amenaza mayor',
+    genero: ['fantasia','donghua','isekai','videojuego'],
+    subgenres: ['reencarnacion','sistema_awakening','overpowered'],
+    keywords: ['bestia','perro','lobo','criatura','animal','evolucion','evolución','devora','devorar','mascota'],
+    contract: `FÓRMULA PROBADA — BESTIA DÉBIL + EVOLUCIÓN:
+1) ABRE siendo realmente débil, prescindible o confundido con una criatura común.
+2) La mecánica de evolución se activa muy pronto y con reglas fáciles de entender.
+3) Primera presa/recurso = primera mejora visible.
+4) La nueva habilidad resuelve un problema que antes era imposible.
+5) Humanos/sectas/otras bestias siguen subestimándolo durante varias etapas.
+6) Cada victoria desbloquea una propiedad distinta, no sólo "más fuerza".
+7) Se revela que su especie/linaje/origen no era normal.
+8) Entra una bestia/secta/enemigo que conoce lo que realmente es.
+9) PAYOFF de transformación/evolución que todos presencian.
+10) Cierra con una ruta de evolución mayor todavía abierta.`,
+    beats: [
+      'estado inicial débil y peligro inmediato',
+      'activación de la mecánica de evolución',
+      'primera mejora visible por comida/combate/recurso',
+      'uso práctico de la habilidad nueva',
+      'segundo salto de poder con una propiedad distinta',
+      'alguien poderoso empieza a sospechar qué criatura es',
+      'rival o depredador obliga a usar todo lo aprendido',
+      'revelación de linaje/especie/origen',
+      'evolución pública importante',
+      'amenaza o forma futura que supera la escala actual'
+    ]
+  },
+  cultivacion_face: {
+    label: 'Basura de la secta → ventaja oculta → progreso secreto → desafío público → face-slap → rango mayor',
+    genero: ['donghua'],
+    subgenres: ['revenge','overpowered','sistema_awakening'],
+    keywords: ['secta','discípulo','discipulo','cultivo','cultivacion','cultivación','qi','núcleo','nucleo','clan'],
+    contract: `FÓRMULA PROBADA — CULTIVACIÓN + HUMILLACIÓN + REVANCHA:
+1) ABRE con jerarquía visible y una humillación concreta delante de testigos.
+2) El protagonista obtiene/descubre una ventaja que los demás no entienden todavía.
+3) Entrena o explota esa ventaja EN PRIVADO y consigue un primer resultado medible.
+4) Un rival lo provoca de nuevo creyendo que sigue igual.
+5) Primer desquite parcial: lo suficiente para sorprender, no para gastar todo el techo de poder.
+6) El clan/secta reacciona: maestros, ancianos, rivales cambian su conducta.
+7) Aparece un recurso/torneo/prueba con un premio que acelera la progresión.
+8) El rival escala la humillación o llama a alguien de rango superior.
+9) PAYOFF PÚBLICO: ruptura de rango, técnica imposible o victoria que destruye la lectura anterior.
+10) El mundo se hace más grande inmediatamente después: otra secta, reino o enemigo superior.`,
+    beats: [
+      'humillación pública dentro de la jerarquía',
+      'descubrimiento de la ventaja oculta',
+      'primer progreso privado y medible',
+      'rival vuelve a provocar',
+      'primer desquite parcial',
+      'reacción de maestros/clan/secta',
+      'prueba, torneo o recurso de alto valor',
+      'enemigo de rango superior sube la apuesta',
+      'face-slap público y avance de rango',
+      'apertura inmediata hacia una escala mayor'
+    ]
+  },
+  oficio_poder: {
+    label: 'Oficio humilde → habilidad absurda → primer cliente sorprendido → élites dudan → prueba pública → expansión',
+    genero: ['fantasia','drama','aventura'],
+    subgenres: ['overpowered','sistema_awakening','misterio'],
+    keywords: ['herrero','restaurante','cocinero','tienda','taller','farmacia','medico','médico','artesano','vendedor'],
+    contract: `FÓRMULA PROBADA — OFICIO HUMILDE + HABILIDAD IMPOSIBLE:
+1) ABRE mostrando por qué su oficio parece mediocre o de bajo estatus.
+2) La habilidad convierte una tarea cotidiana en algo extraordinario.
+3) Un primer cliente/persona descubre el efecto antes que el mundo.
+4) La noticia corre y atrae alguien de estatus mayor.
+5) Un experto/élite se burla o duda públicamente.
+6) El protagonista resuelve una prueba que el experto consideraba imposible.
+7) Su producto/servicio empieza a alterar relaciones de poder.
+8) Aparece alguien que quiere comprarlo, controlarlo o robarle el secreto.
+9) PAYOFF PÚBLICO: el oficio "inferior" supera una institución prestigiosa.
+10) Cierra con demanda/escala que ya no cabe en su vida anterior.`,
+    beats: [
+      'oficio despreciado o negocio al borde del fracaso',
+      'primera demostración pequeña de la habilidad',
+      'primer cliente que nota algo imposible',
+      'la reputación empieza a correr',
+      'élite o experto pone en duda el resultado',
+      'prueba imposible resuelta en público',
+      'consecuencia económica/social de esa prueba',
+      'intento de control, compra o robo del secreto',
+      'victoria pública del oficio humilde sobre la institución',
+      'expansión a una escala mayor'
+    ]
+  },
+  escalada_general: {
+    label: 'Desventaja clara → ventaja concreta → primera prueba → reacción → escalada → inversión pública',
+    genero: [],
+    subgenres: [],
+    keywords: [],
+    contract: `FÓRMULA BASE DE LAS REFERENCIAS:
+1) Empieza con una desventaja/humillación/problema MATERIAL que se entiende en segundos.
+2) Introduce pronto una ventaja, información o capacidad que cambia las reglas.
+3) Demuéstrala con una prueba pequeña antes de explicarla por completo.
+4) Haz que otra persona REACCIONE y cambie su conducta.
+5) Cada solución abre una necesidad mayor; nunca vuelvas al mismo punto.
+6) Recupera a alguien que lo subestimó o introduce una figura de estatus superior.
+7) Escala con recursos, poder, reputación, relación o información visibles.
+8) Incluye al menos una inversión pública de estatus.
+9) Después del payoff, abre una escala mayor en lugar de repetir exactamente el mismo conflicto.
+10) La historia debe sentirse como una cadena de recompensas y complicaciones, no como una novela contemplativa.`,
+    beats: [
+      'problema material claro y protagonista en desventaja',
+      'ventaja concreta que cambia las reglas',
+      'primera prueba pequeña de esa ventaja',
+      'reacción de otra persona que cambia la situación',
+      'escalada de recursos/estatus/información',
+      'regreso o aparición de alguien que lo subestima',
+      'segunda demostración de mayor escala',
+      'inversión pública de estatus',
+      'complicación o amenaza superior',
+      'payoff y apertura hacia una escala mayor'
+    ]
+  }
+};
+
+function normalizarFormulaTexto(v) {
+  return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function seleccionarFormulaViral(genero, subgenres = [], concepto = '') {
+  const txt = normalizarFormulaTexto(concepto);
+  let best = VIRAL_REFERENCE_FORMULAS.escalada_general;
+  let bestScore = -1;
+  for (const [id, f] of Object.entries(VIRAL_REFERENCE_FORMULAS)) {
+    if (id === 'escalada_general') continue;
+    let score = 0;
+    if ((f.genero || []).includes(genero)) score += 4;
+    for (const sg of (subgenres || [])) if ((f.subgenres || []).includes(sg)) score += 2;
+    for (const kw of (f.keywords || [])) if (txt.includes(normalizarFormulaTexto(kw))) score += 3;
+    if (score > bestScore) { best = f; bestScore = score; }
+  }
+  return bestScore >= 4 ? best : VIRAL_REFERENCE_FORMULAS.escalada_general;
+}
+
+function formulaViralActual(u = state.universe) {
+  if (!u) return VIRAL_REFERENCE_FORMULAS.escalada_general;
+  if (u.viralFormulaId && VIRAL_REFERENCE_FORMULAS[u.viralFormulaId]) return VIRAL_REFERENCE_FORMULAS[u.viralFormulaId];
+  return seleccionarFormulaViral(u.genero, effectiveSubgenres(u.subgenres || [], u.demo), u.conceptoOriginal || u.concepto || '');
+}
+
+function idFormulaViral(formula) {
+  return Object.entries(VIRAL_REFERENCE_FORMULAS).find(([,v]) => v === formula)?.[0] || 'escalada_general';
+}
+
+function formulaViralBrief(u = state.universe) {
+  const f = formulaViralActual(u);
+  return `\n═══ FÓRMULA VIRAL DE REFERENCIA — OBLIGATORIA ═══
+${f.label}
+${f.contract}
+OBJETIVO: conservar la misma FANTASÍA DE AUDIENCIA y la misma arquitectura de recompensa/escalada de las referencias estudiadas. La originalidad NO es un criterio de calidad aquí. Si el concepto se parece mucho a una premisa que ya funcionó, NO lo alejes para "hacerlo diferente". Cambia sólo los detalles necesarios para que esta historia sea coherente con su propio elenco/mundo. Nunca copies frases literales de otro guion.
+═══════════════════════════════════════════════════`;
+}
+
+function formulaBeatForPart(i, parts, u = state.universe) {
+  const beats = formulaViralActual(u).beats || VIRAL_REFERENCE_FORMULAS.escalada_general.beats;
+  if (!beats.length) return '';
+  const idx = Math.min(beats.length - 1, Math.floor(i * beats.length / Math.max(1, parts)));
+  const nextIdx = Math.min(beats.length - 1, Math.floor((i + 1) * beats.length / Math.max(1, parts)));
+  const slice = [...new Set([beats[idx], beats[nextIdx]])];
+  return slice.join(' → ');
+}
+
 // ════════════════════════════════════════════════════════════════
 // EPISODE FORMATS — length is data, not a hardcoded 15.
 // words ≈ scenes × 52, because TTS runs at ~150 words/minute and each
