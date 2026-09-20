@@ -1476,7 +1476,7 @@ function buildVideoPrompt(s, slot = 'A', opts = {}) {
   // rain inside the corridor was not only the model hallucinating: we were asking
   // for it. Dropped on the video path only; the images keep the style intact.
   const estiloVideo = estiloParaVideo();
-  const animeStyle = `STYLE — ABSOLUTELY MANDATORY: This clip must look like a moving frame of a ${estiloVideo} Animation quality reference: ${studio}${demoRef}. Target: a hand-painted, richly detailed 2D anime film frame — nothing simplified, nothing plastic-3D.`;
+  const animeStyle = `STYLE — ABSOLUTELY MANDATORY: preserve the exact Japanese hand-drawn 2D anime drawing of the first frame. ${estiloVideo} Do not upgrade it into 3D, CGI, realistic rendering or a videogame cinematic while moving.`;
 
   // With a director-written motion the clip has an explicit destination, so the
   // generic "stay in place" rule would fight it. Without one, keep the old
@@ -2537,6 +2537,56 @@ function generoDeVoz(v) {
   return GENERO_POR_NOMBRE[String(v.etiqueta || '').toLowerCase()] || null;
 }
 
+function vozValor(v) { return v ? `gcp_${v.name}` : ''; }
+
+function vozAutomaticaPara(gender, usados = new Set()) {
+  const lang = document.getElementById('voiceLang')?.value || 'es-US';
+  const want = String(gender || '').toLowerCase().startsWith('f') ? 'female'
+             : String(gender || '').toLowerCase().startsWith('m') ? 'male' : null;
+  const candidates = VOCES_DISPONIBLES.filter(v => v.lang === lang && (!want || generoDeVoz(v) === want));
+  return vozValor(candidates.find(v => !usados.has(vozValor(v))) || candidates[0] || VOCES_DISPONIBLES.find(v => v.lang === lang));
+}
+
+function asegurarVocesPersonajes() {
+  if (state.universe?.storyMode !== 'cast' || !VOCES_DISPONIBLES.length) return;
+  const narr = document.getElementById('voiceSelect')?.value || '';
+  const usados = new Set(narr ? [narr] : []);
+  let changed = false;
+  for (const ch of state.characters || []) {
+    const existe = ch.voice && VOCES_DISPONIBLES.some(v => vozValor(v) === ch.voice);
+    if (!existe) {
+      ch.voice = vozAutomaticaPara(ch.gender, usados);
+      if (ch.voice) { usados.add(ch.voice); changed = true; }
+    } else usados.add(ch.voice);
+  }
+  if (!state.universe.systemVoice) {
+    state.universe.systemVoice = vozAutomaticaPara('female', usados) || narr;
+    changed = true;
+  }
+  if (changed) saveState();
+}
+
+function opcionesVozPersonaje(ch) {
+  const lang = document.getElementById('voiceLang')?.value || 'es-US';
+  const list = VOCES_DISPONIBLES.filter(v => v.lang === lang);
+  const current = ch.voice || '';
+  let html = '<option value="">Automática</option>';
+  for (const v of list) {
+    const val = vozValor(v);
+    const icon = generoDeVoz(v) === 'female' ? '👩' : generoDeVoz(v) === 'male' ? '👨' : '🎙️';
+    html += `<option value="${val}"${val === current ? ' selected' : ''}>${icon} ${v.etiqueta}</option>`;
+  }
+  if (current && !list.some(v => vozValor(v) === current)) html += `<option value="${current}" selected>Voz guardada</option>`;
+  return html;
+}
+
+window.setCharacterVoice = function(id, voice) {
+  const ch = (state.characters || []).find(x => x.id === id);
+  if (!ch) return;
+  ch.voice = voice || vozAutomaticaPara(ch.gender);
+  saveState();
+};
+
 function pintarVocesDelIdioma() {
   const selLang = document.getElementById('voiceLang');
   const selVoz  = document.getElementById('voiceSelect');
@@ -2575,6 +2625,7 @@ function pintarVocesDelIdioma() {
     || (dellang.find(v => v.etiqueta === 'Charon') && `gcp_${dellang.find(v => v.etiqueta === 'Charon').name}`)
     || selVoz.options[0]?.value;
   if (quiero) selVoz.value = quiero;
+  asegurarVocesPersonajes();
   // La lista de voces llega de la red DESPUÉS de arrancar, así que el selector
   // del corto se rellena aquí: al inicializarse sólo existía el hueco.
   const selCorto = document.getElementById('cortoVoz');
@@ -4051,18 +4102,24 @@ Un cambio de ángulo de cámara NO es un beat. Si lo único que cambiaría entre
 - ⚠️ CAUSALIDAD ESTRICTA — cada prompt describe SOLO el estado del mundo en SU momento: lo que se revela DESPUÉS no puede verse ANTES (si todavía no abrió la puerta, el interior, el cuerpo o la sangre NO son visibles en ese prompt; si todavía no agarró el frasco, no lo tiene en la mano). Y lo ya ocurrido NO se deshace (si la puerta ya se abrió en el beat 2, en el beat 3 sigue abierta).
 - LA POSICIÓN AVANZA: si el texto dice que el personaje se mueve (entra, cruza, se agacha, sale, llega a otra parte del lugar), el prompt de ese beat lo muestra YA en la nueva posición con la acción completada — ej.: beat "gira el pomo y entra" → el prompt lo muestra DENTRO de la habitación con la puerta abierta detrás de él viendo lo que hay, NO tocando la puerta otra vez.
 - CONTINUIDAD OBLIGATORIA entre los planos de una escena: MISMO escenario asignado, MISMA ropa y peinado de cada personaje, MISMA iluminación y clima. Lo que SÍ cambia: la acción (avanza), la posición de los personajes en el espacio, el estado de los objetos según el texto, y el ÁNGULO de cámara — los encuadres deben ser claramente distintos entre sí, y el ángulo se elige al servicio de cada beat (no uses una plantilla fija).
-- CONTINUIDAD ENTRE ESCENAS: el primer prompt de cada escena CONTINÚA desde donde quedó el último prompt de la escena anterior — las 45 imágenes del episodio son UNA secuencia visual continua de la misma historia, no ilustraciones sueltas. Si la escena anterior terminó en un lugar y esta empieza en otro, el prompt 1 muestra la llegada/transición natural.
+- CONTINUIDAD ENTRE ESCENAS: un CORTE es normal. Marca "continuarAnterior": true SOLO cuando la nueva escena ocurre segundos después, en el mismo lugar, con la misma ropa y la acción depende físicamente del estado exacto del plano anterior. Un mismo escenario visitado horas después NO es continuidad de fotograma.
 - INTEGRACIÓN FÍSICA: el personaje está DENTRO del espacio — apoyado, sentado o de pie sobre algo que ESE lugar ya tiene, con sombras e iluminación coherentes. NUNCA debe verse como un personaje pegado sobre un fondo. Para lograrlo usá el mobiliario que la descripción del escenario ya menciona; no inventes un mueble nuevo solo para tener con qué interactuar.
 - CÁMARA LIBRE EN EL LUGAR: a lo largo del episodio mostrá el MISMO lugar desde posiciones y ángulos DIFERENTES (desde la puerta, desde la ventana, ángulo bajo, over-shoulder, rincones distintos) — no repitas siempre el mismo encuadre del escenario.
 - VESTIMENTA FIEL AL MUNDO: la ropa de cada personaje conserva el material y la CONDICIÓN de su ficha (basta, desteñida, con parches si es pobre) — nunca la embellezcas ni la conviertas en ropa elegante que la historia no justifica.
 
-⚠️ DECISIÓN 3 — EL MOVIMIENTO DE CADA PLANO (campo "movimientos", uno por plano, EN INGLÉS):
-Cada plano se convierte en un clip de video de 8 segundos que ARRANCA en su propia imagen. Por eso lo único que hay que controlar es DÓNDE TERMINA.
-- Escribí el movimiento como: qué se mueve, cuánto, y en qué estado QUEDA al final del clip.
-- ⚠️ REGLA DE ENGANCHE: el estado final del plano N debe ser EXACTAMENTE la imagen del plano N+1. Si el plano 2 muestra al personaje ya sentado, el movimiento del plano 1 termina con él sentándose — no con ella cruzando la habitación, ni de vuelta de pie. Mirá el prompt del plano siguiente antes de escribir el final de este.
-- El ÚLTIMO plano de la escena no engancha con nada: cierra con un movimiento que se aquieta.
-- MOVIMIENTO CONTENIDO: 8 segundos dan para un gesto, no para una secuencia. Respiración, un giro de cabeza, dar dos pasos, servir una taza, una deriva lenta de cámara. PROHIBIDO: que entren personajes nuevos, cambios de plano dentro del clip, saltos de lugar, acciones que el texto no narra.
-- Si el plano es contemplativo, el movimiento puede ser mínimo (respiración, parpadeo, pelo con el viento, luz que cambia) — eso es correcto, no lo fuerces.
+⚠️ DECISIÓN 3 — MOVIMIENTO LIMITADO DE ANIME / MOTION COMIC:
+Para cada plano devuelve "tiposMovimiento": "still" | "limited" | "action".
+- still: ilustración fuerte que funcionará con corte, paneo o zoom de montaje. Conversaciones, miradas, reacciones, exposición y muchos planos de romance entran aquí.
+- limited: necesita vida mínima (parpadeo, boca sencilla, respiración, cabello/ropa, pequeño gesto) pero NO desplazamiento corporal complejo.
+- action: el acontecimiento pierde claridad si no se mueve: golpe, caída, transformación, carrera corta, objeto lanzado, efecto de poder, acción física decisiva.
+NO marques "action" por espectáculo. La mayoría de una historia larga debe poder sostenerse con still/limited, como motion anime.
+
+Campo "movimientos": describe en INGLÉS únicamente el movimiento pequeño que Veo debe hacer SI ese plano se anima. El primer fotograma ya fija cámara, diseño, luz y escenario.
+- Nada de órbitas 3D, cámaras flotantes, transformación de perspectiva, movimientos de videojuego ni inventar acciones.
+- "limited" = un gesto y se aquieta. "action" = una acción clara, corta y legible.
+- Los CORTES son la norma. Devuelve "continuos": true únicamente cuando el plano N debe transformarse físicamente en el plano N+1 dentro de la MISMA acción continua. Si son dos ángulos de una conversación, es false.
+- El último plano siempre tiene continuo=false.
+- Devuelve "continuarAnterior": true sólo si el primer plano de esta escena debe usar el ÚLTIMO fotograma de la escena inmediatamente anterior como ancla física. No lo uses sólo porque el escenario se repite.
 
 CAMPO "escenario": asigná a cada escena el id EXACTO del escenario del universo donde ocurre (de la lista provista). Si el fragmento ocurre en un lugar que NO está en la lista, dejá "escenario" como "" (vacío) y describí ese lugar nuevo con detalle DENTRO de los 3 prompts — NUNCA asignes un escenario incorrecto solo por llenar el campo, porque su descripción anclaría un fondo equivocado.
 
@@ -4089,9 +4146,9 @@ REGLAS DE CADA PROMPT:
 - NUNCA decir solo "the protagonist" o "a man" — SIEMPRE el nombre real
 - Si 2+ personajes en la escena: "Scene with [nombre1] and [nombre2]:" y describir apariencia de cada uno
 - Máximo 3 personajes por imagen
-- TODOS LOS PRESENTES APARECEN: si la narración tiene 2+ personajes presentes en el lugar, el primer plano (amplio) los muestra a TODOS juntos interactuando; los siguientes pueden acercarse a uno, pero los demás siguen visibles en el encuadre o en segundo plano. Un personaje presente NUNCA desaparece del lugar entre los planos de la misma escena.
-- PRESENCIA CONTINUA: cuando un fragmento se enfoca en las acciones o diálogos de UN personaje, el protagonista y cualquier otro personaje ya presentes en el lugar SIGUEN AHÍ — inclúyelos por su nombre en los prompts, salvo que la narración diga explícitamente que salieron.
-- PERMANENCIA ENTRE ESCENAS: si escenas consecutivas ocurren en el MISMO escenario y la narración no dice que alguien se fue, los MISMOS personajes siguen presentes en todas — NUNCA alternes mostrando a uno por escena.
+- COBERTURA DE PERSONAJES: un plano muestra sólo a quienes la cámara necesita ver en ESE momento. Si hay cinco personas en la habitación, no obligues a las cinco a entrar en cada primer plano. Usa plano conjunto cuando la geografía importe y planos/contraplanos o reacciones cuando habla uno. Máximo 3 personajes visibles por imagen.
+- PRESENCIA NARRATIVA ≠ PRESENCIA EN CUADRO: un personaje puede seguir en la habitación y estar fuera de encuadre. No lo borres de la historia, pero tampoco lo pegues artificialmente al fondo de todos los planos.
+- CONSISTENCIA: si alguien reaparece en el plano siguiente conserva identidad, ropa, lesiones y estado físico, salvo que la narración cambie algo explícitamente.
 - ESCALA Y PROPORCIÓN: proporción humana correcta del personaje respecto a muebles y espacio — un adulto de pie tendría espacio libre sobre la cabeza (el techo NO justo encima). Mantené el tamaño real del escenario; no comprimas el espacio ni encajones al personaje.\n- CRÍTICO: el personaje NUNCA mira a la cámara. Describe la acción que está haciendo según la narración. Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"
 - PROHIBIDO en los prompts: naked, nude, explicit, sexual, genitals, nipples
 - NO texto, NO letras, NO marcas de agua
@@ -4114,6 +4171,8 @@ Responde SOLO JSON válido sin markdown`;
     function aplicarPlanos(s, p) {
       const [a, b, c] = p?.prompts || [];
       const [ma, mb, mc] = p?.movimientos || [];
+      const [ta, tb, tc] = p?.tiposMovimiento || [];
+      const [ca, cb, cc] = p?.continuos || [];
       // Los planos de una escena se encadenan igual que los keyframes de un
       // corto: el clip del plano 1 termina en la imagen del plano 2. Si los dos
       // son del mismo tamaño salen casi iguales y el video, sin nada que
@@ -4129,6 +4188,11 @@ Responde SOLO JSON válido sin markdown`;
         imagePromptA: a || '', imagePromptB: b || '', imagePromptC: c || '',
         tamanoA: a ? tam(0) : '', tamanoB: b ? tam(1) : '', tamanoC: c ? tam(2) : '',
         videoPromptA: ma || '', videoPromptB: mb || '', videoPromptC: mc || '',
+        motionA: a ? (['still','limited','action'].includes(ta) ? ta : 'still') : '',
+        motionB: b ? (['still','limited','action'].includes(tb) ? tb : 'still') : '',
+        motionC: c ? (['still','limited','action'].includes(tc) ? tc : 'still') : '',
+        sueltoPlanoA: ca !== true, sueltoPlanoB: cb !== true, sueltoPlanoC: true,
+        continuarAnterior: p?.continuarAnterior === true,
       };
     }
 
@@ -4136,7 +4200,7 @@ Responde SOLO JSON válido sin markdown`;
       const scenesText = scenesForPrompt.map(s =>
         `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`
       ).join('\n\n');
-      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTINUIDAD — ASÍ TERMINÓ LA ESCENA ANTERIOR A ESTE BLOQUE (el prompt 1 de la primera escena de abajo continúa desde aquí):\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena, genera el campo "escenario" + TRES prompts secuenciales con continuidad:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"prompts":["Scene with..."],"tamanos":["general"],"movimientos":["slow motion description in English, ending state"]},...]} con exactamente ${scenesForPrompt.length} objetos, uno por cada número de escena de arriba. "planos" es cuántos necesita ESA escena (1, 2 o 3); "prompts", "tamanos" y "movimientos" llevan exactamente esa cantidad cada uno.
+      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTINUIDAD — ASÍ TERMINÓ LA ESCENA ANTERIOR A ESTE BLOQUE (el prompt 1 de la primera escena de abajo continúa desde aquí):\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena, genera el campo "escenario" + TRES prompts secuenciales con continuidad:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"continuarAnterior":false,"prompts":["Scene with..."],"tamanos":["general"],"tiposMovimiento":["still"],"movimientos":["subtle motion in English"],"continuos":[false]},...]} con exactamente ${scenesForPrompt.length} objetos. "prompts", "tamanos", "tiposMovimiento", "movimientos" y "continuos" llevan exactamente la cantidad de planos elegida.
 
 ⚠️ "tamanos" ES EL TAMAÑO DE CADA PLANO: general | medio | cerca | escorzo | detalle. Dentro de una escena NUNCA repitas el mismo dos veces seguidas. El clip de video que une dos planos parte del primero y termina en el segundo: si los dos son del mismo tamaño, las dos imágenes salen casi idénticas, el video se queda sin nada que animar y acaba deformando caras e inventando cosas. El cambio de distancia de cámara ES el movimiento del plano.`;
 
@@ -4176,7 +4240,7 @@ Responde SOLO JSON válido sin markdown`;
       let prevContext = '';
       for (let i = 0; i < scenesNoImg.length; i += 5) {
         const chunk = scenesNoImg.slice(i, i + 5);
-        setProg(70 + Math.round((i / scenesNoImg.length) * 25), `Paso 5/5: Descripciones visuales ${Math.min(i + 5, scenesNoImg.length)}/15...`);
+        setProg(70 + Math.round((i / scenesNoImg.length) * 25), `Paso 5/5: Descripciones visuales ${Math.min(i + 5, scenesNoImg.length)}/${scenesNoImg.length}...`);
         const done = await generateImagePromptsBatch(chunk, prevContext);
         // The art director reviews what the DP just wrote, before it reaches the
         // state. One text call per chunk of 5 scenes, and it never blocks: if the
@@ -4216,7 +4280,8 @@ Responde SOLO JSON válido sin markdown`;
       setProg(100, `⚠️ ${scenes.length - pendingCount}/${fmt.scenes} escenas — ${pendingCount} pendientes`);
       showToast(`${pendingCount} escenas pendientes. Usa "Reparar escenas vacías".`, 'error');
     } else {
-      setProg(100, `✅ Episodio ${epNum} completo — ${fmt.scenes} escenas × 3 imágenes = ${fmt.scenes * 3} imágenes`);
+      const planosTotales = scenes.reduce((n,s) => n + ['A','B','C'].filter(sl => s['imagePrompt'+sl]).length, 0);
+      setProg(100, `✅ Episodio ${epNum} completo — ${fmt.scenes} escenas · ${planosTotales} planos necesarios`);
       showToast(`Episodio ${epNum}: ${state.characters.length} personajes y ${fmt.scenes} escenas listas`, 'success');
     }
     setTimeout(() => { progress.style.display = 'none'; setProg(0, ''); }, 3000);
@@ -4258,6 +4323,8 @@ async function renderCharacters() {
           <h4>${ch.name}</h4>
           <div class="char-role">${ch.role}</div>
           <div class="char-detail">${ch.appearance || ''}</div>
+          ${state.universe?.storyMode === 'cast' ? `<label style="font-size:10px;color:var(--text-dim);margin-top:7px;display:block">🎙️ Voz del personaje</label>
+          <select onchange="setCharacterVoice('${ch.id}', this.value)" style="font-size:11px;padding:6px;margin-top:3px">${opcionesVozPersonaje(ch)}</select>` : ''}
         </div>
       </div>
       <div style="margin-top:8px">
@@ -5299,13 +5366,48 @@ async function getRefsForPrompt(prompt) {
   return result;
 }
 
+function bytesToBase64(bytes) {
+  let out = '';
+  const step = 0x8000;
+  for (let i = 0; i < bytes.length; i += step) out += String.fromCharCode(...bytes.subarray(i, i + step));
+  return btoa(out);
+}
+
+function vozParaIntervencion(intervention) {
+  const narrator = document.getElementById('voiceSelect')?.value || '';
+  if (!intervention || intervention.speakerId === 'narrator') return narrator;
+  if (intervention.speakerId === 'system') return state.universe?.systemVoice || vozAutomaticaPara('female') || narrator;
+  const ch = (state.characters || []).find(x => x.id === intervention.speakerId);
+  return ch?.voice || vozAutomaticaPara(ch?.gender) || narrator;
+}
+
+async function generarAudioDeEscena(s) {
+  const narrator = document.getElementById('voiceSelect')?.value || '';
+  if (state.universe?.storyMode !== 'cast') return generateAudio(s.narration, narrator, s.act);
+
+  asegurarVocesPersonajes();
+  const interventions = (Array.isArray(s.interventions) && s.interventions.length)
+    ? s.interventions.filter(x => x?.text?.trim())
+    : [{ type:'narrator', speakerId:'narrator', text:s.narration }];
+  if (!interventions.length) throw new Error('La escena no tiene texto para voz');
+
+  const entries = [];
+  for (let i = 0; i < interventions.length; i++) {
+    const line = interventions[i];
+    const voice = vozParaIntervencion(line);
+    const a = await generateAudio(line.text, voice, s.act);
+    entries.push({ idx:i, data:a.audioData, mime:a.mimeType || 'audio/wav' });
+  }
+  const { wav } = await combineAudiosToWav(entries);
+  return { audioData: bytesToBase64(wav), mimeType:'audio/wav' };
+}
+
 window.generateSceneAudio = async function(sceneId) {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
-  const voice = document.getElementById('voiceSelect').value;
   showToast(`Generando audio escena ${s.num}...`, 'success');
   try {
-    const result = await generateAudio(s.narration, voice, s.act);
+    const result = await generarAudioDeEscena(s);
     // Save audio with its mime type prefix so we know how to play it back
     const mime = result.mimeType || 'audio/wav';
     await dbSet(sceneAudKey(s.id), `${mime}|${result.audioData}`);
@@ -5560,22 +5662,24 @@ window.generateAllVideos = async function() {
   const scenes = state.scenes.filter(s => s.narration && s.imagePromptA);
   if (!scenes.length) { showToast('Genera las escenas primero', 'error'); return; }
 
-  showToast(`Generando todos los videos (secuencial)...`, 'success');
-  let done = 0, errors = 0;
+  const profile = document.getElementById('motionProfileSelect')?.value || 'motion_comic';
+  const debeAnimar = (s, sl) => {
+    const tipo = s['motion' + sl] || 'still';
+    if (profile === 'full') return true;
+    if (profile === 'mixed') return tipo === 'limited' || tipo === 'action';
+    return tipo === 'action';
+  };
 
+  let done = 0, errors = 0, staticShots = 0;
   for (const s of scenes) {
     for (const sl of await sceneSlots(s)) {
+      if (!debeAnimar(s, sl)) { staticShots++; continue; }
       if (await dbGet(sceneVidKeyBy(s.id, sl))) { done++; continue; }
-      try {
-        await window.generateSceneVideo(s.id, sl);
-        done++;
-      } catch(e) {
-        errors++;
-        console.warn(`Video ${s.num}-${sl}:`, e.message);
-      }
+      try { await window.generateSceneVideo(s.id, sl); done++; }
+      catch(e) { errors++; console.warn(`Video ${s.num}-${sl}:`, e.message); }
     }
   }
-  showToast(`Videos: ${done} listos${errors ? ', ' + errors + ' fallidos' : ''} 🎬`, errors ? 'error' : 'success');
+  showToast(`Veo: ${done} clips · ${staticShots} planos quedan como motion-comic${errors ? ' · ' + errors + ' fallidos' : ''}`, errors ? 'error' : 'success');
 };
 
 // ════════════════════════════════════════════════════════════════
@@ -5772,7 +5876,6 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
 
 document.getElementById('btnAllAudio').addEventListener('click', async () => {
   if (!state.scenes.length) { showToast('Genera escenas primero', 'error'); return; }
-  const voice = document.getElementById('voiceSelect').value;
   const bp = document.getElementById('bulkProgress'); bp.style.display = 'block';
   const bt = document.getElementById('bulkText'), bb = document.getElementById('bulkBar');
 
@@ -5795,7 +5898,7 @@ document.getElementById('btnAllAudio').addEventListener('click', async () => {
     try {
       const existing = await dbGet(sceneAudKey(s.id));
       if (!existing) {
-        const result = await generateAudio(s.narration, voice, s.act);
+        const result = await generarAudioDeEscena(s);
         const mime = result.mimeType || 'audio/wav';
         await dbSet(sceneAudKey(s.id), `${mime}|${result.audioData}`);
         completed++;
