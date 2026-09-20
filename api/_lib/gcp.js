@@ -65,7 +65,7 @@ const cfg = {
 
   // Cloud Run JOB that renders the final MP4. Defaults match the montador
   // already deployed in this account, so nothing new has to be configured.
-  get montajeJob()     { return env('MONTAJE_JOB', 'diezmo-montaje'); },
+  get montajeJob()     { return env('MONTAJE_JOB', 'anime-studio-montage'); },
   get montajeRegion()  { return env('MONTAJE_REGION', env('GCP_LOCATION', 'us-central1')); },
 };
 
