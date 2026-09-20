@@ -324,7 +324,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-19.109 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-19.110 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -2232,24 +2232,29 @@ ECCHI/HAREM ACTIVO — REGLA GENERAL (contenido adulto):
 // ════════════════════════════════════════════════════════════════
 // PROJECTS MODAL
 // ════════════════════════════════════════════════════════════════
-function openProjectsModal() {
+async function openProjectsModal() {
+  try { await refreshProjectsFromCloud(); }
+  catch (e) { console.warn('Lista cloud:', e.message); }
+  projects.sort((a,b) => Number(b.updated || 0) - Number(a.updated || 0));
+
   const list = projects.length ? projects.map(p => `
     <div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
       <div style="flex:1;cursor:pointer" onclick="switchProject('${p.id}')">
-        <div style="font-weight:600;font-size:14px">${p.name}</div>
-        <div style="font-size:11px;color:var(--text-dim)">${new Date(p.updated).toLocaleString()}</div>
+        <div style="font-weight:600;font-size:14px">☁️ ${p.name}</div>
+        <div style="font-size:11px;color:var(--text-dim)">Google Cloud · ${new Date(p.updated).toLocaleString()}</div>
       </div>
       <button class="btn-sec btn-danger" style="width:auto;padding:6px 10px;font-size:11px" onclick="deleteProject('${p.id}')">🗑️</button>
     </div>
-  `).join('') : '<p style="color:var(--text-dim);text-align:center">Sin proyectos</p>';
+  `).join('') : '<p style="color:var(--text-dim);text-align:center">Sin proyectos en Google Cloud</p>';
 
   openModal(`
     <h3>📁 Proyectos</h3>
+    <p style="font-size:11px;color:var(--text-dim);margin:-4px 0 12px;line-height:1.5">Esta lista viene del bucket de Google Cloud. Es la misma en cualquier teléfono o computadora.</p>
     ${list}
-    <button class="btn" style="margin-top:10px" onclick="newProject();closeModal();showToast('Proyecto creado','success')">➕ Nuevo Proyecto</button>
+    <button class="btn" style="margin-top:10px" onclick="newProject();closeModal();showToast('Proyecto creado en Google Cloud','success')">➕ Nuevo Proyecto</button>
   `);
 }
-document.getElementById('btnProjects').addEventListener('click', openProjectsModal);
+document.getElementById('btnProjects').addEventListener('click', () => openProjectsModal());
 
 // ════════════════════════════════════════════════════════════════
 // GEMINI TEXT API (via /api/script → Vertex AI, gemini-3.1-pro-preview)
@@ -8176,11 +8181,25 @@ function renderAll() {
 // ════════════════════════════════════════════════════════════════
 (async function init() {
   await initDB();
+
+  // 1) Read whatever this device had BEFORE the cloud architecture existed.
+  // 2) Upload it once (project JSON + every IndexedDB asset) to the bucket.
+  // 3) From this point on, rebuild the project list from GCS on every device.
   loadProjects();
+  await migrateThisBrowserToCloud();
+
+  try {
+    await refreshProjectsFromCloud();
+  } catch (e) {
+    console.warn('No se pudo leer proyectos del bucket; usando caché local:', e.message);
+  }
+
   if (!projects.length) {
     await newProject();
   } else {
-    loadStateFor(projects[projects.length - 1].id);
+    projects.sort((a,b) => Number(b.updated || 0) - Number(a.updated || 0));
+    await loadStateFor(projects[0].id);
+    await pruneDeviceCacheExcept(projects[0].id);
   }
   updateApiDot();
   // Antes de dibujar nada: el formato (9:16 / 16:9) decide cómo se recortan las
