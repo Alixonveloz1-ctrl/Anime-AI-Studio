@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════════
 // SCRIPT GENERATION PROXY — the single point that generates ALL text
 // in the app: universe, characters, story, image prompts, direction
-// and repairs.
+// without post-hoc scene repair.
 //
 // The model is cfg.scriptModel, overridable with the SCRIPT_MODEL env
 // var (and SCRIPT_LOCATION for its endpoint). It defaults to the most
@@ -11,8 +11,7 @@
 //
 // NO automatic model fallback: per project requirement the call
 // returns a clear error rather than silently downgrading quality.
-// Transient blips are absorbed by the client, which retries each text
-// call up to 4 times.
+// Transient quota/network blips are absorbed by the client with shared backoff; story and visual work is chunked and checkpointed so a single function call never has to return an entire long episode.
 //
 // Node.js runtime (NOT Edge): Vercel Edge Functions are deprecated
 // and hard-cap "must begin sending a response" at 25s regardless of
