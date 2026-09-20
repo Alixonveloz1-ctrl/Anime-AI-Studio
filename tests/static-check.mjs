@@ -58,6 +58,12 @@ const required = [
   ["hora_media: { scenes: 120", 'formato de 90 minutos'],
   ["ESTILO_POR_DEFECTO = 'japon_2d'", 'anime japonés 2D por defecto'],
   ['REGISTRO_LONGFORM_REFERENCIA', 'motor narrativo largo'],
+  ['HUELLA NARRATIVA DE LAS REFERENCIAS ESTUDIADAS', 'huella de narración basada en las referencias'],
+  ['problemasDeRegistroReferencia', 'control automático contra la prosa vieja'],
+  ['anclasNarrativas', 'anclas cronológicas por plano'],
+  ['validarAnclasNarrativas', 'validación de orden visual contra narración'],
+  ['CHRONOLOGY LIMIT', 'límite cronológico enviado al generador de imagen'],
+  ['v: 3, epNum', 'versión nueva del borrador narrativo'],
   ['generarAudioDeEscena', 'audio dramatizado por intervención'],
   ['videoRecommendedA', 'recomendación de video por plano'],
   ['continuarAnterior', 'continuidad explícita entre escenas'],
@@ -111,6 +117,9 @@ if (!/AUTHENTIC JAPANESE HAND-DRAWN 2D TV ANIME FRAME/.test(imageApi)) fail('api
 else ok('api/image.js comparte el contrato japonés 2D');
 if (/form-fitting clothing, blushing expressions, suggestive poses/.test(imageApi)) fail('api/image.js todavía fuerza fan service genérico en todas las escenas');
 else ok('Fan service del servidor es situacional, no obligatorio por fotograma');
+if (!/immediately preceding physical state/.test(imageApi) || !/camera cut changes framing, NOT reality/i.test(imageApi)) {
+  fail('api/image.js no conserva el estado físico entre planos');
+} else ok('La referencia anterior conserva estado físico, no sólo estilo');
 
 const gcp = fs.readFileSync('api/_lib/gcp.js','utf8');
 const setup = fs.readFileSync('setup.sh','utf8');
