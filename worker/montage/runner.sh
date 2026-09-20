@@ -30,9 +30,9 @@ done < descargas.txt
 
 ./montar.sh
 
-OUT="$(find . -maxdepth 1 -type f -name 'DIEZMO-EP*.mp4' -print -quit)"
+OUT="$(find . -maxdepth 1 -type f -name 'ANIME-EP*.mp4' -print -quit)"
 if [[ -z "$OUT" ]]; then
-  echo "El script terminó pero no produjo DIEZMO-EP*.mp4" >&2
+  echo "El script terminó pero no produjo ANIME-EP*.mp4" >&2
   exit 22
 fi
 
