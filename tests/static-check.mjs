@@ -58,7 +58,7 @@ const required = [
   ["hora_media: { scenes: 120", 'formato de 90 minutos'],
   ["ESTILO_POR_DEFECTO = 'japon_2d'", 'anime japonés 2D por defecto'],
   ['REGISTRO_LONGFORM_REFERENCIA', 'motor narrativo largo'],
-  ['HUELLA NARRATIVA DE LAS REFERENCIAS ESTUDIADAS', 'huella de narración basada en las referencias'],
+  ['HUELLA NARRATIVA REAL DE LOS GUIONES DE REFERENCIA', 'huella de narración basada en las referencias'],
   ['problemasDeRegistroReferencia', 'control automático contra la prosa vieja'],
   ['anclasNarrativas', 'anclas cronológicas por plano'],
   ['validarAnclasNarrativas', 'validación de orden visual contra narración'],
