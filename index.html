@@ -4620,21 +4620,34 @@ Responde SOLO JSON válido sin markdown.`;
       return problems;
     }
 
-    async function generateStoryPart(prompt, minWords) {
+    function evidenciaViralValida(story, evidence) {
+      const norm = x => String(x || '').replace(/\s+/g, ' ').trim();
+      const e = norm(evidence);
+      const n = e.split(/\s+/).filter(Boolean).length;
+      if (n < 8 || n > 30) return false;
+      return norm(story).includes(e);
+    }
+
+    async function generateStoryPart(prompt, minWords, requiredBeat) {
       let lastErr = '';
       let styleFeedback = '';
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
-          const attemptPrompt = prompt + styleFeedback;
+          const attemptPrompt = prompt + styleFeedback
+            + `\n\nHITO VIRAL QUE TIENES QUE PODER DEMOSTRAR EN "viralEvidence": ${requiredBeat}.`;
           const raw = await callGemini(attemptPrompt, sysBase + genreExtra, { temperature: 0.55, maxOutputTokens: 32768 });
           const parsed = safeParseJSON(raw);
           const story = String(parsed.story || '').trim();
+          const evidence = String(parsed.viralEvidence || '').trim();
           const wc = story.split(/\s+/).filter(Boolean).length;
           if (story && wc >= minWords) {
             const problems = problemasDeRegistroReferencia(story, prompt.includes('BLOQUE DE APERTURA'));
+            if (!evidenciaViralValida(story, evidence)) {
+              problems.push('no demostró dentro del propio texto que ejecutó el hito viral obligatorio');
+            }
             if (!problems.length) return story;
-            lastErr = 'registro narrativo fuera de la referencia: ' + problems.join('; ');
-            styleFeedback = `\n\nREINTENTO OBLIGATORIO: el bloque anterior fue rechazado por el editor porque ${problems.join('; ')}. Conserva los mismos acontecimientos pedidos, pero vuelve a escribir DESDE CERO con la huella narrativa indicada: español oral, frases cortas, diálogo directo y progresión concreta. Devuelve otra vez sólo {"story":"..."}.`;
+            lastErr = 'bloque fuera del motor viral: ' + problems.join('; ');
+            styleFeedback = `\n\nREINTENTO OBLIGATORIO: el bloque anterior fue rechazado porque ${problems.join('; ')}. Mantén la continuidad, pero vuelve a escribir DESDE CERO. El hito "${requiredBeat}" debe OCURRIR, producir una reacción/consecuencia y después debes copiar 8-30 palabras LITERALES de ese momento en "viralEvidence". Conserva español oral, frases cortas y diálogo directo.`;
           } else {
             lastErr = story ? `demasiado corto (${wc} palabras, mínimo ${minWords})` : 'respuesta vacía o sin campo "story"';
           }
@@ -4643,7 +4656,7 @@ Responde SOLO JSON válido sin markdown.`;
         }
         if (attempt < 3) await new Promise(r => setTimeout(r, 1800));
       }
-      throw new Error(`Google no completó este bloque de historia con el registro requerido: ${lastErr}. El borrador se conserva; no se aceptará prosa fuera de la fórmula ni un bloque corto para rellenarlo después.`);
+      throw new Error(`Google no completó este bloque con la fórmula viral requerida: ${lastErr}. El borrador se conserva; no se aceptará un bloque que sólo tenga buena prosa pero no ejecute el hito de retención.`);
     }
 
     function buildLongformPartBriefs(parts, completeEnding) {
