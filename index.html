@@ -6195,26 +6195,27 @@ document.getElementById('btnAllAudio').addEventListener('click', async () => {
   const bp = document.getElementById('bulkProgress'); bp.style.display = 'block';
   const bt = document.getElementById('bulkText'), bb = document.getElementById('bulkBar');
 
-  let failed = 0;
-  let completed = 0;
+  let failed = 0, completed = 0, existingCount = 0;
   const total = state.scenes.length;
 
-  for (let i = 0; i < state.scenes.length; i++) {
-    if (tanda.detener) break;
-    const s = state.scenes[i];
-    const pct = Math.round((i / total) * 100);
-    bb.style.width = pct + '%';
-    bt.textContent = `Audio ${i+1}/${total} (escena ${s.num})...`;
+  try {
+    for (let i = 0; i < state.scenes.length; i++) {
+      if (tanda.detener) break;
+      const s = state.scenes[i];
+      bb.style.width = Math.round((i / total) * 100) + '%';
+      bt.textContent = `Audio ${i+1}/${total} (escena ${s.num})...`;
 
-    // Skip empty/broken scenes
-    if (!s.narration || s.narration.trim().length < 10) {
-      console.warn(`Escena ${s.num} sin narración, saltando audio`);
-      continue;
-    }
+      if (!s.narration || s.narration.trim().length < 10) {
+        throw new Error(`La escena ${s.num} no tiene narración completa. El episodio no debería haber sido confirmado así.`);
+      }
 
-    try {
       const existing = await dbGet(sceneAudKey(s.id));
-      if (!existing) {
+      if (existing) {
+        existingCount++;
+        continue;
+      }
+
+      try {
         const result = await conEsperaDeCuota(
           () => generarAudioDeEscena(s),
           (seg) => { bt.textContent = `⏳ Cuota de audio de Google — reanudando en ${seg}s…`; }
@@ -6222,24 +6223,25 @@ document.getElementById('btnAllAudio').addEventListener('click', async () => {
         const mime = result.mimeType || 'audio/wav';
         await dbSet(sceneAudKey(s.id), `${mime}|${result.audioData}`);
         completed++;
-        // Live render every 3 audios
-        if (completed % 3 === 0) renderScenes();
+        if (completed % 3 === 0) await renderScenes();
+      } catch(e) {
+        console.error(`Audio ${s.num}:`, e.message);
+        failed++;
       }
-    } catch(e) {
-      console.error(`Audio ${s.num}:`, e.message);
-      failed++;
+
+      if (i < state.scenes.length - 1) await new Promise(r => setTimeout(r, 500));
     }
 
-    // Small pause to be nice to the API
-    if (i < state.scenes.length - 1) {
-      await new Promise(r => setTimeout(r, 500));
-    }
+    bb.style.width = '100%';
+    bt.textContent = `Audio: ${completed} nuevos · ${existingCount} ya existían${failed ? ' · '+failed+' pendientes' : ''}`;
+    await renderScenes();
+  } catch(e) {
+    bt.textContent = '⚠️ Audio pausado: ' + e.message;
+    showToast('La tanda de audio quedó pausada; lo terminado se conserva.', 'error');
+  } finally {
+    terminarTanda();
+    setTimeout(() => bp.style.display = 'none', 3000);
   }
-  bb.style.width = '100%';
-  bt.textContent = failed > 0 ? `⚠️ ${completed} audios — ${failed} fallaron` : '✅ Audios completados';
-  renderScenes();
-  terminarTanda();
-  setTimeout(() => bp.style.display = 'none', 3000);
 });
 
 // ════════════════════════════════════════════════════════════════
