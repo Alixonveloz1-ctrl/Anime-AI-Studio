@@ -4197,14 +4197,14 @@ Responde SOLO JSON válido.`;
 
     const imageSysPrompt = `Eres el DIRECTOR DE FOTOGRAFÍA de este anime. Tu tarea: decidir CUÁNTOS PLANOS necesita cada escena y escribir sus prompts de imagen en inglés, basados en la narración YA ESCRITA — no inventas historia nueva, solo decides el desglose visual de lo que ya ocurre.
 
-⚠️ DECISIÓN 1 — CUÁNTOS PLANOS (esto es lo más importante):
-Contá los BEATS VISUALES REALES de la narración: momentos que se ven DISTINTOS entre sí (cambia la posición de alguien, el estado de un objeto, quién está presente, o el lugar).
-- 1 PLANO si la escena es UN solo momento sostenido: una conversación en la que nadie se mueve, un personaje reflexionando, una sola acción continua sin cambio visible. La mayoría de escenas de diálogo estático son de UN plano.
-- 2 PLANOS si hay dos beats claros: acción → reacción, o llegada → descubrimiento.
-- 3 PLANOS solo si hay tres eventos visualmente distintos de verdad.
+⚠️ DECISIÓN 1 — CUÁNTOS PLANOS (motion-anime de formato largo):
+La narración de una escena suele durar decenas de segundos. La imagen no puede quedarse congelada todo ese tiempo. Decide 1, 2 o 3 ILUSTRACIONES distintas por FUNCIÓN EDITORIAL:
+- 1 PLANO sólo para un beat realmente breve y autosuficiente: establishing corto, insert de objeto, reacción aislada, pensamiento corto o una acción cuya misma composición sostiene todo el fragmento.
+- 2 PLANOS para acción→reacción, pregunta→respuesta, llegada→descubrimiento, o una conversación corta que necesita ver al hablante y a quien escucha.
+- 3 PLANOS para conversaciones largas, confrontaciones, revelaciones o secuencias con varios focos: por ejemplo conjunto → hablante → reacción/detalle; amenaza → decisión → consecuencia.
+- Un cambio de ángulo SÍ justifica otra ilustración cuando cambia QUÉ INFORMACIÓN mira el espectador: otro hablante, una reacción, un objeto decisivo, una mirada o la relación espacial. No lo hagas sólo por variedad decorativa.
 
-🚫 PROHIBIDO RELLENAR: si no podés escribir dos planos que se vean CLARAMENTE distintos, devolvé UNO. Un plano de más que repite el anterior no aporta nada, cuesta una generación y arruina el video. Es MEJOR una escena de 1 plano bien elegido que 3 casi idénticos.
-Un cambio de ángulo de cámara NO es un beat. Si lo único que cambiaría entre dos planos es dónde está la cámara, es UN plano.
+🚫 PROHIBIDO RELLENAR: los planos adicionales tienen una función distinta. No generes tres versiones casi iguales del mismo personaje con la misma expresión. Tampoco reduzcas automáticamente una conversación de 30–45 segundos a una sola imagen sólo porque nadie camina.
 
 ⚠️ DECISIÓN 2 — QUÉ MUESTRA CADA PLANO (cuando hay más de uno):
 - Los planos son momentos CONSECUTIVOS: prompt 1 = primer beat, y el último = la consecuencia o revelación con la que cierra el fragmento.
@@ -6208,8 +6208,9 @@ Devuelve:
 ESTILO FIJO: ${estiloCore()}
 ${bibleVisualBrief()}
 REGLAS:
-- 1 plano si un solo momento visual basta; 2 para acción→reacción/llegada→descubrimiento; 3 sólo si hay tres beats realmente distintos. No rellenes.
-- Un corte normal NO exige que los personajes se muevan de un fotograma al siguiente.
+- 1 plano sólo para un beat breve/autosuficiente. Una conversación sostenida normalmente necesita 2–3 ilustraciones de cobertura: hablante, reacción, conjunto o detalle significativo.
+- 2 para acción→reacción, pregunta→respuesta o llegada→descubrimiento; 3 para conversaciones largas, confrontaciones o tres focos informativos diferentes. No rellenes con clones.
+- Un corte normal NO exige que los personajes se muevan: cambiar a la reacción de otro personaje o a un objeto importante ya es una función editorial válida.
 - Elige tamaño por función dramática: general | medio | cerca | escorzo | detalle. Puede repetirse tras un corte.
 - Máximo 3 personajes visibles por imagen; presencia narrativa no obliga a estar en cuadro.
 - Referencias maestras fijan identidad, NO vestuario. El prompt nombra brevemente la ropa ACTUAL de la escena.
