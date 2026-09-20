@@ -7,7 +7,7 @@
 // POST   {projectId,key,method:"GET"|"PUT"} -> signed URL
 // DELETE {projectId,key}                    -> remove remote cached object
 // ════════════════════════════════════════════════════════════════
-const { cfg, loadServiceAccount, auth, signedUrl, asegurarCors, gcsDelete, begin, fail } = require('./_lib/gcp');
+const { cfg, loadServiceAccount, auth, signedUrl, asegurarCors, gcsDelete, gcsList, begin, fail } = require('./_lib/gcp');
 
 function safeProjectId(v) {
   const id = String(v || '').trim();
@@ -22,9 +22,23 @@ function objectPath(projectId, key) {
 }
 
 module.exports = async function handler(req, res) {
-  if (begin(req, res, ['POST', 'DELETE'])) return;
+  if (begin(req, res, ['GET', 'POST', 'DELETE'])) return;
   try {
     if (!cfg.bucket) return res.status(500).json({ error: 'GCS_OUTPUT_BUCKET no configurado', configError: true });
+
+    if (req.method === 'GET') {
+      const projectId = safeProjectId(req.query?.projectId);
+      if (!projectId) return res.status(400).json({ error: 'projectId inválido' });
+      const prefix = `${cfg.prefix}/projects/${projectId}/cache/`;
+      const { token } = await auth();
+      const objects = await gcsList(token, cfg.bucket, prefix);
+      const keys = objects.map(o => String(o.name || ''))
+        .filter(n => n.startsWith(prefix) && n.endsWith('.txt'))
+        .map(n => n.slice(prefix.length, -4))
+        .filter(safeKey);
+      return res.status(200).json({ keys });
+    }
+
     const projectId = safeProjectId(req.body?.projectId);
     const key = safeKey(req.body?.key);
     if (!projectId || !key) return res.status(400).json({ error: 'projectId/key inválidos' });
