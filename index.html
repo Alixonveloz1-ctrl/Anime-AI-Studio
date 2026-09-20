@@ -7056,6 +7056,8 @@ async function assembleEpisode() {
       descargas.push({ origen: `${material}/${nombre}`, destino: nombre });
     };
 
+    let lastClipObject = null;
+    let missingVisual = 0;
     for (let i = 0; i < scenes.length; i++) {
       const s = scenes[i];
       const n = String(i).padStart(3, '0');
@@ -7080,21 +7082,37 @@ async function assembleEpisode() {
         // downloading and re-uploading megabytes through the phone.
         const clipUrl = useClips ? await dbGet(sceneVidKeyBy(s.id, slots[k])) : null;
         const m = clipUrl && /storage\.googleapis\.com\/([^/]+)\/([^?]+)/.exec(clipUrl);
-        if (m) {
-          descargas.push({ origen: decodeURIComponent(m[2]), destino: `clip_${sufijo}.mp4` });
+        const clipObject = m ? decodeURIComponent(m[2]) : null;
+        const duplicateConsecutive = !!(clipObject && lastClipObject && clipObject === lastClipObject);
+
+        if (clipObject && !duplicateConsecutive) {
+          descargas.push({ origen: clipObject, destino: `clip_${sufijo}.mp4` });
           plano.clip = `clip_${sufijo}.mp4`;
+          lastClipObject = clipObject;
         } else {
+          // A repeated adjacent clip is replaced by THIS shot's illustration.
+          // Never loop the action back to frame 1.
           const img = await dbGet(sceneImgKeyBy(s.id, slots[k]));
-          if (img) { add(`img_${sufijo}.png`, img, 'image/png'); plano.image = `img_${sufijo}.png`; }
+          if (img) {
+            add(`img_${sufijo}.png`, img, 'image/png');
+            plano.image = `img_${sufijo}.png`;
+            lastClipObject = null;
+          } else {
+            missingVisual++;
+          }
         }
         if (plano.clip || plano.image) entry.planos.push(plano);
       }
-      if (!entry.planos.length) entry.planos.push({});
+      if (!entry.planos.length) missingVisual++;
       guion.push(entry);
     }
 
-    if (missingAudio === scenes.length) throw new Error('Ninguna escena tiene narración generada');
-    if (missingAudio) showToast(`${missingAudio} escenas sin audio — se rellenan con 2s`, 'error');
+    if (missingAudio) {
+      throw new Error(`Faltan ${missingAudio} audio(s). Pulsa “Toda la Narración” para continuar sólo los faltantes antes de montar.`);
+    }
+    if (missingVisual) {
+      throw new Error(`Faltan ${missingVisual} imagen(es) o tomas visuales. Pulsa “Todas las Imágenes” para continuar sólo las faltantes antes de montar.`);
+    }
 
     // ─── 2. Music, one cue per act ───
     // Apagada por defecto y a mano: generar una pista que quede bien por debajo
