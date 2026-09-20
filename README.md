@@ -1,6 +1,6 @@
 # Anime AI Studio · Your Name Edition
 
-Estudio personal para producir historias anime largas desde el móvil. Conserva la generación de universos, personajes, imágenes, audio, música, clips y montaje que ya funcionaba, pero añade un motor narrativo de formato largo, dos modalidades de voz y una dirección visual estrictamente japonesa 2D. Permite historias desde pruebas de 5 minutos hasta especiales de 60 y 90 minutos.
+Estudio personal para producir historias anime largas desde el móvil. Tiene exactamente dos tipos de proyecto: **Narrado** y **Voces por personaje**. Conserva la generación de universos, personajes, imágenes, audio, música, clips y montaje, con motor narrativo de formato largo y dirección visual estrictamente japonesa 2D. No existe un flujo separado de cortos. Permite historias desde pruebas de 5 minutos hasta especiales de 60 y 90 minutos.
 
 ## Pipeline
 
@@ -18,7 +18,7 @@ Estudio personal para producir historias anime largas desde el móvil. Conserva 
 ## Características
 
 - Duración configurable: ~5 / 8 / 15 / 30 / 60 / 90 minutos
-- Dos modos de audio: **Narrada** (una voz conduce y lee diálogos) o **Dramatizada** (voz estable por personaje)
+- Dos tipos de proyecto, y sólo dos: **Narrado** (una voz conduce y lee diálogos) o **Voces por personaje** (voz estable por personaje)
 - Dos tipos de cierre: historia completa o cliffhanger deliberado
 - El director decide 1, 2 o 3 planos según duración y función editorial: ritmo base de ~3–7 s por composición, ~4–6 s en diálogo estable y ~2–4 s en tensión/acción
 - El director marca qué planos recomienda animar con Veo; tú puedes generar video manualmente para cualquier imagen y el montaje siempre usa el clip si existe
