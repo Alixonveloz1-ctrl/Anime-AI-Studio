@@ -4078,6 +4078,27 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     const hasSliceOfLife = subgenres.includes('slice_of_life');
     const hasEcchi = subgenres.includes('ecchi') || subgenres.includes('harem') || subgenres.includes('harem_inverso');
     const subgenreText = getSubgenreText(subgenres, genero);
+
+    // Existing projects created before the viral-reference engine must not keep
+    // an old generic director bible. Bind them once to the closest proven
+    // formula and rebuild direction before writing a new episode.
+    if (!u.viralFormulaId || !VIRAL_REFERENCE_FORMULAS[u.viralFormulaId]) {
+      const vf = seleccionarFormulaViral(genero, subgenres, u.conceptoOriginal || u.concepto || '');
+      u.viralFormulaId = idFormulaViral(vf);
+      u.viralFormulaLabel = vf.label;
+      u.storyEngineVersion = 2;
+      u.bible = null;
+      saveState();
+      setProg(2, 'Aplicando fórmula viral al proyecto...');
+      await generateSeriesBible();
+    } else if ((u.storyEngineVersion || 0) < 2) {
+      u.storyEngineVersion = 2;
+      u.bible = null;
+      saveState();
+      setProg(2, 'Actualizando la dirección narrativa viral...');
+      await generateSeriesBible();
+    }
+
     // The first episode locks the creative production choices for this universe.
     // Later episodes inherit them so voice/style logic cannot silently change.
     if (!(state.episodes?.[1]?.length)) {
