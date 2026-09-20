@@ -1,0 +1,21 @@
+name: Validate Anime AI Studio
+
+on:
+  push:
+    branches: ["main", "feature/**"]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: JavaScript and creative contracts
+        run: node tests/static-check.mjs
+      - name: Cloud Shell scripts
+        run: |
+          bash -n setup.sh
+          bash -n worker/montage/runner.sh

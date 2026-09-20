@@ -1,6 +1,6 @@
 # Anime AI Studio · Your Name Edition
 
-Estudio de generación de anime cinematográfico. Genera universos narrativos, personajes, episodios de 5 a 16 minutos, imágenes, voces, música y clips de video — y exporta todo el material listo para montar.
+Estudio personal para producir historias anime largas desde el móvil. Conserva la generación de universos, personajes, imágenes, audio, música, clips y montaje que ya funcionaba, pero añade un motor narrativo de formato largo, dos modalidades de voz y una dirección visual estrictamente japonesa 2D. Permite historias desde pruebas de 5 minutos hasta especiales de 60 y 90 minutos.
 
 ## Pipeline
 
@@ -17,10 +17,13 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 
 ## Características
 
-- Duración configurable: 15 / 24 / 36 / 48 escenas (~5 a ~16 min)
+- Duración configurable: ~5 / 8 / 15 / 30 / 60 / 90 minutos
+- Dos modos de audio: **Narrada** (una voz conduce y lee diálogos) o **Dramatizada** (voz estable por personaje)
+- Dos tipos de cierre: historia completa o cliffhanger deliberado
 - El director decide cuántos planos necesita cada escena (1, 2 o 3) — no se generan imágenes de relleno
-- Un clip de video por plano, encadenados: el clip de un plano termina en la imagen del siguiente
-- Cada clip dura su parte de la narración, no ocho segundos fijos
+- Movimiento configurable: **Motion anime** (recomendado), Mixto o Animar todo
+- Los cortes son normales; sólo se interpola entre fotogramas cuando una acción necesita continuidad física
+- Cada clip dura su parte real de la narración, no ocho segundos fijos
 - Los episodios largos se escriben acto por acto, encadenando el texto ya escrito
 - Multi-episodio con continuidad de personajes y escenarios
 - Escenarios extraídos de la historia y reutilizados entre episodios
@@ -33,13 +36,35 @@ Estudio de generación de anime cinematográfico. Genera universos narrativos, p
 
 ## Uso
 
-1. Configura las dos variables de entorno en Vercel (ver más abajo)
-1. Elige demografía, género principal y subgéneros → Genera Universo
-1. Genera Episodio (personajes + historia + escenas)
-1. Genera las imágenes de las escenas
-1. Genera las voces
-1. Genera la música del episodio (una pista por acto)
-1. Ensambla el video final (MP4) o exporta el ZIP con todas las piezas
+1. Elige demografía, género principal y subgéneros → Genera Universo.
+1. Elige duración, modo **Narrado/Dramatizado** y tipo de cierre.
+1. Genera la historia: el universo/sinopsis se conservan y el motor desarrolla el conflicto por causalidad, reacciones y consecuencias.
+1. Genera una referencia limpia por personaje y luego las imágenes de las escenas.
+1. Genera las voces. En modo dramatizado cada personaje conserva su voz.
+1. Genera sólo los clips que necesites según el perfil de movimiento.
+1. Genera música si la quieres y ensambla el MP4 final.
+
+## Google Cloud desde el iPhone
+
+El repositorio incluye su propio montador y un instalador idempotente.
+
+[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://shell.cloud.google.com/?cloudshell_git_repo=https://github.com/Alixonveloz1-ctrl/Anime-AI-Studio)
+
+En Cloud Shell escribe solamente:
+
+```bash
+bash setup.sh
+```
+
+El script activa las APIs, crea/reutiliza bucket y cuenta de servicio, construye el contenedor FFmpeg y despliega el Job `anime-studio-montage`. Al final deja `anime-studio-cloud.env` con los valores de Vercel.
+
+Si necesitas crear una nueva clave JSON para Vercel:
+
+```bash
+bash setup.sh key
+```
+
+Detalles: [docs/cloudshell.md](docs/cloudshell.md).
 
 ## El equipo
 
@@ -102,7 +127,7 @@ Todo se genera con Google Cloud. No hay ningún project ID, bucket, modelo ni re
 |`MUSIC_MODEL`               |`lyria-002`                        |
 |`STT_MODEL` / `STT_LANGUAGE`|`latest_long` / `es-US`            |
 |`GCS_PREFIX`                |`anime-studio` (carpeta propia en el bucket)|
-|`MONTAJE_JOB`               |`diezmo-montaje`                   |
+|`MONTAJE_JOB`               |`anime-studio-montage`              |
 |`MONTAJE_REGION`            |`us-central1`                      |
 
 "Ver APIs configuradas" en la app muestra todos los valores resueltos y qué variable cambia cada uno.

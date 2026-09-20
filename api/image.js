@@ -65,7 +65,7 @@ async function pedirImagen(model, cleanPrompt, characterRefs, projectId, token, 
   // servidor lo desmentía antes de que el prompt llegara a hablar.
   const estilo = (typeof styleSpec === 'string' && styleSpec.trim().length > 40)
     ? styleSpec.trim()
-    : 'high-budget cinematic 2D anime film, reference-tier MAPPA / Ufotable / top-tier cinematic donghua. Fine variable-weight linework, soft gradient cel-shading, large detailed anime eyes with specular highlights, richly detailed environment, filmic lighting. STRICTLY FORBIDDEN: western cartoon, webtoon-flat style, chibi, thick uniform outlines, flat 2-tone shading, 3D render, CGI, Disney/Pixar look, semi-realistic painted faces.';
+    : 'AUTHENTIC JAPANESE HAND-DRAWN 2D TV ANIME FRAME. Crisp variable-weight ink lines, hard-edged cel shadow shapes, matte skin, grouped graphic hair locks, expressive Japanese anime facial acting, detailed painted 2D background. Characters must look like drawn animation cels, not rendered models. STRICTLY FORBIDDEN: 3D render, CGI character shading, PBR materials, ambient-occlusion-heavy faces, subsurface/glossy skin, videogame cutscene, semi-realistic AI portrait, Chinese donghua/manhua rendering, Korean webtoon rendering, Disney/Pixar, photorealistic human skin.';
   parts.push({ text: `ART STYLE (non-negotiable, applies to the ENTIRE image and every character in it): ${estilo}` });
 
   // Continuity reference (the previous generated shot) goes FIRST after the
@@ -98,7 +98,7 @@ What stays identical: the place, the light, the characters' faces, hair and clot
   if (characterRefs && characterRefs.length > 0) {
     for (const ref of characterRefs) {
       parts.push({ inlineData: { mimeType: ref.mimeType || 'image/png', data: ref.img } });
-      parts.push({ text: `CHARACTER REFERENCE above: this is ${ref.name}. Match this character's IDENTITY exactly - same face shape, same hair colour and style, same eye colour, same outfit design - and render them in the SAME 2D anime art style as the reference. The ONLY things you must NOT copy are the pose, framing, size and plain background: redraw ${ref.name} at the body pose, camera angle and SCALE that THIS shot requires, correctly proportioned against the environment, feet grounded, sharing the scene's perspective and lighting. Do NOT mix up characters.` });
+      parts.push({ text: `CHARACTER REFERENCE above: this is ${ref.name}. Use it ONLY as the identity anchor: same face shape, facial proportions, hair colour/style, eye colour, adult body proportions and distinctive traits. DO NOT copy the reference pose, framing, neutral background or reference-sheet composition. WARDROBE IS CONTROLLED BY THE CURRENT SCENE TEXT: if this shot specifies a different outfit, use the shot's outfit while preserving identity. Redraw ${ref.name} in authentic Japanese hand-drawn 2D anime at the body pose, camera angle and scale required by this scene, grounded in the environment and sharing its perspective/light. Never turn the reference into a collage or duplicate the person. Do not mix up characters.` });
     }
   }
 
@@ -109,8 +109,9 @@ What stays identical: the place, the light, the characters' faces, hair and clot
   // regla de "nada de texto" era una clausula suelta en medio de un parrafo.
   const namesList = (characterRefs || []).map(r => r.name).join(', ');
   const ecchiRules = isEcchi ? `
-- This is an ecchi/fan-service anime scene. ALL characters are ADULTS (18 or older), in adult settings fitting the story's genre. NEVER draw school uniforms, classrooms, or anything implying minors.
-- Draw it with appropriate suggestive visual elements: flattering angles, form-fitting clothing, blushing expressions, suggestive poses.` : '';
+- This project may contain ECCHI/FAN-SERVICE, and every sexualized character is an ADULT (18+), clearly adult in face, body and context. Never imply minors or secondary-school settings.
+- Fan-service is SCENE-DRIVEN, not a permanent body filter. If the current scene text describes an adult suggestive beat, wardrobe or awkward romantic situation, render it confidently in Japanese ecchi-anime language through pose, framing, timing and expression while staying non-explicit. If the current beat is grief, combat, exposition, danger or ordinary conversation, do NOT force cleavage, blushing, form-fitting clothes or suggestive poses that the scene did not request.
+- Preserve the character's actual current wardrobe and proportions; do not turn every adult woman into the same exaggerated body type.` : '';
   parts.push({ text: `${namesList ? `Character references provided: ${namesList}.\n\n` : ''}MANDATORY RULES:
 1. ABSOLUTELY NO TEXT. No letters, no words, no numbers, no watermarks, no captions, no subtitles, no readable signage, no speech bubbles, no logos, no signature. This is a single frame of animation, not a page of a comic. Any writing at all is a failed image.
 2. Draw EVERY character named in the scene - if two or three are named, ALL appear. Do not add extra people beyond those mentioned.

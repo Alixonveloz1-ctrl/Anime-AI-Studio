@@ -402,12 +402,27 @@
       <h2>🎬 Generar Episodio</h2>
       <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px" id="epFormatNote"></p>
 
-      <label>Duración del episodio</label>
+      <label>Duración de la historia</label>
       <select id="epLengthSelect">
-        <option value="corto">Corto — 15 escenas · ~5 min · 45 imágenes</option>
-        <option value="medio" selected>Medio — 24 escenas · ~8 min · 72 imágenes</option>
-        <option value="largo">Largo — 36 escenas · ~12 min · 108 imágenes</option>
-        <option value="epico">Épico — 48 escenas · ~16 min · 144 imágenes</option>
+        <option value="corto">Prueba — ~5 min · 12 escenas</option>
+        <option value="medio">Corto — ~8 min · 18 escenas</option>
+        <option value="largo">Historia — ~15 min · 30 escenas</option>
+        <option value="media_hora">Historia larga — ~30 min · 48 escenas</option>
+        <option value="hora" selected>Especial — ~60 min · 84 escenas</option>
+        <option value="hora_media">Especial largo — ~90 min · 120 escenas</option>
+      </select>
+
+      <label style="margin-top:12px">Forma de contar la historia</label>
+      <select id="storyModeSelect">
+        <option value="narrated" selected>🎙️ Narrada — una voz cuenta e interpreta los diálogos</option>
+        <option value="cast">🎭 Dramatizada — una voz estable por personaje</option>
+      </select>
+      <p id="storyModeNote" style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.5">Narrada: una voz conduce la historia, los pensamientos y los diálogos. Dramatizada: diálogo directo y pensamientos con la voz de cada personaje; narrador sólo cuando aporta información que la imagen no puede dar.</p>
+
+      <label style="margin-top:12px">Tipo de cierre</label>
+      <select id="endingModeSelect">
+        <option value="complete" selected>✅ Historia completa — cierre satisfactorio</option>
+        <option value="cliffhanger">➡️ Continuará — cierre abierto / cliffhanger</option>
       </select>
       <!-- Episode navigation -->
       <div id="episodeNav" style="display:none;margin-bottom:14px">
@@ -417,11 +432,18 @@
 
       <label>Número de personajes</label>
       <select id="numCharsSelect">
-        <option value="auto">Auto (3-5 según la historia)</option>
+        <option value="auto">Auto (según duración y concepto)</option>
         <option value="2">2 personajes</option>
         <option value="3">3 personajes</option>
         <option value="4">4 personajes</option>
         <option value="5">5 personajes</option>
+        <option value="6">6 personajes</option>
+        <option value="7">7 personajes</option>
+        <option value="8">8 personajes</option>
+        <option value="9">9 personajes</option>
+        <option value="10">10 personajes</option>
+        <option value="11">11 personajes</option>
+        <option value="12">12 personajes</option>
       </select>
 
       <label style="margin-top:12px">Instrucciones para este episodio <span style="color:var(--text-dim);font-weight:400">(opcional)</span></label>
@@ -446,6 +468,7 @@
   <div class="panel" id="panel-personajes">
     <div class="card">
       <h2>👥 Personajes</h2>
+      <button class="btn-sec" id="btnAllCharacterRefs" style="width:100%;margin-bottom:10px;display:none">🎨 Generar referencias faltantes</button>
       <div id="charactersList"></div>
     </div>
     <div class="card" style="margin-top:14px">
@@ -511,8 +534,16 @@
       <label>Formato de imagen y video</label>
       <select id="aspectRatio">
         <option value="9:16">📱 9:16 Vertical — Reels / TikTok / Stories</option>
-        <option value="16:9">🖥️ 16:9 Horizontal — YouTube / Widescreen</option>
+        <option value="16:9" selected>🖥️ 16:9 Horizontal — YouTube / Widescreen</option>
       </select>
+
+      <label style="margin-top:12px">Movimiento</label>
+      <select id="motionProfileSelect">
+        <option value="motion_comic" selected>🎞️ Motion anime — cortes + paneos/zooms; Veo sólo donde hace falta</option>
+        <option value="mixed">✨ Mixto — también anima gestos y conversaciones importantes</option>
+        <option value="full">🎬 Animar todo — genera Veo para todos los planos</option>
+      </select>
+      <p style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.5">Recomendado: Motion anime. Conserva el aspecto 2D, usa el movimiento como acento y evita convertir una hora de historia en una sucesión de cinemáticas de videojuego.</p>
 
       <label>Idioma</label>
       <select id="voiceLang" style="font-size:13px"><option value="es-US">Español · Latinoamérica</option></select>
@@ -872,9 +903,8 @@ const STUDIO_BY_DEMO = {
 // genre (donghua included) — only the narrative/setting content
 // differs by genre, not the rendering technique.
 // ════════════════════════════════════════════════════════════════
-const ANIME_VISUAL_STYLE_CORE = 'high-budget cinematic 2D anime film quality, reference-tier: MAPPA, Wit Studio, Ufotable, Kyoto Animation, and top-tier cinematic donghua production values. Fine, precise, variable-weight linework — NOT thick uniform cartoon outlines. Soft cel-shading with smooth gradient shadow transitions and subtle ambient occlusion — NOT flat 2-tone color blocks. Large detailed anime eyes with 2-4 specular highlights and iris gradient, expressive but anatomically grounded faces — NOT simplified, NOT chibi, NOT doll-flat. Individually-rendered hair strands with layered directional highlights. Richly detailed, near-photorealistic environment textures and materials behind clean 2D character linework — worn surfaces, reflections, atmospheric depth. Cinematic motivated lighting: practical light sources, warm/cool color contrast, rim light, volumetric glow, wet-surface reflections, filmic color grading — NOT flat even "kids cartoon" lighting. FORBIDDEN — both failure modes: (1) flat single-tone shading, thick block outlines, simplified/chibi/webtoon-flat cartoon look; (2) 3D render, CGI, photorealistic human skin, video game graphics, western cartoon, Disney/Pixar, motion-capture aesthetic.';
-// Short version for LLM-authored prompt lead-ins (keeps token cost low across 15 scenes)
-const ANIME_STYLE_LEAD_IN = 'Cinematic 2D anime key visual, fine detailed linework, soft gradient cel-shading, richly detailed background,';
+const ANIME_VISUAL_STYLE_CORE = 'AUTHENTIC JAPANESE 2D TV ANIME FRAME, modern dark-shonen production language. Hand-drawn character artwork with crisp variable-weight ink lines and GRAPHIC HARD-EDGED CEL SHADOW SHAPES; two or three deliberate tone steps, not airbrushed volume. Matte skin with restrained highlights; facial planes communicated by drawing and cel shadows, never by realistic skin rendering. Hair built from clear grouped locks and graphic shadow masses, not hundreds of individually rendered glossy strands. Expressive Japanese anime facial acting: readable eyes, brows and mouths, strong silhouette and posing. Backgrounds are detailed 2D painted anime backgrounds with believable perspective and atmosphere, but characters remain clearly drawn animation cels on top. Cinematic composition comes from framing, contrast, color design and selective rim light — NOT from 3D material rendering. STRICTLY FORBIDDEN: 3D render, CGI character shading, PBR materials, ambient-occlusion-heavy faces, subsurface skin, glossy plastic skin, videogame cutscene, motion-capture look, photorealistic person, semi-realistic AI portrait, Chinese donghua/manhua rendering, Korean webtoon rendering, Disney/Pixar, over-rendered promotional key art. The result must look like a paused frame from a high-quality Japanese 2D anime episode.';
+const ANIME_STYLE_LEAD_IN = 'Authentic Japanese hand-drawn 2D TV anime frame, crisp variable linework, hard-edged cel shading, matte character colors, expressive anime acting, detailed painted background,';
 
 // ════════════════════════════════════════════════════════════════
 // ESTILOS DE ANIMACIÓN — todos anime 2D, distinta escuela de dibujo.
@@ -891,11 +921,9 @@ const ANIME_STYLE_LEAD_IN = 'Cinematic 2D anime key visual, fine detailed linewo
 // (`leadIn`, la usa el director al escribir los prompts, para no pagar mil
 // palabras por escena).
 // ════════════════════════════════════════════════════════════════
-// Los tamaños de plano son DATO, no una esperanza. Dos keyframes seguidos con
-// el mismo tamaño salen casi idénticos —el modelo se agarra a la imagen de
-// referencia— y entonces Veo tiene ocho segundos vacíos que rellena inventando:
-// así fue como un hombre sentado se convirtió en un reptil. Alternando el
-// tamaño, el clip TIENE un trabajo que hacer: acercarse, alejarse, rodear.
+// Shot-size helpers. The forced alternation function below is kept ONLY for
+// the dedicated short/keyframe workflow. Long-form episodes use normal cuts
+// and are allowed to repeat a shot size when the dramatic coverage needs it.
 const PLANOS_CORTO = [
   { id: 'general',  en: 'WIDE SHOT — the whole place visible, characters full-body and small in frame' },
   { id: 'medio',    en: 'MEDIUM SHOT — characters from the knees or waist up, the room still readable behind' },
@@ -1034,19 +1062,28 @@ se le encienden los ojos porque así ocurre en ese mundo, se dibuja tal cual y c
 // puesta. Decir otra vez que la bata es translúcida no dibuja nada nuevo — sólo
 // pone en el texto la frase que hace saltar el filtro, y esa escena se queda en
 // negro.
+const REGISTRO_LONGFORM_REFERENCIA = `MOTOR DE HISTORIA LARGA — aprendido de las referencias estudiadas:
+- El gancho de los primeros 60-90 segundos plantea una situación concreta, un deseo y una fricción que prometen una transformación. No hace falta resolver nada ahí.
+- CAUSALIDAD: una solución cambia la situación y crea la siguiente necesidad. Evita episodios intercambiables del tipo "aparece rival → gana → aparece rival más fuerte" si nada más cambia.
+- Cada revelación tiene REACCIÓN visible: alguien cambia de decisión, relación, posición, información o recursos. No saltes al siguiente asunto antes de cobrar el efecto de lo que acabas de revelar.
+- Aprovecha ASIMETRÍA DE INFORMACIÓN cuando el concepto la permita: el espectador sabe algo que un personaje ignora, o dos personajes interpretan el mismo hecho de forma distinta. Esa diferencia genera decisiones.
+- Alterna presión, descubrimiento, relación, consecuencia y respiración. Una historia de una hora NO es un Reel repetido doce veces ni necesita un mini-clímax artificial cada minuto.
+- Mantén preguntas abiertas simultáneas, pero paga regularmente algunas de ellas. Introduce una nueva pregunta antes de cerrar todas las anteriores.
+- Diálogo corto y funcional. Los personajes hablan para querer algo, ocultar algo, provocar, negociar, mentir, rechazar o revelar. Evita conversaciones que sólo repiten exposición.
+- La narración aporta lo que la cámara no puede mostrar: intención, información previa, cálculo, ironía y contexto. No describe por duplicado pelo, ropa, muebles o expresiones que ya están en pantalla.
+- Antes de cerrar una secuencia, comprueba de forma ORGÁNICA: expectativa → decisión → consecuencia → reacción → nueva necesidad. Es una prueba de causalidad, NO una plantilla que deba aparecer con el mismo ritmo en cada escena.
+- Varía el mecanismo. Progresión, malentendido, romance, misterio, venganza o poder oculto sólo aparecen si pertenecen al concepto y género elegidos. Nunca metas "sistema", humillación o romance porque una referencia los usara.
+- El final respeta el tipo de cierre elegido: una historia completa paga su conflicto central; un cliffhanger resuelve un tramo y abre un problema concreto. Nunca cortes por falta de texto.`;
+
 const PROMPT_ES_UN_PLANO = `⚠️ EL PROMPT DE IMAGEN NO ES LA NARRACIÓN: ES LA ORDEN DE UN PLANO.
 La narración puede ser todo lo explícita que el género pida — a ella no la filtra nadie. Al generador de
 imagen SÍ, y lo que dispara su filtro es el TEXTO del prompt. Un prompt bloqueado no es una imagen
 suavizada: es una imagen que NO EXISTE. Por eso el prompt lleva sólo esto: QUIÉN está, DÓNDE, QUÉ HACE,
 DESDE DÓNDE se mira y QUÉ LUZ hay.
-- LA FICHA DEL PERSONAJE VIAJA CON LA IMAGEN y ya trae su cara, su pelo y su ropa dibujadas. Aun así,
-  nombrá SIEMPRE su especie y sus rasgos no humanos, su pelo y su prenda: cuesta media frase y es el único
-  seguro contra que el personaje cambie de raza o de ropa entre un plano y el siguiente. Lo que sobra es
-  DETALLAR la prenda — "la bata de gasa gris" basta, y no hace falta explicar qué se ve a través de ella.
-- NUNCA describas una prenda por lo que deja ver del cuerpo. Eso no es información visual —la prenda ya
-  está dibujada— es sólo la frase que bloquea el plano. La carga de una imagen sale de la POSTURA, el
-  ENCUADRE y la LUZ: una mano que se detiene, una mirada apartada, un contraluz.
-- Sólo se describe lo que CAMBIA respecto de la ficha: que ahora está mojada, rota, manchada o quitada.
+- LA REFERENCIA MAESTRA VIAJA CON LA IMAGEN para fijar IDENTIDAD: cara, pelo, ojos, proporciones y rasgos distintivos. NO manda sobre el vestuario.
+- Cada prompt nombra la PRENDA ACTUAL de la escena de forma breve (por ejemplo "bata hospitalaria azul"). Si el personaje cambió de ropa, el prompt nuevo manda y la referencia conserva sólo su identidad.
+- NUNCA describas una prenda por lo que deja ver del cuerpo. La carga de una imagen sale de la POSTURA, el ENCUADRE y la LUZ: una mano que se detiene, una mirada apartada, un contraluz.
+- Cambios de estado relevantes sí se escriben: ropa mojada, rota, manchada, armadura perdida, abrigo añadido, etc.
 - VIOLENCIA, exactamente igual. El plano se cuenta por sus CONSECUENCIAS y su encuadre —la mano que suelta
   el cuchillo, la mancha que crece en el suelo, la cara del que está mirando— no por el detalle del daño.
   Un prompt que insiste en la herida se bloquea y te quedás sin plano. El mismo momento contado por lo que
@@ -1191,8 +1228,13 @@ function briefDeNombres(genero, concepto = '', ademas = []) {
 }
 
 const ESTILOS_ANIME = {
+  japon_2d: {
+    nombre: 'Anime japonés 2D — recomendado',
+    leadIn: ANIME_STYLE_LEAD_IN,
+    core: ANIME_VISUAL_STYLE_CORE,
+  },
   cinematografico: {
-    nombre: 'Cinematográfico moderno',
+    nombre: 'Cinematográfico ilustrado',
     leadIn: ANIME_STYLE_LEAD_IN,
     core: ANIME_VISUAL_STYLE_CORE,
   },
@@ -1268,7 +1310,7 @@ const NO_ES_3D = ' STRICTLY 2D hand-drawn animation. FORBIDDEN: 3D render, CGI, 
   + 'video game graphics, western cartoon, Disney/Pixar, motion capture, live action.';
 for (const e of Object.values(ESTILOS_ANIME)) e.core += NO_ES_3D;
 
-const ESTILO_POR_DEFECTO = 'cinematografico';
+const ESTILO_POR_DEFECTO = 'japon_2d';
 
 function estiloElegido() {
   const v = document.getElementById('estiloAnime')?.value;
@@ -1283,11 +1325,8 @@ function estiloCore(forzado) {
 function estiloLeadIn(forzado) {
   return (ESTILOS_ANIME[forzado] || ESTILOS_ANIME[estiloElegido()]).leadIn;
 }
-// "wet-surface reflections" se escribió para dar brillo a las IMÁGENES. Dentro
-// de un prompt de video se lee como una orden de mojar el suelo — y así llegó
-// la lluvia a un pasillo interior. Se quita sólo en la ruta de video.
 function estiloParaVideo(forzado) {
-  return estiloCore(forzado).replace('wet-surface reflections, ', '');
+  return estiloCore(forzado);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1417,10 +1456,7 @@ function buildVideoPrompt(s, slot = 'A', opts = {}) {
   // only the creation form: after a reload or a project switch they still show
   // their defaults, so this used to reference the wrong studio (accion/shonen)
   // for every project once the page had been reloaded.
-  const genre     = state.universe?.genero || document.getElementById('generoSelect')?.value || 'accion';
-  const demo      = state.universe?.demo   || document.getElementById('demoSelect')?.value   || 'shonen';
-  const studio   = STUDIO_BY_GENRE[genre]  || STUDIO_BY_GENRE['accion'];
-  const demoRef  = STUDIO_BY_DEMO[demo]    || '';
+  const genre = state.universe?.genero || document.getElementById('generoSelect')?.value || 'accion';
   // This was called noCamera, for "never look at the lens" — but its text ALSO
   // ordered "use side angles, 3/4 views, over-shoulder or from-behind". That was
   // written for IMAGE prompts, where choosing an angle is free. In VIDEO the
@@ -1436,7 +1472,7 @@ function buildVideoPrompt(s, slot = 'A', opts = {}) {
   // rain inside the corridor was not only the model hallucinating: we were asking
   // for it. Dropped on the video path only; the images keep the style intact.
   const estiloVideo = estiloParaVideo();
-  const animeStyle = `STYLE — ABSOLUTELY MANDATORY: This clip must look like a moving frame of a ${estiloVideo} Animation quality reference: ${studio}${demoRef}. Target: a hand-painted, richly detailed 2D anime film frame — nothing simplified, nothing plastic-3D.`;
+  const animeStyle = `STYLE — ABSOLUTELY MANDATORY: preserve the exact Japanese hand-drawn 2D anime drawing of the first frame. ${estiloVideo} Do not upgrade it into 3D, CGI, realistic rendering or a videogame cinematic while moving.`;
 
   // With a director-written motion the clip has an explicit destination, so the
   // generic "stay in place" rule would fight it. Without one, keep the old
@@ -2244,18 +2280,7 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
       data.error.includes('cannot generate an image based on')
     );
     if (isRefError && cleanRefs) {
-      console.warn('Ref rechazada — reintentando sin refs');
-      const res2 = await fetch('/api/image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // aspectRatio must be resent: the API defaults to 9:16, so dropping it
-        // here silently produced a vertical image inside a 16:9 project.
-        body: JSON.stringify({ prompt: cleanPrompt, characterRefs: null, model: model === 'auto' ? null : model, isEcchi, aspectRatio }),
-      });
-      const data2 = await res2.json();
-      if (!res2.ok || data2.error) throw new Error(data2.error || `Image proxy ${res2.status}`);
-      if (!data2.imageData) throw new Error('Imagen: respuesta sin datos');
-      return data2.imageData;
+      throw new Error('El modelo rechazó una referencia de personaje. La toma NO se generó sin referencias para no cambiar la identidad. Revisa la referencia o genera este plano manualmente.');
     }
     throw new Error(data.error || `Image proxy ${res.status}`);
   }
@@ -2508,6 +2533,56 @@ function generoDeVoz(v) {
   return GENERO_POR_NOMBRE[String(v.etiqueta || '').toLowerCase()] || null;
 }
 
+function vozValor(v) { return v ? `gcp_${v.name}` : ''; }
+
+function vozAutomaticaPara(gender, usados = new Set()) {
+  const lang = document.getElementById('voiceLang')?.value || 'es-US';
+  const want = String(gender || '').toLowerCase().startsWith('f') ? 'female'
+             : String(gender || '').toLowerCase().startsWith('m') ? 'male' : null;
+  const candidates = VOCES_DISPONIBLES.filter(v => v.lang === lang && (!want || generoDeVoz(v) === want));
+  return vozValor(candidates.find(v => !usados.has(vozValor(v))) || candidates[0] || VOCES_DISPONIBLES.find(v => v.lang === lang));
+}
+
+function asegurarVocesPersonajes() {
+  if (state.universe?.storyMode !== 'cast' || !VOCES_DISPONIBLES.length) return;
+  const narr = document.getElementById('voiceSelect')?.value || '';
+  const usados = new Set(narr ? [narr] : []);
+  let changed = false;
+  for (const ch of state.characters || []) {
+    const existe = ch.voice && VOCES_DISPONIBLES.some(v => vozValor(v) === ch.voice);
+    if (!existe) {
+      ch.voice = vozAutomaticaPara(ch.gender, usados);
+      if (ch.voice) { usados.add(ch.voice); changed = true; }
+    } else usados.add(ch.voice);
+  }
+  if (!state.universe.systemVoice) {
+    state.universe.systemVoice = vozAutomaticaPara('female', usados) || narr;
+    changed = true;
+  }
+  if (changed) saveState();
+}
+
+function opcionesVozPersonaje(ch) {
+  const lang = document.getElementById('voiceLang')?.value || 'es-US';
+  const list = VOCES_DISPONIBLES.filter(v => v.lang === lang);
+  const current = ch.voice || '';
+  let html = '<option value="">Automática</option>';
+  for (const v of list) {
+    const val = vozValor(v);
+    const icon = generoDeVoz(v) === 'female' ? '👩' : generoDeVoz(v) === 'male' ? '👨' : '🎙️';
+    html += `<option value="${val}"${val === current ? ' selected' : ''}>${icon} ${v.etiqueta}</option>`;
+  }
+  if (current && !list.some(v => vozValor(v) === current)) html += `<option value="${current}" selected>Voz guardada</option>`;
+  return html;
+}
+
+window.setCharacterVoice = function(id, voice) {
+  const ch = (state.characters || []).find(x => x.id === id);
+  if (!ch) return;
+  ch.voice = voice || vozAutomaticaPara(ch.gender);
+  saveState();
+};
+
 function pintarVocesDelIdioma() {
   const selLang = document.getElementById('voiceLang');
   const selVoz  = document.getElementById('voiceSelect');
@@ -2546,6 +2621,7 @@ function pintarVocesDelIdioma() {
     || (dellang.find(v => v.etiqueta === 'Charon') && `gcp_${dellang.find(v => v.etiqueta === 'Charon').name}`)
     || selVoz.options[0]?.value;
   if (quiero) selVoz.value = quiero;
+  asegurarVocesPersonajes();
   // La lista de voces llega de la red DESPUÉS de arrancar, así que el selector
   // del corto se rellena aquí: al inicializarse sólo existía el hueco.
   const selCorto = document.getElementById('cortoVoz');
@@ -2558,6 +2634,7 @@ function pintarVocesDelIdioma() {
     }
   }
   guardarAjustes();
+  if (state.universe?.storyMode === 'cast') renderCharacters();
   // The count has to match what the menu is showing, which is one language.
   if (nota) nota.innerHTML = HAY_CHIRP
     ? `<strong>${dellang.length}</strong> voces Chirp 3: HD en este idioma. Mantienen el <strong>mismo narrador de principio a fin</strong>, sin cambiar de registro entre escenas. La velocidad se aplica después de generar, conservando el tono.`
@@ -2576,7 +2653,7 @@ function pintarVocesDelIdioma() {
 // (con qué modelo generás, con qué voz narrás), no contenido de un anime.
 // ════════════════════════════════════════════════════════════════
 const AJUSTES_KEY = 'ajustes_estudio';
-const CAMPOS_AJUSTE = ['imageModelSelect', 'veoModelSelect', 'estiloAnime', 'aspectRatio',
+const CAMPOS_AJUSTE = ['imageModelSelect', 'veoModelSelect', 'estiloAnime', 'aspectRatio', 'motionProfileSelect',
                        'voiceLang', 'voiceSelect', 'voiceSpeed', 'voiceVolumen',
                        'assemblyUseClips', 'assemblyUseMusic', 'assemblyMusicVol',
                        'cortoRatio', 'cortoDuracion', 'cortoGenero', 'cortoEstilo',
@@ -2610,7 +2687,8 @@ function aplicarAjuste(id, valor) {
 // Una línea por estilo, para saber qué se está eligiendo sin generar una imagen
 // de prueba. Van pegadas a lo que se VE, no a nombres de estudios.
 const ESTILO_NOTA = {
-  cinematografico: 'Anime de película moderno: línea fina, sombras suaves, ojos grandes pero con cara. Lo que has usado hasta ahora.',
+  japon_2d:        'Anime japonés 2D: línea dibujada, sombras de cel definidas, piel mate y expresiones de anime. Evita el volumen plástico y la apariencia de videojuego.',
+  cinematografico: 'Ilustración anime cinematográfica, más detallada y suave. Si buscas el aspecto de una serie japonesa 2D, usa «Anime japonés 2D».',
   realista:        'Gente con forma de gente: <strong>siete cabezas y media de alto</strong>, ojos de tamaño normal, nariz con puente, mandíbula. Caras adultas que aparentan su edad. Es el más cercano a un seinen serio.',
   donghua:         'Manhua animado: figuras esbeltas, túnicas con vuelo, fondos de tinta y niebla, paleta de jade y bermellón. Dibujado en 2D, no el donghua 3D.',
   clasico90:       'Anime de los 90 en celuloide: fondos pintados a mano, sombras duras de dos tonos, grano de película y color un poco desvaído.',
@@ -2634,6 +2712,19 @@ function llenarEstilos() {
 function restaurarAjustes() {
   llenarEstilos();
   const datos = ajustesGuardados();
+  // One-time creative migration: old installs remember the previous rendering
+  // choices in localStorage, so changing a default in code alone would appear
+  // to do nothing on the same iPhone.
+  const migrationKey = 'anime_studio_creative_v2';
+  if (!localStorage.getItem(migrationKey)) {
+    datos.estiloAnime = 'japon_2d';
+    datos.aspectRatio = '16:9';
+    datos.motionProfileSelect = 'motion_comic';
+    try {
+      localStorage.setItem(AJUSTES_KEY, JSON.stringify(datos));
+      localStorage.setItem(migrationKey, '1');
+    } catch (_) {}
+  }
   for (const id of CAMPOS_AJUSTE) aplicarAjuste(id, datos[id]);
   // Las etiquetas de los deslizadores no se actualizan solas al cambiar .value.
   const vel = document.getElementById('voiceSpeed');
@@ -2971,24 +3062,46 @@ CAPA DE HUMILLACIÓN Y REVANCHA (la selección del usuario SÍ la pide): la inju
 // each call receiving everything written so far.
 // ════════════════════════════════════════════════════════════════
 const EPISODE_FORMATS = {
-  corto: { scenes: 15, parts: 1, label: 'Corto',  minutes: 5  },
-  medio: { scenes: 24, parts: 2, label: 'Medio',  minutes: 8  },
-  largo: { scenes: 36, parts: 3, label: 'Largo',  minutes: 12 },
-  epico: { scenes: 48, parts: 4, label: 'Épico',  minutes: 16 },
+  corto:      { scenes: 12,  parts: 1,  label: 'Prueba',        minutes: 5  },
+  medio:      { scenes: 18,  parts: 2,  label: 'Corto',         minutes: 8  },
+  largo:      { scenes: 30,  parts: 3,  label: 'Historia',      minutes: 15 },
+  media_hora: { scenes: 48,  parts: 6,  label: 'Historia larga',minutes: 30 },
+  hora:       { scenes: 84,  parts: 10, label: 'Especial',      minutes: 60 },
+  hora_media: { scenes: 120, parts: 15, label: 'Especial largo',minutes: 90 },
 };
-const WORDS_PER_SCENE = 52;
+const WORDS_PER_MINUTE = 145;
 
 function getEpisodeFormat() {
-  // The universe stores the format chosen when it was created, so episodes 2+
-  // and repairs keep the same shape as episode 1 even after a reload.
-  const key = state.universe?.epFormat
+  const firstScenes = state.episodes?.[1] || [];
+  const firstExists = firstScenes.length > 0;
+
+  // Projects created before the long-form engine have no creativeVersion and
+  // used 15/24/36/48-scene presets. Preserve their exact shape forever: the
+  // labels "medio/largo/epico" were reused, so reading only epFormat would
+  // otherwise reinterpret an old 48-scene project as a new 60-minute one.
+  if (firstExists && (state.universe?.creativeVersion || 1) < 2) {
+    const n = firstScenes.length;
+    const legacyMinutes = n <= 15 ? 5 : n <= 24 ? 8 : n <= 36 ? 12 : 16;
+    const totalWords = Math.round(legacyMinutes * WORDS_PER_MINUTE);
+    return {
+      key: 'legacy_' + n, scenes: n, parts: Math.max(1, Math.ceil(n / 12)),
+      label: 'Proyecto anterior', minutes: legacyMinutes, totalWords,
+      wordsPerScene: Math.max(45, Math.round(totalWords / Math.max(1,n))), legacy:true
+    };
+  }
+
+  // New projects lock their production format after episode 1.
+  const key = (firstExists && state.universe?.epFormat)
     || document.getElementById('epLengthSelect')?.value
-    || 'medio';
-  return { key, ...(EPISODE_FORMATS[key] || EPISODE_FORMATS.medio) };
+    || state.universe?.epFormat
+    || 'hora';
+  const base = EPISODE_FORMATS[key] || EPISODE_FORMATS.hora;
+  const totalWords = Math.round(base.minutes * WORDS_PER_MINUTE);
+  return { key, ...base, totalWords, wordsPerScene: Math.max(55, Math.round(totalWords / base.scenes)) };
 }
 function formatWordTarget(fmt) {
-  const total = fmt.scenes * WORDS_PER_SCENE;
-  return { min: Math.round(total * 0.95), max: Math.round(total * 1.08), total };
+  const total = fmt.totalWords || Math.round(fmt.minutes * WORDS_PER_MINUTE);
+  return { min: Math.round(total * 0.92), max: Math.round(total * 1.08), total };
 }
 // Act label for a scene index, scaled to any episode length.
 function actForIndex(i, totalScenes) {
@@ -3068,7 +3181,7 @@ document.getElementById('btnGenerarUniverso').addEventListener('click', async ()
   try {
     const comedyMode = isComedyMode(genero, subgenres);
     const allAgesUni = isAllAges(demo);
-    const system = `Eres un guionista de anime/manhua viral para Facebook Reels.
+    const system = `Eres un creador de universos para historias anime de YouTube. Tu trabajo aquí es sólo diseñar una premisa, conflicto y mundo fuertes; NO desarrollar todavía el guion largo.
 REGLAS ABSOLUTAS:
 ${briefDeNombres(genero, concepto)}
 ${comedyMode
@@ -3141,7 +3254,10 @@ Devuelve JSON:
     state.universe.demo      = demo;
     state.universe.genero    = genero;
     state.universe.subgenres = subgenres;
-    state.universe.epFormat  = document.getElementById('epLengthSelect')?.value || 'medio';
+    state.universe.creativeVersion = 2;
+    state.universe.epFormat  = document.getElementById('epLengthSelect')?.value || 'hora';
+    state.universe.storyMode = document.getElementById('storyModeSelect')?.value || 'narrated';
+    state.universe.endingMode = document.getElementById('endingModeSelect')?.value || 'complete';
     // Fixed now, from the title the model just produced, so it never moves.
     state.universe.carpeta   = slugCarpeta(state.universe.title, state.projectId);
     state.universe.tono      = tono || '';
@@ -3213,16 +3329,48 @@ function updateEpFormatNote() {
   const sel  = document.getElementById('epLengthSelect');
   const note = document.getElementById('epFormatNote');
   if (!sel || !note) return;
-  const f = EPISODE_FORMATS[sel.value] || EPISODE_FORMATS.medio;
-  const words = f.scenes * WORDS_PER_SCENE;
-  note.textContent = `Crea ${f.scenes} escenas con narración y ${f.scenes * 3} imágenes (3 por escena). `
-    + `~${words} palabras · duración estimada ~${f.minutes} minutos`
-    + (f.parts > 1 ? ` · la historia se escribe en ${f.parts} partes encadenadas.` : '.');
+
+  const active = getEpisodeFormat();
+  if (active.legacy) {
+    let opt = [...sel.options].find(o => o.value === 'legacy_current');
+    if (!opt) {
+      opt = document.createElement('option');
+      opt.value = 'legacy_current';
+      sel.appendChild(opt);
+    }
+    opt.textContent = `🔒 Proyecto anterior — ${active.scenes} escenas · ~${active.minutes} min`;
+    sel.value = 'legacy_current';
+    sel.disabled = true;
+    note.textContent = `Proyecto creado con la versión anterior: ${active.scenes} escenas (~${active.minutes} min). Se conserva exactamente ese formato para no romper el material existente.`;
+    return;
+  }
+
+  const legacyOpt = [...sel.options].find(o => o.value === 'legacy_current');
+  if (legacyOpt) legacyOpt.remove();
+  sel.disabled = false;
+  const f = EPISODE_FORMATS[sel.value] || EPISODE_FORMATS.hora;
+  const words = Math.round(f.minutes * WORDS_PER_MINUTE);
+  note.textContent = `~${f.minutes} min · ${f.scenes} escenas narrativas · ~${words.toLocaleString('es-ES')} palabras. `
+    + `Cada escena recibe sólo los planos que necesita; no se generan tres imágenes por obligación.`
+    + (f.parts > 1 ? ` La historia se escribe en ${f.parts} bloques continuos para conservar el arco sin exceder el tiempo de una llamada.` : '');
 }
 document.getElementById('epLengthSelect')?.addEventListener('change', function() {
-  if (state.universe) { state.universe.epFormat = this.value; saveState(); }
+  if (state.universe && !(state.episodes?.[1]?.length)) { state.universe.epFormat = this.value; saveState(); }
   updateEpFormatNote();
 });
+for (const [id, field] of [['storyModeSelect','storyMode'], ['endingModeSelect','endingMode']]) {
+  document.getElementById(id)?.addEventListener('change', function() {
+    if (!state.universe) return;
+    const previous = state.universe[field];
+    if (field === 'storyMode' && state.scenes?.length && previous && previous !== this.value) {
+      const ok = confirm('Cambiar Narrada/Dramatizada modifica cómo se escribe y separa cada intervención. Para obtener el nuevo modo correctamente tendrás que regenerar la historia. ¿Guardar este cambio?');
+      if (!ok) { this.value = previous; return; }
+      showToast('Modo de voz guardado. Regenera la historia para crear el guion en ese formato.', 'success');
+    }
+    state.universe[field] = this.value;
+    saveState();
+  });
+}
 
 // Puts the creation form back in sync with the universe actually loaded, so
 // what the user sees selected is what the project was generated with (and what
@@ -3245,6 +3393,10 @@ function syncFormToUniverse() {
   if (tonoEl && typeof u.tono === 'string') tonoEl.value = u.tono;
   const lenEl = document.getElementById('epLengthSelect');
   if (lenEl && u.epFormat && EPISODE_FORMATS[u.epFormat]) lenEl.value = u.epFormat;
+  const modeEl = document.getElementById('storyModeSelect');
+  if (modeEl && ['narrated','cast'].includes(u.storyMode)) modeEl.value = u.storyMode;
+  const endEl = document.getElementById('endingModeSelect');
+  if (endEl && ['complete','cliffhanger'].includes(u.endingMode)) endEl.value = u.endingMode;
   applyDemoCompatibility();
   updateEpFormatNote();
 }
@@ -3341,17 +3493,10 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
   if (!state.universe) { showToast('Crea un universo primero', 'error'); return; }
   const epNum = state.currentEpisode || 1;   // ← define early, used throughout
 
-  // Regenerating writes a NEW story over the same scene ids, so the old
-  // episode's images, voices, clips and music would stay attached to it — new
-  // narration under old pictures. Say so before starting, and clear them once
-  // the new scenes exist (not before: a failed generation must lose nothing).
+  // Old material is kept until the NEW story is completely ready. The warning
+  // is deferred until we know whether Safari is simply resuming an interrupted
+  // long-form draft; resuming must never ask to delete/restart paid work.
   const materialViejo = await materialDelEpisodio();
-  if (materialViejo.length && !confirm(
-      `El Episodio ${epNum} ya tiene ${materialViejo.length} archivo(s) generados ` +
-      `(imágenes, voces, videos y música).\n\n` +
-      `Volver a generarlo escribe una historia distinta, así que ese material dejaría de ` +
-      `corresponderle y se borrará.\n\n` +
-      `El universo, los personajes y sus imágenes NO se tocan.\n\n¿Seguir?`)) return;
 
   const btn = document.getElementById('btnGenerarEpisodio');
   const progress = document.getElementById('epProgress');
@@ -3376,6 +3521,17 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     const hasSliceOfLife = subgenres.includes('slice_of_life');
     const hasEcchi = subgenres.includes('ecchi') || subgenres.includes('harem') || subgenres.includes('harem_inverso');
     const subgenreText = getSubgenreText(subgenres, genero);
+    // The first episode locks the creative production choices for this universe.
+    // Later episodes inherit them so voice/style logic cannot silently change.
+    if (!(state.episodes?.[1]?.length)) {
+      u.creativeVersion = 2;
+      u.epFormat = document.getElementById('epLengthSelect')?.value || u.epFormat || 'hora';
+      u.storyMode = document.getElementById('storyModeSelect')?.value || u.storyMode || 'narrated';
+      u.endingMode = document.getElementById('endingModeSelect')?.value || u.endingMode || 'complete';
+      saveState();
+    }
+    const storyMode = u.storyMode || 'narrated';
+    const endingMode = u.endingMode || 'complete';
     const fmt = getEpisodeFormat();
     const wordTarget = formatWordTarget(fmt);
 
@@ -3497,56 +3653,60 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
     const sceneOpening = SCENE_OPENING[genero]
       || 'un personaje con nombre ya metido en lo que el género considera un problema';
 
-    const sysBase = `${comedyMode
-      ? 'Eres un guionista de comedia viral para anime/manhua, escribiendo para Facebook Reels — capítulos cortos, ritmo ágil, tono absurdo y directo.'
-      : `Eres un guionista de anime/manhua viral para Facebook Reels — capítulos cortos, ritmo ágil, ESTRICTAMENTE FIEL al tono del género "${genero}". NO es comedia: no agregues chistes, sistemas cómicos ni tono paródico que el género no pide.`}
+    const storyModeRules = storyMode === 'cast'
+      ? `MODO DRAMATIZADO — VOCES POR PERSONAJE:
+- Escribe una historia muy dialogada. El narrador sólo une saltos temporales, antecedentes o información imposible de ver.
+- Los pensamientos pertenecen al personaje que los piensa y deben poder leerse con SU misma voz.
+- Cada intervención debe dejar claro por contexto quién habla; evita párrafos donde tres voces se mezclen sin anclaje.
+- No escribas acotaciones teatrales para ser pronunciadas. La acción se cuenta brevemente o se muestra visualmente.`
+      : `MODO NARRADO — UNA VOZ PRINCIPAL:
+- Una sola voz contará la historia y también leerá las frases de los personajes, como en un resumen dramatizado.
+- La prosa debe fluir al oído: narración, pensamiento y diálogo se distinguen por redacción y contexto, no por etiquetas técnicas.
+- Usa diálogo directo con frecuencia, pero el narrador puede enlazar acciones y saltos sin convertirlo en una obra teatral.`;
+
+    const endingRule = endingMode === 'complete'
+      ? `CIERRE COMPLETO: el conflicto central de ESTA historia queda pagado. Puede quedar mundo para otras historias, pero el espectador no termina sintiendo que faltó el último acto. La última secuencia muestra la consecuencia de la decisión final.`
+      : `CIERRE CONTINUARÁ: resuelve el conflicto del tramo y abre una amenaza, condición o revelación concreta para la siguiente entrega. El corte se siente deliberado, no truncado.`;
+
+    const sysBase = `Eres el guionista principal de una HISTORIA ANIME LARGA para YouTube. No estás escribiendo un Reel, una tesis ni una novela contemplativa. Estás escribiendo una historia audiovisual de aproximadamente ${fmt.minutes} minutos que debe sostener curiosidad, emoción y claridad durante todo su recorrido.
+
+GÉNERO: ${genero}. DEMOGRAFÍA: ${demo}. SUBGÉNEROS: ${subgenres.join(', ') || 'ninguno'}.
+El UNIVERSO y la SINOPSIS ya aprobados son canon. Tu trabajo es DESARROLLARLOS bien, no sustituirlos por otra premisa.
 
 ${allAges
-  ? 'ALL-AGES AUDIENCE (demografía Kodomomuke): historia para público infantil — sin violencia explícita, sin contenido sexual ni sugerente, sin lenguaje adulto. Conflictos comprensibles, tono cálido y una moraleja clara. El ritmo y el gancho siguen siendo los mismos; lo que cambia es el contenido.'
-  : "ADULT AUDIENCE: this is adult content — write with edge and directness, not family-friendly softening. The only real limit is what Gemini's policies actually block."}
+  ? 'AUDIENCIA GENERAL: contenido apropiado para la demografía seleccionada.'
+  : 'PERSONAJES ADULTOS cuando el contenido o subgénero lo requiera. El tono puede ser maduro sin convertir cada escena en provocación.'}
 
-CRITICAL: el campo JSON es "story" (un solo bloque de texto continuo, no un array de escenas).
+${REGISTRO_LONGFORM_REFERENCIA}
 
-TU TAREA: escribí LA HISTORIA COMPLETA del episodio como narración continua y natural — NO como una lista de escenas desconectadas ni como una checklist que hay que marcar en cada párrafo. Contá una historia real de RITMO RÁPIDO CONSTANTE — esto es un Reel de Facebook, no un capítulo de anime de 24 minutos: el espectador abandona en segundos si la historia no avanza. Diálogo cuando aporte. ${comedyMode ? 'Que la comedia fluya como la escribiría un guionista humano.' : 'Que la historia fluya como la escribiría un guionista humano del género.'}
+${storyModeRules}
 
-ESTILO NARRATIVO VIRAL (obligatorio para TODOS los géneros — el género decide QUÉ pasa; esto decide CÓMO se cuenta):
-- PRIMERA ORACIÓN DEL EPISODIO — es una regla de POSICIÓN, no una ventana: el SUJETO de la primera oración es una PERSONA CON NOMBRE, haciendo o diciendo algo concreto. Antes de la palabra 15 ya se sabe qué está en juego para ella: qué le falta, qué le acaban de hacer, qué quiere y no puede, o qué acaba de descubrir. Una línea de diálogo como primera frase también vale.
-  🚫 PROHIBIDO ABRIR CON: clima, calor, frío, viento, hora del día, luz, polvo, olor, silencio, ni con el pueblo / la ciudad / la casa / la sala.
-  TEST: si tu primera oración se puede ilustrar SIN ningún personaje en el cuadro, está mal — reescribila empezando por la persona.
-  TEST DEL BORRADO (hacelo antes de entregar): tapá tu primera oración y leé desde la segunda. Si no se pierde ningún HECHO, sobraba: borrala y empezá por la segunda, que casi siempre era el verdadero comienzo. El material fuerte NUNCA va en segundo lugar.
-  ARRANQUE PROPIO DE ESTE GÉNERO (el género decide QUÉ es un arranque fuerte; la regla de arriba sólo exige que esté primero): ${sceneOpening}.
-- DIÁLOGO DIRECTO constante tejido en la narración — los personajes hablan con sus propias voces en líneas cortas ("—¿Crees que puedes entrar aquí?"); apuntá a que cerca de la MITAD del texto sean voces de personajes.
-- Frases CORTAS de hechos concretos. Números específicos siempre que aporten ("tres años", "mil yuanes", "una semana") — nunca vaguedades ("mucho tiempo", "mucho dinero").
-- PROHIBIDO el lirismo y los adjetivos emocionales vacíos ("sintió un terror indescriptible", "todo cambió en ese momento") — la emoción sale de lo que PASA y de lo que DICEN.
-- PREGUNTAS RETÓRICAS dosificadas (máximo 1-2 por tramo) al espectador o entre personajes ("¿Una semana? Le bastaron dos días.").
-- MINI-CLÍMAX CONSTANTES: cada 2-3 escenas un golpe de giro propio del género (venganza: humillación → bofetada de karma; misterio: pista → vuelco; romance: acercamiento → interrupción; terror: falsa calma → golpe; comedia: plan → desastre absurdo). NO un solo clímax al final.
-- Ritmo de avance permanente: cada frase mueve la historia; nada de párrafos contemplativos. Esto aplica incluso a géneros de ritmo tradicionalmente lento (slice of life, drama, terror): el QUÉ es del género, el ritmo Reel no se negocia.
-- AMBIENTACIÓN SIN FRASE PROPIA, NUNCA: un lugar nuevo se nombra en 6 palabras o menos DENTRO de una oración cuyo sujeto es un personaje y cuyo verbo es una acción ("[NOMBRE] cruzó el patio de la casa [APELLIDO]"). Jamás en oración propia, jamás antes de que el personaje entre en el cuadro — la imagen ya muestra el lugar y el espectador la está viendo mientras te escucha. PROHIBIDO gastar frases en clima, luz, temperatura, olores, polvo o texturas ("el aire helado", "la luz entraba por las rendijas"). ÚNICA excepción: que ese detalle CAUSE un evento de la trama, y entonces se escribe como causa dentro de una acción ("el barro le tragó la sandalia"), nunca como estampa. Esa excepción NO EXISTE en la primera oración del episodio ni en la primera oración de un tramo: ahí arranca la persona, siempre.
-- DENSIDAD Y ORDEN DE CADA TRAMO: este texto se corta después en ${fmt.scenes} fragmentos consecutivos de ~${WORDS_PER_SCENE} palabras, y CADA fragmento se convierte en un video suelto con su propia imagen y su propia voz. Escribí como si cada ~${WORDS_PER_SCENE} palabras empezara un video nuevo que tiene que retener solo: el tramo ABRE con lo más fuerte que tenga dentro (una acción, una voz entrando en frío, una cifra, una revelación) y lo explicativo, lo que ata cabos y lo descriptivo va SIEMPRE después, nunca en su primera oración. Dentro de cada tramo pasan 2-3 cosas DISTINTAS y visualizables (acción → reacción → consecuencia), nunca un solo momento estirado. Al menos UNO DE CADA TRES tramos abre con diálogo.
-
-⚠️ NADA se convierte en tic mecánico repetido en cada párrafo — ni ${comedyMode ? 'el dinero/recompensa, ni ' : ''}una reacción fija de un personaje, ni una frase tipo. ${comedyMode ? 'Si el protagonista calcula una recompensa, que pase con variación real a lo largo de la historia — no lo repitas después de cada incidente como si fuera una casilla que hay que marcar.' : 'Cualquier recurso narrativo debe variar de forma real a lo largo de la historia — nada de repetir la misma fórmula en cada tramo.'}
-
-PERSONAJES: usá el elenco tal como está definido más abajo (roles, rasgos y quirks ya establecidos en sus fichas) — no inventes roles que el elenco no tiene, no ignores rasgos ya asignados a quien sí existe.
-
-TONO DE GÉNERO (${comedyMode ? 'mecánica cómica de referencia, no mandato de trama — palabras como "reino"/"héroe" abajo son solo ilustrativas si no aplican a tu concepto' : 'atmósfera y convenciones del género — mandato de tono, adaptado al concepto y setting de esta historia'}):
+TONO DEL GÉNERO:
 ${genreTone}
-${u.conceptoOriginal ? `🎯 EL CONCEPTO DEFINE EL SETTING: el concepto semilla del usuario (marcado CANON arriba) es el mundo real de esta historia. Si es contemporáneo/realista, quedate ahí — sin reinos, magia ni tecnología futurista que el concepto no mencione. Aplicá solo la mecánica cómica de tono (arriba) a ese setting ya establecido.` : ''}
 
-CIERRE: ${sceneEnding} — terminá con un CLIFFHANGER seco y concreto hacia el episodio ${epNum + 1} — una amenaza visible, una llegada, una frase cortada; no una reflexión.${allAges ? '' : `
-QUE LO COMENTEN (los últimos segundos deciden si escriben o si sólo miran): 1) la ÚLTIMA LÍNEA del episodio la DICE un personaje en voz alta —una amenaza, una condición, una cifra, un plazo—, nunca el narrador. 2) El protagonista hace por lo menos UNA cosa que se puede criticar con razón, y el antagonista dice en voz alta UN motivo que se entiende aunque lo que haga siga estando mal: si al bando contrario no le diste ni una línea con la que alguien podría estar de acuerdo, escribiste un sermón y nadie discute. 3) Queda una decisión a punto de tomarse que una parte del público aprobaría y otra condenaría, y el episodio corta ANTES de que la tome — mostrala y cortá, SIN VEREDICTO: si el episodio dice quién tiene razón, el comentario ya está escrito y nadie lo escribe. Todo esto se mide en cosas concretas (cuánto dinero, cuántos días, quién se queda con qué, quién cuida a quién), nunca en abstracciones.`}
-${isGrounded ? `MODO COTIDIANO ACTIVO: día a día real y específico, CERO fantasmas, CERO poderes — ${comedyMode ? 'el humor' : 'el interés'} viene de situaciones reales.` : `MODO NARRATIVO ACTIVO: la emoción viene de los hechos, no de adjetivos. "[NOMBRE] dispara y falla. El monstruo está a diez metros." No "el terror lo paraliza".`}
-${!allowsSuper && !allowsSuper2 ? `⚠️ RESTRICCIÓN: sin elementos sobrenaturales para el género ${genero} — ni magia, ni poderes, ni sistemas, ni fenómenos inexplicables. Todo lo que ocurre tiene una causa del mundo real.` : ''}
-
-VOZ NARRATIVA (la decidió el director — sostenela sin cambiar ni una frase):
+VOZ NARRATIVA:
 ${reglaNarrativa(state.universe?.bible?.narrativa)}
-
-${REGISTRO_MANHUA}
 
 ${VOZ_SOBRE_IMAGEN}
 
-EXTENSIÓN Y FORMATO: entre ${wordTarget.min} y ${wordTarget.max} palabras en total (la narración TTS corre a ~150 palabras/minuto: este total produce los ~${fmt.minutes} minutos del formato elegido), español. Un solo bloque de texto continuo — esta llamada NO genera imágenes ni divide en escenas todavía, eso es un paso separado.
-Responde SOLO JSON válido sin markdown`;
+REGLAS DE DESARROLLO:
+- El primer minuto introduce AL PROTAGONISTA EN UNA SITUACIÓN, no una explicación del mundo. Antes de explicar reglas, crea una pregunta.
+- No quemes la sinopsis en cinco minutos. Expande mediante decisiones y consecuencias reales.
+- Cada bloque de 6-10 minutos debe modificar al menos una de estas cosas: objetivo, relación, poder/recursos, información, amenaza o precio de una decisión.
+- Si un personaje demuestra algo extraordinario, deja que otros reaccionen y actúen por ello. La reacción es parte del acontecimiento.
+- Los secundarios no existen para hacer fila y admirar al protagonista: tienen objetivos, información parcial y capacidad de empeorar o mejorar la situación.
+- REPARTO CERRADO PARA PERSONAJES RECURRENTES: los personajes con nombre que reaparecen a lo largo de la historia deben salir del reparto proporcionado. Puedes usar extras puntuales sin nombre ("la camarera", "un guardia", "dos clientes"), pero no inventes a mitad del guion un nuevo coprotagonista o antagonista recurrente sin ficha.
+- Evita repetir exactamente el mismo ciclo de problema/recompensa. Si una mecánica reaparece, cambia el costo, la interpretación o la consecuencia.
+- No hagas resúmenes de acontecimientos que merecen escena. Las decisiones, confrontaciones, descubrimientos y revelaciones importantes ocurren delante del espectador.
+- Usa elipsis para trayectos, rutinas y repeticiones que no cambian nada.
+- Mantén nombres, reglas del mundo, relaciones, objetos importantes, deudas y heridas consistentes entre bloques.
+- Diálogos naturales y relativamente cortos. Nada de personajes dando discursos para explicar al espectador lo que ambos ya saben.
+- Español natural. Evita traducciones literales, frases robóticas, muletillas repetidas y cierres moralizantes.
 
+${endingRule}
+
+EXTENSIÓN: ${wordTarget.min}-${wordTarget.max} palabras en total. La historia se escribirá por bloques consecutivos, pero debe leerse como UNA sola obra continua.
+CRÍTICO: el campo JSON es "story". Responde SOLO JSON válido sin markdown.`;
     // Split ecchi rules: narration guidance goes with the narration call,
     // visual/camera language goes with the image-prompt call.
     const genreExtra = hasEcchi
@@ -3574,13 +3734,12 @@ enumerar — no te autocensures, pero tampoco confundas "adulto" con "listar par
       : '';
 
     const genreExtraImage = hasEcchi
-      ? `\n\nECCHI ACTIVO — LENGUAJE VISUAL:
-TODOS los personajes son ADULTOS (18 años en adelante), con cuerpos y rostros claramente adultos, cada uno con su propia edad adulta según su rol, en contextos adultos acordes al género y setting de la historia. JAMÁS uniformes escolares, aulas, ni nada que sugiera colegiales o menores de edad.
-LENGUAJE DE CÁMARA ECCHI: "low angle shot revealing her thighs", "wind lifting her skirt she blushes", "her fitted dress barely covers as she leans forward", "wet shirt clinging to her figure after rain", "she wraps towel around herself surprised expression", "swimsuit scene at pool side profile view", "form-fitting activewear surprised mid-motion", "short nightgown in hallway embarrassed expression", "side view leaning over table dress riding up"
-APARIENCIA: mujeres adultas con ropa que la historia justifique — vestido entallado, traje de baño, ropa de trabajo ajustada, ropa de dormir. Nombrá la PRENDA, su tela y su corte. NO describas el cuerpo con etiquetas de catálogo ("hourglass silhouette", "voluptuous figure", "curvy"): son justo las palabras que hacen que el filtro tire el plano, y lo que hace atractiva una imagen es el ÁNGULO, la POSTURA y la LUZ, no un adjetivo sobre la anatomía. Todos los personajes son adultos.
-LÍMITE: sin desnudez explícita, sin partes íntimas visibles — todo lo demás (sensual, sugerente, provocativo) está permitido.`
+      ? `\n\nECCHI ADULTO — DIRECCIÓN VISUAL:
+TODOS los personajes sexualizados son ADULTOS (18+), con rostro y contexto claramente adultos. Nunca secundaria, colegiales ni códigos visuales de menores.
+El fan service debe sentirse como anime ecchi, pero nace de la SITUACIÓN: proximidad incómoda, reacción avergonzada, vestuario apropiado al contexto, cambio de ropa fuera de campo, traje de baño, ropa de dormir, cita, sesión de fotos, entrenamiento, baño termal adulto u otros contextos que la historia realmente haya establecido.
+La cámara puede usar ángulos sugerentes y timing cómico, pero sigue contando el beat narrativo. Evita inventarios anatómicos, poses de catálogo y cuerpos exagerados que rompen continuidad o empujan el resultado a una ilustración genérica.
+Sin desnudez explícita ni partes íntimas visibles. La identidad japonesa 2D, las proporciones coherentes y la continuidad del personaje tienen prioridad.`
       : '';
-
     const episodeInstructions = document.getElementById('episodeInstructions')?.value.trim() || '';
 
     const ctx = `Universo: ${u.title}
@@ -3612,35 +3771,40 @@ ${SUBGENRE_FIDELITY_CONTRACT}`;
     // comedy formula in the ep2+ path, so a serious drama/terror universe got
     // gag archetypes for every character introduced after episode 1.
     const charDesignerHeader = comedyMode
-      ? `Eres un diseñador de personajes para anime/manhua cómico viral para ${allAges ? 'público infantil' : 'audiencia adulta'}.
-FÓRMULA DE COMEDIA — arquetipos de referencia (esto es MECÁNICA cómica, no estética visual obligatoria):
+      ? `Eres diseñador de personajes para una historia de ANIME JAPONÉS 2D de comedia, para ${allAges ? 'público general' : 'audiencia adulta'}.
+TONO DEL GÉNERO:
 ${genreTone}
-Los personajes deben tener un protagonista mercenario/práctico (nunca dramático). Un COMPAÑERO y una figura de autoridad que sufre las consecuencias son roles PROBADOS para el humor viral y buen default — pero inclúyelos SOLO si encajan con el concepto/género de esta historia; si el concepto no los sugiere, no los fuerces.`
-      : `Eres un diseñador de personajes para anime/manhua viral para ${allAges ? 'público infantil' : 'audiencia adulta'}.
-TONO DEL GÉNERO (los personajes deben servir a esta atmósfera):
+El humor nace de la premisa y de objetivos incompatibles, no de obligar a todos a ser caricaturas. Diseña personas capaces de sostener una historia larga: deseos propios, defectos, límites y relaciones que puedan cambiar. Un compañero cómico o una figura de autoridad sólo aparecen si el concepto realmente los necesita.`
+      : `Eres diseñador de personajes para una historia de ANIME JAPONÉS 2D, para ${allAges ? 'público general' : 'audiencia adulta'}.
+TONO DEL GÉNERO:
 ${genreTone}
-Los personajes deben ser fieles al género "${genero}" y al concepto de la historia — con motivaciones, roles y conflictos propios de ese género. NO agregues roles cómicos (compañero de chiste, autoridad que sufre gags) ni conviertas al protagonista en un personaje de parodia: el reparto es serio dentro de las reglas de su género.`;
+Los personajes sirven al género "${genero}" y al concepto aprobado: tienen deseos, contradicciones, relaciones y función causal en la trama. No añadas arquetipos virales ni roles de fórmula que el concepto no pida.`;
 
-    if (epNum === 1 || !state.characters?.length) {
+    if (!state.characters?.length) {
       setProg(5, 'Paso 1/5: Creando personajes...');
 
       let numChars, numFemales, numMales, protagonistGender;
       const numCharsChoice = document.getElementById('numCharsSelect')?.value || 'auto';
 
+      const autoCastSize = fmt.minutes >= 75 ? 10
+        : fmt.minutes >= 50 ? 8
+        : fmt.minutes >= 25 ? 7
+        : fmt.minutes >= 12 ? 6
+        : fmt.minutes >= 7 ? 5 : 4;
       if (mod === 'harem') {
-        numChars = numCharsChoice !== 'auto' ? Math.max(4, parseInt(numCharsChoice)) : (4 + Math.floor(Math.random() * 2));
+        numChars = numCharsChoice !== 'auto' ? Math.max(4, parseInt(numCharsChoice)) : Math.max(6, autoCastSize);
         numMales = 1; numFemales = numChars - 1;
         protagonistGender = 'male';
       } else if (mod === 'harem_inverso') {
-        numChars = numCharsChoice !== 'auto' ? Math.max(4, parseInt(numCharsChoice)) : (4 + Math.floor(Math.random() * 2));
+        numChars = numCharsChoice !== 'auto' ? Math.max(4, parseInt(numCharsChoice)) : Math.max(6, autoCastSize);
         numFemales = 1; numMales = numChars - 1;
         protagonistGender = 'female';
       } else if (numCharsChoice !== 'auto') {
-        numChars = parseInt(numCharsChoice);
+        numChars = Math.max(2, Math.min(12, parseInt(numCharsChoice) || autoCastSize));
         numFemales = null; numMales = null;
         protagonistGender = 'libre (el que mejor sirva al género y la historia)';
       } else {
-        numChars = 3 + Math.floor(Math.random() * 3);
+        numChars = autoCastSize;
         numFemales = null; numMales = null;
         protagonistGender = 'libre (el que mejor sirva al género y la historia)';
       }
@@ -3652,8 +3816,9 @@ Los personajes deben ser fieles al género "${genero}" y al concepto de la histo
 - Protagonista: ${protagonistGender}
 - Nombres coherentes con la demografía y época del setting (japoneses, chinos, occidentales, según corresponda) — SOLO para personajes NUEVOS que no estén ya nombrados en el concepto semilla
 - Variedad visual: distintos colores de cabello, ojos, estilos de ropa
-- Cada personaje debe tener un rol claro y FUNCIÓN en la trama del género solicitado${(mod === 'ecchi' || mod === 'harem') ? '\n- Personajes femeninos con arquetipos marcados y DISTINTOS entre sí (tsundere, kuudere, genki, dandere, onee-san, etc) — uno por personaje, sin repetir' : ''}${mod === 'harem_inverso' ? '\n- Personajes masculinos con arquetipos marcados y DISTINTOS entre sí (cool, principesco, deportista, intelectual, salvaje, etc) — uno por personaje, sin repetir' : ''}
-${comedyMode ? `- Evalúa si esta historia necesita un COMPAÑERO (con rasgo cómico fijo "${getCompanionQuirk()}", no otro) y/o una FIGURA DE AUTORIDAD que sufre las consecuencias de los éxitos accidentales del protagonista. Estos son roles PROBADOS para el humor viral y son un buen default para isekai/videojuego/donghua/sistema — pero NO son obligatorios: si el concepto proporcionado por el usuario no sugiere estos roles, o si no encajan naturalmente con la historia (ej: dramas serios, slice of life íntimo, conceptos con reparto reducido específico), NO los agregues forzosamente. Prioriza fidelidad al concepto del usuario sobre completar la fórmula.` : `- Roles y relaciones fieles al género "${genero}" y al concepto — sin roles cómicos de fórmula (compañero de chiste, autoridad que sufre gags).`}
+- Cada personaje debe tener un rol claro y FUNCIÓN CAUSAL en la trama: quiere algo, puede tomar decisiones y su presencia modifica al menos una relación, objetivo o consecuencia.
+- Diferencia personalidades por valores, deseos, defectos y forma de actuar; no repartas etiquetas de arquetipo como si fueran una lista obligatoria.
+${comedyMode ? `- Si la premisa necesita contraste cómico, dáselo a relaciones concretas entre personajes. Un compañero o figura de autoridad sólo entra si crea decisiones y consecuencias propias de ESTA historia.` : `- Roles y relaciones fieles al género "${genero}" y al concepto, sin insertar personajes de fórmula.`}
 
 ⚠️ PERSONAJE NO-HUMANO — LEE EL CONCEPTO CON MUCHO CUIDADO:
 Si el CONCEPTO SEMILLA ORIGINAL menciona EXPLÍCITAMENTE que un personaje específico (normalmente el protagonista) transmigró, se reencarnó, o habita el cuerpo de un animal, criatura, objeto u otra entidad NO humana — SOLO ESE personaje específico debe crearse como no-humano, respetando el esquema JSON completo (name, role, gender, age, appearance, personality, backstory). NO lo omitas y NO lo conviertas en humano.
@@ -3667,28 +3832,26 @@ Las reglas de ropa/vestimenta de más abajo NO aplican a este personaje — solo
 
 🚫 PROHIBIDO INVENTAR MÁS PERSONAJES NO-HUMANOS: si el concepto solo describe UN personaje como no-humano (ej: solo el protagonista es un perro), TODOS los demás personajes (ex parejas, familiares, vecinos, figuras de autoridad, etc.) DEBEN ser humanos normales — sin excepción, aunque parezca "consistente" con el tono de la historia inventar otro personaje no-humano. No agregues gatos parlantes, mascotas con poderes, ni ninguna otra criatura no mencionada explícitamente en el concepto. Un mundo con UN personaje no-humano no significa que el mundo entero tenga animales que hablan — sigue siendo el mundo real, con UNA excepción puntual.
 
-REGLAS DE PERSONAJES FEMENINOS (TODOS los géneros humanos):
-- Cabello LARGO obligatorio (hasta los hombros o más largo). Nunca corto tipo bob/pixie.
-- Figura femenina atractiva y bien proporcionada: cintura definida, esbelta, elegante.
-- Piel limpia, sin cicatrices, sin heridas, sin ojeras pronunciadas
-- Ropa adecuada al rol pero femenina
+DISEÑO DE PERSONAJES HUMANOS:
+- Cada personaje necesita una SILUETA reconocible y distinta: altura, complexión, peinado, expresión habitual y manera de vestir coherentes con su edad, oficio y personalidad.
+- Las mujeres NO comparten un molde obligatorio: cabello corto, bob, recogido, medio o largo son válidos cuando sirven al personaje. Lo mismo con complexiones y rasgos faciales.
+- Rostros claramente adultos cuando corresponde, con variedad real. No conviertas a todo el elenco en modelos perfectos ni borres cicatrices, cansancio o marcas si la historia las justifica.
+- La ropa identifica función y estatus antes que atractivo. Cada personaje debe poder reconocerse por su diseño general, no sólo por el color del cabello.
 
 REGLAS DE VESTIMENTA PARA PERSONAJES HUMANOS (OBLIGATORIO):
 - La ropa DEBE ser coherente con la ÉPOCA del setting y con la CONDICIÓN ECONÓMICA de cada personaje según el concepto — cada personaje según SU estatus, no todos iguales. Describir SIEMPRE: prenda + material + color + CONDICIÓN.
 - POBREZA en época ANTIGUA/feudal (o miseria extrema que el concepto declare): telas bastas (cáñamo, algodón crudo, lana burda), colores desteñidos, PARCHES visibles, dobladillos deshilachados — ej.: "yukata de algodón basto color índigo desteñido, con parches cuadrados en el hombro y el costado, dobladillo deshilachado".
 - Historia CONTEMPORÁNEA o personaje común/clase media: ropa moderna normal, limpia y en buen estado aunque sea sencilla y sin marca (jeans, camiseta, sudadera, uniforme de trabajo) — hoy en día la ropa modesta también se ve bien: NADA de parches ni telas burdas en settings actuales salvo que el concepto declare indigencia explícita.
 - Personaje ADINERADO o contexto formal: telas finas (seda, lino fino), colores vivos, prendas impecables — SOLO si el estatus de ese personaje lo justifica.
-- El desgaste, cuando aplica, es DIGNO al estilo anime/donghua: parches limpios, tela desteñida, bordes gastados — la ropa siempre bien puesta y entera en silueta; nada de harapos grotescos ni suciedad exagerada.
+- El desgaste, cuando aplica, se dibuja con lenguaje de anime japonés 2D: tela desteñida, costuras, bordes gastados o parches coherentes; nada de suciedad exagerada salvo que la historia lo exija.
 - PROHIBIDO el default de lujo: nunca seda, telas finas ni ropa "impecable" en personajes cuya historia dice que son pobres.
 
-${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA (solo personajes humanos):
-- Personajes ADULTOS con rostro y cuerpo claramente adultos, en contextos adultos acordes al género y setting de la historia. Cada personaje tiene su PROPIA edad adulta asignada según su rol en la historia (18 años en adelante), con variedad real entre personajes — no les pongas a todos la misma edad. NUNCA colegiales/estudiantes de secundaria, NUNCA menores, NUNCA uniformes escolares, faldas plisadas de colegio ni ambientes de instituto/aula.
-- Personajes femeninos adultos con figuras atractivas y sensuales estilo ecchi anime: "graceful hourglass silhouette", "long slender legs", "delicate collarbone", "slim waist", "voluptuous figure", "curvy silhouette"
-- Personajes masculinos adultos atractivos estilo anime (especialmente en harem inverso): "tall athletic build", "broad shoulders", "toned physique", "sharp jawline", ropa que marca la figura (camisa entallada, traje ajustado)
-- Ropa fan service típica del género: vestido corto entallado, traje de baño, pijama corto, lencería anime (encajes, lazos), ropa deportiva ajustada, ropa de oficina entallada
-- Vocabulario que funciona con Gemini: "form-fitting dress", "fitted sports outfit", "swimsuit", "lace-trim sleepwear", "attractive silhouette", "sensual pose"
-- NO usar en appearance: "naked", "nude", "explicit", "nipples", "genitals" — sin desnudez explícita, todo lo demás (sensual, sugerente, provocativo) está permitido
-- SIEMPRE especificar la edad: cada personaje una edad adulta propia según su rol (de veintitantos en adelante), siempre claramente adultos, nunca adolescentes ni colegiales` : `- Descripción de apariencia libre y natural — sin restricciones artificiales de vocabulario, mientras sea apropiado para el género y tono elegidos`}
+${isEcchi ? `MODIFICADOR ECCHI ACTIVO — DISEÑO ADULTO:
+- TODOS los personajes sexualizados son adultos de 18 años o más y se ven claramente adultos. Nunca secundaria/colegio ni uniformes asociados a menores.
+- El atractivo sale del DISEÑO, actitud, vestuario y situación; no escribas un inventario de partes del cuerpo ni clones la misma figura en todas las mujeres.
+- Da a cada adulto una apariencia propia y reconocible. Vestuario sugerente sólo cuando encaja con oficio, lugar y escena: vestido de noche, traje de baño, ropa deportiva, ropa de dormir o ropa de trabajo estilizada, según corresponda.
+- Mantén proporciones anatómicas coherentes y poses naturales. Evita descripciones que empujen a un render sexualizado genérico o a anatomía exagerada.
+- En appearance no uses desnudez explícita ni partes íntimas. Especifica siempre una edad adulta coherente con el rol.` : `- Descripción de apariencia libre, específica y coherente con edad, rol, época y personalidad.`}
 
 ${allAges
   ? '- Edad (Kodomomuke): edades apropiadas para una historia infantil — el protagonista puede ser un niño o preadolescente. Especificar edad en la descripción. SIN contenido romántico, SIN contenido sugerente, SIN violencia explícita.'
@@ -3722,6 +3885,7 @@ Responde SOLO JSON válido sin markdown.`;
       }
       state.characters = parsedChars.characters || [];
       recordarNombres(state.characters.map(ch => ch.name));
+      asegurarVocesPersonajes();
       saveState();
       renderCharacters();
       setProg(20, `✅ ${state.characters.length} personajes — Paso 2/5: Escribiendo historia...`);
@@ -3746,6 +3910,7 @@ Responde SOLO JSON válido sin markdown.`;
             newChars.forEach((ch, i) => { ch.id = `c_new_ep${epNum}_${i}_${ts}`; });
             state.characters = [...state.characters, ...newChars];
             recordarNombres(newChars.map(ch => ch.name));
+            asegurarVocesPersonajes();
             saveState();
             renderCharacters();
 
@@ -3753,7 +3918,7 @@ Responde SOLO JSON válido sin markdown.`;
             setProg(15, `Generando imágenes de ${newChars.length} personaje(s) nuevo(s)...`);
             for (const ch of newChars) {
               try {
-                const prompt = `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. Render the clothing's fabric, colors and CONDITION exactly as described — if it says coarse, faded, patched or frayed, show it clearly; do NOT beautify, enrich or upgrade the clothes. NO text, NO letters, NO watermarks. Clean professional anime 2D art style, white background, character turnaround showing front side and back.`;
+                const prompt = `Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render clothing exactly as described. No turnaround, no collage, no alternate poses, no expression sheet, no text, no watermark. Authentic Japanese hand-drawn 2D anime, crisp linework, hard-edged cel shading.`;
                 const imgB64 = await generateImage(prompt, null, null, { charSheet: true });
                 await dbSet(charImgKey(ch.id), imgB64);
                 renderCharacters();
@@ -3778,202 +3943,242 @@ Responde SOLO JSON válido sin markdown.`;
 
     const charRefShort = state.characters.map(c => c.name).join(', ');
 
-    // N escenas × 3 imágenes por escena, según el formato elegido
-    const narrationShape = `{"id":"s1","num":1,"title":"título corto","narration":"~48-55 palabras tomadas TAL CUAL de la historia original, cortadas en un punto natural — no reescribas ni le agregues un gancho artificial, solo extraé el fragmento que corresponde."}`;
+    const charVoiceMap = state.characters.map(ch => `${ch.id} = ${ch.name}`).join('\n');
 
-    // ─── STEP: write the episode as continuous prose — no per-scene checklist,
-    // so nothing (money amounts, character beats, reactions) gets mechanically
-    // repeated once per scene.
-    //
-    // One call per PART. A short episode is a single call, as before. Longer
-    // formats are written act by act because a single 2500-word generation runs
-    // past Vercel's 60s function limit. Splitting by ACT is safe in a way that
-    // splitting by SCENE was not: every part receives the complete text written
-    // so far plus what its act must accomplish, so it continues one story
-    // instead of restarting it (the old per-scene split is what made scene 10
-    // repeat scene 5). ───
+    // ─── Resumable long-form draft ───────────────────────────────
+    // A 60–90 minute story requires many sequential model calls. Mobile Safari
+    // may suspend or reload while they run, so every paid block is persisted.
+    // Pressing Generate again resumes from the first missing block.
+    const episodeInstructionsNow = document.getElementById('episodeInstructions')?.value.trim() || '';
+    const draftSignature = JSON.stringify({
+      v: 2, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
+      storyMode, endingMode, instructions: episodeInstructionsNow,
+      title: u.title || '', concept: u.concepto || '', conflict: u.conflicto || '',
+      demo: u.demo || '', genero: u.genero || '', subgenres,
+      bible: u.bible || null,
+      chars: state.characters.map(ch => [ch.id, ch.name, ch.role, ch.age, ch.personality])
+    });
+    if (!u.longformDrafts || typeof u.longformDrafts !== 'object') u.longformDrafts = {};
+    let longDraft = u.longformDrafts[epNum];
+    if (!longDraft || longDraft.signature !== draftSignature) {
+      longDraft = {
+        signature: draftSignature, storyParts: [], sceneChunks: [], visualChunks: [],
+        createdAt: Date.now(), updatedAt: Date.now()
+      };
+      u.longformDrafts[epNum] = longDraft;
+      saveState();
+    }
+    const resumingLongDraft = (longDraft.storyParts?.length || longDraft.sceneChunks?.length || longDraft.visualChunks?.length) > 0;
+    if (resumingLongDraft) {
+      showToast(`Reanudando historia: ${longDraft.storyParts?.length || 0}/${fmt.parts} bloques escritos`, 'success');
+    } else if (materialViejo.length && !confirm(
+      `El Episodio ${epNum} ya tiene ${materialViejo.length} archivo(s) generados (imágenes, voces, videos y música).\n\n` +
+      `Generar una historia nueva hará que ese material deje de corresponderle y se borrará SÓLO cuando la historia nueva termine correctamente.\n\n` +
+      `El universo, los personajes y sus referencias NO se tocan.\n\n¿Seguir?`)) {
+      delete u.longformDrafts[epNum];
+      saveState();
+      return;
+    }
+    const narrationShape = storyMode === 'cast'
+      ? `{"id":"s1","num":1,"title":"título corto","narration":"texto legible de la escena","interventions":[{"type":"narrator|dialogue|thought|system","speakerId":"narrator|system|ID_DEL_PERSONAJE","text":"texto que se pronuncia"}]}`
+      : `{"id":"s1","num":1,"title":"título corto","narration":"fragmento completo y natural de la historia"}`;
+
     async function generateStoryPart(prompt, minWords) {
-      let best = '';
-      let lastErr = '';
+      let best = '', lastErr = '';
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callGemini(prompt, sysBase + genreExtra);
-          let parsed;
-          try {
-            parsed = safeParseJSON(raw);
-          } catch (pe) {
-            // The API answered but the body didn't parse as JSON — show why and
-            // a snippet of what came back, so truncation/format issues are clear.
-            throw new Error(`respuesta recibida pero el JSON no parseó (${pe.message}) | inicio: ${String(raw).slice(0, 180)}`);
-          }
+          const parsed = safeParseJSON(raw);
           const story = String(parsed.story || '').trim();
           const wc = story.split(/\s+/).filter(Boolean).length;
           if (story.length > best.length) best = story;
-          if (story && wc >= minWords) return story; // sanity floor — reject obviously truncated results
+          if (story && wc >= minWords) return story;
           lastErr = story ? `demasiado corto (${wc} palabras, mínimo ${minWords})` : 'respuesta vacía o sin campo "story"';
-          console.warn(`Historia intento ${attempt+1}: ${lastErr}`);
-          await new Promise(r => setTimeout(r, 3000));
-        } catch(e) {
+          if (attempt < 3) await new Promise(r => setTimeout(r, 2500));
+        } catch (e) {
           lastErr = e.message;
-          console.error(`Historia intento ${attempt+1}:`, e.message);
-          if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
+          if (attempt < 3) await new Promise(r => setTimeout(r, 2500));
         }
       }
-      if (best) return best; // accept the longest attempt rather than fail outright
-      throw new Error(`No se pudo generar la historia. Último error: ${lastErr}`);
+      if (best) return best;
+      throw new Error(`No se pudo escribir esta parte de la historia: ${lastErr}`);
     }
 
-    // Arc beats per part, so each call knows what its act has to accomplish.
-    const PART_BRIEFS = {
-      1: ['la historia COMPLETA: abrí con la historia YA EN MARCHA (una persona con nombre y algo en juego desde la primera oración — nada de presentar el mundo antes), desarrollo, clímax y cierre con cliffhanger'],
-      2: ['PRIMERA MITAD: abrí con la historia YA EN MARCHA (una persona con nombre y algo en juego desde la primera oración), primer incidente y escalada hasta un punto de giro fuerte (NO cierres la historia)',
-          'SEGUNDA MITAD: consecuencias del giro, escalada final, clímax y cierre con cliffhanger'],
-      3: ['ACTO 1: abrí con la historia YA EN MARCHA (una persona con nombre y algo en juego desde la primera oración); el elenco se presenta actuando, y el primer evento que rompe la normalidad (NO cierres nada)',
-          'ACTO 2: escalada — complicaciones, alianzas y traiciones, un giro que sube las apuestas (NO cierres la historia)',
-          'ACTO 3: convergencia de los hilos sembrados, clímax y cierre con cliffhanger'],
-      4: ['ACTO 1: abrí con la historia YA EN MARCHA (una persona con nombre y algo en juego desde la primera oración) y primer incidente que rompe la normalidad (NO cierres nada)',
-          'ACTO 2: complicaciones que escalan y un primer giro real (NO cierres nada)',
-          'ACTO 3: las apuestas suben al máximo, todo se complica antes del final (NO cierres la historia)',
-          'ACTO 4: convergencia de los hilos sembrados, clímax y cierre con cliffhanger'],
-    };
+    function buildLongformPartBriefs(parts, completeEnding) {
+      return Array.from({ length: parts }, (_, i) => {
+        const p = (i + 1) / parts;
+        if (i === 0) return 'BLOQUE DE APERTURA: instala el gancho, el deseo del protagonista, la primera fricción y la promesa de la historia. Empieza dentro de una situación. Siembra 2-3 preguntas; no expliques todavía todo el mundo y no cierres el conflicto.';
+        if (i === parts - 1) return completeEnding
+          ? 'BLOQUE FINAL: las decisiones anteriores convergen en el clímax. Paga el conflicto central, muestra reacciones y consecuencias, y entrega un epílogo breve que haga sentir la historia completa.'
+          : 'BLOQUE FINAL DE ESTA ENTREGA: paga el conflicto inmediato y luego abre una amenaza/revelación concreta. Termina en un punto de decisión deliberado que continúe después.';
+        if (p <= 0.30) return 'DESARROLLO TEMPRANO: explota las consecuencias del gancho. Introduce relaciones, reglas y obstáculos sólo cuando el protagonista choque con ellos. Haz que una solución cree una nueva necesidad.';
+        if (p <= 0.55) return 'DESARROLLO MEDIO: complica objetivos y relaciones. Recupera información sembrada antes, paga al menos una pregunta y abre otra de mayor peso. Evita repetir el mismo tipo de obstáculo.';
+        if (p <= 0.78) return 'ESCALADA: una decisión o revelación cambia la posición del protagonista. Sube el costo y fuerza una elección distinta a las anteriores. Los demás reaccionan y toman medidas.';
+        return 'PRECLÍMAX: convergen subtramas y consecuencias. Quita salidas fáciles, recupera elementos sembrados y deja preparado el conflicto final sin resolverlo todavía.';
+      });
+    }
 
     async function generateFullStory(baseCtx) {
-      const briefs = PART_BRIEFS[fmt.parts] || PART_BRIEFS[1];
+      const briefs = buildLongformPartBriefs(fmt.parts, endingMode === 'complete');
       const perPart = Math.round(wordTarget.total / fmt.parts);
-      const partsOut = [];
+      const partsOut = Array.isArray(longDraft.storyParts)
+        ? longDraft.storyParts.slice(0, briefs.length).map(x => String(x || '').trim())
+        : [];
 
       for (let i = 0; i < briefs.length; i++) {
-        if (fmt.parts > 1) {
-          setProg(30 + Math.round((i / briefs.length) * 12), `Paso 2/5: Escribiendo parte ${i+1}/${briefs.length}...`);
+        if (partsOut[i]) {
+          if (fmt.parts > 1) setProg(30 + Math.round(((i + 1) / briefs.length) * 12), `Paso 2/5: Bloque ${i + 1}/${briefs.length} recuperado`);
+          continue;
         }
-        const soFar = partsOut.join('\n\n');
+        if (fmt.parts > 1) setProg(30 + Math.round((i / briefs.length) * 12), `Paso 2/5: Escribiendo bloque ${i + 1}/${briefs.length}...`);
+        const soFar = partsOut.slice(0, i).join('\n\n');
         const prompt = `${baseCtx}
 
-${soFar ? `═══ TEXTO YA ESCRITO DE ESTE MISMO EPISODIO (continuá desde aquí, NO lo repitas, NO reinicies la historia) ═══
+${soFar ? `═══ HISTORIA YA ESCRITA — CANON INMEDIATO (CONTINÚA; NO RESUMAS NI REPITAS) ═══
 ${soFar}
-═══ FIN DEL TEXTO YA ESCRITO ═══
+═══ FIN DEL CANON ESCRITO ═══
+` : ''}
+ESCRIBE AHORA: ${briefs[i]}
+Objetivo aproximado de este bloque: ${perPart} palabras.
+${i > 0 ? 'Comienza exactamente después de la última acción/decisión previa. No reinicies la premisa.' : ''}
+${i < briefs.length - 1 ? 'Este bloque NO es el final. Déjalo avanzar hacia el siguiente sin un cliffhanger artificial interno.' : ''}
 
-` : ''}ESCRIBÍ AHORA ${briefs[i]}.
-Extensión de esta parte: ~${perPart} palabras.${i > 0 ? '\nEmpezá exactamente donde quedó el texto anterior, sin resumirlo y sin repetir eventos ya narrados.' : ''}${i < briefs.length - 1 ? '\nEsta parte NO termina el episodio: dejá la tensión abierta para la parte siguiente.' : ''}
-
-Devolvé SOLO: {"story":"el texto de esta parte, en un solo bloque continuo"}`;
-
-        partsOut.push(await generateStoryPart(prompt, Math.round(perPart * 0.6)));
+Devuelve SOLO {"story":"..."}.`;
+        partsOut[i] = await generateStoryPart(prompt, Math.round(perPart * 0.72));
+        longDraft.storyParts = partsOut.slice();
+        longDraft.updatedAt = Date.now();
+        saveState();
       }
-      return partsOut.join('\n\n');
+      return { story: partsOut.join('\n\n'), parts: partsOut };
     }
 
-    // ─── STEP: split the ALREADY-FINISHED story into exactly N sequential
-    // scenes. This does NOT continue or add to the story (that would risk
-    // the context-loss failure mode from splitting narrative generation
-    // across calls) — it only restructures text that already exists in
-    // front of it, the same safe pattern the image-prompt call already used. ───
-    const splitSysPrompt = `Sos un editor que divide una historia YA TERMINADA en exactamente ${fmt.scenes} fragmentos secuenciales para un formato de video. NO agregues historia nueva, NO reescribas el contenido ni el estilo — dividí el texto ya escrito en ${fmt.scenes} cortes naturales, preservando el orden y el contenido original. Podés ajustar levemente las palabras justo en los puntos de corte para que cada fragmento se lea bien de forma independiente, pero el contenido, los eventos y el estilo son los del autor original — vos solo cortás.
-Cada fragmento: ~48-55 palabras en español, ${formaNarrativa(state.universe?.bible?.narrativa)} — no cambies la voz ni la persona.
-⚠️ REGLA DE CORTE ABSOLUTA: cada fragmento DEBE empezar al inicio de una oración y DEBE terminar con puntuación final (. ! ? …). JAMÁS cortes a mitad de una oración — cada fragmento se convierte en un audio expresivo INDEPENDIENTE, y si una oración queda partida entre dos fragmentos la voz cambia de tono a mitad de la frase y se rompe la continuidad auditiva. Preferí un fragmento de 44 o de 60 palabras antes que cortar una oración por la mitad. Antes de devolver, verificá que los ${fmt.scenes} fragmentos terminen en . ! ? o …
-Cada fragmento necesita un "title" corto (3-6 palabras). No te preocupes por el campo "act": lo asigna la app según la posición.
-CRÍTICO: el campo se llama "narration" (sin tilde).
-Responde SOLO JSON válido sin markdown.`;
-
-    // ─── Deterministic sentence-boundary repair (JS, not LLM) ───
-    // Even with the split rule, the model occasionally cuts mid-sentence.
-    // This pass moves any trailing partial sentence of chunk N to the start
-    // of chunk N+1, guaranteeing every scene's narration is complete
-    // sentences — so each scene's expressive TTS audio starts and ends at
-    // natural boundaries and the voice tone stays continuous.
-    function lastSentenceEnd(t) {
-      const re = /[.!?…]["'»”)]*/g;
-      let last = -1, m;
-      while ((m = re.exec(t)) !== null) last = m.index + m[0].length;
-      return last;
-    }
-    function alignScenesToSentenceBoundaries(scenes) {
-      for (let i = 0; i < scenes.length - 1; i++) {
-        const txt = String(scenes[i].narration || '').trim();
-        if (!txt) continue;
-        const cut = lastSentenceEnd(txt);
-        if (cut === -1 || cut >= txt.length) { scenes[i].narration = txt; continue; }
-        const head = txt.slice(0, cut).trim();
-        const tail = txt.slice(cut).trim();
-        // Safety: never leave a scene nearly empty — if no full sentence fits, keep as-is
-        if (head.length < 15) { scenes[i].narration = txt; continue; }
-        scenes[i].narration = head;
-        scenes[i + 1].narration = (tail + ' ' + String(scenes[i + 1].narration || '').trim()).trim();
-      }
-      return scenes;
+    function scenesInPart(i, parts, total) {
+      const base = Math.floor(total / parts);
+      return base + (i < (total % parts) ? 1 : 0);
     }
 
-    async function splitStoryIntoScenes(story) {
-      const prompt = `HISTORIA COMPLETA A DIVIDIR:\n\n${story}\n\nDividila en EXACTAMENTE ${fmt.scenes} fragmentos secuenciales, en orden. Devolvé SOLO: {"scenes":[${narrationShape},...]} con exactamente ${fmt.scenes} objetos numerados 1-${fmt.scenes}.`;
+    const splitSysPrompt = `Eres el editor de guion de una producción audiovisual. Recibes UN BLOQUE ya escrito y lo divides en escenas consecutivas. No agregas acontecimientos nuevos y no cambias el resultado del bloque.
+
+Cada escena debe cubrir un beat audiovisual coherente. No hay objetivo fijo de 52 palabras: una conversación puede ser más larga y una acción puede ser breve. La duración media objetivo de este proyecto es ~${fmt.wordsPerScene} palabras por escena, pero manda el sentido dramático y las oraciones completas.
+
+MODO: ${storyMode === 'cast' ? 'DRAMATIZADO CON VOCES POR PERSONAJE' : 'NARRADO CON UNA VOZ PRINCIPAL'}.
+PERSONAJES Y SUS IDs:
+${charVoiceMap}
+
+${storyMode === 'cast' ? `
+Para cada escena devuelve "interventions" EN ORDEN:
+- dialogue: frase pronunciada por un personaje.
+- thought: pensamiento del personaje, con SU speakerId.
+- narrator: sólo contexto, transición o información que la imagen no puede dar.
+- system: únicamente si existe un sistema real en esta historia.
+No escribas el nombre del hablante dentro de "text". Usa speakerId exacto. El diálogo/pensamiento debe ser la mayoría cuando la escena lo permita. "narration" queda como lectura completa de la escena para editarla visualmente.`
+: `No necesitas separar voces: "narration" contiene el fragmento completo que leerá un único narrador. La misma voz podrá leer las frases directas de personajes tal como están escritas.`}
+
+Reglas:
+- Empieza y termina en límites naturales. Nunca cortes una oración a la mitad.
+- Una escena importante debe incluir la reacción a su revelación/decisión cuando esa reacción pertenece al mismo beat.
+- No fabriques un gancho al final de cada escena. Los cortes existen para montaje, no para convertir una hora en docenas de Reels.
+- Título de 3-6 palabras.
+Responde SOLO JSON válido.`;
+
+    function normalizeInterventions(scene) {
+      if (storyMode !== 'cast') return [{ type: 'narrator', speakerId: 'narrator', text: String(scene.narration || '').trim() }].filter(x => x.text);
+      const validIds = new Set(['narrator', 'system', ...state.characters.map(ch => ch.id)]);
+      const arr = Array.isArray(scene.interventions) ? scene.interventions : [];
+      const cleaned = arr.map(x => {
+        const type = ['narrator','dialogue','thought','system'].includes(x?.type) ? x.type : 'narrator';
+        let speakerId = String(x?.speakerId || 'narrator');
+        if (type === 'system') speakerId = 'system';
+        if (type === 'narrator') speakerId = 'narrator';
+        if (!validIds.has(speakerId)) speakerId = 'narrator';
+        return { type, speakerId, text: String(x?.text || '').trim() };
+      }).filter(x => x.text);
+      return cleaned.length ? cleaned : [{ type: 'narrator', speakerId: 'narrator', text: String(scene.narration || '').trim() }].filter(x => x.text);
+    }
+
+    async function splitStoryPart(partText, wanted, startNum) {
+      const prompt = `BLOQUE A DIVIDIR:\n\n${partText}\n\nDivídelo en EXACTAMENTE ${wanted} escenas consecutivas. Devuelve {"scenes":[${narrationShape},...]} con ${wanted} objetos.`;
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callGemini(prompt, splitSysPrompt);
-          const parsed = safeParseJSON(raw);
-          const arr = parsed.scenes || [];
-          arr.forEach(s => { if (s && s['narración'] && !s.narration) s.narration = s['narración']; });
+          const arr = safeParseJSON(raw).scenes || [];
           const valid = arr.filter(s => s && s.narration && s.title);
-          if (valid.length >= fmt.scenes) {
-            // The act is POSITIONAL, so it is computed here rather than trusted
-            // from the model: a uniform or shifted "act" in the response used to
-            // survive straight into the episode.
-            const scenes = valid.slice(0, fmt.scenes).map((s, i) => ({ ...s, id: `s${i+1}`, num: i+1, act: actForIndex(i, fmt.scenes) }));
-            return alignScenesToSentenceBoundaries(scenes);
+          if (valid.length >= wanted) {
+            return valid.slice(0, wanted).map((s, i) => ({
+              ...s, id: `s${startNum + i}`, num: startNum + i,
+              interventions: normalizeInterventions(s)
+            }));
           }
-          console.warn(`División intento ${attempt+1}: ${valid.length}/${fmt.scenes}`);
-          await new Promise(r => setTimeout(r, 3000));
-        } catch(e) {
-          console.error(`División intento ${attempt+1}:`, e.message);
-          if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
-        }
+        } catch (e) {}
+        if (attempt < 3) await new Promise(r => setTimeout(r, 2500));
       }
-      // Mechanical fallback: sentence-aware split — never cuts mid-sentence.
-      const sentences = story.match(/[^.!?…]+[.!?…]+["'»”)]*\s*/g) || [story];
-      const totalWords = story.split(/\s+/).filter(Boolean).length;
-      const perScene = Math.ceil(totalWords / fmt.scenes) || 1;
-      const chunks = []; let cur = '', curWords = 0;
+
+      // Deterministic fallback by complete sentences.
+      const sentences = partText.match(/[^.!?…]+[.!?…]+["'»”)]*\s*/g) || [partText];
+      const totalWords = partText.split(/\s+/).filter(Boolean).length;
+      const perScene = Math.ceil(totalWords / wanted) || 1;
+      const chunks=[]; let cur='', words=0;
       for (const sent of sentences) {
-        const w = sent.split(/\s+/).filter(Boolean).length;
-        if (curWords + w > perScene && cur && chunks.length < fmt.scenes - 1) {
-          chunks.push(cur.trim()); cur = ''; curWords = 0;
-        }
-        cur += sent; curWords += w;
+        const w=sent.split(/\s+/).filter(Boolean).length;
+        if (cur && words + w > perScene && chunks.length < wanted - 1) { chunks.push(cur.trim()); cur=''; words=0; }
+        cur += sent; words += w;
       }
       if (cur.trim()) chunks.push(cur.trim());
-      while (chunks.length < fmt.scenes) chunks.push('');
-      return Array.from({ length: fmt.scenes }, (_, i) => ({
-        id: `s${i+1}`, num: i+1, act: actForIndex(i, fmt.scenes),
-        title: `Escena ${i+1}`, narration: chunks[i] || '', dialogue: [], imagePromptA: '',
-      }));
+      while (chunks.length < wanted) chunks.push('');
+      return Array.from({length:wanted},(_,i) => {
+        const s={ id:`s${startNum+i}`, num:startNum+i, title:`Escena ${startNum+i}`, narration:chunks[i]||'' };
+        s.interventions=normalizeInterventions(s);
+        return s;
+      });
     }
 
-    const storyArcGuide = `ARCO DEL EPISODIO (guía de ritmo, NO plantilla mecánica escena-por-escena):
-${comedyMode
-  ? `Arranque en caliente: el protagonista YA metido en el primer incidente cómico desde la primera oración — su rutina se deduce de lo que el incidente le rompe, no se cuenta antes.
-Desarrollo: 3-4 incidentes que escalan en absurdo, con chistes recurrentes que se van sembrando y retomando.
-Clímax: el incidente más grande del episodio, donde convergen los chistes recurrentes.
-Cierre: resolución parcial + gancho claro hacia el próximo episodio.`
-  : `Arranque en caliente: el protagonista YA dentro del primer evento que rompe su normalidad, desde la primera oración (fiel al género) — la situación previa se deduce de lo que ese evento le quita, no se cuenta antes.
-Desarrollo: 3-4 eventos que escalan la tensión propia del género, sembrando elementos que se retoman después.
-Clímax: el evento más intenso del episodio, donde convergen los hilos sembrados.
-Cierre: resolución parcial + gancho claro hacia el próximo episodio.`}
+    async function splitStoryIntoScenes(storyParts) {
+      const scenes=[]; let num=1;
+      if (!Array.isArray(longDraft.sceneChunks)) longDraft.sceneChunks = [];
+      for (let i=0; i<storyParts.length; i++) {
+        const wanted=scenesInPart(i, storyParts.length, fmt.scenes);
+        setProg(45 + Math.round((i / storyParts.length) * 12), `Paso 3/5: Organizando escenas ${i + 1}/${storyParts.length}...`);
+        let chunk = null;
+        const cached = longDraft.sceneChunks[i];
+        if (cached?.wanted === wanted && Array.isArray(cached.scenes) && cached.scenes.length === wanted) {
+          chunk = cached.scenes;
+        } else {
+          chunk = await splitStoryPart(storyParts[i], wanted, num);
+          longDraft.sceneChunks[i] = { wanted, scenes: chunk };
+          longDraft.updatedAt = Date.now();
+          saveState();
+        }
+        scenes.push(...chunk); num += wanted;
+      }
+      return scenes.slice(0, fmt.scenes).map((s,i)=>({ ...s, id:`s${i+1}`, num:i+1, act:actForIndex(i, fmt.scenes) }));
+    }
 
-- Usá TODOS o la gran mayoría de los personajes listados en "PERSONAJES DEL EPISODIO" — no ignores a los secundarios enfocándote solo en 2. Si hay 5 personajes, los 5 deberían tener presencia real.
+    const majorTurns = fmt.minutes >= 75 ? '14-18' : fmt.minutes >= 50 ? '10-14' : fmt.minutes >= 25 ? '7-10' : '4-6';
+    const storyArcGuide = `ARCO DE ESTA HISTORIA LARGA:
+- Gancho claro en los primeros 60-90 segundos: persona + deseo/problema + promesa.
+- Aproximadamente ${majorTurns} cambios MAYORES a lo largo de la obra; no significa ${majorTurns} peleas. Un cambio puede ser relación, información, recurso, objetivo o amenaza.
+- Recupera elementos sembrados. Una revelación importante recibe reacción y consecuencia antes de pasar de página.
+- Mantén variedad: alterna confrontación, decisión, descubrimiento, relación, costo y respiración según el género.
+- Los secundarios aparecen cuando tienen una función causal; no hay obligación de meter a todos en cada tramo.
+- ${endingMode === 'complete' ? 'El final resuelve el conflicto central y muestra su consecuencia.' : 'El final resuelve el tramo actual y deja un problema concreto abierto.'}
 - Extensión total: ${wordTarget.min}-${wordTarget.max} palabras.`;
 
     // ─── The director gives the note for this chapter BEFORE it is written ───
     const prevEpSummary = buildPrevEpisodesSummary();
     setProg(25, 'El director prepara el capítulo...');
-    const epDirection = await directEpisode(epNum, prevEpSummary);
+    const epDirection = (resumingLongDraft && state.episodeDirection?.[epNum])
+      ? state.episodeDirection[epNum]
+      : await directEpisode(epNum, prevEpSummary);
 
     // ─── CALL 1: the story, guided by the bible and the chapter note ───
     setProg(30, 'Paso 2/5: Escribiendo la historia...');
-    const fullStory = await generateFullStory(
+    const storyPackage = await generateFullStory(
       `${ctx}${bibleBrief()}${episodeDirectionBrief(epDirection)}${prevEpSummary ? '\n\nCONTEXTO DE EPISODIOS ANTERIORES:\n' + prevEpSummary : ''}\n\nPERSONAJES DEL EPISODIO:\n${charRef}\n\n${storyArcGuide}\n\nEstás escribiendo el episodio ${epNum}.`
     );
+    const fullStory = storyPackage.story;
 
-    // ─── CALL 2: split the finished story into 15 scenes ───
-    setProg(45, `Paso 3/5: Dividiendo en ${fmt.scenes} escenas...`);
-    const scenesNoImg = await splitStoryIntoScenes(fullStory);
+    setProg(45, `Paso 3/5: Organizando ${fmt.scenes} escenas...`);
+    const scenesNoImg = await splitStoryIntoScenes(storyPackage.parts);
 
     // ─── CALL 2.5: extract THIS story's locations → universe scenarios ───
     // Story first, always: locations are derived FROM the finished story.
@@ -3992,14 +4197,14 @@ Cierre: resolución parcial + gancho claro hacia el próximo episodio.`}
 
     const imageSysPrompt = `Eres el DIRECTOR DE FOTOGRAFÍA de este anime. Tu tarea: decidir CUÁNTOS PLANOS necesita cada escena y escribir sus prompts de imagen en inglés, basados en la narración YA ESCRITA — no inventas historia nueva, solo decides el desglose visual de lo que ya ocurre.
 
-⚠️ DECISIÓN 1 — CUÁNTOS PLANOS (esto es lo más importante):
-Contá los BEATS VISUALES REALES de la narración: momentos que se ven DISTINTOS entre sí (cambia la posición de alguien, el estado de un objeto, quién está presente, o el lugar).
-- 1 PLANO si la escena es UN solo momento sostenido: una conversación en la que nadie se mueve, un personaje reflexionando, una sola acción continua sin cambio visible. La mayoría de escenas de diálogo estático son de UN plano.
-- 2 PLANOS si hay dos beats claros: acción → reacción, o llegada → descubrimiento.
-- 3 PLANOS solo si hay tres eventos visualmente distintos de verdad.
+⚠️ DECISIÓN 1 — CUÁNTOS PLANOS (motion-anime de formato largo):
+La narración de una escena suele durar decenas de segundos. La imagen no puede quedarse congelada todo ese tiempo. Decide 1, 2 o 3 ILUSTRACIONES distintas por FUNCIÓN EDITORIAL:
+- 1 PLANO sólo para un beat realmente breve y autosuficiente: establishing corto, insert de objeto, reacción aislada, pensamiento corto o una acción cuya misma composición sostiene todo el fragmento.
+- 2 PLANOS para acción→reacción, pregunta→respuesta, llegada→descubrimiento, o una conversación corta que necesita ver al hablante y a quien escucha.
+- 3 PLANOS para conversaciones largas, confrontaciones, revelaciones o secuencias con varios focos: por ejemplo conjunto → hablante → reacción/detalle; amenaza → decisión → consecuencia.
+- Un cambio de ángulo SÍ justifica otra ilustración cuando cambia QUÉ INFORMACIÓN mira el espectador: otro hablante, una reacción, un objeto decisivo, una mirada o la relación espacial. No lo hagas sólo por variedad decorativa.
 
-🚫 PROHIBIDO RELLENAR: si no podés escribir dos planos que se vean CLARAMENTE distintos, devolvé UNO. Un plano de más que repite el anterior no aporta nada, cuesta una generación y arruina el video. Es MEJOR una escena de 1 plano bien elegido que 3 casi idénticos.
-Un cambio de ángulo de cámara NO es un beat. Si lo único que cambiaría entre dos planos es dónde está la cámara, es UN plano.
+🚫 PROHIBIDO RELLENAR: los planos adicionales tienen una función distinta. No generes tres versiones casi iguales del mismo personaje con la misma expresión. Tampoco reduzcas automáticamente una conversación de 30–45 segundos a una sola imagen sólo porque nadie camina.
 
 ⚠️ DECISIÓN 2 — QUÉ MUESTRA CADA PLANO (cuando hay más de uno):
 - Los planos son momentos CONSECUTIVOS: prompt 1 = primer beat, y el último = la consecuencia o revelación con la que cierra el fragmento.
@@ -4007,20 +4212,26 @@ Un cambio de ángulo de cámara NO es un beat. Si lo único que cambiaría entre
 - ⚠️ CAUSALIDAD ESTRICTA — cada prompt describe SOLO el estado del mundo en SU momento: lo que se revela DESPUÉS no puede verse ANTES (si todavía no abrió la puerta, el interior, el cuerpo o la sangre NO son visibles en ese prompt; si todavía no agarró el frasco, no lo tiene en la mano). Y lo ya ocurrido NO se deshace (si la puerta ya se abrió en el beat 2, en el beat 3 sigue abierta).
 - LA POSICIÓN AVANZA: si el texto dice que el personaje se mueve (entra, cruza, se agacha, sale, llega a otra parte del lugar), el prompt de ese beat lo muestra YA en la nueva posición con la acción completada — ej.: beat "gira el pomo y entra" → el prompt lo muestra DENTRO de la habitación con la puerta abierta detrás de él viendo lo que hay, NO tocando la puerta otra vez.
 - CONTINUIDAD OBLIGATORIA entre los planos de una escena: MISMO escenario asignado, MISMA ropa y peinado de cada personaje, MISMA iluminación y clima. Lo que SÍ cambia: la acción (avanza), la posición de los personajes en el espacio, el estado de los objetos según el texto, y el ÁNGULO de cámara — los encuadres deben ser claramente distintos entre sí, y el ángulo se elige al servicio de cada beat (no uses una plantilla fija).
-- CONTINUIDAD ENTRE ESCENAS: el primer prompt de cada escena CONTINÚA desde donde quedó el último prompt de la escena anterior — las 45 imágenes del episodio son UNA secuencia visual continua de la misma historia, no ilustraciones sueltas. Si la escena anterior terminó en un lugar y esta empieza en otro, el prompt 1 muestra la llegada/transición natural.
+- CONTINUIDAD ENTRE ESCENAS: un CORTE es normal. Marca "continuarAnterior": true SOLO cuando la nueva escena ocurre segundos después, en el mismo lugar, con la misma ropa y la acción depende físicamente del estado exacto del plano anterior. Un mismo escenario visitado horas después NO es continuidad de fotograma.
 - INTEGRACIÓN FÍSICA: el personaje está DENTRO del espacio — apoyado, sentado o de pie sobre algo que ESE lugar ya tiene, con sombras e iluminación coherentes. NUNCA debe verse como un personaje pegado sobre un fondo. Para lograrlo usá el mobiliario que la descripción del escenario ya menciona; no inventes un mueble nuevo solo para tener con qué interactuar.
 - CÁMARA LIBRE EN EL LUGAR: a lo largo del episodio mostrá el MISMO lugar desde posiciones y ángulos DIFERENTES (desde la puerta, desde la ventana, ángulo bajo, over-shoulder, rincones distintos) — no repitas siempre el mismo encuadre del escenario.
-- VESTIMENTA FIEL AL MUNDO: la ropa de cada personaje conserva el material y la CONDICIÓN de su ficha (basta, desteñida, con parches si es pobre) — nunca la embellezcas ni la conviertas en ropa elegante que la historia no justifica.
+- VESTIMENTA FIEL AL MOMENTO: usa la prenda ACTUAL que corresponde a esta escena y conserva su material/condición entre planos. La ficha fija identidad, no obliga a llevar siempre la ropa de la primera referencia.
 
-⚠️ DECISIÓN 3 — EL MOVIMIENTO DE CADA PLANO (campo "movimientos", uno por plano, EN INGLÉS):
-Cada plano se convierte en un clip de video de 8 segundos que ARRANCA en su propia imagen. Por eso lo único que hay que controlar es DÓNDE TERMINA.
-- Escribí el movimiento como: qué se mueve, cuánto, y en qué estado QUEDA al final del clip.
-- ⚠️ REGLA DE ENGANCHE: el estado final del plano N debe ser EXACTAMENTE la imagen del plano N+1. Si el plano 2 muestra al personaje ya sentado, el movimiento del plano 1 termina con él sentándose — no con ella cruzando la habitación, ni de vuelta de pie. Mirá el prompt del plano siguiente antes de escribir el final de este.
-- El ÚLTIMO plano de la escena no engancha con nada: cierra con un movimiento que se aquieta.
-- MOVIMIENTO CONTENIDO: 8 segundos dan para un gesto, no para una secuencia. Respiración, un giro de cabeza, dar dos pasos, servir una taza, una deriva lenta de cámara. PROHIBIDO: que entren personajes nuevos, cambios de plano dentro del clip, saltos de lugar, acciones que el texto no narra.
-- Si el plano es contemplativo, el movimiento puede ser mínimo (respiración, parpadeo, pelo con el viento, luz que cambia) — eso es correcto, no lo fuerces.
+⚠️ DECISIÓN 3 — MOVIMIENTO LIMITADO DE ANIME / MOTION COMIC:
+Para cada plano devuelve "tiposMovimiento": "still" | "limited" | "action".
+- still: ilustración fuerte que funcionará con corte, paneo o zoom de montaje. Conversaciones, miradas, reacciones, exposición y muchos planos de romance entran aquí.
+- limited: necesita vida mínima (parpadeo, boca sencilla, respiración, cabello/ropa, pequeño gesto) pero NO desplazamiento corporal complejo.
+- action: el acontecimiento pierde claridad si no se mueve: golpe, caída, transformación, carrera corta, objeto lanzado, efecto de poder, acción física decisiva.
+NO marques "action" por espectáculo. La mayoría de una historia larga debe poder sostenerse con still/limited, como motion anime.
 
-CAMPO "escenario": asigná a cada escena el id EXACTO del escenario del universo donde ocurre (de la lista provista). Si el fragmento ocurre en un lugar que NO está en la lista, dejá "escenario" como "" (vacío) y describí ese lugar nuevo con detalle DENTRO de los 3 prompts — NUNCA asignes un escenario incorrecto solo por llenar el campo, porque su descripción anclaría un fondo equivocado.
+Campo "movimientos": describe en INGLÉS únicamente el movimiento pequeño que Veo debe hacer SI ese plano se anima. El primer fotograma ya fija cámara, diseño, luz y escenario.
+- Nada de órbitas 3D, cámaras flotantes, transformación de perspectiva, movimientos de videojuego ni inventar acciones.
+- "limited" = un gesto y se aquieta. "action" = una acción clara, corta y legible.
+- Los CORTES son la norma. Devuelve "continuos": true únicamente cuando el plano N debe transformarse físicamente en el plano N+1 dentro de la MISMA acción continua. Si son dos ángulos de una conversación, es false.
+- El último plano siempre tiene continuo=false.
+- Devuelve "continuarAnterior": true sólo si el primer plano de esta escena debe usar el ÚLTIMO fotograma de la escena inmediatamente anterior como ancla física. No lo uses sólo porque el escenario se repite.
+
+CAMPO "escenario": asigná a cada escena el id EXACTO del escenario del universo donde ocurre (de la lista provista). Si el fragmento ocurre en un lugar que NO está en la lista, dejá "escenario" como "" (vacío) y describí ese lugar nuevo con detalle dentro de CADA prompt que esa escena necesite — NUNCA asignes un escenario incorrecto solo por llenar el campo.
 
 ⚠️ INVENTARIO CERRADO DEL LUGAR (dirección de arte — esto se revisa):
 La descripción del escenario asignado NO es decoración: es el inventario de lo que existe ahí. Solo podés nombrar muebles, mobiliario fijo y objetos grandes que esa descripción mencione, o que cualquiera daría por sentados en ESE tipo de lugar concreto.
@@ -4045,9 +4256,9 @@ REGLAS DE CADA PROMPT:
 - NUNCA decir solo "the protagonist" o "a man" — SIEMPRE el nombre real
 - Si 2+ personajes en la escena: "Scene with [nombre1] and [nombre2]:" y describir apariencia de cada uno
 - Máximo 3 personajes por imagen
-- TODOS LOS PRESENTES APARECEN: si la narración tiene 2+ personajes presentes en el lugar, el primer plano (amplio) los muestra a TODOS juntos interactuando; los siguientes pueden acercarse a uno, pero los demás siguen visibles en el encuadre o en segundo plano. Un personaje presente NUNCA desaparece del lugar entre los planos de la misma escena.
-- PRESENCIA CONTINUA: cuando un fragmento se enfoca en las acciones o diálogos de UN personaje, el protagonista y cualquier otro personaje ya presentes en el lugar SIGUEN AHÍ — inclúyelos por su nombre en los prompts, salvo que la narración diga explícitamente que salieron.
-- PERMANENCIA ENTRE ESCENAS: si escenas consecutivas ocurren en el MISMO escenario y la narración no dice que alguien se fue, los MISMOS personajes siguen presentes en todas — NUNCA alternes mostrando a uno por escena.
+- COBERTURA DE PERSONAJES: un plano muestra sólo a quienes la cámara necesita ver en ESE momento. Si hay cinco personas en la habitación, no obligues a las cinco a entrar en cada primer plano. Usa plano conjunto cuando la geografía importe y planos/contraplanos o reacciones cuando habla uno. Máximo 3 personajes visibles por imagen.
+- PRESENCIA NARRATIVA ≠ PRESENCIA EN CUADRO: un personaje puede seguir en la habitación y estar fuera de encuadre. No lo borres de la historia, pero tampoco lo pegues artificialmente al fondo de todos los planos.
+- CONSISTENCIA: si alguien reaparece en el plano siguiente conserva identidad, ropa, lesiones y estado físico, salvo que la narración cambie algo explícitamente.
 - ESCALA Y PROPORCIÓN: proporción humana correcta del personaje respecto a muebles y espacio — un adulto de pie tendría espacio libre sobre la cabeza (el techo NO justo encima). Mantené el tamaño real del escenario; no comprimas el espacio ni encajones al personaje.\n- CRÍTICO: el personaje NUNCA mira a la cámara. Describe la acción que está haciendo según la narración. Usa ángulos: "side view", "3/4 view", "over-shoulder shot", "from behind", "looking away"
 - PROHIBIDO en los prompts: naked, nude, explicit, sexual, genitals, nipples
 - NO texto, NO letras, NO marcas de agua
@@ -4070,21 +4281,26 @@ Responde SOLO JSON válido sin markdown`;
     function aplicarPlanos(s, p) {
       const [a, b, c] = p?.prompts || [];
       const [ma, mb, mc] = p?.movimientos || [];
-      // Los planos de una escena se encadenan igual que los keyframes de un
-      // corto: el clip del plano 1 termina en la imagen del plano 2. Si los dos
-      // son del mismo tamaño salen casi iguales y el video, sin nada que
-      // animar, deforma caras. El director los asigna y esto los obliga a
-      // alternar — no basta con pedírselo.
-      const kf = alternarPlanos((p?.tamanos || []).map(t => ({ plano: String(t || '').trim().toLowerCase() })));
-      const tam = i => (PLANOS_CORTO.some(x => x.id === kf[i]?.plano)
-        ? kf[i].plano
-        : ['general', 'cerca', 'escorzo'][i]);
+      const [ta, tb, tc] = p?.tiposMovimiento || [];
+      const [ca, cb, cc] = p?.continuos || [];
+      // Long-form coverage is edited by CUTS. Repeating a medium or close shot
+      // is perfectly valid when the dramatic function demands it; forcing an
+      // alternating pattern made conversations feel mechanical and game-like.
+      const tamanos = (p?.tamanos || []).map(t => String(t || '').trim().toLowerCase());
+      const tam = i => (PLANOS_CORTO.some(x => x.id === tamanos[i])
+        ? tamanos[i]
+        : ['general', 'medio', 'cerca'][i]);
       return {
         ...s,
         escenario: p?.escenario || '',
         imagePromptA: a || '', imagePromptB: b || '', imagePromptC: c || '',
         tamanoA: a ? tam(0) : '', tamanoB: b ? tam(1) : '', tamanoC: c ? tam(2) : '',
         videoPromptA: ma || '', videoPromptB: mb || '', videoPromptC: mc || '',
+        motionA: a ? (['still','limited','action'].includes(ta) ? ta : 'still') : '',
+        motionB: b ? (['still','limited','action'].includes(tb) ? tb : 'still') : '',
+        motionC: c ? (['still','limited','action'].includes(tc) ? tc : 'still') : '',
+        sueltoPlanoA: ca !== true, sueltoPlanoB: cb !== true, sueltoPlanoC: true,
+        continuarAnterior: p?.continuarAnterior === true,
       };
     }
 
@@ -4092,9 +4308,9 @@ Responde SOLO JSON válido sin markdown`;
       const scenesText = scenesForPrompt.map(s =>
         `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`
       ).join('\n\n');
-      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTINUIDAD — ASÍ TERMINÓ LA ESCENA ANTERIOR A ESTE BLOQUE (el prompt 1 de la primera escena de abajo continúa desde aquí):\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena, genera el campo "escenario" + TRES prompts secuenciales con continuidad:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"prompts":["Scene with..."],"tamanos":["general"],"movimientos":["slow motion description in English, ending state"]},...]} con exactamente ${scenesForPrompt.length} objetos, uno por cada número de escena de arriba. "planos" es cuántos necesita ESA escena (1, 2 o 3); "prompts", "tamanos" y "movimientos" llevan exactamente esa cantidad cada uno.
+      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales y genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"continuarAnterior":false,"prompts":["Scene with..."],"tamanos":["general"],"tiposMovimiento":["still"],"movimientos":["subtle motion in English"],"continuos":[false]},...]} con exactamente ${scenesForPrompt.length} objetos. "prompts", "tamanos", "tiposMovimiento", "movimientos" y "continuos" llevan exactamente la cantidad de planos elegida.
 
-⚠️ "tamanos" ES EL TAMAÑO DE CADA PLANO: general | medio | cerca | escorzo | detalle. Dentro de una escena NUNCA repitas el mismo dos veces seguidas. El clip de video que une dos planos parte del primero y termina en el segundo: si los dos son del mismo tamaño, las dos imágenes salen casi idénticas, el video se queda sin nada que animar y acaba deformando caras e inventando cosas. El cambio de distancia de cámara ES el movimiento del plano.`;
+⚠️ "tamanos": general | medio | cerca | escorzo | detalle. Elige el tamaño por FUNCIÓN DRAMÁTICA, no por alternancia automática. Repetir un plano medio o un primer plano en dos cortes consecutivos es válido si muestran interlocutores o reacciones diferentes. Sólo cuando "continuos" sea true, los dos fotogramas deben describir estados físicamente compatibles para una interpolación corta.`;
 
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
@@ -4121,30 +4337,38 @@ Responde SOLO JSON válido sin markdown`;
       return scenesForPrompt.map(s => aplicarPlanos(s, null));
     }
 
-    // 3 prompts per scene = 45 total. Generated in chunks of 5 scenes
-    // (15 prompts per call) to keep each JSON response small enough to
-    // avoid output truncation. This chunks the PROMPT-TRANSLATION step,
-    // not the narrative — each scene's narration is already final, so
-    // there is no narrative context to lose across chunks.
+    // Visual direction is generated in chunks of 5 scenes. Each scene may
+    // need 1, 2 or 3 shots; chunking keeps JSON responses small without
+    // changing the already-finished narrative.
     let scenes;
     if (scenesNoImg.some(s => s.narration)) {
       scenes = [];
       let prevContext = '';
+      if (!Array.isArray(longDraft.visualChunks)) longDraft.visualChunks = [];
       for (let i = 0; i < scenesNoImg.length; i += 5) {
+        const chunkIndex = Math.floor(i / 5);
         const chunk = scenesNoImg.slice(i, i + 5);
-        setProg(70 + Math.round((i / scenesNoImg.length) * 25), `Paso 5/5: Descripciones visuales ${Math.min(i + 5, scenesNoImg.length)}/15...`);
-        const done = await generateImagePromptsBatch(chunk, prevContext);
-        // The art director reviews what the DP just wrote, before it reaches the
-        // state. One text call per chunk of 5 scenes, and it never blocks: if the
-        // review fails, the shots go through unrevised.
-        const { correcciones } = await revisarPlanos(done);
-        if (correcciones.length) console.log('Puesta en escena corregida:', aplicarCorrecciones(done, correcciones).motivos);
+        setProg(70 + Math.round((i / scenesNoImg.length) * 25), `Paso 5/5: Descripciones visuales ${Math.min(i + 5, scenesNoImg.length)}/${scenesNoImg.length}...`);
+        let done = null;
+        const cachedVisual = longDraft.visualChunks[chunkIndex];
+        const expectedNums = chunk.map(s => s.num).join(',');
+        if (cachedVisual?.nums === expectedNums && Array.isArray(cachedVisual.scenes) && cachedVisual.scenes.length === chunk.length) {
+          done = cachedVisual.scenes;
+        } else {
+          done = await generateImagePromptsBatch(chunk, prevContext);
+          // The art director reviews what the DP just wrote before it is cached.
+          const { correcciones } = await revisarPlanos(done);
+          if (correcciones.length) console.log('Puesta en escena corregida:', aplicarCorrecciones(done, correcciones).motivos);
+          longDraft.visualChunks[chunkIndex] = { nums: expectedNums, scenes: done };
+          longDraft.updatedAt = Date.now();
+          saveState();
+        }
         scenes.push(...done);
-        // Chain continuity into the next chunk: last scene's narration,
-        // assigned scenario and closing prompt
+        // Chain context into the next chunk: this is editorial context, not an
+        // automatic continuity reference.
         const last = done[done.length - 1];
         if (last) {
-          prevContext = `Escena ${last.num} (escenario: ${last.escenario || 'nuevo lugar descrito en el prompt'}): ${last.narration}\nÚltimo prompt de esa escena: ${last.imagePromptC || last.imagePromptA || '(sin prompt)'}`;
+          prevContext = `Escena ${last.num} (escenario: ${last.escenario || 'nuevo lugar descrito en el prompt'}): ${last.narration}\nEstado visual final para coherencia: ${last.imagePromptC || last.imagePromptB || last.imagePromptA || '(sin prompt)'}\nIMPORTANTE: la escena siguiente empieza con un CORTE salvo que su propia acción exija continuar físicamente este instante.`;
         }
       }
     } else {
@@ -4162,6 +4386,7 @@ Responde SOLO JSON válido sin markdown`;
 
     state.scenes = scenes;
     state.episodes[epNum] = scenes;
+    if (u.longformDrafts) delete u.longformDrafts[epNum];
     saveState();
     renderScenes();
     renderScenarios();
@@ -4172,7 +4397,8 @@ Responde SOLO JSON válido sin markdown`;
       setProg(100, `⚠️ ${scenes.length - pendingCount}/${fmt.scenes} escenas — ${pendingCount} pendientes`);
       showToast(`${pendingCount} escenas pendientes. Usa "Reparar escenas vacías".`, 'error');
     } else {
-      setProg(100, `✅ Episodio ${epNum} completo — ${fmt.scenes} escenas × 3 imágenes = ${fmt.scenes * 3} imágenes`);
+      const planosTotales = scenes.reduce((n,s) => n + ['A','B','C'].filter(sl => s['imagePrompt'+sl]).length, 0);
+      setProg(100, `✅ Episodio ${epNum} completo — ${fmt.scenes} escenas · ${planosTotales} planos necesarios`);
       showToast(`Episodio ${epNum}: ${state.characters.length} personajes y ${fmt.scenes} escenas listas`, 'success');
     }
     setTimeout(() => { progress.style.display = 'none'; setProg(0, ''); }, 3000);
@@ -4182,7 +4408,8 @@ Responde SOLO JSON válido sin markdown`;
     if (nci) nci.value = '';
 
   } catch(e) {
-    openErrorModal('Error generando episodio', e.message);
+    saveState();
+    openErrorModal('Generación pausada', `${e.message}\n\nEl progreso de la historia larga quedó guardado. Pulsa “Generar Episodio” otra vez para reanudar desde el último bloque completado.`);
     progress.style.display = 'none';
   } finally {
     btn.disabled = false;
@@ -4194,6 +4421,8 @@ Responde SOLO JSON válido sin markdown`;
 // ════════════════════════════════════════════════════════════════
 async function renderCharacters() {
   const c = document.getElementById('charactersList');
+  const bulkBtn = document.getElementById('btnAllCharacterRefs');
+  if (bulkBtn) bulkBtn.style.display = state.characters.length ? 'block' : 'none';
   if (!state.characters.length) {
     c.innerHTML = `<div class="empty"><div class="emoji">👥</div><p>Genera un episodio para ver los personajes</p></div>`;
     return;
@@ -4203,7 +4432,7 @@ async function renderCharacters() {
     return { ch, imgB64 };
   }));
   c.innerHTML = items.map(({ ch, imgB64 }) => {
-    const defaultPrompt = `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. Render the clothing's fabric, colors and CONDITION exactly as described — if it says coarse, faded, patched or frayed, show it clearly; do NOT beautify, enrich or upgrade the clothes. NO text, NO letters, NO watermarks, NO labels anywhere in the image. Clean professional 2D anime hand-drawn style, white background, character turnaround showing front side and back.`;
+    const defaultPrompt = `Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, natural neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render the clothing's fabric, colors and CONDITION exactly as described; do not beautify or upgrade it. No turnaround, no collage, no alternate poses, no expression sheet, no inset faces, no text, no labels, no watermark. Authentic Japanese hand-drawn 2D anime character design with crisp linework and hard-edged cel shading.`;
     return `
     <div class="char-card">
       <div class="char-header">
@@ -4214,6 +4443,8 @@ async function renderCharacters() {
           <h4>${ch.name}</h4>
           <div class="char-role">${ch.role}</div>
           <div class="char-detail">${ch.appearance || ''}</div>
+          ${state.universe?.storyMode === 'cast' ? `<label style="font-size:10px;color:var(--text-dim);margin-top:7px;display:block">🎙️ Voz del personaje</label>
+          <select onchange="setCharacterVoice('${ch.id}', this.value)" style="font-size:11px;padding:6px;margin-top:3px">${opcionesVozPersonaje(ch)}</select>` : ''}
         </div>
       </div>
       <div style="margin-top:8px">
@@ -4233,7 +4464,7 @@ window.generateCharImage = async function(charId) {
     // Use editable prompt from textarea if available, else build default
     const textarea = document.getElementById('charPrompt_' + charId);
     const prompt = textarea?.value.trim() ||
-      `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. Render the clothing's fabric, colors and CONDITION exactly as described — if it says coarse, faded, patched or frayed, show it clearly; do NOT beautify, enrich or upgrade the clothes. NO text, NO letters, NO watermarks. Clean professional 2D anime hand-drawn style, white background, character turnaround showing front side and back.`;
+      `Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, natural neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render clothing exactly as described. No turnaround, no collage, no alternate poses, no expression sheet, no text, no watermark. Authentic Japanese hand-drawn 2D anime character design, crisp linework, hard-edged cel shading.`;
 
     // Never pass existing image as reference — it prevents the prompt from taking effect
     let imgB64 = null, lastErr = null;
@@ -4259,6 +4490,41 @@ window.generateCharImage = async function(charId) {
     openErrorModal('Error imagen personaje', explicarErrorDeImagen(e));
   }
 };
+
+document.getElementById('btnAllCharacterRefs')?.addEventListener('click', async function() {
+  if (!state.characters.length) return;
+  if (!empezarTanda()) return;
+  const btn=this, original=btn.innerHTML;
+  btn.disabled=true;
+  let made=0, skipped=0, failed=0;
+  try {
+    for (let i=0;i<state.characters.length;i++) {
+      if (tanda.detener) break;
+      const ch=state.characters[i];
+      if (await dbGet(charImgKey(ch.id))) { skipped++; continue; }
+      btn.innerHTML=`<div class="spinner"></div> Referencia ${i+1}/${state.characters.length}: ${ch.name}`;
+      const prompt=`Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, natural neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render clothing exactly as described. No turnaround, no collage, no alternate poses, no expression sheet, no inset faces, no text, no labels, no watermark. Authentic Japanese hand-drawn 2D anime character design, crisp variable linework, hard-edged cel shading, matte skin.`;
+      try {
+        const img=await conEsperaDeCuota(
+          () => generateImage(prompt, null, null, { charSheet:true, estilo:'japon_2d' }),
+          (secs) => { btn.textContent=`Cuota: esperando ${secs}s antes de ${ch.name}...`; }
+        );
+        await dbSet(charImgKey(ch.id), img);
+        made++;
+        await renderCharacters();
+      } catch(e) {
+        failed++;
+        console.warn('Referencia '+ch.name+':',e.message);
+        if (!esBloqueo(e) && !esLimiteDeCuota(e)) {
+          // Continue with other characters; the missing one will remain obvious.
+        }
+      }
+    }
+    showToast(`Referencias: ${made} nuevas · ${skipped} ya existentes${failed ? ' · '+failed+' fallidas' : ''}`, failed ? 'error':'success');
+  } finally {
+    btn.disabled=false; btn.innerHTML=original; terminarTanda(); renderCharacters();
+  }
+});
 
 // ════════════════════════════════════════════════════════════════
 // RENDER: SCENARIOS (universe locations + hora/clima)
@@ -4858,7 +5124,7 @@ window.editScenePrompts = function(sceneId) {
     <div class="modal-handle"></div>
     <h3>✏️ Editar Prompts — Escena ${s.num}</h3>
     <p style="font-size:12px;color:var(--text-dim);margin:0 0 12px;line-height:1.5">
-      3 imágenes secuenciales de la escena (inicio → desarrollo → cierre). Edita, guarda y regenera.
+      Edita los planos visuales de esta escena. Los campos vacíos significan que el director decidió que ese plano no era necesario.
     </p>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
       <label style="margin:0">Imagen 1 — momento inicial</label>
@@ -4875,7 +5141,7 @@ window.editScenePrompts = function(sceneId) {
       <button class="btn" onclick="saveScenePrompts('${sceneId}')">💾 Guardar</button>
     </div>
     <div style="margin-top:8px">
-      <button class="btn-sec" style="font-size:12px;width:100%" onclick="saveAndRegenAll('${sceneId}')">🖼️ Guardar y regenerar las 3 imágenes</button>
+      <button class="btn-sec" style="font-size:12px;width:100%" onclick="saveAndRegenAll('${sceneId}')">🖼️ Guardar y regenerar los planos existentes</button>
     </div>
     <div style="margin-top:8px">
       <button class="btn-sec" style="font-size:12px;width:100%;border-color:rgba(0,229,255,0.4);color:var(--accent2)"
@@ -4973,26 +5239,28 @@ function anclaDeEscenario(esc) {
 // nearest PREVIOUS scene that happens in the SAME escenario (its last C/B/A).
 // The chain resets automatically whenever the location changes.
 async function getContinuityRef(s, slot) {
-  // Apagado a mano para esta escena: la imagen anterior la estaba bloqueando.
   if (s?.sinContinuidad) return null;
   try {
     const tryList = [];
+    // Inside one scene, references are useful because the action is genuinely
+    // consecutive and wardrobe/location have not changed.
     if (slot === 'C') tryList.push([s.id, 'B'], [s.id, 'A']);
     else if (slot === 'B') tryList.push([s.id, 'A']);
-    if (s.escenario) {
+    // A new scene NEVER grabs an arbitrary older shot merely because it shares
+    // a location. It may anchor to the immediately previous scene only when the
+    // director explicitly marked a physical continuation.
+    else if (slot === 'A' && s?.continuarAnterior === true) {
       const idx = state.scenes.findIndex(x => x.id === s.id);
-      for (let i = idx - 1; i >= 0; i--) {
-        const p = state.scenes[i];
-        if (!p || p.escenario !== s.escenario) continue;
+      const p = idx > 0 ? state.scenes[idx - 1] : null;
+      if (p && (!s.escenario || !p.escenario || p.escenario === s.escenario)) {
         tryList.push([p.id, 'C'], [p.id, 'B'], [p.id, 'A']);
-        break;
       }
     }
     for (const [id, sl] of tryList) {
       const img = await dbGet(sceneImgKeyBy(id, sl));
       if (img && String(img).length > 100) return String(img);
     }
-  } catch(_) {}
+  } catch (_) {}
   return null;
 }
 
@@ -5253,13 +5521,51 @@ async function getRefsForPrompt(prompt) {
   return result;
 }
 
+function bytesToBase64(bytes) {
+  let out = '';
+  const step = 0x8000;
+  for (let i = 0; i < bytes.length; i += step) out += String.fromCharCode(...bytes.subarray(i, i + step));
+  return btoa(out);
+}
+
+function vozParaIntervencion(intervention) {
+  const narrator = document.getElementById('voiceSelect')?.value || '';
+  if (!intervention || intervention.speakerId === 'narrator') return narrator;
+  if (intervention.speakerId === 'system') return state.universe?.systemVoice || vozAutomaticaPara('female') || narrator;
+  const ch = (state.characters || []).find(x => x.id === intervention.speakerId);
+  return ch?.voice || vozAutomaticaPara(ch?.gender) || narrator;
+}
+
+async function generarAudioDeEscena(s) {
+  const narrator = document.getElementById('voiceSelect')?.value || '';
+  if (state.universe?.storyMode !== 'cast') return generateAudio(s.narration, narrator, s.act);
+
+  asegurarVocesPersonajes();
+  const interventions = (Array.isArray(s.interventions) && s.interventions.length)
+    ? s.interventions.filter(x => x?.text?.trim())
+    : [{ type:'narrator', speakerId:'narrator', text:s.narration }];
+  if (!interventions.length) throw new Error('La escena no tiene texto para voz');
+
+  const entries = [];
+  for (let i = 0; i < interventions.length; i++) {
+    const line = interventions[i];
+    const voice = vozParaIntervencion(line);
+    const a = await generateAudio(line.text, voice, s.act);
+    const gapAfter = line.type === 'system' ? 0.16
+      : line.type === 'thought' ? 0.13
+      : line.type === 'dialogue' ? 0.11 : 0.08;
+    entries.push({ idx:i, data:a.audioData, mime:a.mimeType || 'audio/wav', gapAfter });
+  }
+  const { wav } = await combineAudiosToWav(entries);
+  return { audioData: bytesToBase64(wav), mimeType:'audio/wav' };
+}
+
 window.generateSceneAudio = async function(sceneId) {
   const s = state.scenes.find(x => x.id === sceneId);
   if (!s) return;
-  const voice = document.getElementById('voiceSelect').value;
   showToast(`Generando audio escena ${s.num}...`, 'success');
   try {
-    const result = await generateAudio(s.narration, voice, s.act);
+    const result = await generarAudioDeEscena(s);
     // Save audio with its mime type prefix so we know how to play it back
     const mime = result.mimeType || 'audio/wav';
     await dbSet(sceneAudKey(s.id), `${mime}|${result.audioData}`);
@@ -5514,22 +5820,24 @@ window.generateAllVideos = async function() {
   const scenes = state.scenes.filter(s => s.narration && s.imagePromptA);
   if (!scenes.length) { showToast('Genera las escenas primero', 'error'); return; }
 
-  showToast(`Generando todos los videos (secuencial)...`, 'success');
-  let done = 0, errors = 0;
+  const profile = document.getElementById('motionProfileSelect')?.value || 'motion_comic';
+  const debeAnimar = (s, sl) => {
+    const tipo = s['motion' + sl] || 'still';
+    if (profile === 'full') return true;
+    if (profile === 'mixed') return tipo === 'limited' || tipo === 'action';
+    return tipo === 'action';
+  };
 
+  let done = 0, errors = 0, staticShots = 0;
   for (const s of scenes) {
     for (const sl of await sceneSlots(s)) {
+      if (!debeAnimar(s, sl)) { staticShots++; continue; }
       if (await dbGet(sceneVidKeyBy(s.id, sl))) { done++; continue; }
-      try {
-        await window.generateSceneVideo(s.id, sl);
-        done++;
-      } catch(e) {
-        errors++;
-        console.warn(`Video ${s.num}-${sl}:`, e.message);
-      }
+      try { await window.generateSceneVideo(s.id, sl); done++; }
+      catch(e) { errors++; console.warn(`Video ${s.num}-${sl}:`, e.message); }
     }
   }
-  showToast(`Videos: ${done} listos${errors ? ', ' + errors + ' fallidos' : ''} 🎬`, errors ? 'error' : 'success');
+  showToast(`Veo: ${done} clips · ${staticShots} planos quedan como motion-comic${errors ? ' · ' + errors + ' fallidos' : ''}`, errors ? 'error' : 'success');
 };
 
 // ════════════════════════════════════════════════════════════════
@@ -5537,6 +5845,14 @@ window.generateAllVideos = async function() {
 // ════════════════════════════════════════════════════════════════
 document.getElementById('btnAllImages').addEventListener('click', async () => {
   if (!state.scenes.length) { showToast('Genera escenas primero', 'error'); return; }
+  const missingRefs=[];
+  for (const ch of state.characters || []) {
+    if (!(await dbGet(charImgKey(ch.id)))) missingRefs.push(ch.name);
+  }
+  if (missingRefs.length) {
+    showToast(`Faltan ${missingRefs.length} referencias de personaje. Ve a Personajes → Generar referencias faltantes.`, 'error');
+    return;
+  }
   if (!empezarTanda()) return;
   const btn = document.getElementById('btnAllImages');
   btn.disabled = true;
@@ -5693,40 +6009,22 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
     const data = await res.json();
     if (res.ok && !data.error && data.imageData) { avisarRescate(data); return data.imageData; }
 
-    // If Gemini rejects the reference image itself, retry without refs
     const isRefError = data.error && (
       data.error.includes('character reference') ||
       data.error.includes('provided character') ||
       data.error.includes('cannot generate an image based on')
     );
-    if (!isRefError) throw new Error(data.error || `Image proxy ${res.status}`);
-    console.warn('Ref rechazada por Gemini — reintentando sin refs:', data.error);
+    if (isRefError && refs?.length) {
+      throw new Error('Gemini rechazó una referencia de personaje. La tanda NO generó esta toma sin referencias para no cambiar la identidad. Regenera la referencia o este plano manualmente.');
+    }
+    throw new Error(data.error || `Image proxy ${res.status}`);
   }
 
-  // Attempt 2: without refs (fallback)
-  const res2 = await fetch('/api/image', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt: cleanPrompt,
-      characterRefs: null,
-      model: model === 'auto' ? null : model,
-      isEcchi,
-      aspectRatio,
-      styleSpec: estiloCore(),
-      desdeNarracion: env.desdeNarracion === true,
-    }),
-  });
-  const data2 = await res2.json();
-  if (!res2.ok || data2.error) throw new Error(data2.error || `Image proxy ${res2.status}`);
-  if (!data2.imageData) throw new Error('Imagen: respuesta sin datos');
-  avisarRescate(data2);
-  return data2.imageData;
+  throw new Error('Imagen: no se pudo generar con las referencias requeridas.');
 }
 
 document.getElementById('btnAllAudio').addEventListener('click', async () => {
   if (!state.scenes.length) { showToast('Genera escenas primero', 'error'); return; }
-  const voice = document.getElementById('voiceSelect').value;
   const bp = document.getElementById('bulkProgress'); bp.style.display = 'block';
   const bt = document.getElementById('bulkText'), bb = document.getElementById('bulkBar');
 
@@ -5749,7 +6047,7 @@ document.getElementById('btnAllAudio').addEventListener('click', async () => {
     try {
       const existing = await dbGet(sceneAudKey(s.id));
       if (!existing) {
-        const result = await generateAudio(s.narration, voice, s.act);
+        const result = await generarAudioDeEscena(s);
         const mime = result.mimeType || 'audio/wav';
         await dbSet(sceneAudKey(s.id), `${mime}|${result.audioData}`);
         completed++;
@@ -5798,172 +6096,187 @@ window.addEventListener('load', () => setTimeout(updateEpisodeNav, 500));
 // REPAIR EMPTY/UNDEFINED SCENES
 // ════════════════════════════════════════════════════════════════
 document.getElementById('btnRepairScenes').addEventListener('click', async () => {
-  if (!state.universe || !state.scenes.length) { showToast('No hay episodio', 'error'); return; }
+  if (!state.universe || !state.scenes.length) { showToast('No hay historia', 'error'); return; }
   const u = state.universe;
-
-  // Separate broken scenes into two categories so we don't redo work that
-  // already succeeded: scenes missing narration need full repair, but
-  // scenes that already HAVE narration (e.g. call 1 succeeded, call 2
-  // didn't) only need an image prompt — a much lighter task.
-  const needsNarrationIdx = [];
-  const needsImageOnlyIdx = [];
-  state.scenes.forEach((s, idx) => {
-    if (!s.narration || !s.title || s.num === undefined || s.num === null) {
-      needsNarrationIdx.push(idx);
-    } else if (!s.imagePromptA) {
-      needsImageOnlyIdx.push(idx);
-    }
-  });
-
-  const originalBrokenIndices = [...needsNarrationIdx, ...needsImageOnlyIdx];
-  const totalBroken = originalBrokenIndices.length;
-  if (!totalBroken) { showToast('No hay escenas que reparar', 'success'); return; }
+  const broken = state.scenes.map((s, idx) => ({ s, idx })).filter(({s}) =>
+    !s.narration || !s.title || s.num == null || !s.imagePromptA);
+  if (!broken.length) { showToast('No hay escenas que reparar', 'success'); return; }
 
   const btn = document.getElementById('btnRepairScenes');
   btn.disabled = true;
-  btn.innerHTML = `<div class="spinner"></div> Reparando ${totalBroken} escenas...`;
+  btn.innerHTML = `<div class="spinner"></div> Reparando ${broken.length} escena(s)...`;
 
   try {
-    const charRef = state.characters.map(c =>
-      `- ${c.name} (${c.role}): ${c.appearance}`
+    const subs = effectiveSubgenres(u.subgenres || [], u.demo);
+    const allAges = isAllAges(u.demo);
+    const hasEcchi = subs.some(x => ['ecchi','harem','harem_inverso'].includes(x));
+    const fmt = getEpisodeFormat();
+    const mode = u.storyMode || 'narrated';
+    const charRef = state.characters.map(ch =>
+      `- ${ch.id} = ${ch.name} (${ch.role}, ${ch.age || ''}): ${ch.appearance || ''}; personalidad: ${ch.personality || ''}`
     ).join('\n');
-    const ctx = `Universo: ${u.title}\nDemografía: ${u.demo || 'shonen'}\nGénero: ${u.genero}\nConcepto: ${u.concepto}\nConflicto: ${u.conflicto}\nSetting: ${u.setting}`;
-    // Repairs must follow the SAME mode as the original generation: comedy
-    // formula only for comedy genres/subgenre, and ecchi rules whenever
-    // ecchi/harem is active — otherwise repaired scenes broke tone/content.
-    const repairSubgenres = effectiveSubgenres(u.subgenres || [], u.demo);
-    const repairComedy = isComedyMode(u.genero, repairSubgenres);
-    const repairEcchi = repairSubgenres.some(s => ['ecchi','harem','harem_inverso'].includes(s));
-    const repairAllAges = isAllAges(u.demo);
-    const repairSuper = genreAllowsSupernatural(u.genero, repairSubgenres);
+    const scenarioText = (u.escenarios || []).length
+      ? (u.escenarios || []).map(e => `${e.id} = "${e.name}": ${e.desc}`).join('\n')
+      : '(ninguno definido)';
 
-    // ─── Step A: narration for scenes that don't have any ───
-    if (needsNarrationIdx.length) {
-      btn.innerHTML = `<div class="spinner"></div> Reparando narración (${needsNarrationIdx.length})...`;
+    const validSpeakerIds = new Set(['narrator','system', ...state.characters.map(ch => ch.id)]);
+    const normalizeInterventionsRepair = (scene) => {
+      if (mode !== 'cast') return [{ type:'narrator', speakerId:'narrator', text:String(scene.narration || '').trim() }].filter(x=>x.text);
+      const src = Array.isArray(scene.interventions) ? scene.interventions : [];
+      const out = src.map(x => {
+        const type = ['narrator','dialogue','thought','system'].includes(x?.type) ? x.type : 'narrator';
+        let speakerId = type === 'narrator' ? 'narrator' : type === 'system' ? 'system' : String(x?.speakerId || '');
+        if (!validSpeakerIds.has(speakerId)) speakerId = 'narrator';
+        return { type, speakerId, text:String(x?.text || '').trim() };
+      }).filter(x=>x.text);
+      return out.length ? out : [{ type:'narrator', speakerId:'narrator', text:String(scene.narration || '').trim() }].filter(x=>x.text);
+    };
 
-      const repairNarrationSys = `${repairComedy
-        ? `You are a viral anime scriptwriter for Facebook Reels${repairAllAges ? ', all-ages audience' : ', adult audience'}. Write THIRD-PERSON Spanish narrations in the viral dubbed-donghua recap style: protagonist always NAMED (never first person), constant direct dialogue woven into the narration (about half the text is character voices), short concrete sentences with specific numbers, sparing rhetorical questions, comedic escalating situations born ONLY from the premise of the story, its "${u.genero}" genre and its selected subgenres, deadpan delivery — no drama, no forced emotion. NEVER introduce systems, stat windows, notifications or any trope the universe does not already contain.`
-        : `You are a viral anime scriptwriter for Facebook Reels${repairAllAges ? ', all-ages audience' : ', adult audience'}. Write THIRD-PERSON Spanish narrations (protagonist always NAMED, never first person; constant direct dialogue woven into the narration; short concrete sentences with specific numbers) STRICTLY FAITHFUL to the "${u.genero}" genre's real tone — no comedy, no parody, no comedic detection systems. Show, don't tell: build the genre's emotion from concrete events, actions and sensory detail, never empty emotional adjectives.`}${repairSuper ? '' : `\nGENRE RESTRICTION: the "${u.genero}" genre of this universe has NO magic, powers, status systems or supernatural phenomena. Everything that happens has a real-world cause.`}${repairEcchi ? '\nECCHI/HAREM ACTIVE (adult content): all characters are adults (18 or older, each with their own adult age fitting their story role) in adult settings appropriate to the genre — never school uniforms or classrooms, nothing that frames characters as minors. Weave suggestive fan-service moments naturally where scenes allow, with genuine sensory detail; the only limit is what Gemini actually blocks.' : ''}${repairAllAges ? '\nALL-AGES (Kodomomuke): no explicit violence, no sexual or suggestive content, no adult themes. Warm tone with a clear moral.' : ''}
-RULES:
-- JSON field MUST be "narration" (no accent). EXACTLY 48-55 Spanish words. Count them. Fast-paced: 2-3 distinct visualizable events per narration, minimal atmosphere (max one short setting phrase), the rest is action and dialogue.
-- OPEN with a NAMED person doing or saying something concrete — never with weather, light, time of day, or a description of the place. If the first sentence can be illustrated with nobody in frame, rewrite it starting from the person. Specific over vague. End naturally for the genre.
-- Respond ONLY with valid JSON, no markdown`;
+    // ── A. Repara primero la historia, escena por escena, usando ambos vecinos.
+    for (const item of broken.filter(x => !x.s.narration || !x.s.title || x.s.num == null)) {
+      const idx = item.idx;
+      const before = [...state.scenes.slice(0, idx)].reverse().find(x => x?.narration);
+      const after = state.scenes.slice(idx + 1).find(x => x?.narration);
+      const num = idx + 1;
+      const act = actForIndex(idx, state.scenes.length || fmt.scenes);
+      const target = Math.max(65, fmt.wordsPerScene || 100);
 
-      const firstBroken = needsNarrationIdx[0];
-      const lastGood = firstBroken > 0 ? state.scenes[firstBroken - 1] : null;
-      const startNum = firstBroken + 1;
-      const endNum = needsNarrationIdx[needsNarrationIdx.length - 1] + 1;
-      const count = needsNarrationIdx.length;
+      const modeRules = mode === 'cast'
+        ? `MODO DRAMATIZADO: devuelve "interventions" en orden. dialogue/thought usan speakerId exacto del personaje; narrator sólo para contexto que la imagen no puede mostrar; system sólo si el universo realmente tiene sistema. El campo narration sigue siendo el texto completo editable de la escena.`
+        : `MODO NARRADO: una sola voz leerá narration, incluyendo frases directas de personajes. No devuelvas etiquetas técnicas dentro del texto.`;
 
-      const repairTotal = state.scenes.length || getEpisodeFormat().scenes;
-      const act = actForIndex(startNum - 1, repairTotal);
+      const sys = `Eres el editor de continuidad de una historia anime LARGA para YouTube. Reparas UNA escena perdida sin convertirla en un Reel ni cambiar la historia.
+${REGISTRO_LONGFORM_REFERENCIA}
+${VOZ_SOBRE_IMAGEN}
+${modeRules}
+Género: ${u.genero}. Subgéneros: ${subs.join(', ') || 'ninguno'}.
+${GENRE_PROMPTS[u.genero] || ''}
+${getSubgenreText(subs, u.genero)}
+${SUBGENRE_FIDELITY_CONTRACT}
+${allAges ? 'AUDIENCIA GENERAL: sin contenido adulto.' : ''}
+${hasEcchi ? 'ECCHI ADULTO: el fan service, si esta escena lo admite, nace de la situación; no conviertas la narración en catálogo corporal.' : ''}
+Mantén ${formaNarrativa(u.bible?.narrativa)}.
+La escena debe conectar CAUSALMENTE con lo anterior y lo posterior. No inventes un giro enorme sólo para rellenar un hueco.
+Objetivo aproximado: ${Math.round(target * .7)}-${Math.round(target * 1.3)} palabras; manda el beat dramático, no el conteo.
+Responde SOLO JSON válido.`;
 
-      const lastGoodRef = lastGood ? `\nEscena anterior (${lastGood.num}): "${lastGood.narration}"` : '';
-      const sceneExample = `{"id":"s${startNum}","num":${startNum},"act":"${act}","title":"...","narration":"EXACTAMENTE 48-55 palabras, ${formaNarrativa(state.universe?.bible?.narrativa)}"}`;
-      // The repair used to receive only the universe blurb, so repaired scenes
-      // lost the genre/subgenre rules the rest of the episode was written with.
-      const repairGenreCtx = `${GENRE_PROMPTS[u.genero] || ''}\n\n${getSubgenreText(repairSubgenres, u.genero)}\n\n${SUBGENRE_FIDELITY_CONTRACT}`;
-      const prompt = `${ctx}\n\n${repairGenreCtx}\n\nPERSONAJES:\n${charRef}${lastGoodRef}\n\nGenera EXACTAMENTE ${count} escenas numeradas de ${startNum} a ${endNum}. Acto principal: ${act}. Total del episodio: ${repairTotal} escenas.\nCada escena DEBE tener narration (EXACTAMENTE 48-55 palabras, ${formaNarrativa(state.universe?.bible?.narrativa)}, diálogo directo intercalado, ritmo rápido: 2-3 eventos distintos por escena, ambientación mínima).\nDevuelve SOLO: {"scenes":[${sceneExample}, ...]}`;
+      const prompt = `UNIVERSO: ${u.title}
+CONCEPTO: ${u.concepto}
+CONFLICTO: ${u.conflicto}
+PERSONAJES:
+${charRef}
 
-      let newNarrations = [];
-      for (let attempt = 0; attempt < 3 && newNarrations.length < count; attempt++) {
+${before ? `ESCENA ANTERIOR ${before.num}: ${before.title}\n${before.narration}` : 'No hay escena anterior: ésta pertenece al inicio.'}
+
+ESCENA PERDIDA A REPARAR: número ${num}, acto ${act}.
+
+${after ? `ESCENA SIGUIENTE ${after.num}: ${after.title}\n${after.narration}` : 'No hay escena posterior: ésta pertenece al cierre.'}
+
+Devuelve:
+{"title":"3-6 palabras","narration":"texto completo"${mode === 'cast' ? ',"interventions":[{"type":"narrator|dialogue|thought|system","speakerId":"ID","text":"..."}]' : ''}}`;
+
+      let repaired = null;
+      for (let attempt=0; attempt<4 && !repaired; attempt++) {
         try {
-          const raw = await callGemini(prompt, repairNarrationSys);
-          const parsed = safeParseJSON(raw);
-          (parsed.scenes || []).forEach(s => { if (s && s['narración'] && !s.narration) s.narration = s['narración']; });
-          const arr = (parsed.scenes || []).filter(s => s && s.narration && s.title);
-          if (arr.length >= count) {
-            newNarrations = arr.slice(0, count).map((s, i) => ({
-              ...s, id: `s${startNum + i}`, num: startNum + i, act: s.act || act,
-            }));
-            break;
-          }
-          console.warn(`Reparación narración intento ${attempt+1}: ${arr.length}/${count}`);
-          await new Promise(r => setTimeout(r, 2000));
+          const raw = await callGemini(prompt, sys);
+          const p = safeParseJSON(raw);
+          if (p?.narration && p?.title) repaired = p;
         } catch(e) {
-          console.error(`Reparación narración intento ${attempt+1}:`, e.message);
-          if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
+          if (attempt === 3) throw e;
+          await new Promise(r => setTimeout(r, 1800));
+        }
+      }
+      if (!repaired) throw new Error(`No se pudo reparar la escena ${num}`);
+      state.scenes[idx] = {
+        ...state.scenes[idx],
+        id: state.scenes[idx]?.id || `s${num}`,
+        num, act, title: repaired.title, narration: repaired.narration,
+        interventions: normalizeInterventionsRepair(repaired),
+        imagePromptA:'', imagePromptB:'', imagePromptC:''
+      };
+      saveState();
+    }
+
+    // ── B. Genera puesta en escena sólo donde falte imagen.
+    const visualBroken = state.scenes.map((s, idx)=>({s,idx})).filter(x => x.s.narration && !x.s.imagePromptA);
+    for (let offset=0; offset<visualBroken.length; offset+=5) {
+      const batch = visualBroken.slice(offset, offset+5);
+      btn.innerHTML = `<div class="spinner"></div> Dirección visual ${Math.min(offset+5, visualBroken.length)}/${visualBroken.length}...`;
+
+      const sceneText = batch.map(({s}) => `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`).join('\n\n');
+      const sys = `Eres director de fotografía de una historia anime japonesa 2D de formato largo. Reparas la puesta en escena sin cambiar los acontecimientos.
+ESTILO FIJO: ${estiloCore()}
+${bibleVisualBrief()}
+REGLAS:
+- 1 plano sólo para un beat breve/autosuficiente. Una conversación sostenida normalmente necesita 2–3 ilustraciones de cobertura: hablante, reacción, conjunto o detalle significativo.
+- 2 para acción→reacción, pregunta→respuesta o llegada→descubrimiento; 3 para conversaciones largas, confrontaciones o tres focos informativos diferentes. No rellenes con clones.
+- Un corte normal NO exige que los personajes se muevan: cambiar a la reacción de otro personaje o a un objeto importante ya es una función editorial válida.
+- Elige tamaño por función dramática: general | medio | cerca | escorzo | detalle. Puede repetirse tras un corte.
+- Máximo 3 personajes visibles por imagen; presencia narrativa no obliga a estar en cuadro.
+- Referencias maestras fijan identidad, NO vestuario. El prompt nombra brevemente la ropa ACTUAL de la escena.
+- tiposMovimiento: still | limited | action. Usa action sólo cuando perder el movimiento volvería confusa la acción; limited para gesto/boca/parpadeo; la mayoría puede ser still.
+- continuos=true sólo entre dos planos de la MISMA acción física que realmente deben interpolarse. Último plano false.
+- continuarAnterior=true sólo si esta escena sucede segundos después de la anterior, mismo lugar/ropa y depende de su estado físico exacto.
+- El escenario asignado es inventario cerrado. Si el lugar no existe en la lista, escenario="" y descríbelo en el prompt.
+- Los prompts son INGLÉS y empiezan con "${estiloLeadIn()} Scene with [nombre exacto]:".
+- No pongas texto, logos, subtítulos ni personajes mirando al espectador.
+- ${hasEcchi ? 'Contenido adulto sugerente sólo cuando la escena lo justifica; el encuadre sigue siendo narrativo y no explícito.' : 'Respeta el tono del género.'}
+Responde SOLO JSON válido.`;
+
+      const prompt = `PERSONAJES:
+${charRef}
+
+ESCENARIOS:
+${scenarioText}
+
+ESCENAS:
+${sceneText}
+
+Devuelve {"imagePrompts":[{"num":1,"escenario":"","planos":1,"continuarAnterior":false,"prompts":["..."],"tamanos":["medio"],"tiposMovimiento":["still"],"movimientos":["subtle motion in English"],"continuos":[false]}]} con un objeto por escena.`;
+
+      let map = new Map();
+      for (let attempt=0; attempt<4 && map.size<batch.length; attempt++) {
+        try {
+          const raw=await callGemini(prompt,sys);
+          const arr=safeParseJSON(raw).imagePrompts || [];
+          map=new Map(arr.filter(p=>p?.num && Array.isArray(p.prompts) && p.prompts[0]).map(p=>[p.num,p]));
+        } catch(e) {
+          if (attempt===3) throw e;
+          await new Promise(r=>setTimeout(r,1800));
         }
       }
 
-      needsNarrationIdx.forEach((idx, i) => {
-        if (newNarrations[i]) {
-          const oldId = state.scenes[idx].id;
-          if (oldId) { dbSet(sceneImgKey(oldId), null).catch(() => {}); dbSet(sceneAudKey(oldId), null).catch(() => {}); }
-          state.scenes[idx] = { ...newNarrations[i], imagePromptA: '' };
-          needsImageOnlyIdx.push(idx); // now needs an image prompt too
-        }
-      });
-      saveState();
-      renderScenes();
-    }
-
-    // ─── Step B: image prompts for any scene that has narration but no image ───
-    if (needsImageOnlyIdx.length) {
-      btn.innerHTML = `<div class="spinner"></div> Generando ${needsImageOnlyIdx.length} descripciones visuales...`;
-
-      const imageSys = `Eres el director de fotografía de este anime. Para cada escena decidí CUÁNTOS PLANOS necesita (1, 2 o 3) y escribí sus prompts en inglés, basados en la narración ya escrita — no inventás historia nueva.
-⚠️ CUÁNTOS PLANOS: contá los beats visuales REALES (cambia la posición de alguien, el estado de un objeto, quién está presente o el lugar). Una conversación estática o una sola acción continua = 1 PLANO. Un cambio de ángulo NO es un beat. PROHIBIDO rellenar: si dos planos no se verían claramente distintos, devolvé uno solo.
-Cuando hay más de uno son momentos consecutivos que cubren TODO lo que el texto narra, en orden. Todos los planos de una escena: MISMO lugar, MISMA ropa/peinado de cada personaje; solo cambia la acción que avanza y el ángulo de cámara. También asigna el campo "escenario" con el id exacto del escenario del universo donde ocurre la escena — si el lugar no está en la lista, deja "escenario" como "" y describe ese lugar dentro de los prompts (nunca asignes un escenario incorrecto).
-REGLAS: SIEMPRE en inglés. Cada prompt empieza con "${estiloLeadIn()} Scene with [nombre exacto]:". Personajes humanos: incluye ropa y cabello con material y condición fieles a su ficha y a la economía del mundo (sin embellecer). Personajes NO-humanos (animal/criatura): describe su apariencia física real, sin ropa inventada. Si 2+ personajes están presentes en la escena, TODOS aparecen: el prompt 1 los muestra juntos; los prompts 2-3 pueden enfocar a uno pero los demás siguen visibles. Cuando el texto se enfoca en un personaje, el protagonista y los demás ya presentes SIGUEN en el lugar — inclúyelos por nombre salvo que la narración diga que salieron. Entre escenas consecutivas en el mismo escenario los personajes permanecen presentes salvo que la narración los saque. Los planos de cada escena son momentos consecutivos que cubren TODO el fragmento en orden — nunca dos versiones del mismo instante; cada prompt muestra SOLO lo visible en su momento (nada revelado después puede verse antes) y si el texto dice que el personaje entra o se mueve, ese prompt YA lo muestra en la nueva posición. El personaje NUNCA mira a la cámara — usa ángulos (side view, 3/4 view, from behind, over-shoulder). Prohibido: naked, nude, explicit, genitals, nipples.
-⚠️ INVENTARIO CERRADO DEL LUGAR: la descripción del escenario asignado es el inventario de lo que existe ahí. Solo podés nombrar muebles y objetos grandes que esa descripción mencione o que ese tipo de sitio tenga de verdad. Un pasillo, una escalera, una calle o una azotea NO tienen pupitres, camas, mesas puestas ni tazas apoyadas: ahí la gente está de pie, caminando, apoyada en la pared o sentada en un escalón. Si la acción necesita un mueble que ese lugar no tiene, reescribí la acción con lo que sí hay; si es imposible, el escenario está mal asignado (corregí el id o dejalo vacío y describí el lugar entero). Los objetos pequeños que el personaje trae encima sí pueden aparecer donde sea. Si el lugar es interior, la lluvia y la nieve se ven POR la ventana, nunca dentro.${repairEcchi ? `
-ECCHI ACTIVO — LENGUAJE VISUAL: TODOS los personajes son ADULTOS (18 en adelante, cada uno con su edad adulta según su rol), en contextos adultos acordes al género — jamás uniformes escolares ni aulas, nada que sugiera menores. Usa lenguaje de cámara ecchi cuando la escena lo permita: "low angle shot revealing her thighs", "form-fitting dress emphasizing her shape", "wet shirt clinging to her figure", "hourglass silhouette", "long slender legs", "curvy figure" — sensual y sugerente, sin desnudez explícita.` : ''}
-Responde SOLO JSON válido sin markdown`;
-
-      const repairScenarioList = (u.escenarios || []).length
-        ? 'ESCENARIOS DEL UNIVERSO (asigná uno por escena usando su id exacto):\n' + u.escenarios.map(e => `${e.id} = "${e.name}": ${e.desc}`).join('\n')
-        : 'ESCENARIOS DEL UNIVERSO: (ninguno definido — dejá "escenario" como "")';
-
-      const scenesToDescribe = needsImageOnlyIdx.map(idx => state.scenes[idx]);
-      const scenesText = scenesToDescribe.map(s => `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`).join('\n\n');
-      const imgPrompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${repairScenarioList}\n\nESCENAS YA ESCRITAS:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"prompts":["Scene with..."]}]} con exactamente ${scenesToDescribe.length} objetos. "planos" es cuántos necesita esa escena (1, 2 o 3) y "prompts" lleva exactamente esa cantidad.`;
-
-      let imgMap = new Map();
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          const raw = await callGemini(imgPrompt, imageSys);
-          const parsed = safeParseJSON(raw);
-          const arr = parsed.imagePrompts || [];
-          arr.forEach(p => { if (p && p.num && Array.isArray(p.prompts) && p.prompts[0]) imgMap.set(p.num, p); });
-          if (imgMap.size >= scenesToDescribe.length) break;
-          console.warn(`Reparación imágenes intento ${attempt+1}: ${imgMap.size}/${scenesToDescribe.length}`);
-          if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
-        } catch(e) {
-          console.error(`Reparación imágenes intento ${attempt+1}:`, e.message);
-          if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
-        }
+      for (const {s,idx} of batch) {
+        const p=map.get(s.num);
+        if (!p) continue;
+        const prompts=p.prompts || [], sizes=p.tamanos || [], motions=p.movimientos || [];
+        const kinds=p.tiposMovimiento || [], continuous=p.continuos || [];
+        const validSize=i=>PLANOS_CORTO.some(x=>x.id===String(sizes[i]||'').toLowerCase()) ? String(sizes[i]).toLowerCase() : ['general','medio','cerca'][i];
+        const kind=i=>['still','limited','action'].includes(kinds[i]) ? kinds[i] : 'still';
+        state.scenes[idx]={
+          ...s,
+          escenario:p.escenario || s.escenario || '',
+          imagePromptA:prompts[0]||'', imagePromptB:prompts[1]||'', imagePromptC:prompts[2]||'',
+          tamanoA:prompts[0]?validSize(0):'', tamanoB:prompts[1]?validSize(1):'', tamanoC:prompts[2]?validSize(2):'',
+          videoPromptA:motions[0]||'', videoPromptB:motions[1]||'', videoPromptC:motions[2]||'',
+          motionA:prompts[0]?kind(0):'', motionB:prompts[1]?kind(1):'', motionC:prompts[2]?kind(2):'',
+          sueltoPlanoA:continuous[0]!==true, sueltoPlanoB:continuous[1]!==true, sueltoPlanoC:true,
+          continuarAnterior:p.continuarAnterior===true
+        };
       }
-
-      needsImageOnlyIdx.forEach(idx => {
-        const s = state.scenes[idx];
-        const p = imgMap.get(s.num);
-        if (p) {
-          s.escenario = p.escenario || s.escenario || '';
-          s.imagePromptA = p.prompts[0] || '';
-          s.imagePromptB = p.prompts[1] || '';
-          s.imagePromptC = p.prompts[2] || '';
-        }
-      });
       saveState();
-      renderScenes();
     }
 
-    // Count success based on FINAL state of the originally-broken scenes
-    const totalRepaired = originalBrokenIndices.filter(idx => {
-      const s = state.scenes[idx];
-      return s.narration && s.imagePromptA;
-    }).length;
-
-    if (totalRepaired < totalBroken) {
-      showToast(`⚠️ ${totalRepaired}/${totalBroken} escenas reparadas — vuelve a intentar para las restantes`, 'error');
-    } else {
-      showToast(`✅ ${totalRepaired} escenas reparadas`, 'success');
-    }
+    renderScenes();
+    audioSecCache.clear();
+    const remain=state.scenes.filter(s=>!s.narration || !s.imagePromptA).length;
+    if (remain) showToast(`⚠️ Quedan ${remain} escena(s) por reparar`, 'error');
+    else showToast('✅ Reparación completa', 'success');
   } catch(e) {
     openErrorModal('Error reparando escenas', e.message);
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = '🔧 Reparar escenas vacías';
+    btn.disabled=false;
+    btn.innerHTML='🔧 Reparar escenas vacías';
   }
 });
 
@@ -5998,6 +6311,7 @@ CÓMO TRABAJAS:
 - Concreto sobre abstracto: "linterna de papel naranja como única fuente cálida en planos nocturnos" en vez de "iluminación atmosférica".
 - Cada decisión es ejecutable por un equipo: se puede dibujar, componer o cronometrar.
 - Coherencia por encima de novedad: lo que fijas en la biblia se respeta en todos los capítulos.
+- EL ESTILO DE DIBUJO YA ESTÁ FIJADO POR LA APP: anime japonés 2D dibujado a mano, línea clara y cel-shading. Tú eliges paleta, luz, composición y motivos; NUNCA pidas 3D, CGI, fotorrealismo, manhua/donghua, webtoon, piel volumétrica ni "render cinematográfico" que contradiga ese contrato.
 Responde SOLO JSON válido sin markdown.`;
 }
 
@@ -6034,19 +6348,21 @@ async function generateSeriesBible() {
 
   const prompt = `${directorContext()}
 
-Formato de cada capítulo: ${fmt.scenes} escenas, ~${fmt.minutes} minutos, formato vertical para redes.
+Formato objetivo de la primera historia: ~${fmt.minutes} minutos, ${fmt.scenes} escenas narrativas, YouTube 16:9 por defecto.
+Modo de audio: ${u.storyMode === 'cast' ? 'dramatizado con voces por personaje' : 'narrado por una voz principal'}.
+Tipo de cierre: ${u.endingMode === 'cliffhanger' ? 'continuará' : 'historia completa'}.
 
-Escribe la BIBLIA DE DIRECCIÓN de esta serie. Es el documento que seguirán todos los capítulos.
+Escribe la BIBLIA DE DIRECCIÓN. El universo y la sinopsis ya son buenos: protégelos. La biblia debe ayudar a DESARROLLARLOS, no sustituirlos con otra fórmula.
 
 Devuelve JSON:
 {
-  "direccionVisual": "Cómo se ve esta serie y solo esta serie: paleta concreta (3-4 colores nombrados), tratamiento de luz, lenguaje de cámara recurrente, textura. 3-4 frases ejecutables.",
-  "narrativa": "La VOZ del relato. Elegí UNA: primera_presente | tercera_presente | tercera_pasado | segunda. Elegí primera_presente si hay un protagonista con voz interior propia o dos frentes que se alternan (es la que mejor funciona en resúmenes de manhua). Sólo el identificador, sin explicar.",
-  "identidadMusical": "El COLOR de fondo de la serie: familia instrumental, textura y tempo. Es un colchón que suena POR DEBAJO de una narración, no una pieza de concierto — así que nada de melodías ni de instrumentos solistas llevando un tema. 2-3 frases.",
-  "ritmo": "Regla de ritmo propia de esta serie dentro del género: dónde acelera, dónde respira, cómo entra y sale de cada capítulo. 2-3 frases.",
-  "arcoTemporada": ["Capítulo 1: qué establece y con qué queda abierto", "Capítulo 2: ...", "Capítulo 3: ...", "Capítulo 4: ...", "Capítulo 5: ..."],
-  "motivosRecurrentes": ["objeto, gesto o encuadre que reaparece y significa algo", "otro", "otro"],
-  "reglasDeOro": ["regla concreta que esta serie NUNCA rompe", "otra", "otra", "otra"]
+  "direccionVisual": "SOLO paleta concreta (3-4 colores), tratamiento de luz, composición y motivos visuales. El render ya está fijado como anime japonés 2D; no lo redefinas. 3-4 frases ejecutables.",
+  "narrativa": "La VOZ del relato. Elige UNA: primera_presente | tercera_presente | tercera_pasado | segunda. Elige la que sirva al concepto, no por una regla de manhua. Sólo el identificador.",
+  "identidadMusical": "Familia instrumental, textura y tempo del colchón musical. Debe acompañar voz durante mucho tiempo sin competir con ella. 2-3 frases.",
+  "ritmo": "Cómo respira una historia LARGA: dónde acelera, dónde deja reaccionar una revelación y cómo alterna presión/relación/descubrimiento. 2-3 frases.",
+  "arcoTemporada": ["Macroacto 1: gancho y primera alteración", "Macroacto 2: consecuencias y relaciones", "Macroacto 3: punto medio/revelación", "Macroacto 4: escalada y costo", "Macroacto 5: clímax y consecuencia"],
+  "motivosRecurrentes": ["objeto, gesto o encuadre que reaparece con sentido", "otro", "otro"],
+  "reglasDeOro": ["regla causal concreta que esta historia nunca rompe", "regla de personaje", "regla de tono", "regla de continuidad"]
 }`;
 
   const raw = await callGemini(prompt, directorSystemPrompt(u.genero, comedyMode));
@@ -6101,15 +6417,19 @@ ${bibleBrief()}
 
 ${arc.length ? `ARCO DE TEMPORADA:\n${arc.map((a, i) => `${i + 1}. ${a}`).join('\n')}\n` : ''}
 ${prevSummary ? `LO QUE YA PASÓ EN CAPÍTULOS ANTERIORES:\n${prevSummary}\n` : ''}
-Estás dirigiendo el CAPÍTULO ${epNum}. Da la nota de dirección al guionista antes de que escriba.
+Estás dirigiendo la HISTORIA/ENTREGA ${epNum}. Da una nota al guionista para que el universo aprobado se desarrolle con causalidad y personalidad.
+Tipo de cierre: ${u.endingMode === 'cliffhanger' ? 'CONTINUARÁ' : 'COMPLETO'}.
+${u.endingMode === 'complete'
+  ? 'El conflicto central de esta entrega DEBE cerrarse. Puede quedar una posibilidad futura, pero no conviertas el último acto en un teaser que roba la resolución.'
+  : 'El tramo debe resolver algo importante antes de abrir la siguiente amenaza.'}
 
 Devuelve JSON:
 {
-  "objetivo": "Qué tiene que lograr este capítulo en el arco (1-2 frases concretas)",
-  "curvaEmocional": "De qué emoción parte el espectador y a cuál llega (1 frase)",
-  "imagenClave": "La imagen que el espectador debe recordar de este capítulo (1 frase visual concreta)",
-  "notaDeDireccion": "La instrucción más importante para que este capítulo no se sienta genérico (1-2 frases)",
-  "quedaAbierto": "Qué queda deliberadamente sin resolver para el capítulo siguiente (1 frase)"
+  "objetivo": "Qué transformación concreta debe completar esta entrega (1-2 frases)",
+  "curvaEmocional": "De qué estado parte el espectador/protagonista y a cuál llega",
+  "imagenClave": "Una imagen memorable que nace de un acontecimiento real de la trama",
+  "notaDeDireccion": "Qué evitar o potenciar para que esta premisa no se vuelva genérica o repetitiva",
+  "quedaAbierto": "Si el cierre es completo: sólo una posibilidad secundaria opcional. Si continúa: el problema concreto que queda abierto."
 }`;
 
   try {
@@ -6132,7 +6452,7 @@ OBJETIVO: ${dir.objetivo || ''}
 CURVA EMOCIONAL: ${dir.curvaEmocional || ''}
 IMAGEN CLAVE (tiene que existir en el capítulo): ${dir.imagenClave || ''}
 NOTA DEL DIRECTOR: ${dir.notaDeDireccion || ''}
-QUEDA ABIERTO para el próximo capítulo: ${dir.quedaAbierto || ''}
+${state.universe?.endingMode === 'complete' ? 'POSIBILIDAD FUTURA OPCIONAL (NO sustituye el cierre)' : 'QUEDA ABIERTO'}: ${dir.quedaAbierto || ''}
 ═══════════════════════════════════════════`;
 }
 
@@ -6392,7 +6712,7 @@ async function uploadAssets(items, onProgress) {
 // directory with every file from descargas.txt already downloaded under the
 // local names used here.
 //
-// The container's wrapper looks for DIEZMO-EP*.mp4 to know the render finished,
+// The container's wrapper looks for ANIME-EP*.mp4 to know the render finished,
 // so the local filename has to match that glob. The name it gets in the bucket
 // comes from SALIDA, not from here, so this never reaches the user.
 function buildMontarScript(scenes, opts) {
@@ -6461,19 +6781,33 @@ function buildMontarScript(scenes, opts) {
           `setpts=PTS*$R,fps=$FPS,tpad=stop_mode=clone:stop_duration=$PAD" ` +
           `-an -c:v libx264 -preset veryfast -pix_fmt yuv420p seg_${sufijo}.mp4`);
       } else if (pl && pl.image) {
-        // zoompan jitters at 1x, so it works on an upscaled copy.
-        //
-        // `d` is how many frames one zoom cycle lasts, and zoompan RESTARTS at
-        // zoom 1 when it runs out. `%d` truncates, so `d` used to come out one
-        // frame short of what `-t` actually emits and the segment's LAST frame
-        // was the first frame of a new cycle — the image snapped back to 1×
-        // right on the cut. Two spare frames put the restart safely past the
-        // end: -t emits round(T*24) ≤ floor(T*24)+1 frames, always < d.
-        p(`F=$(awk "BEGIN{printf \\"%d\\", ${T}*24+2}")`,
-          `ffmpeg -y -loop 1 -i ${pl.image} -t "${T}" ` +
-          `-vf "scale=$((W*2)):$((H*2)):force_original_aspect_ratio=increase,crop=$((W*2)):$((H*2)),` +
-          `zoompan=z='min(zoom+0.0006,1.12)':d=$F:s=${'${W}'}x${'${H}'}:fps=$FPS,format=yuv420p" ` +
-          `-an -c:v libx264 -preset veryfast seg_${sufijo}.mp4`);
+        // Motion-anime edit: a still illustration must not sit under narration
+        // for 30-40 seconds with one endless zoom. Every ~6 seconds the montage
+        // makes a clean editorial cut on the SAME drawing with a different
+        // crop/motion. This costs zero extra image/Veo generations and matches
+        // the visual cadence of long-form motion-comic references.
+        p(`NCUT=$(awk "BEGIN{n=int((${T}+5.999)/6); if(n<1)n=1; if(n>8)n=8; print n}")`,
+          `if [ "$NCUT" -le 1 ]; then`,
+          `  F=$(awk "BEGIN{printf \\"%d\\", ${T}*24+2}")`,
+          `  ffmpeg -y -loop 1 -i ${pl.image} -t "${T}" -vf "scale=$((W*2)):$((H*2)):force_original_aspect_ratio=increase,crop=$((W*2)):$((H*2)),zoompan=z='min(zoom+0.0006,1.10)':d=$F:s=${'${W}'}x${'${H}'}:fps=$FPS,format=yuv420p" -an -c:v libx264 -preset veryfast seg_${sufijo}.mp4`,
+          `else`,
+          `  BASE=$(awk "BEGIN{printf \\"%.3f\\", ${T}/$NCUT}")`,
+          `  : > cam_${sufijo}.txt`,
+          `  for J in $(seq 1 "$NCUT"); do`,
+          `    if [ "$J" -eq "$NCUT" ]; then CT=$(awk "BEGIN{printf \\"%.3f\\", ${T}-($NCUT-1)*$BASE}"); else CT=$BASE; fi`,
+          `    CF=$(awk "BEGIN{printf \\"%d\\", $CT*24+2}")`,
+          `    MOD=$((J % 4))`,
+          `    case "$MOD" in`,
+          `      1) Z="z='min(zoom+0.0011,1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'" ;;`,
+          `      2) Z="z='if(eq(on,0),1.12,max(zoom-0.0011,1.0))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'" ;;`,
+          `      3) Z="z='1.08':x='(iw-iw/zoom)*on/$CF':y='ih/2-(ih/zoom/2)'" ;;`,
+          `      0) Z="z='1.08':x='(iw-iw/zoom)*(1-on/$CF)':y='ih/2-(ih/zoom/2)'" ;;`,
+          `    esac`,
+          `    ffmpeg -y -loop 1 -i ${pl.image} -t "$CT" -vf "scale=$((W*2)):$((H*2)):force_original_aspect_ratio=increase,crop=$((W*2)):$((H*2)),zoompan=$Z:d=$CF:s=${'${W}'}x${'${H}'}:fps=$FPS,format=yuv420p" -an -c:v libx264 -preset veryfast cam_${sufijo}_$J.mp4`,
+          `    echo "file '$PWD/cam_${sufijo}_$J.mp4'" >> cam_${sufijo}.txt`,
+          `  done`,
+          `  ffmpeg -y -f concat -safe 0 -i cam_${sufijo}.txt -c copy seg_${sufijo}.mp4`,
+          `fi`);
       } else {
         // Neither asset: black, so the picture never drifts from the audio.
         p(`ffmpeg -y -f lavfi -i color=c=black:s=${'${W}'}x${'${H}'}:r=$FPS -t "${T}" ` +
@@ -6527,7 +6861,7 @@ function buildMontarScript(scenes, opts) {
   // sin filtro de subtítulos no hay nada que redibujar, así que el montaje
   // termina en segundos y no pierde calidad.
   p('', '# ─── mezcla final ───');
-  const salida = `DIEZMO-EP${String(episodio).padStart(2, '0')}.mp4`;
+  const salida = `ANIME-EP${String(episodio).padStart(2, '0')}.mp4`;
   p(`ffmpeg -y -i mudo.mp4 -i mezcla.wav -c:v copy -c:a aac -b:a 192k -shortest ` +
     `-movflags +faststart ${salida}`);
   p(`echo "Montado: ${salida}"`);
@@ -6786,7 +7120,7 @@ async function assembleEpisode() {
     const manifest = {
       carpeta: carpetaProy,
       episodio: epNum,
-      hoja: { titulo: state.universe?.title || '', episodio: epNum, escenas: guion.length, vertical, hasMusic, musicVol },
+      hoja: { titulo: state.universe?.title || '', episodio: epNum, escenas: guion.length, vertical, hasMusic, musicVol, motionProfile: document.getElementById('motionProfileSelect')?.value || 'motion_comic' },
       script: buildMontarScript(guion, { vertical, hasMusic, musicVol, episodio: epNum }),
       descargas,
     };
@@ -7199,7 +7533,7 @@ async function combineAudiosToWav(audioEntries, progressCb) {
       const arrBuf = base64ToArrayBuffer(entry.data);
       // decodeAudioData mutates the buffer in some implementations — clone
       const buf = await ctx.decodeAudioData(arrBuf.slice(0));
-      decoded.push({ buf, idx: entry.idx });
+      decoded.push({ buf, idx: entry.idx, gapAfter: Number.isFinite(Number(entry.gapAfter)) ? Math.max(0, Math.min(0.5, Number(entry.gapAfter))) : 0.05 });
       if (buf.sampleRate > maxSampleRate) maxSampleRate = buf.sampleRate;
       if (buf.numberOfChannels > maxChannels) maxChannels = buf.numberOfChannels;
     } catch(e) {
@@ -7210,9 +7544,10 @@ async function combineAudiosToWav(audioEntries, progressCb) {
 
   if (!decoded.length) throw new Error('Ningún audio se pudo decodificar');
 
-  // Minimal silence between scenes — 0.05s, just enough to avoid abrupt cuts
-  const silenceFrames = Math.floor(maxSampleRate * 0.05);
-  const totalFrames = decoded.reduce((sum, d) => sum + d.buf.length, 0) + silenceFrames * (decoded.length - 1);
+  // Each entry may request a tiny conversational pause. Legacy callers keep
+  // the old 0.05 s default; cast dialogue uses 0.08–0.16 s depending on role.
+  const totalFrames = decoded.reduce((sum, d, i) =>
+    sum + d.buf.length + (i < decoded.length - 1 ? Math.floor(maxSampleRate * d.gapAfter) : 0), 0);
 
   const offline = new OfflineAudioContext(maxChannels, totalFrames, maxSampleRate);
   let cursor = 0;
@@ -7227,7 +7562,7 @@ async function combineAudiosToWav(audioEntries, progressCb) {
     src.start(startSec);
     const endSec = (cursor + buf.length) / maxSampleRate;
     offsets.push({ idx: decoded[i].idx, start: startSec, end: endSec });
-    cursor += buf.length + silenceFrames;
+    cursor += buf.length + (i < decoded.length - 1 ? Math.floor(maxSampleRate * decoded[i].gapAfter) : 0);
   }
 
   const rendered = await offline.startRendering();
@@ -7238,7 +7573,7 @@ async function combineAudiosToWav(audioEntries, progressCb) {
 // EXPORT ZIP — lo que hace falta para PUBLICAR, y nada más.
 //
 // Tres archivos:
-//   DIEZMO-EPnn.mp4   el montaje ya terminado, traído del bucket
+//   ANIME-EPnn.mp4   el montaje ya terminado, traído del bucket
 //   descripcion.txt   título, descripción y hashtags listos para pegar
 //   subtitulos.srt    con el timing real, para importarlo en CapCut
 //
@@ -7255,23 +7590,17 @@ async function generarTextoDePublicacion(scenes) {
   const sinopsis = scenes.slice(0, 6).map(s => (s.narration || '').slice(0, 320)).join('\n\n');
   const final = scenes.slice(-2).map(s => (s.narration || '').slice(-320)).join('\n\n');
 
-  const sys = `Sos el encargado de publicación de un canal de anime narrado en español que vive de la
-monetización. Tu trabajo NO es resumir el episodio con elegancia: es conseguir el clic y conseguir el
-comentario. Escribís como los canales de donghua y de historias chinas que revientan en Facebook y
-YouTube — directo, con conflicto por delante, sin florituras.
+  const sys = `Sos el encargado de publicación de un canal de historias anime en español monetizado en YouTube.
+El video puede ser narrado por una sola voz o dramatizado con varias voces. Tu trabajo es presentar el CONFLICTO real de la historia con claridad y curiosidad, sin inventar promesas ni copiar títulos de otras obras.
 
 Reglas:
-- El TÍTULO va en la voz del conflicto, no del narrador. Nombra lo que está en juego y a quién se lo
-  hacen. Nada de títulos de capítulo tipo "El despertar" o "Capítulo 1: el inicio". Máx. 90 caracteres.
-- La DESCRIPCIÓN abre con la injusticia o la traición, no con el contexto. Dos o tres frases. La última
-  deja el episodio abierto.
-- La PREGUNTA va al final de la descripción, en su propia línea, y obliga a tomar bando. La gente
-  comenta cuando cree que la otra mitad se equivoca, no cuando le preguntan si le gustó. Una sola
-  línea, sin "comenta abajo" ni "dime qué opinas".
-- HASHTAGS: exactamente 6. Ni uno más — una pared de etiquetas la lee Facebook como spam. Elegí los
-  seis que de verdad busca alguien que quiere ver esto: dos generales de anime en español, dos del
-  género, dos de la historia concreta. Sin espacios dentro de un hashtag, todos en minúscula.
-- Nada de inventar datos que no estén en la historia. Nada de prometer lo que el episodio no da.
+- El TÍTULO nombra la situación que cambia la vida del protagonista o la contradicción principal. Máx. 90 caracteres. Nada de "Capítulo 1" ni títulos abstractos.
+- La DESCRIPCIÓN abre con el conflicto concreto y resume la promesa de la historia en 2-3 frases.
+- Si esta entrega tiene CIERRE COMPLETO, NO finjas que quedó inconclusa: puedes insinuar una consecuencia o pregunta posterior sin ocultar que la historia resolvió su conflicto central.
+- Si es CLIFFHANGER, sí puedes señalar el problema concreto que quedó abierto.
+- La PREGUNTA final invita a tomar una posición sobre una decisión o relación real de esta historia. Una sola línea.
+- HASHTAGS: exactamente 6; dos generales de anime/historias, dos del género y dos del concepto concreto.
+- Nada de inventar datos, herramientas, giros o personajes que no estén en la historia.
 
 Devolvé SÓLO este JSON:
 {"titulo":"...","descripcion":"...","pregunta":"...","hashtags":["#...","#..."]}`;
@@ -7279,6 +7608,8 @@ Devolvé SÓLO este JSON:
   const prompt = `TÍTULO DE LA SERIE: ${u.title || '(sin título)'}
 GÉNERO: ${u.genero || ''}${(u.subgenres || []).length ? ' · ' + (u.subgenres || []).join(', ') : ''}
 TONO: ${u.tono || ''}
+MODO DE AUDIO: ${u.storyMode === 'cast' ? 'dramatizado con voces por personaje' : 'narrado'}
+CIERRE: ${u.endingMode === 'cliffhanger' ? 'continuará' : 'completo'}
 EPISODIO: ${state.currentEpisode || 1}
 
 CÓMO EMPIEZA:
