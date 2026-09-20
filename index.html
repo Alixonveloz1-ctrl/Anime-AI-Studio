@@ -5541,10 +5541,14 @@ window.generateSceneImageAB = async function(sceneId, slot) {
   const conPlano = tam ? `${planoEn(tam)}. ${base}` : base;
   showToast(`Generando imagen ${slot} escena ${s.num}...`, 'success');
   try {
+    const faltanRefs = await referenciasNombradasFaltantes(conPlano);
+    if (faltanRefs.length) {
+      throw new Error(`Antes de gastar otra imagen, genera la referencia maestra de: ${faltanRefs.join(', ')} en la pestaña Personajes. Sin esa ficha, la cara puede cambiar entre planos.`);
+    }
     // Quién sale, su ficha dibujada si la tiene, y su descripción si no.
     const { refs, ancla, sinFicha } = await repartoDeLaEscena(conPlano, s);
     if (sinFicha.length) {
-      showToast(`${sinFicha.join(', ')} sin ficha generada: se dibuja del texto`, 'error');
+      showToast(`${sinFicha.join(', ')} no fue reconocido de forma explícita en el plano; se usa el ancla textual`, 'error');
     }
     const prompt = conPlano + ancla + limiteCronologicoPlano(s, slot);
     const env = buildSceneEnvContext(s);
@@ -5680,6 +5684,18 @@ async function repartoDeLaEscena(prompt, escena) {
     ancla: anclaDeFicha(conEstado),
     sinFicha: conEstado.filter(c => !c.tieneImagen).map(c => c.name),
   };
+}
+
+// If the director explicitly names a recurring character in a shot, generating
+// without that character's master reference is a quality bug, not a harmless
+// fallback. The batch path already refused this; the single-shot path did not.
+async function referenciasNombradasFaltantes(prompt) {
+  const named = seleccionarRefs(prompt, state.characters || []);
+  const missing = [];
+  for (const ch of named) {
+    if (!(await dbGet(charImgKey(ch.id)))) missing.push(ch.name);
+  }
+  return missing;
 }
 
 async function getRefsForPrompt(prompt) {
