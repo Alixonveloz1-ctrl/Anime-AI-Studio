@@ -3329,6 +3329,25 @@ function updateEpFormatNote() {
   const sel  = document.getElementById('epLengthSelect');
   const note = document.getElementById('epFormatNote');
   if (!sel || !note) return;
+
+  const active = getEpisodeFormat();
+  if (active.legacy) {
+    let opt = [...sel.options].find(o => o.value === 'legacy_current');
+    if (!opt) {
+      opt = document.createElement('option');
+      opt.value = 'legacy_current';
+      sel.appendChild(opt);
+    }
+    opt.textContent = `🔒 Proyecto anterior — ${active.scenes} escenas · ~${active.minutes} min`;
+    sel.value = 'legacy_current';
+    sel.disabled = true;
+    note.textContent = `Proyecto creado con la versión anterior: ${active.scenes} escenas (~${active.minutes} min). Se conserva exactamente ese formato para no romper el material existente.`;
+    return;
+  }
+
+  const legacyOpt = [...sel.options].find(o => o.value === 'legacy_current');
+  if (legacyOpt) legacyOpt.remove();
+  sel.disabled = false;
   const f = EPISODE_FORMATS[sel.value] || EPISODE_FORMATS.hora;
   const words = Math.round(f.minutes * WORDS_PER_MINUTE);
   note.textContent = `~${f.minutes} min · ${f.scenes} escenas narrativas · ~${words.toLocaleString('es-ES')} palabras. `
