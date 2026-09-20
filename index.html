@@ -4051,6 +4051,23 @@ Responde SOLO JSON válido sin markdown.`;
         ? longDraft.storyParts.slice(0, briefs.length).map(x => String(x || '').trim())
         : [];
 
+      // Drafts created by an older build may contain a short block that used to
+      // be accepted as "best effort". Keep valid earlier canon, but invalidate
+      // that block and everything after it because later blocks were written
+      // from the wrong/short context.
+      for (let i = 0; i < partsOut.length; i++) {
+        const wc = String(partsOut[i] || '').split(/\s+/).filter(Boolean).length;
+        if (!partsOut[i] || wc < minPerPart) {
+          partsOut.splice(i);
+          longDraft.storyParts = partsOut.slice();
+          longDraft.sceneChunks = [];
+          longDraft.visualChunks = [];
+          longDraft.updatedAt = Date.now();
+          saveState();
+          break;
+        }
+      }
+
       for (let i = 0; i < briefs.length; i++) {
         if (partsOut[i]) {
           if (fmt.parts > 1) setProg(30 + Math.round(((i + 1) / briefs.length) * 12), `Paso 2/5: Bloque ${i + 1}/${briefs.length} recuperado`);
