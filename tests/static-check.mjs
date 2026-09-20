@@ -1,0 +1,54 @@
+import fs from 'node:fs';
+
+const fail = (msg) => { console.error('❌ ' + msg); process.exitCode = 1; };
+const ok = (msg) => console.log('✅ ' + msg);
+
+const html = fs.readFileSync('index.html', 'utf8');
+const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)]
+  .map(m => m[1]).filter(s => s.trim());
+
+if (!scripts.length) fail('index.html no contiene script inline');
+scripts.forEach((src, i) => {
+  try { new Function(src); ok(`index.html script ${i + 1} parsea`); }
+  catch (e) { fail(`index.html script ${i + 1}: ${e.message}`); }
+});
+
+for (const file of [
+  'api/_lib/gcp.js','api/_lib/texto.js','api/assemble.js','api/audio.js',
+  'api/download-url.js','api/health.js','api/image.js','api/music.js',
+  'api/script.js','api/transcribe.js','api/upload-url.js','api/video-start.js',
+  'api/video-status.js','api/voices.js'
+]) {
+  const src = fs.readFileSync(file, 'utf8');
+  try { new Function('module','exports','require','process','fetch','Buffer',src); ok(file + ' parsea'); }
+  catch (e) { fail(file + ': ' + e.message); }
+}
+
+const required = [
+  ['storyModeSelect', 'selector Narrada/Dramatizada'],
+  ['endingModeSelect', 'selector de cierre'],
+  ['motionProfileSelect', 'perfil de movimiento'],
+  ["hora:       { scenes: 84", 'formato de 60 minutos'],
+  ["hora_media: { scenes: 120", 'formato de 90 minutos'],
+  ["ESTILO_POR_DEFECTO = 'japon_2d'", 'anime japonés 2D por defecto'],
+  ['REGISTRO_LONGFORM_REFERENCIA', 'motor narrativo largo'],
+  ['generarAudioDeEscena', 'audio dramatizado por intervención'],
+  ['tiposMovimiento', 'dirección motion-comic'],
+  ['continuarAnterior', 'continuidad explícita entre escenas']
+];
+for (const [needle, label] of required) html.includes(needle) ? ok(label) : fail('Falta ' + label);
+
+if (/reintentando sin refs/i.test(html)) fail('Todavía existe un fallback que elimina referencias de personaje');
+else ok('Nunca se eliminan referencias de identidad silenciosamente');
+
+const imageApi = fs.readFileSync('api/image.js','utf8');
+if (!/AUTHENTIC JAPANESE HAND-DRAWN 2D TV ANIME FRAME/.test(imageApi)) fail('api/image.js no comparte el contrato japonés 2D');
+else ok('api/image.js comparte el contrato japonés 2D');
+
+const gcp = fs.readFileSync('api/_lib/gcp.js','utf8');
+const setup = fs.readFileSync('setup.sh','utf8');
+if (!gcp.includes("anime-studio-montage") || !setup.includes('anime-studio-montage')) fail('El nombre del Job no coincide entre código e instalador');
+else ok('Montador y aplicación usan el mismo Job');
+
+if (process.exitCode) process.exit(process.exitCode);
+console.log('\nValidación estática completa.');
