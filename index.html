@@ -565,6 +565,7 @@
         <button class="btn-sec" id="btnAllImages">🖼️ Todas las Imágenes</button>
         <button class="btn-sec" id="btnAllAudio">🎙️ Toda la Narración</button>
       </div>
+      <p style="font-size:10px;color:var(--text-dim);margin:6px 0 0;line-height:1.45">↻ Todas las tandas son reanudables: referencias, imágenes, audio y videos ya terminados se conservan y se omiten al continuar.</p>
       <div class="btn-row" style="margin-top:8px">
         <button class="btn-sec" onclick="generateAllVideos()" style="border-color:rgba(0,229,255,0.4);color:var(--accent2)">🎬 Videos recomendados</button>
       </div>
@@ -6150,6 +6151,7 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
 
 document.getElementById('btnAllAudio').addEventListener('click', async () => {
   if (!state.scenes.length) { showToast('Genera escenas primero', 'error'); return; }
+  if (!empezarTanda()) return;
   const bp = document.getElementById('bulkProgress'); bp.style.display = 'block';
   const bt = document.getElementById('bulkText'), bb = document.getElementById('bulkBar');
 
@@ -6158,6 +6160,7 @@ document.getElementById('btnAllAudio').addEventListener('click', async () => {
   const total = state.scenes.length;
 
   for (let i = 0; i < state.scenes.length; i++) {
+    if (tanda.detener) break;
     const s = state.scenes[i];
     const pct = Math.round((i / total) * 100);
     bb.style.width = pct + '%';
@@ -6172,7 +6175,10 @@ document.getElementById('btnAllAudio').addEventListener('click', async () => {
     try {
       const existing = await dbGet(sceneAudKey(s.id));
       if (!existing) {
-        const result = await generarAudioDeEscena(s);
+        const result = await conEsperaDeCuota(
+          () => generarAudioDeEscena(s),
+          (seg) => { bt.textContent = `⏳ Cuota de audio de Google — reanudando en ${seg}s…`; }
+        );
         const mime = result.mimeType || 'audio/wav';
         await dbSet(sceneAudKey(s.id), `${mime}|${result.audioData}`);
         completed++;
@@ -6192,6 +6198,7 @@ document.getElementById('btnAllAudio').addEventListener('click', async () => {
   bb.style.width = '100%';
   bt.textContent = failed > 0 ? `⚠️ ${completed} audios — ${failed} fallaron` : '✅ Audios completados';
   renderScenes();
+  terminarTanda();
   setTimeout(() => bp.style.display = 'none', 3000);
 });
 
@@ -6518,6 +6525,7 @@ async function generateEpisodeMusic() {
   const txt  = document.getElementById('musicProgressText');
   if (!state.universe) { showToast('Crea un universo primero', 'error'); return; }
   if (!(state.scenes || []).some(s => s.narration)) { showToast('Genera el episodio primero', 'error'); return; }
+  if (!empezarTanda()) return;
 
   const acts = episodeActs();
   btn.disabled = true;
@@ -6525,31 +6533,38 @@ async function generateEpisodeMusic() {
   const setProg = (p, m) => { bar.style.width = p + '%'; txt.textContent = m; };
 
   try {
-    // ─── Step 1: the creative director writes the musical direction ───
-    setProg(10, 'El director escribe la dirección musical...');
-    const briefs = await directMusic(acts);
+    let briefs = { ...(state.universe?.musicBriefs || {}) };
+    const missingBriefs = acts.filter(a => !briefs[a]?.prompt);
+    if (missingBriefs.length) {
+      setProg(10, 'El director completa la dirección musical que falta...');
+      const generated = await directMusic(acts);
+      for (const a of missingBriefs) if (generated?.[a]) briefs[a] = generated[a];
+      state.universe.musicBriefs = briefs;
+      saveState();
+    }
 
-    // ─── Step 2: Lyria composes each cue ───
-    let done = 0, failed = 0;
+    let done = 0, failed = 0, skipped = 0;
     for (const act of acts) {
+      if (tanda.detener) break;
       setProg(20 + Math.round((done / acts.length) * 75), `Componiendo ${ACT_LABELS[act] || act}...`);
+      const existing = await dbGet(musicKey(act));
+      if (existing) { skipped++; done++; continue; }
       const brief = briefs[act];
       if (!brief) { failed++; done++; continue; }
       try {
-        const res = await fetch('/api/music', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: brief.prompt, negativePrompt: brief.negative || '' }),
-        });
-        const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error || `Music proxy ${res.status}`);
+        const data = await conEsperaDeCuota(async () => {
+          const res = await fetch('/api/music', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: brief.prompt, negativePrompt: brief.negative || '' }),
+          });
+          const d = await res.json();
+          if (!res.ok || d.error) throw new Error(d.error || `Music proxy ${res.status}`);
+          return d;
+        }, (seg) => setProg(20 + Math.round((done / acts.length) * 75), `Cuota de música: reanudando en ${seg}s…`));
         const clip = data.clips?.[0];
         if (!clip?.audioData) throw new Error('sin audio');
         await dbSet(musicKey(act), `${clip.mimeType}|${clip.audioData}`);
-        if (state.universe) {
-          state.universe.musicBriefs = { ...(state.universe.musicBriefs || {}), [act]: brief };
-          saveState();
-        }
       } catch (e) {
         console.warn(`Música ${act}:`, e.message);
         failed++;
@@ -6559,12 +6574,12 @@ async function generateEpisodeMusic() {
     }
 
     setProg(100, failed ? `${acts.length - failed}/${acts.length} pistas listas` : 'Música lista');
-    showToast(failed ? `${acts.length - failed}/${acts.length} pistas generadas` : 'Música del episodio lista 🎵',
-              failed ? 'error' : 'success');
+    showToast(`Música: ${acts.length - failed} listas · ${skipped} ya existían${failed ? ' · '+failed+' pendientes' : ''}`, failed ? 'error' : 'success');
   } catch (e) {
     openErrorModal('Error generando música', e.message);
   } finally {
     btn.disabled = false;
+    terminarTanda();
     setTimeout(() => { prog.style.display = 'none'; }, 2500);
   }
 }
@@ -7069,7 +7084,7 @@ async function assembleEpisode() {
     const manifest = {
       carpeta: carpetaProy,
       episodio: epNum,
-      hoja: { titulo: state.universe?.title || '', episodio: epNum, escenas: guion.length, vertical, hasMusic, musicVol, motionProfile: document.getElementById('motionProfileSelect')?.value || 'motion_comic' },
+      hoja: { titulo: state.universe?.title || '', episodio: epNum, escenas: guion.length, vertical, hasMusic, musicVol },
       script: buildMontarScript(guion, { vertical, hasMusic, musicVol, episodio: epNum }),
       descargas,
     };
