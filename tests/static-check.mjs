@@ -52,7 +52,7 @@ try {
 }
 
 const required = [
-  ['storyModeSelect', 'selector Narrada/Dramatizada'],
+  ['storyModeSelect', 'selector Narrado/Voces por personaje'],
   ['endingModeSelect', 'selector de cierre'],
   ["hora:       { scenes: 84", 'formato de 60 minutos'],
   ["hora_media: { scenes: 120", 'formato de 90 minutos'],
@@ -72,7 +72,21 @@ if (/btnRepairScenes|Reparar escenas vacías/i.test(html)) fail('Volvió a apare
 else ok('No existe botón de reparación post-hoc');
 
 if (/motionProfileSelect/.test(html)) fail('Motion anime volvió a aparecer como un modo separado');
-else ok('Sólo los modos narrativos son seleccionables; el motion es interno al montaje');
+else ok('Motion anime no es un tipo de proyecto; es interno al montaje');
+
+if (/panel-corto|data-panel="corto"|CORTO CINEMATOGRÁFICO|btnEscribirCorto/.test(html)) {
+  fail('Volvió a aparecer el flujo legado de cortos');
+} else {
+  ok('No existe un flujo separado de cortos');
+}
+
+const modeBlock = html.match(/<select id="storyModeSelect">([\s\S]*?)<\/select>/)?.[1] || '';
+const projectModes = [...modeBlock.matchAll(/<option value="([^"]+)"/g)].map(m => m[1]);
+if (projectModes.length !== 2 || projectModes[0] !== 'narrated' || projectModes[1] !== 'cast') {
+  fail('Los tipos de proyecto visibles no son exactamente Narrado y Voces por personaje');
+} else {
+  ok('Sólo existen dos tipos de proyecto: Narrado y Voces por personaje');
+}
 
 if (/if \(best\) return best/.test(html)) fail('El guion todavía acepta bloques cortos como éxito');
 else ok('Los bloques de historia insuficientes no se aceptan');
