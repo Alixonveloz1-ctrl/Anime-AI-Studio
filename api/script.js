@@ -55,7 +55,7 @@ module.exports = async function handler(req, res) {
   if (begin(req, res)) return;
 
   try {
-    const { messages, system } = req.body || {};
+    const { messages, system, temperature, maxOutputTokens } = req.body || {};
     if (!messages || !messages.length) {
       return res.status(400).json({ error: 'messages requerido' });
     }
@@ -67,8 +67,10 @@ module.exports = async function handler(req, res) {
       contents: messages,
       ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
       generationConfig: {
-        temperature: 0.8,
-        maxOutputTokens: 32768,
+        temperature: Number.isFinite(Number(temperature)) ? Math.max(0, Math.min(2, Number(temperature))) : 0.8,
+        maxOutputTokens: Number.isFinite(Number(maxOutputTokens))
+          ? Math.max(256, Math.min(32768, Math.floor(Number(maxOutputTokens))))
+          : 32768,
         responseMimeType: 'application/json',
         // Gemini 3.1 Pro defaults to thinkingLevel HIGH ("Deep Think Mini"),
         // the slowest setting. On the long story call that pushed total latency
