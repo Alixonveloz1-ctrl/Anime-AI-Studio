@@ -1074,14 +1074,10 @@ La narración puede ser todo lo explícita que el género pida — a ella no la 
 imagen SÍ, y lo que dispara su filtro es el TEXTO del prompt. Un prompt bloqueado no es una imagen
 suavizada: es una imagen que NO EXISTE. Por eso el prompt lleva sólo esto: QUIÉN está, DÓNDE, QUÉ HACE,
 DESDE DÓNDE se mira y QUÉ LUZ hay.
-- LA FICHA DEL PERSONAJE VIAJA CON LA IMAGEN y ya trae su cara, su pelo y su ropa dibujadas. Aun así,
-  nombrá SIEMPRE su especie y sus rasgos no humanos, su pelo y su prenda: cuesta media frase y es el único
-  seguro contra que el personaje cambie de raza o de ropa entre un plano y el siguiente. Lo que sobra es
-  DETALLAR la prenda — "la bata de gasa gris" basta, y no hace falta explicar qué se ve a través de ella.
-- NUNCA describas una prenda por lo que deja ver del cuerpo. Eso no es información visual —la prenda ya
-  está dibujada— es sólo la frase que bloquea el plano. La carga de una imagen sale de la POSTURA, el
-  ENCUADRE y la LUZ: una mano que se detiene, una mirada apartada, un contraluz.
-- Sólo se describe lo que CAMBIA respecto de la ficha: que ahora está mojada, rota, manchada o quitada.
+- LA REFERENCIA MAESTRA VIAJA CON LA IMAGEN para fijar IDENTIDAD: cara, pelo, ojos, proporciones y rasgos distintivos. NO manda sobre el vestuario.
+- Cada prompt nombra la PRENDA ACTUAL de la escena de forma breve (por ejemplo "bata hospitalaria azul"). Si el personaje cambió de ropa, el prompt nuevo manda y la referencia conserva sólo su identidad.
+- NUNCA describas una prenda por lo que deja ver del cuerpo. La carga de una imagen sale de la POSTURA, el ENCUADRE y la LUZ: una mano que se detiene, una mirada apartada, un contraluz.
+- Cambios de estado relevantes sí se escriben: ropa mojada, rota, manchada, armadura perdida, abrigo añadido, etc.
 - VIOLENCIA, exactamente igual. El plano se cuenta por sus CONSECUENCIAS y su encuadre —la mano que suelta
   el cuchillo, la mancha que crece en el suelo, la cara del que está mirando— no por el detalle del daño.
   Un prompt que insiste en la herida se bloquea y te quedás sin plano. El mismo momento contado por lo que
@@ -3168,7 +3164,7 @@ document.getElementById('btnGenerarUniverso').addEventListener('click', async ()
   try {
     const comedyMode = isComedyMode(genero, subgenres);
     const allAgesUni = isAllAges(demo);
-    const system = `Eres un guionista de anime/manhua viral para Facebook Reels.
+    const system = `Eres un creador de universos para historias anime de YouTube. Tu trabajo aquí es sólo diseñar una premisa, conflicto y mundo fuertes; NO desarrollar todavía el guion largo.
 REGLAS ABSOLUTAS:
 ${briefDeNombres(genero, concepto)}
 ${comedyMode
@@ -5854,35 +5850,18 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
     const data = await res.json();
     if (res.ok && !data.error && data.imageData) { avisarRescate(data); return data.imageData; }
 
-    // If Gemini rejects the reference image itself, retry without refs
     const isRefError = data.error && (
       data.error.includes('character reference') ||
       data.error.includes('provided character') ||
       data.error.includes('cannot generate an image based on')
     );
-    if (!isRefError) throw new Error(data.error || `Image proxy ${res.status}`);
-    console.warn('Ref rechazada por Gemini — reintentando sin refs:', data.error);
+    if (isRefError && refs?.length) {
+      throw new Error('Gemini rechazó una referencia de personaje. La tanda NO generó esta toma sin referencias para no cambiar la identidad. Regenera la referencia o este plano manualmente.');
+    }
+    throw new Error(data.error || `Image proxy ${res.status}`);
   }
 
-  // Attempt 2: without refs (fallback)
-  const res2 = await fetch('/api/image', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt: cleanPrompt,
-      characterRefs: null,
-      model: model === 'auto' ? null : model,
-      isEcchi,
-      aspectRatio,
-      styleSpec: estiloCore(),
-      desdeNarracion: env.desdeNarracion === true,
-    }),
-  });
-  const data2 = await res2.json();
-  if (!res2.ok || data2.error) throw new Error(data2.error || `Image proxy ${res2.status}`);
-  if (!data2.imageData) throw new Error('Imagen: respuesta sin datos');
-  avisarRescate(data2);
-  return data2.imageData;
+  throw new Error('Imagen: no se pudo generar con las referencias requeridas.');
 }
 
 document.getElementById('btnAllAudio').addEventListener('click', async () => {
