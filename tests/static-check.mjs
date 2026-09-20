@@ -71,6 +71,12 @@ const required = [
   ['generationDrafts', 'reanudación persistente para cualquier duración'],
   ['sceneVidOpKeyBy', 'reanudación de operaciones Veo en curso'],
   ['creativeVersion', 'versionado compatible de proyectos'],
+  ['VIRAL_REFERENCE_FORMULAS', 'biblioteca de fórmulas virales de referencia'],
+  ['seleccionarFormulaViral', 'selección de fórmula viral por concepto/género'],
+  ['formulaBeatForPart', 'hitos virales distribuidos por bloque'],
+  ['FÓRMULA VIRAL DE REFERENCIA', 'contrato viral inyectado en el guion'],
+  ['v: 4, epNum', 'borrador versionado para no reutilizar guiones anteriores'],
+  ['temperature: 0.55', 'menor deriva creativa en el guion largo'],
   ['cloudSaveProject', 'estado permanente de proyectos en GCS'],
   ['migrateThisBrowserToCloud', 'migración automática del primer almacenamiento local'],
   ['refreshProjectsFromCloud', 'lista de proyectos reconstruida desde el bucket'],
@@ -114,6 +120,14 @@ else ok('Paneos de montaje expanden el conteo de fotogramas');
 if (/Facebook Reels/i.test(html)) fail('El motor largo todavía contiene reglas editoriales de Facebook Reels');
 else ok('El motor largo no hereda reglas de Facebook Reels');
 
+if (/Crea un universo ORIGINAL y único|No añadas arquetipos virales|sin insertar personajes de fórmula/.test(html)) {
+  fail('Persisten instrucciones que alejan el guion de las fórmulas virales');
+} else ok('No quedan instrucciones de originalidad que contradigan las referencias');
+
+if (!/la originalidad NO es un objetivo/i.test(html) || !/no lo alejes para "hacerlo diferente"/i.test(html)) {
+  fail('La prioridad de fórmula probada no quedó explícita');
+} else ok('La fórmula probada tiene prioridad explícita sobre la originalidad');
+
 if (/REGLAS DE PERSONAJES FEMENINOS/.test(html)) fail('Persisten reglas de apariencia femenina de fórmula');
 else ok('El reparto no usa un molde femenino obligatorio');
 
@@ -125,6 +139,11 @@ else ok('Fan service del servidor es situacional, no obligatorio por fotograma')
 if (!/immediately preceding physical state/.test(imageApi) || !/camera cut changes framing, NOT reality/i.test(imageApi)) {
   fail('api/image.js no conserva el estado físico entre planos');
 } else ok('La referencia anterior conserva estado físico, no sólo estilo');
+
+const scriptApi = fs.readFileSync('api/script.js','utf8');
+if (!/maxOutputTokens/.test(scriptApi) || !/Number\(temperature\)/.test(scriptApi)) {
+  fail('api/script.js no acepta controles de temperatura/tokens');
+} else ok('El generador de texto permite fijar menor temperatura para seguir la fórmula');
 
 const gcp = fs.readFileSync('api/_lib/gcp.js','utf8');
 const setup = fs.readFileSync('setup.sh','utf8');
