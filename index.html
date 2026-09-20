@@ -2000,9 +2000,9 @@ document.getElementById('btnProjects').addEventListener('click', openProjectsMod
 // ════════════════════════════════════════════════════════════════
 // GEMINI TEXT API (via /api/script → Vertex AI, gemini-3.1-pro-preview)
 // ════════════════════════════════════════════════════════════════
-async function callGemini(prompt, system) {
+async function callGeminiOnce(prompt, system) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 90000); // 90 sec max
+  const timeout = setTimeout(() => controller.abort(), 85000);
   let res;
   try {
     res = await fetch('/api/script', {
@@ -2016,14 +2016,11 @@ async function callGemini(prompt, system) {
     });
   } catch(e) {
     clearTimeout(timeout);
-    if (e.name === 'AbortError') throw new Error('Tiempo de espera agotado (90 seg). El servidor tardó demasiado — intenta de nuevo.');
+    if (e.name === 'AbortError') throw new Error('Tiempo de espera agotado al generar texto.');
     throw new Error('Fallo de red al contactar /api/script: ' + (e.message || e.name));
   }
   clearTimeout(timeout);
-  // Read the body as TEXT first. If /api/script returns something that isn't
-  // JSON (a Vercel function-timeout page, a crash, a truncated body, an empty
-  // response), this surfaces the HTTP status and the actual body instead of an
-  // opaque "res.json() failed" exception — so the real cause is visible.
+
   const rawText = await res.text();
   let data;
   try {
@@ -2033,6 +2030,40 @@ async function callGemini(prompt, system) {
   }
   if (!res.ok || data.error) throw new Error(data.error || `Script API ${res.status}`);
   return data.text;
+}
+
+async function callGemini(prompt, system) {
+  // Text generation uses one shared resilience policy. A Vertex 429 is Google's
+  // project/model quota, not a Vercel rate limit. We wait and retry the SAME
+  // request instead of returning a partial episode that later needs "repair".
+  const quotaWaits = [20, 45, 90, 150, 240];
+  const transientWaits = [4, 8, 16];
+  let quotaAttempt = 0, transientAttempt = 0;
+
+  for (;;) {
+    try {
+      return await callGeminiOnce(prompt, system);
+    } catch(e) {
+      const msg = String(e?.message || '');
+      const quota = /\b429\b|resource_exhausted|exhausted|quota|rate.?limit|sin capacidad/i.test(msg);
+      const transient = /\b5\d\d\b|timeout|tiempo de espera|network|red al contactar|respuesta no-json/i.test(msg);
+
+      if (quota && quotaAttempt < quotaWaits.length) {
+        const secs = quotaWaits[quotaAttempt++];
+        console.warn(`Vertex AI quota: esperando ${secs}s antes de reintentar texto`);
+        showToast(`⏳ Google alcanzó la cuota temporal. Reanudando en ${secs}s…`, 'error');
+        await new Promise(r => setTimeout(r, secs * 1000));
+        continue;
+      }
+      if (transient && transientAttempt < transientWaits.length) {
+        const secs = transientWaits[transientAttempt++];
+        console.warn(`Texto: error transitorio; reintento en ${secs}s — ${msg}`);
+        await new Promise(r => setTimeout(r, secs * 1000));
+        continue;
+      }
+      throw e;
+    }
+  }
 }
 
 function safeParseJSON(raw) {
