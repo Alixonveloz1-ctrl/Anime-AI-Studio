@@ -5551,7 +5551,10 @@ async function generarAudioDeEscena(s) {
     const line = interventions[i];
     const voice = vozParaIntervencion(line);
     const a = await generateAudio(line.text, voice, s.act);
-    entries.push({ idx:i, data:a.audioData, mime:a.mimeType || 'audio/wav' });
+    const gapAfter = line.type === 'system' ? 0.16
+      : line.type === 'thought' ? 0.13
+      : line.type === 'dialogue' ? 0.11 : 0.08;
+    entries.push({ idx:i, data:a.audioData, mime:a.mimeType || 'audio/wav', gapAfter });
   }
   const { wav } = await combineAudiosToWav(entries);
   return { audioData: bytesToBase64(wav), mimeType:'audio/wav' };
@@ -7529,7 +7532,7 @@ async function combineAudiosToWav(audioEntries, progressCb) {
       const arrBuf = base64ToArrayBuffer(entry.data);
       // decodeAudioData mutates the buffer in some implementations — clone
       const buf = await ctx.decodeAudioData(arrBuf.slice(0));
-      decoded.push({ buf, idx: entry.idx });
+      decoded.push({ buf, idx: entry.idx, gapAfter: Number.isFinite(Number(entry.gapAfter)) ? Math.max(0, Math.min(0.5, Number(entry.gapAfter))) : 0.05 });
       if (buf.sampleRate > maxSampleRate) maxSampleRate = buf.sampleRate;
       if (buf.numberOfChannels > maxChannels) maxChannels = buf.numberOfChannels;
     } catch(e) {
@@ -7540,9 +7543,10 @@ async function combineAudiosToWav(audioEntries, progressCb) {
 
   if (!decoded.length) throw new Error('Ningún audio se pudo decodificar');
 
-  // Minimal silence between scenes — 0.05s, just enough to avoid abrupt cuts
-  const silenceFrames = Math.floor(maxSampleRate * 0.05);
-  const totalFrames = decoded.reduce((sum, d) => sum + d.buf.length, 0) + silenceFrames * (decoded.length - 1);
+  // Each entry may request a tiny conversational pause. Legacy callers keep
+  // the old 0.05 s default; cast dialogue uses 0.08–0.16 s depending on role.
+  const totalFrames = decoded.reduce((sum, d, i) =>
+    sum + d.buf.length + (i < decoded.length - 1 ? Math.floor(maxSampleRate * d.gapAfter) : 0), 0);
 
   const offline = new OfflineAudioContext(maxChannels, totalFrames, maxSampleRate);
   let cursor = 0;
@@ -7557,7 +7561,7 @@ async function combineAudiosToWav(audioEntries, progressCb) {
     src.start(startSec);
     const endSec = (cursor + buf.length) / maxSampleRate;
     offsets.push({ idx: decoded[i].idx, start: startSec, end: endSec });
-    cursor += buf.length + silenceFrames;
+    cursor += buf.length + (i < decoded.length - 1 ? Math.floor(maxSampleRate * decoded[i].gapAfter) : 0);
   }
 
   const rendered = await offline.startRendering();
