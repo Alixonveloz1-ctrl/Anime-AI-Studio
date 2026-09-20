@@ -4305,16 +4305,14 @@ La narración de una escena suele durar decenas de segundos. La imagen no puede 
 - CÁMARA LIBRE EN EL LUGAR: a lo largo del episodio mostrá el MISMO lugar desde posiciones y ángulos DIFERENTES (desde la puerta, desde la ventana, ángulo bajo, over-shoulder, rincones distintos) — no repitas siempre el mismo encuadre del escenario.
 - VESTIMENTA FIEL AL MOMENTO: usa la prenda ACTUAL que corresponde a esta escena y conserva su material/condición entre planos. La ficha fija identidad, no obliga a llevar siempre la ropa de la primera referencia.
 
-⚠️ DECISIÓN 3 — MOVIMIENTO LIMITADO DE ANIME / MOTION COMIC:
-Para cada plano devuelve "tiposMovimiento": "still" | "limited" | "action".
-- still: ilustración fuerte que funcionará con corte, paneo o zoom de montaje. Conversaciones, miradas, reacciones, exposición y muchos planos de romance entran aquí.
-- limited: necesita vida mínima (parpadeo, boca sencilla, respiración, cabello/ropa, pequeño gesto) pero NO desplazamiento corporal complejo.
-- action: el acontecimiento pierde claridad si no se mueve: golpe, caída, transformación, carrera corta, objeto lanzado, efecto de poder, acción física decisiva.
-NO marques "action" por espectáculo. La mayoría de una historia larga debe poder sostenerse con still/limited, como motion anime.
+⚠️ DECISIÓN 3 — ¿ESTE PLANO MERECE VIDEO?
+Para CADA plano devuelve "videoRecomendado": true | false.
+- true cuando el movimiento aporta información o actuación que una ilustración con paneo/zoom no puede comunicar bien: golpe, caída, transformación, entrada/salida física importante, carrera, interacción compleja con un objeto, poder en acción, gesto corporal decisivo o actuación facial/corporal que sea el centro del beat.
+- false cuando una ilustración fuerte con un movimiento de cámara visible durante el montaje funciona bien: exposición, reacción, conversación estable, mirada, detalle, establecimiento del lugar o pose sostenida.
+No ahorres video artificialmente y tampoco lo marques por espectáculo: decide por función narrativa. El usuario puede generar manualmente un clip incluso cuando tú marques false; si ese clip existe, el montaje lo usará.
 
-Campo "movimientos": describe en INGLÉS únicamente el movimiento pequeño que Veo debe hacer SI ese plano se anima. El primer fotograma ya fija cámara, diseño, luz y escenario.
-- Nada de órbitas 3D, cámaras flotantes, transformación de perspectiva, movimientos de videojuego ni inventar acciones.
-- "limited" = un gesto y se aquieta. "action" = una acción clara, corta y legible.
+Campo "movimientos": describe en INGLÉS qué debe hacer Veo SI se genera video para ese plano. Debe ser una acción corta y clara que conserve el dibujo japonés 2D.
+- Nada de órbitas 3D, cámaras flotantes, transformación de perspectiva, movimientos de videojuego ni acciones inventadas.
 - Los CORTES son la norma. Devuelve "continuos": true únicamente cuando el plano N debe transformarse físicamente en el plano N+1 dentro de la MISMA acción continua. Si son dos ángulos de una conversación, es false.
 - El último plano siempre tiene continuo=false.
 - Devuelve "continuarAnterior": true sólo si el primer plano de esta escena debe usar el ÚLTIMO fotograma de la escena inmediatamente anterior como ancla física. No lo uses sólo porque el escenario se repite.
@@ -4369,7 +4367,7 @@ Responde SOLO JSON válido sin markdown`;
     function aplicarPlanos(s, p) {
       const [a, b, c] = p?.prompts || [];
       const [ma, mb, mc] = p?.movimientos || [];
-      const [ta, tb, tc] = p?.tiposMovimiento || [];
+      const [va, vb, vc] = p?.videoRecomendado || [];
       const [ca, cb, cc] = p?.continuos || [];
       // Long-form coverage is edited by CUTS. Repeating a medium or close shot
       // is perfectly valid when the dramatic function demands it; forcing an
@@ -4384,9 +4382,13 @@ Responde SOLO JSON válido sin markdown`;
         imagePromptA: a || '', imagePromptB: b || '', imagePromptC: c || '',
         tamanoA: a ? tam(0) : '', tamanoB: b ? tam(1) : '', tamanoC: c ? tam(2) : '',
         videoPromptA: ma || '', videoPromptB: mb || '', videoPromptC: mc || '',
-        motionA: a ? (['still','limited','action'].includes(ta) ? ta : 'still') : '',
-        motionB: b ? (['still','limited','action'].includes(tb) ? tb : 'still') : '',
-        motionC: c ? (['still','limited','action'].includes(tc) ? tc : 'still') : '',
+        videoRecommendedA: !!(a && va === true),
+        videoRecommendedB: !!(b && vb === true),
+        videoRecommendedC: !!(c && vc === true),
+        // Keep legacy motion fields so old UI/state helpers stay compatible.
+        motionA: a ? (va === true ? 'action' : 'still') : '',
+        motionB: b ? (vb === true ? 'action' : 'still') : '',
+        motionC: c ? (vc === true ? 'action' : 'still') : '',
         sueltoPlanoA: ca !== true, sueltoPlanoB: cb !== true, sueltoPlanoC: true,
         continuarAnterior: p?.continuarAnterior === true,
       };
