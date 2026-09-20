@@ -3493,17 +3493,10 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
   if (!state.universe) { showToast('Crea un universo primero', 'error'); return; }
   const epNum = state.currentEpisode || 1;   // ← define early, used throughout
 
-  // Regenerating writes a NEW story over the same scene ids, so the old
-  // episode's images, voices, clips and music would stay attached to it — new
-  // narration under old pictures. Say so before starting, and clear them once
-  // the new scenes exist (not before: a failed generation must lose nothing).
+  // Old material is kept until the NEW story is completely ready. The warning
+  // is deferred until we know whether Safari is simply resuming an interrupted
+  // long-form draft; resuming must never ask to delete/restart paid work.
   const materialViejo = await materialDelEpisodio();
-  if (materialViejo.length && !confirm(
-      `El Episodio ${epNum} ya tiene ${materialViejo.length} archivo(s) generados ` +
-      `(imágenes, voces, videos y música).\n\n` +
-      `Volver a generarlo escribe una historia distinta, así que ese material dejaría de ` +
-      `corresponderle y se borrará.\n\n` +
-      `El universo, los personajes y sus imágenes NO se tocan.\n\n¿Seguir?`)) return;
 
   const btn = document.getElementById('btnGenerarEpisodio');
   const progress = document.getElementById('epProgress');
@@ -3787,7 +3780,7 @@ TONO DEL GÉNERO:
 ${genreTone}
 Los personajes sirven al género "${genero}" y al concepto aprobado: tienen deseos, contradicciones, relaciones y función causal en la trama. No añadas arquetipos virales ni roles de fórmula que el concepto no pida.`;
 
-    if (epNum === 1 || !state.characters?.length) {
+    if (!state.characters?.length) {
       setProg(5, 'Paso 1/5: Creando personajes...');
 
       let numChars, numFemales, numMales, protagonistGender;
@@ -3951,6 +3944,39 @@ Responde SOLO JSON válido sin markdown.`;
     const charRefShort = state.characters.map(c => c.name).join(', ');
 
     const charVoiceMap = state.characters.map(ch => `${ch.id} = ${ch.name}`).join('\n');
+
+    // ─── Resumable long-form draft ───────────────────────────────
+    // A 60–90 minute story requires many sequential model calls. Mobile Safari
+    // may suspend or reload while they run, so every paid block is persisted.
+    // Pressing Generate again resumes from the first missing block.
+    const episodeInstructionsNow = document.getElementById('episodeInstructions')?.value.trim() || '';
+    const draftSignature = JSON.stringify({
+      v: 2, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
+      storyMode, endingMode, instructions: episodeInstructionsNow,
+      title: u.title || '', concept: u.concepto || '', conflict: u.conflicto || '',
+      chars: state.characters.map(ch => [ch.id, ch.name, ch.role, ch.age])
+    });
+    if (!u.longformDrafts || typeof u.longformDrafts !== 'object') u.longformDrafts = {};
+    let longDraft = u.longformDrafts[epNum];
+    if (!longDraft || longDraft.signature !== draftSignature) {
+      longDraft = {
+        signature: draftSignature, storyParts: [], sceneChunks: [], visualChunks: [],
+        createdAt: Date.now(), updatedAt: Date.now()
+      };
+      u.longformDrafts[epNum] = longDraft;
+      saveState();
+    }
+    const resumingLongDraft = (longDraft.storyParts?.length || longDraft.sceneChunks?.length || longDraft.visualChunks?.length) > 0;
+    if (resumingLongDraft) {
+      showToast(`Reanudando historia: ${longDraft.storyParts?.length || 0}/${fmt.parts} bloques escritos`, 'success');
+    } else if (materialViejo.length && !confirm(
+      `El Episodio ${epNum} ya tiene ${materialViejo.length} archivo(s) generados (imágenes, voces, videos y música).\n\n` +
+      `Generar una historia nueva hará que ese material deje de corresponderle y se borrará SÓLO cuando la historia nueva termine correctamente.\n\n` +
+      `El universo, los personajes y sus referencias NO se tocan.\n\n¿Seguir?`)) {
+      delete u.longformDrafts[epNum];
+      saveState();
+      return;
+    }
     const narrationShape = storyMode === 'cast'
       ? `{"id":"s1","num":1,"title":"título corto","narration":"texto legible de la escena","interventions":[{"type":"narrator|dialogue|thought|system","speakerId":"narrator|system|ID_DEL_PERSONAJE","text":"texto que se pronuncia"}]}`
       : `{"id":"s1","num":1,"title":"título corto","narration":"fragmento completo y natural de la historia"}`;
@@ -3993,11 +4019,17 @@ Responde SOLO JSON válido sin markdown.`;
     async function generateFullStory(baseCtx) {
       const briefs = buildLongformPartBriefs(fmt.parts, endingMode === 'complete');
       const perPart = Math.round(wordTarget.total / fmt.parts);
-      const partsOut = [];
+      const partsOut = Array.isArray(longDraft.storyParts)
+        ? longDraft.storyParts.slice(0, briefs.length).map(x => String(x || '').trim())
+        : [];
 
       for (let i = 0; i < briefs.length; i++) {
+        if (partsOut[i]) {
+          if (fmt.parts > 1) setProg(30 + Math.round(((i + 1) / briefs.length) * 12), `Paso 2/5: Bloque ${i + 1}/${briefs.length} recuperado`);
+          continue;
+        }
         if (fmt.parts > 1) setProg(30 + Math.round((i / briefs.length) * 12), `Paso 2/5: Escribiendo bloque ${i + 1}/${briefs.length}...`);
-        const soFar = partsOut.join('\n\n');
+        const soFar = partsOut.slice(0, i).join('\n\n');
         const prompt = `${baseCtx}
 
 ${soFar ? `═══ HISTORIA YA ESCRITA — CANON INMEDIATO (CONTINÚA; NO RESUMAS NI REPITAS) ═══
@@ -4010,7 +4042,10 @@ ${i > 0 ? 'Comienza exactamente después de la última acción/decisión previa.
 ${i < briefs.length - 1 ? 'Este bloque NO es el final. Déjalo avanzar hacia el siguiente sin un cliffhanger artificial interno.' : ''}
 
 Devuelve SOLO {"story":"..."}.`;
-        partsOut.push(await generateStoryPart(prompt, Math.round(perPart * 0.72)));
+        partsOut[i] = await generateStoryPart(prompt, Math.round(perPart * 0.72));
+        longDraft.storyParts = partsOut.slice();
+        longDraft.updatedAt = Date.now();
+        saveState();
       }
       return { story: partsOut.join('\n\n'), parts: partsOut };
     }
@@ -4097,10 +4132,20 @@ Responde SOLO JSON válido.`;
 
     async function splitStoryIntoScenes(storyParts) {
       const scenes=[]; let num=1;
+      if (!Array.isArray(longDraft.sceneChunks)) longDraft.sceneChunks = [];
       for (let i=0; i<storyParts.length; i++) {
         const wanted=scenesInPart(i, storyParts.length, fmt.scenes);
         setProg(45 + Math.round((i / storyParts.length) * 12), `Paso 3/5: Organizando escenas ${i + 1}/${storyParts.length}...`);
-        const chunk=await splitStoryPart(storyParts[i], wanted, num);
+        let chunk = null;
+        const cached = longDraft.sceneChunks[i];
+        if (cached?.wanted === wanted && Array.isArray(cached.scenes) && cached.scenes.length === wanted) {
+          chunk = cached.scenes;
+        } else {
+          chunk = await splitStoryPart(storyParts[i], wanted, num);
+          longDraft.sceneChunks[i] = { wanted, scenes: chunk };
+          longDraft.updatedAt = Date.now();
+          saveState();
+        }
         scenes.push(...chunk); num += wanted;
       }
       return scenes.slice(0, fmt.scenes).map((s,i)=>({ ...s, id:`s${i+1}`, num:i+1, act:actForIndex(i, fmt.scenes) }));
@@ -4295,18 +4340,28 @@ Responde SOLO JSON válido sin markdown`;
     if (scenesNoImg.some(s => s.narration)) {
       scenes = [];
       let prevContext = '';
+      if (!Array.isArray(longDraft.visualChunks)) longDraft.visualChunks = [];
       for (let i = 0; i < scenesNoImg.length; i += 5) {
+        const chunkIndex = Math.floor(i / 5);
         const chunk = scenesNoImg.slice(i, i + 5);
         setProg(70 + Math.round((i / scenesNoImg.length) * 25), `Paso 5/5: Descripciones visuales ${Math.min(i + 5, scenesNoImg.length)}/${scenesNoImg.length}...`);
-        const done = await generateImagePromptsBatch(chunk, prevContext);
-        // The art director reviews what the DP just wrote, before it reaches the
-        // state. One text call per chunk of 5 scenes, and it never blocks: if the
-        // review fails, the shots go through unrevised.
-        const { correcciones } = await revisarPlanos(done);
-        if (correcciones.length) console.log('Puesta en escena corregida:', aplicarCorrecciones(done, correcciones).motivos);
+        let done = null;
+        const cachedVisual = longDraft.visualChunks[chunkIndex];
+        const expectedNums = chunk.map(s => s.num).join(',');
+        if (cachedVisual?.nums === expectedNums && Array.isArray(cachedVisual.scenes) && cachedVisual.scenes.length === chunk.length) {
+          done = cachedVisual.scenes;
+        } else {
+          done = await generateImagePromptsBatch(chunk, prevContext);
+          // The art director reviews what the DP just wrote before it is cached.
+          const { correcciones } = await revisarPlanos(done);
+          if (correcciones.length) console.log('Puesta en escena corregida:', aplicarCorrecciones(done, correcciones).motivos);
+          longDraft.visualChunks[chunkIndex] = { nums: expectedNums, scenes: done };
+          longDraft.updatedAt = Date.now();
+          saveState();
+        }
         scenes.push(...done);
-        // Chain continuity into the next chunk: last scene's narration,
-        // assigned scenario and closing prompt
+        // Chain context into the next chunk: this is editorial context, not an
+        // automatic continuity reference.
         const last = done[done.length - 1];
         if (last) {
           prevContext = `Escena ${last.num} (escenario: ${last.escenario || 'nuevo lugar descrito en el prompt'}): ${last.narration}\nEstado visual final para coherencia: ${last.imagePromptC || last.imagePromptB || last.imagePromptA || '(sin prompt)'}\nIMPORTANTE: la escena siguiente empieza con un CORTE salvo que su propia acción exija continuar físicamente este instante.`;
@@ -4327,6 +4382,7 @@ Responde SOLO JSON válido sin markdown`;
 
     state.scenes = scenes;
     state.episodes[epNum] = scenes;
+    if (u.longformDrafts) delete u.longformDrafts[epNum];
     saveState();
     renderScenes();
     renderScenarios();
@@ -4348,7 +4404,8 @@ Responde SOLO JSON válido sin markdown`;
     if (nci) nci.value = '';
 
   } catch(e) {
-    openErrorModal('Error generando episodio', e.message);
+    saveState();
+    openErrorModal('Generación pausada', `${e.message}\n\nEl progreso de la historia larga quedó guardado. Pulsa “Generar Episodio” otra vez para reanudar desde el último bloque completado.`);
     progress.style.display = 'none';
   } finally {
     btn.disabled = false;
