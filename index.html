@@ -2715,6 +2715,19 @@ function llenarEstilos() {
 function restaurarAjustes() {
   llenarEstilos();
   const datos = ajustesGuardados();
+  // One-time creative migration: old installs remember the previous rendering
+  // choices in localStorage, so changing a default in code alone would appear
+  // to do nothing on the same iPhone.
+  const migrationKey = 'anime_studio_creative_v2';
+  if (!localStorage.getItem(migrationKey)) {
+    datos.estiloAnime = 'japon_2d';
+    datos.aspectRatio = '16:9';
+    datos.motionProfileSelect = 'motion_comic';
+    try {
+      localStorage.setItem(AJUSTES_KEY, JSON.stringify(datos));
+      localStorage.setItem(migrationKey, '1');
+    } catch (_) {}
+  }
   for (const id of CAMPOS_AJUSTE) aplicarAjuste(id, datos[id]);
   // Las etiquetas de los deslizadores no se actualizan solas al cambiar .value.
   const vel = document.getElementById('voiceSpeed');
@@ -3778,11 +3791,11 @@ Las reglas de ropa/vestimenta de más abajo NO aplican a este personaje — solo
 
 🚫 PROHIBIDO INVENTAR MÁS PERSONAJES NO-HUMANOS: si el concepto solo describe UN personaje como no-humano (ej: solo el protagonista es un perro), TODOS los demás personajes (ex parejas, familiares, vecinos, figuras de autoridad, etc.) DEBEN ser humanos normales — sin excepción, aunque parezca "consistente" con el tono de la historia inventar otro personaje no-humano. No agregues gatos parlantes, mascotas con poderes, ni ninguna otra criatura no mencionada explícitamente en el concepto. Un mundo con UN personaje no-humano no significa que el mundo entero tenga animales que hablan — sigue siendo el mundo real, con UNA excepción puntual.
 
-REGLAS DE PERSONAJES FEMENINOS (TODOS los géneros humanos):
-- Cabello LARGO obligatorio (hasta los hombros o más largo). Nunca corto tipo bob/pixie.
-- Figura femenina atractiva y bien proporcionada: cintura definida, esbelta, elegante.
-- Piel limpia, sin cicatrices, sin heridas, sin ojeras pronunciadas
-- Ropa adecuada al rol pero femenina
+DISEÑO DE PERSONAJES HUMANOS:
+- Cada personaje necesita una SILUETA reconocible y distinta: altura, complexión, peinado, expresión habitual y manera de vestir coherentes con su edad, oficio y personalidad.
+- Las mujeres NO comparten un molde obligatorio: cabello corto, bob, recogido, medio o largo son válidos cuando sirven al personaje. Lo mismo con complexiones y rasgos faciales.
+- Rostros claramente adultos cuando corresponde, con variedad real. No conviertas a todo el elenco en modelos perfectos ni borres cicatrices, cansancio o marcas si la historia las justifica.
+- La ropa identifica función y estatus antes que atractivo. Cada personaje debe poder reconocerse por su diseño general, no sólo por el color del cabello.
 
 REGLAS DE VESTIMENTA PARA PERSONAJES HUMANOS (OBLIGATORIO):
 - La ropa DEBE ser coherente con la ÉPOCA del setting y con la CONDICIÓN ECONÓMICA de cada personaje según el concepto — cada personaje según SU estatus, no todos iguales. Describir SIEMPRE: prenda + material + color + CONDICIÓN.
@@ -3792,14 +3805,12 @@ REGLAS DE VESTIMENTA PARA PERSONAJES HUMANOS (OBLIGATORIO):
 - El desgaste, cuando aplica, es DIGNO al estilo anime/donghua: parches limpios, tela desteñida, bordes gastados — la ropa siempre bien puesta y entera en silueta; nada de harapos grotescos ni suciedad exagerada.
 - PROHIBIDO el default de lujo: nunca seda, telas finas ni ropa "impecable" en personajes cuya historia dice que son pobres.
 
-${isEcchi ? `MODIFICADOR ECCHI ACTIVO — REGLAS DE APARIENCIA (solo personajes humanos):
-- Personajes ADULTOS con rostro y cuerpo claramente adultos, en contextos adultos acordes al género y setting de la historia. Cada personaje tiene su PROPIA edad adulta asignada según su rol en la historia (18 años en adelante), con variedad real entre personajes — no les pongas a todos la misma edad. NUNCA colegiales/estudiantes de secundaria, NUNCA menores, NUNCA uniformes escolares, faldas plisadas de colegio ni ambientes de instituto/aula.
-- Personajes femeninos adultos con figuras atractivas y sensuales estilo ecchi anime: "graceful hourglass silhouette", "long slender legs", "delicate collarbone", "slim waist", "voluptuous figure", "curvy silhouette"
-- Personajes masculinos adultos atractivos estilo anime (especialmente en harem inverso): "tall athletic build", "broad shoulders", "toned physique", "sharp jawline", ropa que marca la figura (camisa entallada, traje ajustado)
-- Ropa fan service típica del género: vestido corto entallado, traje de baño, pijama corto, lencería anime (encajes, lazos), ropa deportiva ajustada, ropa de oficina entallada
-- Vocabulario que funciona con Gemini: "form-fitting dress", "fitted sports outfit", "swimsuit", "lace-trim sleepwear", "attractive silhouette", "sensual pose"
-- NO usar en appearance: "naked", "nude", "explicit", "nipples", "genitals" — sin desnudez explícita, todo lo demás (sensual, sugerente, provocativo) está permitido
-- SIEMPRE especificar la edad: cada personaje una edad adulta propia según su rol (de veintitantos en adelante), siempre claramente adultos, nunca adolescentes ni colegiales` : `- Descripción de apariencia libre y natural — sin restricciones artificiales de vocabulario, mientras sea apropiado para el género y tono elegidos`}
+${isEcchi ? `MODIFICADOR ECCHI ACTIVO — DISEÑO ADULTO:
+- TODOS los personajes sexualizados son adultos de 18 años o más y se ven claramente adultos. Nunca secundaria/colegio ni uniformes asociados a menores.
+- El atractivo sale del DISEÑO, actitud, vestuario y situación; no escribas un inventario de partes del cuerpo ni clones la misma figura en todas las mujeres.
+- Da a cada adulto una apariencia propia y reconocible. Vestuario sugerente sólo cuando encaja con oficio, lugar y escena: vestido de noche, traje de baño, ropa deportiva, ropa de dormir o ropa de trabajo estilizada, según corresponda.
+- Mantén proporciones anatómicas coherentes y poses naturales. Evita descripciones que empujen a un render sexualizado genérico o a anatomía exagerada.
+- En appearance no uses desnudez explícita ni partes íntimas. Especifica siempre una edad adulta coherente con el rol.` : `- Descripción de apariencia libre, específica y coherente con edad, rol, época y personalidad.`}
 
 ${allAges
   ? '- Edad (Kodomomuke): edades apropiadas para una historia infantil — el protagonista puede ser un niño o preadolescente. Especificar edad en la descripción. SIN contenido romántico, SIN contenido sugerente, SIN violencia explícita.'
