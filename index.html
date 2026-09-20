@@ -324,7 +324,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-20.114 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-20.115 🎬</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -2750,16 +2750,11 @@ function speedLabel(v) {
 // the gemini_* voices, Cloud TTS Neural2/WaveNet for the gcp_* voices. Both go
 // through /api/audio, which authenticates with the single GCP_SERVICE_ACCOUNT.
 // ════════════════════════════════════════════════════════════════
-// VOCES — Chirp 3: HD
+// VOCES — Chirp 3: HD + Gemini TTS
 //
-// Only Chirp. Gemini TTS re-performs on every call, so across an episode the
-// narrator changes register and even timbre from scene to scene, and no amount
-// of direction fixes that. Neural2/WaveNet hold steady but read like a machine.
-// Chirp is the one that stays the same person from start to finish.
-//
-// The list is NOT written here: it is asked of Google. A hand-written list is
-// how the app came to offer "Perseus", which does not exist, and only four Chirp
-// voices when the project has many more.
+// Chirp remains the stable long-form option. Gemini TTS is also exposed because
+// it offers a different expressive voice palette and the backend already knows
+// how to synthesize it. The selected voice prefix decides the engine.
 // ════════════════════════════════════════════════════════════════
 const NOMBRE_IDIOMA = {
   'es-US': 'Español · Latinoamérica', 'es-ES': 'Español · España',
@@ -2785,10 +2780,11 @@ async function cargarVoces() {
     const d = await r.json();
     if (!r.ok || d.error) throw new Error((d.error || r.status) + (d.hint ? ` — ${d.hint}` : ''));
 
-    // Chirp 3: HD if the project has it; otherwise everything, rather than an
-    // empty menu the user cannot act on.
-    const chirp = (d.voices || []).filter(v => v.familia === 'chirp3hd');
-    VOCES_DISPONIBLES = chirp.length ? chirp : (d.voices || []);
+    const all = d.voices || [];
+    const chirp = all.filter(v => v.familia === 'chirp3hd');
+    const gemini = all.filter(v => v.familia === 'gemini');
+    VOCES_DISPONIBLES = [...chirp, ...gemini];
+    if (!VOCES_DISPONIBLES.length) VOCES_DISPONIBLES = all;
     if (!VOCES_DISPONIBLES.length) throw new Error('el proyecto no tiene ninguna voz disponible');
 
     const idiomas = [...new Set(VOCES_DISPONIBLES.map(v => v.lang))];
@@ -2796,6 +2792,7 @@ async function cargarVoces() {
     selLang.innerHTML = idiomas.map(l => `<option value="${l}">${NOMBRE_IDIOMA[l] || l}</option>`).join('');
     selLang.value = idiomas.includes(previo) ? previo : (idiomas.includes('es-US') ? 'es-US' : idiomas[0]);
     HAY_CHIRP = chirp.length > 0;
+    HAY_GEMINI = gemini.length > 0;
     pintarVocesDelIdioma();
   } catch (e) {
     if (nota) nota.innerHTML = `⚠️ No se pudo cargar la lista de voces: ${e.message}`;
@@ -2803,6 +2800,7 @@ async function cargarVoces() {
 }
 
 let HAY_CHIRP = true;
+let HAY_GEMINI = true;
 
 // Google normally reports the gender of each voice and that is what gets used.
 // This table only fills the gap when the API answers UNSPECIFIED, so the menu
@@ -2825,7 +2823,10 @@ function generoDeVoz(v) {
   return GENERO_POR_NOMBRE[String(v.etiqueta || '').toLowerCase()] || null;
 }
 
-function vozValor(v) { return v ? `gcp_${v.name}` : ''; }
+function vozValor(v) {
+  if (!v) return '';
+  return v.familia === 'gemini' ? `gemini_${v.name}` : `gcp_${v.name}`;
+}
 
 function vozAutomaticaPara(gender, usados = new Set()) {
   const lang = document.getElementById('voiceLang')?.value || 'es-US';
@@ -2893,33 +2894,42 @@ function pintarVocesDelIdioma() {
     ['otra',   '❔ Sin clasificar'],
   ];
   selVoz.innerHTML = bloques.map(([g, titulo]) => {
-    const vs = dellang.filter(v => grupo(v) === g).sort((a, b) => a.etiqueta.localeCompare(b.etiqueta));
+    const vs = dellang.filter(v => grupo(v) === g).sort((a, b) => {
+      if (a.familia !== b.familia) return a.familia === 'chirp3hd' ? -1 : 1;
+      return a.etiqueta.localeCompare(b.etiqueta);
+    });
     if (!vs.length) return '';
     return `<optgroup label="${titulo} (${vs.length})">`
-      + vs.map(v => `<option value="gcp_${v.name}">${v.etiqueta}</option>`).join('')
+      + vs.map(v => {
+          const motor = v.familia === 'gemini' ? 'Gemini' : v.familia === 'chirp3hd' ? 'Chirp 3 HD' : v.familia;
+          return `<option value="${vozValor(v)}">${motor} · ${v.etiqueta}</option>`;
+        }).join('')
       + '</optgroup>';
   }).join('');
   // Keep the chosen personality when switching language: "Charon" in es-US and
   // "Charon" in es-ES are the same voice reading another language.
-  const mismaPersona = previo && VOCES_DISPONIBLES.find(v => `gcp_${v.name}` === previo);
-  const enEsteIdioma = mismaPersona && dellang.find(v => v.etiqueta === mismaPersona.etiqueta);
+  const mismaPersona = previo && VOCES_DISPONIBLES.find(v => vozValor(v) === previo);
+  const enEsteIdioma = mismaPersona && dellang.find(v => v.etiqueta === mismaPersona.etiqueta && v.familia === mismaPersona.familia);
   // La voz elegida la última vez manda, si existe en este idioma. Va primero
   // porque la lista llega de la red DESPUÉS de restaurar los ajustes: cuando se
   // restauran, el menú todavía sólo tiene el hueco de relleno.
   // Al cambiar de idioma no estorba: una voz de otro idioma no está en dellang.
   const guardada = ajustesGuardados().voiceSelect;
-  const quiero = (guardada && dellang.some(v => `gcp_${v.name}` === guardada) && guardada)
-    || (enEsteIdioma && `gcp_${enEsteIdioma.name}`)
-    || (dellang.find(v => v.etiqueta === 'Charon') && `gcp_${dellang.find(v => v.etiqueta === 'Charon').name}`)
+  const quiero = (guardada && dellang.some(v => vozValor(v) === guardada) && guardada)
+    || (enEsteIdioma && vozValor(enEsteIdioma))
+    || (dellang.find(v => v.familia === 'chirp3hd' && v.etiqueta === 'Charon') && vozValor(dellang.find(v => v.familia === 'chirp3hd' && v.etiqueta === 'Charon')))
+    || (dellang.find(v => v.familia === 'gemini' && v.etiqueta === 'Charon') && vozValor(dellang.find(v => v.familia === 'gemini' && v.etiqueta === 'Charon')))
     || selVoz.options[0]?.value;
   if (quiero) selVoz.value = quiero;
   asegurarVocesPersonajes();
   guardarAjustes();
   if (state.universe?.storyMode === 'cast') renderCharacters();
   // The count has to match what the menu is showing, which is one language.
-  if (nota) nota.innerHTML = HAY_CHIRP
-    ? `<strong>${dellang.length}</strong> voces Chirp 3: HD en este idioma. Mantienen el <strong>mismo narrador de principio a fin</strong>, sin cambiar de registro entre escenas. La velocidad se aplica después de generar, conservando el tono.`
-    : `⚠️ Tu proyecto no tiene voces Chirp 3: HD. Se muestran las demás (${dellang.length} en este idioma).`;
+  if (nota) {
+    const nc = dellang.filter(v => v.familia === 'chirp3hd').length;
+    const ng = dellang.filter(v => v.familia === 'gemini').length;
+    nota.innerHTML = `<strong>${nc}</strong> Chirp 3 HD · <strong>${ng}</strong> Gemini TTS. Chirp prioriza estabilidad larga; Gemini ofrece interpretación más expresiva. Elegís el motor directamente en el mismo menú.`;
+  }
 }
 
 // ════════════════════════════════════════════════════════════════
