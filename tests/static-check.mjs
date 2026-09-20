@@ -84,7 +84,11 @@ const required = [
   ['migrateThisBrowserToCloud', 'migración automática del primer almacenamiento local'],
   ['refreshProjectsFromCloud', 'lista de proyectos reconstruida desde el bucket'],
   ['cloudPutDbValue', 'medios de IndexedDB espejados en GCS'],
-  ['pruneDeviceCacheExcept', 'caché del dispositivo limitada al proyecto activo']
+  ['pruneDeviceCacheExcept', 'caché del dispositivo limitada al proyecto activo'],
+  ['validarPuestaEnEscena', 'validación mecánica de blocking y continuidad física'],
+  ['CINEMATIC STAGING', 'estado físico enviado a imagen y Veo'],
+  ['visualEngineVersion: 2', 'motor visual versionado para no reutilizar planes antiguos'],
+  ["v.familia === 'gemini'", 'Gemini TTS visible junto a Chirp']
 ];
 for (const [needle, label] of required) html.includes(needle) ? ok(label) : fail('Falta ' + label);
 
@@ -152,6 +156,15 @@ else ok('Fan service del servidor es situacional, no obligatorio por fotograma')
 if (!/immediately preceding physical state/.test(imageApi) || !/camera cut changes framing, NOT reality/i.test(imageApi)) {
   fail('api/image.js no conserva el estado físico entre planos');
 } else ok('La referencia anterior conserva estado físico, no sólo estilo');
+
+const voicesApi = fs.readFileSync('api/voices.js','utf8');
+if (!/familia:\s*'gemini'/.test(voicesApi) || !/VOCES_GEMINI/.test(voicesApi)) {
+  fail('api/voices.js no expone Gemini TTS');
+} else ok('Catálogo de voces expone Chirp y Gemini TTS');
+
+if (!/NARRATIVE ANIME FRAME/.test(html) || !/RETRATO PROMOCIONAL/.test(html)) {
+  fail('El motor visual no bloquea retratos promocionales como sustituto de escena');
+} else ok('El motor visual exige cobertura narrativa, no retratos');
 
 const scriptApi = fs.readFileSync('api/script.js','utf8');
 if (!/maxOutputTokens/.test(scriptApi) || !/Number\(temperature\)/.test(scriptApi)) {

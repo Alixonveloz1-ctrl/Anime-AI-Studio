@@ -324,7 +324,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-20.114 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-20.115 🎬</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -579,6 +579,7 @@
       </div>
       <p style="font-size:10px;color:var(--text-dim);margin:6px 0 0;line-height:1.45">↻ Todas las tandas son reanudables: referencias, imágenes, audio y videos ya terminados se conservan y se omiten al continuar.</p>
       <div class="btn-row" style="margin-top:8px">
+        <button class="btn-sec" onclick="supervisarEpisodio()" style="border-color:rgba(224,64,251,0.45);color:#f29cff">🎬 Corregir continuidad visual</button>
         <button class="btn-sec" onclick="generateAllVideos()" style="border-color:rgba(0,229,255,0.4);color:var(--accent2)">🎬 Videos recomendados</button>
       </div>
 
@@ -1567,7 +1568,8 @@ function buildVideoPrompt(s, slot = 'A', opts = {}) {
     ? 'FRAMING — INTERPOLATION: this clip travels from the first frame to the provided final frame and must LAND exactly on that final framing — same camera distance, same shot size, same lens, same character positions. Move between the two smoothly and at an even rate; do not overshoot past the final framing and add no camera movement beyond what is needed to get there.'
     : 'FRAMING — LOCKED: the first frame sets the camera position, the lens and the shot size for the ENTIRE clip. Hold that exact framing from first frame to last: same distance to the subject, same lens, same shot size, same headroom, same amount of the room visible. The camera sits on a locked tripod unless the SHOT MOTION line names a camera move — if it names none, there is no zoom, no push-in, no pull-back and no reframing at any point.';
 
-  return `${animeStyle} ${motionRule} ${framingRule} ${locRule} ${climaRule} ${actuacion} SHOT MOTION: ${base}. ${audioRule}`;
+  const stagingRule = anclaPuestaEnEscena(s, slot);
+  return `${animeStyle} ${motionRule} ${framingRule} ${locRule} ${climaRule} ${actuacion} ${stagingRule} SHOT MOTION: ${base}. ${audioRule}`;
 }
 
 // ─── EQUIPO: lo que Veo NO debe poner ───
@@ -2499,7 +2501,7 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
 
   const styleSpec = estiloCore(opts.estilo);
   const fullBleed = ' FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side. The artwork must extend completely to all four edges of the image.';
-  const sceneIntegration = ' ALL characters named in this prompt are visible in the frame, actively in the scene, NOT posing, NOT looking at camera. Side angle or 3/4 view. Characters drawn at true real-world scale inside the environment — feet grounded with contact shadows, natural headroom, matching the perspective and lighting of the scene; never oversized or pasted over the background.';
+  const sceneIntegration = ' NARRATIVE ANIME FRAME — this is a moment from an ongoing scene, NEVER a character portrait, poster, model sheet or promotional pose. Characters act toward each other, toward an object, or toward the event described; they do NOT pose, do NOT stand front-and-center just to be seen, and do NOT look at the camera. Preserve the established blocking: a camera cut changes framing, not where people physically are. All characters named for THIS shot are visible when the shot requires them; characters intentionally outside the crop still remain in their established off-screen position. Use side, 3/4, over-shoulder, from-behind or contextual wide framing as the beat requires. Characters stay at true real-world scale inside the environment — feet grounded with contact shadows, natural headroom, matching perspective and lighting; never oversized or pasted over the background.';
   const noLookSuffix = opts.charSheet ? (' ' + styleSpec + fullBleed) : (' ' + styleSpec + sceneIntegration + fullBleed);
   const cleanPrompt = (String(prompt || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
@@ -2750,16 +2752,11 @@ function speedLabel(v) {
 // the gemini_* voices, Cloud TTS Neural2/WaveNet for the gcp_* voices. Both go
 // through /api/audio, which authenticates with the single GCP_SERVICE_ACCOUNT.
 // ════════════════════════════════════════════════════════════════
-// VOCES — Chirp 3: HD
+// VOCES — Chirp 3: HD + Gemini TTS
 //
-// Only Chirp. Gemini TTS re-performs on every call, so across an episode the
-// narrator changes register and even timbre from scene to scene, and no amount
-// of direction fixes that. Neural2/WaveNet hold steady but read like a machine.
-// Chirp is the one that stays the same person from start to finish.
-//
-// The list is NOT written here: it is asked of Google. A hand-written list is
-// how the app came to offer "Perseus", which does not exist, and only four Chirp
-// voices when the project has many more.
+// Chirp remains the stable long-form option. Gemini TTS is also exposed because
+// it offers a different expressive voice palette and the backend already knows
+// how to synthesize it. The selected voice prefix decides the engine.
 // ════════════════════════════════════════════════════════════════
 const NOMBRE_IDIOMA = {
   'es-US': 'Español · Latinoamérica', 'es-ES': 'Español · España',
@@ -2785,10 +2782,11 @@ async function cargarVoces() {
     const d = await r.json();
     if (!r.ok || d.error) throw new Error((d.error || r.status) + (d.hint ? ` — ${d.hint}` : ''));
 
-    // Chirp 3: HD if the project has it; otherwise everything, rather than an
-    // empty menu the user cannot act on.
-    const chirp = (d.voices || []).filter(v => v.familia === 'chirp3hd');
-    VOCES_DISPONIBLES = chirp.length ? chirp : (d.voices || []);
+    const all = d.voices || [];
+    const chirp = all.filter(v => v.familia === 'chirp3hd');
+    const gemini = all.filter(v => v.familia === 'gemini');
+    VOCES_DISPONIBLES = [...chirp, ...gemini];
+    if (!VOCES_DISPONIBLES.length) VOCES_DISPONIBLES = all;
     if (!VOCES_DISPONIBLES.length) throw new Error('el proyecto no tiene ninguna voz disponible');
 
     const idiomas = [...new Set(VOCES_DISPONIBLES.map(v => v.lang))];
@@ -2796,6 +2794,7 @@ async function cargarVoces() {
     selLang.innerHTML = idiomas.map(l => `<option value="${l}">${NOMBRE_IDIOMA[l] || l}</option>`).join('');
     selLang.value = idiomas.includes(previo) ? previo : (idiomas.includes('es-US') ? 'es-US' : idiomas[0]);
     HAY_CHIRP = chirp.length > 0;
+    HAY_GEMINI = gemini.length > 0;
     pintarVocesDelIdioma();
   } catch (e) {
     if (nota) nota.innerHTML = `⚠️ No se pudo cargar la lista de voces: ${e.message}`;
@@ -2803,6 +2802,7 @@ async function cargarVoces() {
 }
 
 let HAY_CHIRP = true;
+let HAY_GEMINI = true;
 
 // Google normally reports the gender of each voice and that is what gets used.
 // This table only fills the gap when the API answers UNSPECIFIED, so the menu
@@ -2825,7 +2825,10 @@ function generoDeVoz(v) {
   return GENERO_POR_NOMBRE[String(v.etiqueta || '').toLowerCase()] || null;
 }
 
-function vozValor(v) { return v ? `gcp_${v.name}` : ''; }
+function vozValor(v) {
+  if (!v) return '';
+  return v.familia === 'gemini' ? `gemini_${v.name}` : `gcp_${v.name}`;
+}
 
 function vozAutomaticaPara(gender, usados = new Set()) {
   const lang = document.getElementById('voiceLang')?.value || 'es-US';
@@ -2893,33 +2896,42 @@ function pintarVocesDelIdioma() {
     ['otra',   '❔ Sin clasificar'],
   ];
   selVoz.innerHTML = bloques.map(([g, titulo]) => {
-    const vs = dellang.filter(v => grupo(v) === g).sort((a, b) => a.etiqueta.localeCompare(b.etiqueta));
+    const vs = dellang.filter(v => grupo(v) === g).sort((a, b) => {
+      if (a.familia !== b.familia) return a.familia === 'chirp3hd' ? -1 : 1;
+      return a.etiqueta.localeCompare(b.etiqueta);
+    });
     if (!vs.length) return '';
     return `<optgroup label="${titulo} (${vs.length})">`
-      + vs.map(v => `<option value="gcp_${v.name}">${v.etiqueta}</option>`).join('')
+      + vs.map(v => {
+          const motor = v.familia === 'gemini' ? 'Gemini' : v.familia === 'chirp3hd' ? 'Chirp 3 HD' : v.familia;
+          return `<option value="${vozValor(v)}">${motor} · ${v.etiqueta}</option>`;
+        }).join('')
       + '</optgroup>';
   }).join('');
   // Keep the chosen personality when switching language: "Charon" in es-US and
   // "Charon" in es-ES are the same voice reading another language.
-  const mismaPersona = previo && VOCES_DISPONIBLES.find(v => `gcp_${v.name}` === previo);
-  const enEsteIdioma = mismaPersona && dellang.find(v => v.etiqueta === mismaPersona.etiqueta);
+  const mismaPersona = previo && VOCES_DISPONIBLES.find(v => vozValor(v) === previo);
+  const enEsteIdioma = mismaPersona && dellang.find(v => v.etiqueta === mismaPersona.etiqueta && v.familia === mismaPersona.familia);
   // La voz elegida la última vez manda, si existe en este idioma. Va primero
   // porque la lista llega de la red DESPUÉS de restaurar los ajustes: cuando se
   // restauran, el menú todavía sólo tiene el hueco de relleno.
   // Al cambiar de idioma no estorba: una voz de otro idioma no está en dellang.
   const guardada = ajustesGuardados().voiceSelect;
-  const quiero = (guardada && dellang.some(v => `gcp_${v.name}` === guardada) && guardada)
-    || (enEsteIdioma && `gcp_${enEsteIdioma.name}`)
-    || (dellang.find(v => v.etiqueta === 'Charon') && `gcp_${dellang.find(v => v.etiqueta === 'Charon').name}`)
+  const quiero = (guardada && dellang.some(v => vozValor(v) === guardada) && guardada)
+    || (enEsteIdioma && vozValor(enEsteIdioma))
+    || (dellang.find(v => v.familia === 'chirp3hd' && v.etiqueta === 'Charon') && vozValor(dellang.find(v => v.familia === 'chirp3hd' && v.etiqueta === 'Charon')))
+    || (dellang.find(v => v.familia === 'gemini' && v.etiqueta === 'Charon') && vozValor(dellang.find(v => v.familia === 'gemini' && v.etiqueta === 'Charon')))
     || selVoz.options[0]?.value;
   if (quiero) selVoz.value = quiero;
   asegurarVocesPersonajes();
   guardarAjustes();
   if (state.universe?.storyMode === 'cast') renderCharacters();
   // The count has to match what the menu is showing, which is one language.
-  if (nota) nota.innerHTML = HAY_CHIRP
-    ? `<strong>${dellang.length}</strong> voces Chirp 3: HD en este idioma. Mantienen el <strong>mismo narrador de principio a fin</strong>, sin cambiar de registro entre escenas. La velocidad se aplica después de generar, conservando el tono.`
-    : `⚠️ Tu proyecto no tiene voces Chirp 3: HD. Se muestran las demás (${dellang.length} en este idioma).`;
+  if (nota) {
+    const nc = dellang.filter(v => v.familia === 'chirp3hd').length;
+    const ng = dellang.filter(v => v.familia === 'gemini').length;
+    nota.innerHTML = `<strong>${nc}</strong> Chirp 3 HD · <strong>${ng}</strong> Gemini TTS. Chirp prioriza estabilidad larga; Gemini ofrece interpretación más expresiva. Elegís el motor directamente en el mismo menú.`;
+  }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -4989,6 +5001,20 @@ Decide 1, 2 o 3 ILUSTRACIONES distintas por FUNCIÓN EDITORIAL:
 - CÁMARA LIBRE EN EL LUGAR: a lo largo del episodio mostrá el MISMO lugar desde posiciones y ángulos DIFERENTES (desde la puerta, desde la ventana, ángulo bajo, over-shoulder, rincones distintos) — no repitas siempre el mismo encuadre del escenario.
 - VESTIMENTA FIEL AL MOMENTO: usa la prenda ACTUAL que corresponde a esta escena y conserva su material/condición entre planos. La ficha fija identidad, no obliga a llevar siempre la ropa de la primera referencia.
 
+⚠️ DECISIÓN 2B — BLOQUEO Y CONTINUIDAD FÍSICA (OBLIGATORIO EN TODAS LAS HISTORIAS):
+Antes de escribir los prompts, construí un mapa físico de la escena. La cámara puede cortar; los cuerpos no se teletransportan.
+- "layoutEscena": EN INGLÉS, dónde está cada personaje respecto de los demás y de los elementos fijos al COMENZAR la escena: izquierda/derecha/fondo, de pie/sentado/arrodillado, orientación, objetos que sostiene, heridas y puertas/objetos abiertos o cerrados.
+- "estadoEscenaInicial": EN INGLÉS, el estado físico acumulado justo antes del plano 1.
+- Para CADA plano:
+  - "funciones": establishing | interaction | action | speaker | reaction | insert | consequence. NUNCA portrait.
+  - "personajesVisibles": nombres EXACTOS de quienes están dentro del encuadre; máximo 3. Quien queda fuera de cuadro NO desaparece: sigue en su posición del layout.
+  - "cambios": el cambio visible que ocurre DURANTE ese plano. Si nadie cambia de posición, decilo.
+  - "estadosDespues": el estado físico acumulado DESPUÉS del plano. El plano siguiente parte de ese estado; jamás reinicia la escena.
+- Si interactúan 2+ personajes, al menos un plano establece o recuerda claramente su relación espacial (establishing o interaction). PROHIBIDO resolver una interacción como retratos aislados A → B → C sin geografía compartida.
+- Un primer plano o reacción puede aislar a una persona, pero se comporta como cobertura cinematográfica: esa persona responde a alguien/algo fuera de cuadro, nunca posa para el espectador.
+- No pongas a distintos personajes ocupando mágicamente la misma marca física entre cortes. Si alguien cruza el espacio, la narración tiene que justificarlo y "cambios" tiene que declararlo.
+- La imagen muestra el BEAT correspondiente, no un resumen ni sólo la acción final de toda la escena.
+
 ⚠️ DECISIÓN 3 — ¿ESTE PLANO MERECE VIDEO?
 Para CADA plano devuelve "videoRecomendado": true | false.
 La referencia real usa MAYORITARIAMENTE ilustraciones 2D con cortes, paneos y zooms; el video completo se reserva para momentos donde el TIEMPO del movimiento comunica algo que una imagen no puede.
@@ -5101,6 +5127,41 @@ Responde SOLO JSON válido sin markdown`;
       return true;
     }
 
+    function validarPuestaEnEscena(scene, plan) {
+      const prompts = (plan?.prompts || []).filter(Boolean);
+      const n = prompts.length;
+      if (!n) return false;
+      if (String(plan?.layoutEscena || '').trim().length < 40) return false;
+      if (String(plan?.estadoEscenaInicial || '').trim().length < 20) return false;
+
+      const funciones = (plan?.funciones || []).slice(0, n);
+      const visibles = (plan?.personajesVisibles || []).slice(0, n);
+      const cambios = (plan?.cambios || []).slice(0, n);
+      const estados = (plan?.estadosDespues || []).slice(0, n);
+      if ([funciones, visibles, cambios, estados].some(a => a.length !== n)) return false;
+
+      const permitidas = new Set(['establishing','interaction','action','speaker','reaction','insert','consequence']);
+      if (funciones.some(f => !permitidas.has(String(f || '').toLowerCase()))) return false;
+      if (visibles.some(v => !Array.isArray(v) || v.length > 3)) return false;
+      if (cambios.some(x => String(x || '').trim().length < 8)) return false;
+      if (estados.some(x => String(x || '').trim().length < 20)) return false;
+
+      if (n > 1 && new Set(funciones.map(f => String(f).toLowerCase())).size === 1
+          && ['speaker','reaction'].includes(String(funciones[0]).toLowerCase())) return false;
+
+      const narr = String(scene?.narration || '').toLowerCase();
+      const mentioned = (state.characters || []).filter(ch => {
+        const parts = String(ch.name || '').toLowerCase().split(/\s+/).filter(p => p.length >= 3);
+        return parts.some(p => narr.includes(p));
+      });
+      if (mentioned.length >= 2) {
+        const shared = visibles.some(v => v.length >= 2)
+          || funciones.some(f => ['establishing','interaction'].includes(String(f).toLowerCase()));
+        if (!shared) return false;
+      }
+      return true;
+    }
+
     // Shot prompts + the motion of each shot, onto the scene.
     function aplicarPlanos(s, p) {
       const [a, b, c] = p?.prompts || [];
@@ -5109,6 +5170,10 @@ Responde SOLO JSON válido sin markdown`;
       const [ca, cb, cc] = p?.continuos || [];
       const [pa, pb, pc] = p?.pesos || [];
       const [na, nb, nc] = p?.anclasNarrativas || [];
+      const [fa, fb, fc] = p?.funciones || [];
+      const [vaVis, vbVis, vcVis] = p?.personajesVisibles || [];
+      const [xa, xb, xc] = p?.cambios || [];
+      const [ea, eb, ec] = p?.estadosDespues || [];
       const peso = v => {
         const n = Number(v);
         return Number.isFinite(n) && n > 0 ? Math.min(5, Math.max(1, n)) : 1;
@@ -5123,6 +5188,15 @@ Responde SOLO JSON válido sin markdown`;
       return {
         ...s,
         escenario: p?.escenario || '',
+        visualEngineVersion: 2,
+        layoutEscena: String(p?.layoutEscena || '').trim(),
+        estadoEscenaInicial: String(p?.estadoEscenaInicial || '').trim(),
+        funcionA: a ? (fa || '') : '', funcionB: b ? (fb || '') : '', funcionC: c ? (fc || '') : '',
+        personajesVisiblesA: a ? (Array.isArray(vaVis) ? vaVis : []) : [],
+        personajesVisiblesB: b ? (Array.isArray(vbVis) ? vbVis : []) : [],
+        personajesVisiblesC: c ? (Array.isArray(vcVis) ? vcVis : []) : [],
+        cambioVisibleA: a ? (xa || '') : '', cambioVisibleB: b ? (xb || '') : '', cambioVisibleC: c ? (xc || '') : '',
+        estadoDespuesA: a ? (ea || '') : '', estadoDespuesB: b ? (eb || '') : '', estadoDespuesC: c ? (ec || '') : '',
         imagePromptA: a || '', imagePromptB: b || '', imagePromptC: c || '',
         anclaNarrativaA: a ? (na || '') : '', anclaNarrativaB: b ? (nb || '') : '', anclaNarrativaC: c ? (nc || '') : '',
         tamanoA: a ? tam(0) : '', tamanoB: b ? tam(1) : '', tamanoC: c ? tam(2) : '',
@@ -5147,9 +5221,11 @@ Responde SOLO JSON válido sin markdown`;
       const scenesText = scenesForPrompt.map(s =>
         `Escena ${s.num} [${s.act}] "${s.title}" — MÍNIMO ${minPlanosPorTexto(s.narration)} plano(s): ${s.narration}`
       ).join('\n\n');
-      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales. El texto ya te indica el MÍNIMO permitido por su duración estimada. Genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":3,"continuarAnterior":false,"anclasNarrativas":["4-14 palabras consecutivas COPIADAS de la narración para el plano 1","...plano 2","...plano 3"],"prompts":["Scene with...","Scene with...","Scene with..."],"tamanos":["general","cerca","medio"],"pesos":[2,1,2],"videoRecomendado":[false,false,true],"movimientos":["...","...","..."],"continuos":[false,false,false]},...]} con EXACTAMENTE ${scenesForPrompt.length} objetos. "anclasNarrativas", "prompts", "tamanos", "pesos", "videoRecomendado", "movimientos" y "continuos" llevan exactamente la cantidad de planos elegida.
+      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales. El texto ya te indica el MÍNIMO permitido por su duración estimada. Genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":3,"continuarAnterior":false,"layoutEscena":"physical blocking in English","estadoEscenaInicial":"cumulative physical state before shot 1","anclasNarrativas":["4-14 palabras consecutivas COPIADAS de la narración para el plano 1","...plano 2","...plano 3"],"funciones":["establishing","interaction","reaction"],"personajesVisibles":[["Nombre A","Nombre B"],["Nombre A","Nombre B"],["Nombre C"]],"cambios":["visible change during shot 1","visible change during shot 2","visible change during shot 3"],"estadosDespues":["cumulative state after shot 1","cumulative state after shot 2","cumulative state after shot 3"],"prompts":["Scene with...","Scene with...","Scene with..."],"tamanos":["general","medio","cerca"],"pesos":[2,2,1],"videoRecomendado":[false,false,false],"movimientos":["...","...","..."],"continuos":[false,false,false]},...]} con EXACTAMENTE ${scenesForPrompt.length} objetos. Todos los arrays por plano llevan EXACTAMENTE la cantidad de planos elegida.
 
 ⚠️ "anclasNarrativas": para CADA plano copia literalmente 4-14 PALABRAS CONSECUTIVAS de la narración que ese plano ilustra. Deben aparecer EN ORDEN y sin solaparse. Es una prueba mecánica de cronología: plano 1 usa palabras del inicio real; el último llega a la mitad/final real. Si el personaje cae al suelo más tarde, el plano 1 NO puede mostrarlo en el suelo.
+⚠️ "layoutEscena", "estadoEscenaInicial", "cambios" y "estadosDespues" son el contrato físico. Los prompts DEBEN obedecerlos. Un corte cambia la cámara, no la realidad. "personajesVisibles" usa sólo nombres exactos del reparto y NO significa que los demás abandonaron el lugar.
+⚠️ PROHIBIDO RETRATO PROMOCIONAL: ningún plano existe para enseñar lo bonito que se ve un personaje. Cada encuadre muestra una acción, interacción, reacción, información o consecuencia de ESTE beat.
 ⚠️ "tamanos": general | medio | cerca | escorzo | detalle. Elige el tamaño por FUNCIÓN DRAMÁTICA.
 ⚠️ "pesos": enteros 1–5 y representan DURACIÓN RELATIVA EN PANTALLA, no calidad. 1 = insert/reacción muy corta; 2–3 = frase o beat normal; 4–5 = beat dominante. Úsalos para que el corte visual caiga donde cambia la frase/acción, no en tercios matemáticos.
 "videoRecomendado" es true SÓLO cuando el movimiento temporal necesita Veo; false cuando una ilustración con montaje de cámara es suficiente. Esto es una recomendación del director, no un bloqueo: el usuario puede animar cualquier plano manualmente. Sólo cuando "continuos" sea true, dos fotogramas deben describir estados físicamente compatibles para una interpolación corta.`;
@@ -5165,10 +5241,11 @@ Responde SOLO JSON válido sin markdown`;
             const min = scene ? minPlanosPorTexto(scene.narration) : 1;
             if (p && p.num && Array.isArray(p.prompts)
                 && p.prompts.filter(Boolean).length >= min
-                && validarAnclasNarrativas(scene, p)) {
+                && validarAnclasNarrativas(scene, p)
+                && validarPuestaEnEscena(scene, p)) {
               accumulated.set(Number(p.num), p);
             } else if (scene && p?.num) {
-              console.warn(`Dirección visual rechazada en escena ${scene.num}: los planos no prueban la cronología del texto`);
+              console.warn(`Dirección visual rechazada en escena ${scene.num}: cronología o puesta en escena física inválida`);
             }
           }
           if (scenesForPrompt.every(s => accumulated.has(Number(s.num)))) {
@@ -5215,14 +5292,14 @@ Responde SOLO JSON válido sin markdown`;
         let done = null;
         const cachedVisual = longDraft.visualChunks[chunkIndex];
         const expectedNums = chunk.map(s => s.num).join(',');
-        if (cachedVisual?.nums === expectedNums && Array.isArray(cachedVisual.scenes) && cachedVisual.scenes.length === chunk.length) {
+        if (cachedVisual?.version === 2 && cachedVisual?.nums === expectedNums && Array.isArray(cachedVisual.scenes) && cachedVisual.scenes.length === chunk.length) {
           done = cachedVisual.scenes;
         } else {
           done = await generateImagePromptsBatch(chunk, prevContext);
           // The art director reviews what the DP just wrote before it is cached.
           const { correcciones } = await revisarPlanos(done);
           if (correcciones.length) console.log('Puesta en escena corregida:', aplicarCorrecciones(done, correcciones).motivos);
-          longDraft.visualChunks[chunkIndex] = { nums: expectedNums, scenes: done };
+          longDraft.visualChunks[chunkIndex] = { version: 2, nums: expectedNums, scenes: done };
           longDraft.updatedAt = Date.now();
           saveState();
         }
@@ -5437,8 +5514,8 @@ async function renderScenarios() {
     <div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:8px">
       <p style="font-size:11px;color:var(--text-dim);margin:0 0 8px;line-height:1.4">¿Fondos inconsistentes entre escenas del mismo lugar? Vinculá cada escena a su escenario — así todas reciben la misma descripción del sitio. Después regenerá las imágenes de esas escenas.</p>
       <button class="btn-sec" onclick="relinkScenesToScenarios()">🔗 Vincular escenas de este episodio a estos escenarios</button>
-      <p style="font-size:11px;color:var(--text-dim);margin:14px 0 8px;line-height:1.4">¿Un plano muestra muebles que no pueden estar en ese lugar (un pupitre en un pasillo) o lluvia dentro de un interior? El director de arte repasa los prompts ya escritos y corrige SÓLO los que estén mal. No borra ninguna imagen.</p>
-      <button class="btn-sec" onclick="supervisarEpisodio()">🎬 Revisar la puesta en escena de este episodio</button>
+      <p style="font-size:11px;color:var(--text-dim);margin:14px 0 8px;line-height:1.4">Corrige los prompts ya escritos SIN tocar historia ni personajes: retratos/poses, continuidad espacial, personajes que desaparecen, beats adelantados, muebles imposibles y clima incoherente. Las imágenes existentes no se borran; la app te indica cuáles regenerar.</p>
+      <button class="btn-sec" onclick="supervisarEpisodio()">🎬 Corregir continuidad visual de este episodio</button>
     </div>`;
 }
 
@@ -5583,7 +5660,7 @@ async function assignScenariosToScenes() {
 // forbidden objects, it reasons about the pair (prompt, place) — so it catches
 // the failure nobody anticipated, in any universe.
 // ════════════════════════════════════════════════════════════════
-const SUPERVISOR_SYS = `Eres el DIRECTOR DE ARTE de este anime y hacés también de script. Tu ÚNICO trabajo es revisar la PUESTA EN ESCENA de prompts YA ESCRITOS por el director de fotografía. No escribís historia, no cambiás el encuadre, no cambiás la acción dramática, no cambiás la ropa ni el peinado, no cambiás la luz.
+const SUPERVISOR_SYS = `Eres el DIRECTOR DE ARTE, CONTINUIDAD y SCRIPT de este anime. Revisás prompts YA ESCRITOS antes de que cuesten imágenes. No escribís historia ni cambias lo que ocurre. Conservás ropa, peinado, identidad, lugar y luz. Podés corregir el ENCUADRE solamente cuando el actual parece retrato/promocional, no muestra la acción narrada o rompe la geografía física entre planos.
 
 CÓMO SE USA LO QUE REVISÁS: cada prompt se manda al generador de imagen con la DESCRIPCIÓN DEL ESCENARIO ASIGNADO PEGADA DETRÁS, palabra por palabra. Si el prompt y esa descripción describen sitios distintos, el generador dibuja LOS DOS MEZCLADOS y la imagen sale rota (un pupitre con taza de té en medio de un pasillo). Ese es el fallo que tenés que cazar.
 
@@ -5592,6 +5669,10 @@ LO QUE BUSCÁS, EN ESTE ORDEN:
    Un lugar de PASO (pasillo, escalera, calle, andén, vestíbulo) no tiene dónde sentarse a una mesa: ahí la gente está de pie, caminando, apoyada en la pared o en una barandilla, o sentada en un escalón.
 2. CLIMA DENTRO: si el escenario es un interior, la lluvia, la nieve y la niebla sólo pueden verse a través de ventanas o puertas. Lluvia, charcos o suelo mojado DENTRO del encuadre = FALLO.
 3. LUGAR EQUIVOCADO: si el lugar que describe el prompt es el correcto según la narración y el id asignado es el que está mal, NO toques el prompt: devolvé sólo el "escenario" corregido.
+4. RETRATO EN VEZ DE ESCENA: un personaje centrado, quieto, mirando o posando como foto/promocional cuando la narración describe interacción, conflicto, desplazamiento o reacción = FALLO. Reescribí ese plano como cobertura cinematográfica del beat: acción hacia otro personaje/objeto, 3/4, lateral, over-shoulder, desde atrás o plano conjunto según corresponda. Nadie mira a cámara.
+5. GEOGRAFÍA ROTA ENTRE PLANOS: compará A→B→C como UNA misma realidad física. Un corte NO mueve cuerpos. Si A deja a alguien arrodillado a la izquierda y B pone a otra persona mágicamente en esa misma marca sin movimiento narrado, = FALLO. Conservá posiciones y orientaciones; cambiar de ángulo no cambia el mundo.
+6. DESAPARICIÓN FALSA: un personaje puede quedar fuera de cuadro por el encuadre, pero no puede desaparecer de la escena. Si la interacción depende de dos personas y todos los planos son retratos aislados sin establecer dónde están una respecto de la otra, = FALLO. Al menos un plano debe mostrar o recordar la relación espacial.
+7. BEAT EQUIVOCADO: si el prompt muestra sólo la acción final o una revelación que ocurre más tarde y omite lo que se narra en ese punto, = FALLO. Cada plano muestra su momento exacto y los planos juntos desarrollan situación → acción/interacción → reacción/consecuencia cuando el texto contiene esos pasos.
 
 ⚠️ EL MOVIMIENTO VA PEGADO A LA IMAGEN. Cada plano tiene además un MOVIMIENTO (en inglés) que describe qué se anima en su clip de video y en qué estado TERMINA, y ese estado final tiene que ser exactamente la imagen del plano SIGUIENTE. Por eso, si corregís el prompt de un plano:
 - Revisá el movimiento de ESE plano: si mencionaba el mueble que quitaste ("lowers the phone onto the desk"), corregilo con la acción equivalente que el lugar sí permite ("lowers the phone to her side"). Devolvelo en "movimiento".
@@ -5600,7 +5681,8 @@ LO QUE BUSCÁS, EN ESTE ORDEN:
 
 CÓMO CORREGÍS — MÍNIMA INTERVENCIÓN:
 - Si el plano es correcto, NO lo toques y NO lo devuelvas. Devolver de más es un error tan grave como no corregir: cada cambio innecesario cuesta una imagen.
-- Si tiene atrezzo imposible, reescribí SOLO ese trozo: quitá el mueble u objeto que no va y sustituílo por la acción equivalente que ese lugar SÍ permite, conservando palabra por palabra TODO lo demás (el arranque de estilo, el "Scene with [nombre]:", la ropa, el pelo, el ángulo de cámara, la iluminación y la emoción del personaje).
+- Si tiene atrezzo imposible, reescribí SOLO ese trozo: quitá el mueble u objeto que no va y sustituílo por la acción equivalente que ese lugar SÍ permite.
+- Si el fallo es retrato, geografía, desaparición o beat equivocado, reescribí el prompt COMPLETO del plano conservando identidad, vestuario, lugar, luz y momento narrativo, pero corrigiendo la composición y la acción. La prioridad es que A→B→C parezca cobertura de una misma escena, no tres fichas de personajes.
   Ejemplo: en un pasillo, "sits at a small pressed-wood desk by a rain-streaked window, looking down at a cracked smartphone" → "stands leaning against the corridor wall beside a rain-streaked window, looking down at a cracked smartphone".
 - El prompt corregido sigue EN INGLÉS y empieza EXACTAMENTE igual que el original.
 - NUNCA agregues personajes, NUNCA agregues objetos que la narración no menciona, NUNCA "mejores" la redacción.
@@ -5712,7 +5794,7 @@ window.supervisarEpisodio = async function() {
   // editor writes to. There is no undo anywhere in the app, so an episode with
   // hand-tuned prompts deserves a warning before a model rewrites them.
   if (!confirm(
-      'El director de arte va a reescribir los prompts que estén mal puestos en escena.\n\n' +
+      'El director va a corregir continuidad, encuadre y puesta en escena de los prompts que estén mal, sin tocar la historia.\n\n' +
       'Se cambia SOLO el texto de los planos con el fallo. Las imágenes y los clips que ya generaste no se borran.\n\n' +
       'Si editaste algún prompt a mano, esa edición puede quedar reescrita y no hay deshacer.\n\n¿Seguir?')) return;
 
@@ -6089,6 +6171,28 @@ function limiteCronologicoPlano(s, slot) {
   return ` CHRONOLOGY LIMIT — this shot corresponds EXACTLY to this narration beat: "${a}". Depict the world at this moment only. Do NOT include actions, injuries, positions, objects or reveals that occur later in the scene. Preserve every state already established before this beat unless this beat changes it.`;
 }
 
+function anclaPuestaEnEscena(s, slot) {
+  const prev = slot === 'B' ? 'A' : slot === 'C' ? 'B' : null;
+  const before = prev ? String(s?.['estadoDespues' + prev] || '').trim()
+                      : String(s?.estadoEscenaInicial || '').trim();
+  const after = String(s?.['estadoDespues' + slot] || '').trim();
+  const layout = String(s?.layoutEscena || '').trim();
+  const cambio = String(s?.['cambioVisible' + slot] || '').trim();
+  const funcion = String(s?.['funcion' + slot] || '').trim();
+  const visibles = Array.isArray(s?.['personajesVisibles' + slot])
+    ? s['personajesVisibles' + slot].filter(Boolean).join(', ') : '';
+
+  const base = ' CINEMATIC STAGING — HARD RULE: this is a frame from an ongoing animated scene, never a portrait, poster, character showcase or promotional pose. A camera cut changes framing, NOT physical reality. Characters act toward each other, an object or the event; nobody poses for the viewer or looks into the lens.';
+  if (!layout && !before && !after) return base;
+  return base
+    + (layout ? ` SCENE BLOCKING: ${layout}` : '')
+    + (before ? ` STATE BEFORE THIS SHOT: ${before}` : '')
+    + (funcion ? ` EDITORIAL FUNCTION: ${funcion}.` : '')
+    + (visibles ? ` VISIBLE IN THIS FRAME: ${visibles}. Other established characters remain in their prior off-screen positions unless the narration moves them.` : '')
+    + (cambio ? ` VISIBLE CHANGE DURING THIS BEAT: ${cambio}` : '')
+    + (after ? ` REQUIRED PHYSICAL STATE AFTER THIS BEAT: ${after}` : '');
+}
+
 // The location anchor, appended BEHIND the shot prompt before it goes to the
 // image model. Both were arriving as mandatory at once, which is how a desk from
 // a classroom prompt and a corridor description ended up drawn on top of each
@@ -6148,7 +6252,7 @@ async function armarEnvioDeEscena(s, slot) {
     env.planoPrevio = previo && s[previo] ? planoEn(s[previo]) : '';
     env.planoNuevo = planoEn(tam);
   }
-  return { base, tuTexto: base, prompt: conPlano + ancla + limiteCronologicoPlano(s, slot), refs, ancla, sinFicha, env, desdeNarracion };
+  return { base, tuTexto: base, prompt: conPlano + ancla + limiteCronologicoPlano(s, slot) + anclaPuestaEnEscena(s, slot), refs, ancla, sinFicha, env, desdeNarracion };
 }
 
 // El texto COMPLETO tal y como lo lee Google, con el añadido del cliente incluido.
@@ -6237,7 +6341,7 @@ window.generateSceneImageAB = async function(sceneId, slot) {
     if (sinFicha.length) {
       showToast(`${sinFicha.join(', ')} no fue reconocido de forma explícita en el plano; se usa el ancla textual`, 'error');
     }
-    const prompt = conPlano + ancla + limiteCronologicoPlano(s, slot);
+    const prompt = conPlano + ancla + limiteCronologicoPlano(s, slot) + anclaPuestaEnEscena(s, slot);
     const env = buildSceneEnvContext(s);
     env.desdeNarracion = desdeNarracion;
     env.continuityRef = await getContinuityRef(s, slot);
@@ -6631,7 +6735,11 @@ window.generateSceneVideo = async function(sceneId, slot = 'A') {
 
     // Each shot gets its share of the narration. Without this the clip runs the
     // full eight seconds and the character invents movement to fill them.
-    const segundos = (await sceneAudioSeconds(s)) / (slots.length || 1);
+    const audioSeg = await sceneAudioSeconds(s);
+    const pesos = slots.map(sl => Math.max(1, Number(s['peso' + sl]) || 1));
+    const totalPesos = pesos.reduce((a, b) => a + b, 0) || slots.length || 1;
+    const pesoActual = pesos[Math.max(0, idx)] || 1;
+    const segundos = audioSeg * pesoActual / totalPesos;
 
     const inicial = await prepararFotograma(imgData);
     const final   = await prepararFotograma(lastFrame);
@@ -6851,7 +6959,7 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
       const imgB64 = await conEsperaDeCuota(async () => {
         const contRef = await getContinuityRef(s, ab);
         const previo = { B: 'tamanoA', C: 'tamanoB' }[ab];
-        return generateImageRaw(prompt + anclaDeEscena(prompt, s) + limiteCronologicoPlano(s, ab), refsDeEscena(prompt, s), {
+        return generateImageRaw(prompt + anclaDeEscena(prompt, s) + limiteCronologicoPlano(s, ab) + anclaPuestaEnEscena(s, ab), refsDeEscena(prompt, s), {
           ...envForScene(s), continuityRef: contRef, desdeNarracion,
           planoPrevio: (contRef && tam && previo && s[previo]) ? planoEn(s[previo]) : '',
           planoNuevo: (contRef && tam) ? planoEn(tam) : '',
@@ -6899,7 +7007,8 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
   const cleanPrompt = String(prompt || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim() + (env.envText || '') + ' ' + estiloCore() + ' ALL characters named in this prompt are visible in the frame, actively in the scene, NOT looking at camera. FULL-BLEED composition filling the ENTIRE frame edge-to-edge — NO white borders, NO letterboxing, NO padding, NO frame, NO empty margins on any side. Characters drawn at true real-world scale inside the environment — feet grounded with contact shadows, natural headroom, matching the perspective and lighting of the scene; never oversized or pasted over the background.';
+    .trim() + (env.envText || '') + ' ' + estiloCore()
+    + ' NARRATIVE ANIME FRAME — NEVER a character portrait, poster, model sheet or promotional pose. Characters act toward each other, an object or the event; nobody poses for the viewer, stands front-and-center just to be displayed, or looks into the lens. A camera cut changes framing, NOT physical reality: preserve established positions, orientation, injuries, held objects and off-screen presence. FULL-BLEED composition edge-to-edge. Characters stay at true real-world scale inside the environment, grounded with contact shadows and matching perspective/lighting; never oversized or pasted over the background.';
 
   const isEcchi = (state.universe?.subgenres || []).some(s => ['ecchi','harem','harem_inverso'].includes(s));
 
@@ -6939,7 +7048,7 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
       data.error.includes('provided character') ||
       data.error.includes('cannot generate an image based on')
     );
-    if (isRefError && refs?.length) {
+    if (isRefError && preCompressedRefs?.length) {
       throw new Error('Gemini rechazó una referencia de personaje. La tanda NO generó esta toma sin referencias para no cambiar la identidad. Regenera la referencia o este plano manualmente.');
     }
     throw new Error(data.error || `Image proxy ${res.status}`);

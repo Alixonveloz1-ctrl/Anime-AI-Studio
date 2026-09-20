@@ -15,6 +15,16 @@ const { auth, begin, fail } = require('./_lib/gcp');
 // es-US first: the app narrates in Latin American Spanish by default.
 const ORDEN_IDIOMA = ['es-US', 'es-ES', 'es-419', 'en-US', 'pt-BR', 'ja-JP'];
 
+const IDIOMAS_GEMINI = new Set(['es-US','es-ES','es-419','en-US','en-GB','pt-BR','ja-JP','fr-FR','it-IT','de-DE','ko-KR','zh-CN']);
+
+const VOCES_GEMINI = [
+  'Zephyr','Puck','Charon','Kore','Fenrir','Leda','Orus','Aoede','Callirrhoe',
+  'Autonoe','Enceladus','Iapetus','Umbriel','Algieba','Despina','Erinome',
+  'Algenib','Rasalgethi','Laomedeia','Achernar','Alnilam','Schedar','Gacrux',
+  'Pulcherrima','Achird','Zubenelgenubi','Vindemiatrix','Sadachbia',
+  'Sadaltager','Sulafat',
+];
+
 module.exports = async function handler(req, res) {
   if (begin(req, res, ['GET', 'POST'])) return;
 
@@ -53,6 +63,23 @@ module.exports = async function handler(req, res) {
           // "es-US-Chirp3-HD-Charon".
           etiqueta: nombre.split('-').pop(),
           genero: (v.ssmlGender || '').toLowerCase(),
+        });
+      }
+    }
+
+    // Gemini TTS voices are multilingual and are synthesized through Vertex AI,
+    // not the Cloud TTS voices endpoint. Expose them for every language that this
+    // project already offers in the selector, so the same menu can choose either
+    // engine without inventing a separate UI.
+    const idiomasGemini = [...new Set(salida.map(v => v.lang))].filter(lang => IDIOMAS_GEMINI.has(lang));
+    for (const lang of idiomasGemini) {
+      for (const nombre of VOCES_GEMINI) {
+        salida.push({
+          name: nombre,
+          lang,
+          familia: 'gemini',
+          etiqueta: nombre,
+          genero: '',
         });
       }
     }
