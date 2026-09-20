@@ -17,8 +17,8 @@ scripts.forEach((src, i) => {
 for (const file of [
   'api/_lib/gcp.js','api/_lib/texto.js','api/assemble.js','api/audio.js',
   'api/download-url.js','api/health.js','api/image.js','api/music.js',
-  'api/script.js','api/transcribe.js','api/upload-url.js','api/video-start.js',
-  'api/video-status.js','api/voices.js'
+  'api/project-asset.js','api/project-store.js','api/script.js','api/transcribe.js',
+  'api/upload-url.js','api/video-start.js','api/video-status.js','api/voices.js'
 ]) {
   const src = fs.readFileSync(file, 'utf8');
   try { new Function('module','exports','require','process','fetch','Buffer',src); ok(file + ' parsea'); }
@@ -70,7 +70,12 @@ const required = [
   ['btnAllCharacterRefs', 'generación en lote de referencias maestras'],
   ['generationDrafts', 'reanudación persistente para cualquier duración'],
   ['sceneVidOpKeyBy', 'reanudación de operaciones Veo en curso'],
-  ['creativeVersion', 'versionado compatible de proyectos']
+  ['creativeVersion', 'versionado compatible de proyectos'],
+  ['cloudSaveProject', 'estado permanente de proyectos en GCS'],
+  ['migrateThisBrowserToCloud', 'migración automática del primer almacenamiento local'],
+  ['refreshProjectsFromCloud', 'lista de proyectos reconstruida desde el bucket'],
+  ['cloudPutDbValue', 'medios de IndexedDB espejados en GCS'],
+  ['pruneDeviceCacheExcept', 'caché del dispositivo limitada al proyecto activo']
 ];
 for (const [needle, label] of required) html.includes(needle) ? ok(label) : fail('Falta ' + label);
 
@@ -127,6 +132,15 @@ if (!gcp.includes("anime-studio-montage") || !setup.includes('anime-studio-monta
 else ok('Montador y aplicación usan el mismo Job');
 if (!setup.includes("gcloud auth list") || !setup.includes("Cuenta Google activa")) fail('setup.sh no valida la cuenta activa de Cloud Shell');
 else ok('setup.sh usa la sesión/proyecto activos; no depende de un correo hardcodeado');
+
+const projectStore = fs.readFileSync('api/project-store.js','utf8');
+const projectAsset = fs.readFileSync('api/project-asset.js','utf8');
+if (!/project-manifests/.test(projectStore) || !/GCS listing is the authoritative project index/.test(projectStore)) {
+  fail('project-store no usa GCS como índice autoritativo');
+} else ok('El bucket es la fuente de verdad de la lista de proyectos');
+if (!/signed access/.test(projectAsset) || !/cache\//.test(projectAsset)) {
+  fail('project-asset no refleja los medios del proyecto en GCS');
+} else ok('Los medios del proyecto tienen espejo cloud');
 
 if (process.exitCode) process.exit(process.exitCode);
 console.log('\nValidación estática completa.');
