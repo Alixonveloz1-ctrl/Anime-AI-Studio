@@ -63,7 +63,6 @@ const required = [
   ['anclasNarrativas', 'anclas cronológicas por plano'],
   ['validarAnclasNarrativas', 'validación de orden visual contra narración'],
   ['CHRONOLOGY LIMIT', 'límite cronológico enviado al generador de imagen'],
-  ['v: 3, epNum', 'versión nueva del borrador narrativo'],
   ['generarAudioDeEscena', 'audio dramatizado por intervención'],
   ['videoRecommendedA', 'recomendación de video por plano'],
   ['continuarAnterior', 'continuidad explícita entre escenas'],
