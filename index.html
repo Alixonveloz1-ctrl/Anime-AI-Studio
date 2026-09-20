@@ -324,7 +324,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-19.111 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-20.112 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -4540,7 +4540,7 @@ Responde SOLO JSON válido sin markdown.`;
     // Pressing Generate again resumes from the first missing block.
     const episodeInstructionsNow = document.getElementById('episodeInstructions')?.value.trim() || '';
     const draftSignature = JSON.stringify({
-      v: 4, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
+      v: 5, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
       storyMode, endingMode, instructions: episodeInstructionsNow,
       viralFormula: idFormulaViral(formulaViralActual(u)),
       title: u.title || '', concept: u.concepto || '', conflict: u.conflicto || '',
@@ -4723,7 +4723,7 @@ ${i > 0 ? 'Comienza exactamente después de la última acción/decisión previa.
 ${i < briefs.length - 1 ? 'Este bloque NO es el final. Déjalo avanzar hacia el siguiente sin un cliffhanger artificial interno.' : ''}
 
 Devuelve SOLO {"story":"..."}.`;
-        partsOut[i] = await generateStoryPart(prompt, minPerPart);
+        partsOut[i] = await generateStoryPart(prompt, minPerPart, formulaBeatForPart(i, briefs.length, u));
         longDraft.storyParts = partsOut.slice();
         longDraft.updatedAt = Date.now();
         saveState();
@@ -7179,7 +7179,7 @@ Devuelve JSON:
   "objetivo": "Qué transformación concreta debe completar esta entrega (1-2 frases)",
   "curvaEmocional": "De qué estado parte el espectador/protagonista y a cuál llega",
   "imagenClave": "Una imagen memorable que nace de un acontecimiento real de la trama",
-  "notaDeDireccion": "Qué evitar o potenciar para que esta premisa no se vuelva genérica o repetitiva",
+  "notaDeDireccion": "Qué evitar o potenciar para que la fórmula mantenga retención sin perder su mecánica probada; NO penalices que se parezca a las referencias",
   "quedaAbierto": "Si el cierre es completo: sólo una posibilidad secundaria opcional. Si continúa: el problema concreto que queda abierto."
 }`;
 
