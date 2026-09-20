@@ -20,6 +20,9 @@ Estudio personal para producir historias anime largas desde el móvil. Tiene exa
 - Duración configurable: ~5 / 8 / 15 / 30 / 60 / 90 minutos
 - Dos tipos de proyecto, y sólo dos: **Narrado** (una voz conduce y lee diálogos) o **Voces por personaje** (voz estable por personaje)
 - El guion largo aplica una huella narrativa basada en las referencias estudiadas: español oral, frases cortas, diálogo directo, punto de vista cercano, microcambios frecuentes y rechazo automático de prosa literaria/IA antes de aceptar cada bloque
+- El motor selecciona una **fórmula viral de referencia** según concepto/género (apocalipsis+base/sistema, divorcio+retorno de estatus, compromiso+asimetría de información, bestia+evolución, cultivación+face-slap, oficio humilde+habilidad imposible o fórmula general) y la guarda en el proyecto
+- La originalidad NO es un criterio del motor: conserva la fantasía de audiencia, progresión, tipo de antagonista, inversiones de estatus y payoffs de las referencias; sólo evita copiar texto literal
+- Cada bloque largo recibe un hito concreto de esa fórmula y sólo se acepta si devuelve **evidencia literal dentro del propio guion** de que ese hito ocurrió; proyectos anteriores se migran automáticamente al nuevo motor al regenerar
 - Dos tipos de cierre: historia completa o cliffhanger deliberado
 - El director decide 1, 2 o 3 planos según duración y función editorial: ritmo base de ~3–7 s por composición, ~4–6 s en diálogo estable y ~2–4 s en tensión/acción
 - Cada plano queda anclado a un fragmento literal y ordenado de la narración para impedir adelantar acontecimientos; dentro de una escena se conserva posición, ropa, lesiones, objetos y estado físico entre tomas
