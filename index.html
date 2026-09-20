@@ -468,6 +468,7 @@
   <div class="panel" id="panel-personajes">
     <div class="card">
       <h2>👥 Personajes</h2>
+      <button class="btn-sec" id="btnAllCharacterRefs" style="width:100%;margin-bottom:10px;display:none">🎨 Generar referencias faltantes</button>
       <div id="charactersList"></div>
     </div>
     <div class="card" style="margin-top:14px">
@@ -4322,6 +4323,8 @@ Responde SOLO JSON válido sin markdown`;
 // ════════════════════════════════════════════════════════════════
 async function renderCharacters() {
   const c = document.getElementById('charactersList');
+  const bulkBtn = document.getElementById('btnAllCharacterRefs');
+  if (bulkBtn) bulkBtn.style.display = state.characters.length ? 'block' : 'none';
   if (!state.characters.length) {
     c.innerHTML = `<div class="empty"><div class="emoji">👥</div><p>Genera un episodio para ver los personajes</p></div>`;
     return;
@@ -4389,6 +4392,41 @@ window.generateCharImage = async function(charId) {
     openErrorModal('Error imagen personaje', explicarErrorDeImagen(e));
   }
 };
+
+document.getElementById('btnAllCharacterRefs')?.addEventListener('click', async function() {
+  if (!state.characters.length) return;
+  if (!empezarTanda()) return;
+  const btn=this, original=btn.innerHTML;
+  btn.disabled=true;
+  let made=0, skipped=0, failed=0;
+  try {
+    for (let i=0;i<state.characters.length;i++) {
+      if (tanda.detener) break;
+      const ch=state.characters[i];
+      if (await dbGet(charImgKey(ch.id))) { skipped++; continue; }
+      btn.innerHTML=`<div class="spinner"></div> Referencia ${i+1}/${state.characters.length}: ${ch.name}`;
+      const prompt=`Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, natural neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render clothing exactly as described. No turnaround, no collage, no alternate poses, no expression sheet, no inset faces, no text, no labels, no watermark. Authentic Japanese hand-drawn 2D anime character design, crisp variable linework, hard-edged cel shading, matte skin.`;
+      try {
+        const img=await conEsperaDeCuota(
+          () => generateImage(prompt, null, null, { charSheet:true, estilo:'japon_2d' }),
+          (secs) => { btn.textContent=`Cuota: esperando ${secs}s antes de ${ch.name}...`; }
+        );
+        await dbSet(charImgKey(ch.id), img);
+        made++;
+        await renderCharacters();
+      } catch(e) {
+        failed++;
+        console.warn('Referencia '+ch.name+':',e.message);
+        if (!esBloqueo(e) && !esLimiteDeCuota(e)) {
+          // Continue with other characters; the missing one will remain obvious.
+        }
+      }
+    }
+    showToast(`Referencias: ${made} nuevas · ${skipped} ya existentes${failed ? ' · '+failed+' fallidas' : ''}`, failed ? 'error':'success');
+  } finally {
+    btn.disabled=false; btn.innerHTML=original; terminarTanda(); renderCharacters();
+  }
+});
 
 // ════════════════════════════════════════════════════════════════
 // RENDER: SCENARIOS (universe locations + hora/clima)
@@ -5706,6 +5744,14 @@ window.generateAllVideos = async function() {
 // ════════════════════════════════════════════════════════════════
 document.getElementById('btnAllImages').addEventListener('click', async () => {
   if (!state.scenes.length) { showToast('Genera escenas primero', 'error'); return; }
+  const missingRefs=[];
+  for (const ch of state.characters || []) {
+    if (!(await dbGet(charImgKey(ch.id)))) missingRefs.push(ch.name);
+  }
+  if (missingRefs.length) {
+    showToast(`Faltan ${missingRefs.length} referencias de personaje. Ve a Personajes → Generar referencias faltantes.`, 'error');
+    return;
+  }
   if (!empezarTanda()) return;
   const btn = document.getElementById('btnAllImages');
   btn.disabled = true;
