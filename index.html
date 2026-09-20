@@ -402,12 +402,27 @@
       <h2>🎬 Generar Episodio</h2>
       <p style="font-size:13px;color:var(--text-dim);margin:0 0 14px" id="epFormatNote"></p>
 
-      <label>Duración del episodio</label>
+      <label>Duración de la historia</label>
       <select id="epLengthSelect">
-        <option value="corto">Corto — 15 escenas · ~5 min · 45 imágenes</option>
-        <option value="medio" selected>Medio — 24 escenas · ~8 min · 72 imágenes</option>
-        <option value="largo">Largo — 36 escenas · ~12 min · 108 imágenes</option>
-        <option value="epico">Épico — 48 escenas · ~16 min · 144 imágenes</option>
+        <option value="corto">Prueba — ~5 min · 12 escenas</option>
+        <option value="medio">Corto — ~8 min · 18 escenas</option>
+        <option value="largo">Historia — ~15 min · 30 escenas</option>
+        <option value="media_hora">Historia larga — ~30 min · 48 escenas</option>
+        <option value="hora" selected>Especial — ~60 min · 84 escenas</option>
+        <option value="hora_media">Especial largo — ~90 min · 120 escenas</option>
+      </select>
+
+      <label style="margin-top:12px">Forma de contar la historia</label>
+      <select id="storyModeSelect">
+        <option value="narrated" selected>🎙️ Narrada — una voz cuenta e interpreta los diálogos</option>
+        <option value="cast">🎭 Dramatizada — una voz estable por personaje</option>
+      </select>
+      <p id="storyModeNote" style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.5">Narrada: una voz conduce la historia, los pensamientos y los diálogos. Dramatizada: diálogo directo y pensamientos con la voz de cada personaje; narrador sólo cuando aporta información que la imagen no puede dar.</p>
+
+      <label style="margin-top:12px">Tipo de cierre</label>
+      <select id="endingModeSelect">
+        <option value="complete" selected>✅ Historia completa — cierre satisfactorio</option>
+        <option value="cliffhanger">➡️ Continuará — cierre abierto / cliffhanger</option>
       </select>
       <!-- Episode navigation -->
       <div id="episodeNav" style="display:none;margin-bottom:14px">
@@ -513,6 +528,14 @@
         <option value="9:16">📱 9:16 Vertical — Reels / TikTok / Stories</option>
         <option value="16:9">🖥️ 16:9 Horizontal — YouTube / Widescreen</option>
       </select>
+
+      <label style="margin-top:12px">Movimiento</label>
+      <select id="motionProfileSelect">
+        <option value="motion_comic" selected>🎞️ Motion anime — cortes + paneos/zooms; Veo sólo donde hace falta</option>
+        <option value="mixed">✨ Mixto — también anima gestos y conversaciones importantes</option>
+        <option value="full">🎬 Animar todo — genera Veo para todos los planos</option>
+      </select>
+      <p style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.5">Recomendado: Motion anime. Conserva el aspecto 2D, usa el movimiento como acento y evita convertir una hora de historia en una sucesión de cinemáticas de videojuego.</p>
 
       <label>Idioma</label>
       <select id="voiceLang" style="font-size:13px"><option value="es-US">Español · Latinoamérica</option></select>
@@ -872,9 +895,8 @@ const STUDIO_BY_DEMO = {
 // genre (donghua included) — only the narrative/setting content
 // differs by genre, not the rendering technique.
 // ════════════════════════════════════════════════════════════════
-const ANIME_VISUAL_STYLE_CORE = 'high-budget cinematic 2D anime film quality, reference-tier: MAPPA, Wit Studio, Ufotable, Kyoto Animation, and top-tier cinematic donghua production values. Fine, precise, variable-weight linework — NOT thick uniform cartoon outlines. Soft cel-shading with smooth gradient shadow transitions and subtle ambient occlusion — NOT flat 2-tone color blocks. Large detailed anime eyes with 2-4 specular highlights and iris gradient, expressive but anatomically grounded faces — NOT simplified, NOT chibi, NOT doll-flat. Individually-rendered hair strands with layered directional highlights. Richly detailed, near-photorealistic environment textures and materials behind clean 2D character linework — worn surfaces, reflections, atmospheric depth. Cinematic motivated lighting: practical light sources, warm/cool color contrast, rim light, volumetric glow, wet-surface reflections, filmic color grading — NOT flat even "kids cartoon" lighting. FORBIDDEN — both failure modes: (1) flat single-tone shading, thick block outlines, simplified/chibi/webtoon-flat cartoon look; (2) 3D render, CGI, photorealistic human skin, video game graphics, western cartoon, Disney/Pixar, motion-capture aesthetic.';
-// Short version for LLM-authored prompt lead-ins (keeps token cost low across 15 scenes)
-const ANIME_STYLE_LEAD_IN = 'Cinematic 2D anime key visual, fine detailed linework, soft gradient cel-shading, richly detailed background,';
+const ANIME_VISUAL_STYLE_CORE = 'AUTHENTIC JAPANESE 2D TV ANIME FRAME, modern dark-shonen production language. Hand-drawn character artwork with crisp variable-weight ink lines and GRAPHIC HARD-EDGED CEL SHADOW SHAPES; two or three deliberate tone steps, not airbrushed volume. Matte skin with restrained highlights; facial planes communicated by drawing and cel shadows, never by realistic skin rendering. Hair built from clear grouped locks and graphic shadow masses, not hundreds of individually rendered glossy strands. Expressive Japanese anime facial acting: readable eyes, brows and mouths, strong silhouette and posing. Backgrounds are detailed 2D painted anime backgrounds with believable perspective and atmosphere, but characters remain clearly drawn animation cels on top. Cinematic composition comes from framing, contrast, color design and selective rim light — NOT from 3D material rendering. STRICTLY FORBIDDEN: 3D render, CGI character shading, PBR materials, ambient-occlusion-heavy faces, subsurface skin, glossy plastic skin, videogame cutscene, motion-capture look, photorealistic person, semi-realistic AI portrait, Chinese donghua/manhua rendering, Korean webtoon rendering, Disney/Pixar, over-rendered promotional key art. The result must look like a paused frame from a high-quality Japanese 2D anime episode.';
+const ANIME_STYLE_LEAD_IN = 'Authentic Japanese hand-drawn 2D TV anime frame, crisp variable linework, hard-edged cel shading, matte character colors, expressive anime acting, detailed painted background,';
 
 // ════════════════════════════════════════════════════════════════
 // ESTILOS DE ANIMACIÓN — todos anime 2D, distinta escuela de dibujo.
@@ -1191,8 +1213,13 @@ function briefDeNombres(genero, concepto = '', ademas = []) {
 }
 
 const ESTILOS_ANIME = {
+  japon_2d: {
+    nombre: 'Anime japonés 2D — recomendado',
+    leadIn: ANIME_STYLE_LEAD_IN,
+    core: ANIME_VISUAL_STYLE_CORE,
+  },
   cinematografico: {
-    nombre: 'Cinematográfico moderno',
+    nombre: 'Cinematográfico ilustrado',
     leadIn: ANIME_STYLE_LEAD_IN,
     core: ANIME_VISUAL_STYLE_CORE,
   },
@@ -1268,7 +1295,7 @@ const NO_ES_3D = ' STRICTLY 2D hand-drawn animation. FORBIDDEN: 3D render, CGI, 
   + 'video game graphics, western cartoon, Disney/Pixar, motion capture, live action.';
 for (const e of Object.values(ESTILOS_ANIME)) e.core += NO_ES_3D;
 
-const ESTILO_POR_DEFECTO = 'cinematografico';
+const ESTILO_POR_DEFECTO = 'japon_2d';
 
 function estiloElegido() {
   const v = document.getElementById('estiloAnime')?.value;
@@ -2244,18 +2271,7 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
       data.error.includes('cannot generate an image based on')
     );
     if (isRefError && cleanRefs) {
-      console.warn('Ref rechazada — reintentando sin refs');
-      const res2 = await fetch('/api/image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // aspectRatio must be resent: the API defaults to 9:16, so dropping it
-        // here silently produced a vertical image inside a 16:9 project.
-        body: JSON.stringify({ prompt: cleanPrompt, characterRefs: null, model: model === 'auto' ? null : model, isEcchi, aspectRatio }),
-      });
-      const data2 = await res2.json();
-      if (!res2.ok || data2.error) throw new Error(data2.error || `Image proxy ${res2.status}`);
-      if (!data2.imageData) throw new Error('Imagen: respuesta sin datos');
-      return data2.imageData;
+      throw new Error('El modelo rechazó una referencia de personaje. La toma NO se generó sin referencias para no cambiar la identidad. Revisa la referencia o genera este plano manualmente.');
     }
     throw new Error(data.error || `Image proxy ${res.status}`);
   }
@@ -2576,7 +2592,7 @@ function pintarVocesDelIdioma() {
 // (con qué modelo generás, con qué voz narrás), no contenido de un anime.
 // ════════════════════════════════════════════════════════════════
 const AJUSTES_KEY = 'ajustes_estudio';
-const CAMPOS_AJUSTE = ['imageModelSelect', 'veoModelSelect', 'estiloAnime', 'aspectRatio',
+const CAMPOS_AJUSTE = ['imageModelSelect', 'veoModelSelect', 'estiloAnime', 'aspectRatio', 'motionProfileSelect',
                        'voiceLang', 'voiceSelect', 'voiceSpeed', 'voiceVolumen',
                        'assemblyUseClips', 'assemblyUseMusic', 'assemblyMusicVol',
                        'cortoRatio', 'cortoDuracion', 'cortoGenero', 'cortoEstilo',
@@ -2610,7 +2626,8 @@ function aplicarAjuste(id, valor) {
 // Una línea por estilo, para saber qué se está eligiendo sin generar una imagen
 // de prueba. Van pegadas a lo que se VE, no a nombres de estudios.
 const ESTILO_NOTA = {
-  cinematografico: 'Anime de película moderno: línea fina, sombras suaves, ojos grandes pero con cara. Lo que has usado hasta ahora.',
+  japon_2d:        'Anime japonés 2D: línea dibujada, sombras de cel definidas, piel mate y expresiones de anime. Evita el volumen plástico y la apariencia de videojuego.',
+  cinematografico: 'Ilustración anime cinematográfica, más detallada y suave. Si buscas el aspecto de una serie japonesa 2D, usa «Anime japonés 2D».',
   realista:        'Gente con forma de gente: <strong>siete cabezas y media de alto</strong>, ojos de tamaño normal, nariz con puente, mandíbula. Caras adultas que aparentan su edad. Es el más cercano a un seinen serio.',
   donghua:         'Manhua animado: figuras esbeltas, túnicas con vuelo, fondos de tinta y niebla, paleta de jade y bermellón. Dibujado en 2D, no el donghua 3D.',
   clasico90:       'Anime de los 90 en celuloide: fondos pintados a mano, sombras duras de dos tonos, grano de película y color un poco desvaído.',
@@ -2971,24 +2988,30 @@ CAPA DE HUMILLACIÓN Y REVANCHA (la selección del usuario SÍ la pide): la inju
 // each call receiving everything written so far.
 // ════════════════════════════════════════════════════════════════
 const EPISODE_FORMATS = {
-  corto: { scenes: 15, parts: 1, label: 'Corto',  minutes: 5  },
-  medio: { scenes: 24, parts: 2, label: 'Medio',  minutes: 8  },
-  largo: { scenes: 36, parts: 3, label: 'Largo',  minutes: 12 },
-  epico: { scenes: 48, parts: 4, label: 'Épico',  minutes: 16 },
+  corto:      { scenes: 12,  parts: 1,  label: 'Prueba',        minutes: 5  },
+  medio:      { scenes: 18,  parts: 2,  label: 'Corto',         minutes: 8  },
+  largo:      { scenes: 30,  parts: 3,  label: 'Historia',      minutes: 15 },
+  media_hora: { scenes: 48,  parts: 6,  label: 'Historia larga',minutes: 30 },
+  hora:       { scenes: 84,  parts: 10, label: 'Especial',      minutes: 60 },
+  hora_media: { scenes: 120, parts: 15, label: 'Especial largo',minutes: 90 },
 };
-const WORDS_PER_SCENE = 52;
+const WORDS_PER_MINUTE = 145;
 
 function getEpisodeFormat() {
-  // The universe stores the format chosen when it was created, so episodes 2+
-  // and repairs keep the same shape as episode 1 even after a reload.
-  const key = state.universe?.epFormat
+  // Once the first episode is generated the universe keeps that production
+  // format. Before that, the visible selector is authoritative.
+  const firstExists = !!(state.episodes?.[1]?.length);
+  const key = (firstExists && state.universe?.epFormat)
     || document.getElementById('epLengthSelect')?.value
-    || 'medio';
-  return { key, ...(EPISODE_FORMATS[key] || EPISODE_FORMATS.medio) };
+    || state.universe?.epFormat
+    || 'hora';
+  const base = EPISODE_FORMATS[key] || EPISODE_FORMATS.hora;
+  const totalWords = Math.round(base.minutes * WORDS_PER_MINUTE);
+  return { key, ...base, totalWords, wordsPerScene: Math.max(55, Math.round(totalWords / base.scenes)) };
 }
 function formatWordTarget(fmt) {
-  const total = fmt.scenes * WORDS_PER_SCENE;
-  return { min: Math.round(total * 0.95), max: Math.round(total * 1.08), total };
+  const total = fmt.totalWords || Math.round(fmt.minutes * WORDS_PER_MINUTE);
+  return { min: Math.round(total * 0.92), max: Math.round(total * 1.08), total };
 }
 // Act label for a scene index, scaled to any episode length.
 function actForIndex(i, totalScenes) {
@@ -3141,7 +3164,9 @@ Devuelve JSON:
     state.universe.demo      = demo;
     state.universe.genero    = genero;
     state.universe.subgenres = subgenres;
-    state.universe.epFormat  = document.getElementById('epLengthSelect')?.value || 'medio';
+    state.universe.epFormat  = document.getElementById('epLengthSelect')?.value || 'hora';
+    state.universe.storyMode = document.getElementById('storyModeSelect')?.value || 'narrated';
+    state.universe.endingMode = document.getElementById('endingModeSelect')?.value || 'complete';
     // Fixed now, from the title the model just produced, so it never moves.
     state.universe.carpeta   = slugCarpeta(state.universe.title, state.projectId);
     state.universe.tono      = tono || '';
@@ -3213,16 +3238,21 @@ function updateEpFormatNote() {
   const sel  = document.getElementById('epLengthSelect');
   const note = document.getElementById('epFormatNote');
   if (!sel || !note) return;
-  const f = EPISODE_FORMATS[sel.value] || EPISODE_FORMATS.medio;
-  const words = f.scenes * WORDS_PER_SCENE;
-  note.textContent = `Crea ${f.scenes} escenas con narración y ${f.scenes * 3} imágenes (3 por escena). `
-    + `~${words} palabras · duración estimada ~${f.minutes} minutos`
-    + (f.parts > 1 ? ` · la historia se escribe en ${f.parts} partes encadenadas.` : '.');
+  const f = EPISODE_FORMATS[sel.value] || EPISODE_FORMATS.hora;
+  const words = Math.round(f.minutes * WORDS_PER_MINUTE);
+  note.textContent = `~${f.minutes} min · ${f.scenes} escenas narrativas · ~${words.toLocaleString('es-ES')} palabras. `
+    + `Cada escena recibe sólo los planos que necesita; no se generan tres imágenes por obligación.`
+    + (f.parts > 1 ? ` La historia se escribe en ${f.parts} bloques continuos para conservar el arco sin exceder el tiempo de una llamada.` : '');
 }
 document.getElementById('epLengthSelect')?.addEventListener('change', function() {
-  if (state.universe) { state.universe.epFormat = this.value; saveState(); }
+  if (state.universe && !(state.episodes?.[1]?.length)) { state.universe.epFormat = this.value; saveState(); }
   updateEpFormatNote();
 });
+for (const [id, field] of [['storyModeSelect','storyMode'], ['endingModeSelect','endingMode']]) {
+  document.getElementById(id)?.addEventListener('change', function() {
+    if (state.universe) { state.universe[field] = this.value; saveState(); }
+  });
+}
 
 // Puts the creation form back in sync with the universe actually loaded, so
 // what the user sees selected is what the project was generated with (and what
@@ -3245,6 +3275,10 @@ function syncFormToUniverse() {
   if (tonoEl && typeof u.tono === 'string') tonoEl.value = u.tono;
   const lenEl = document.getElementById('epLengthSelect');
   if (lenEl && u.epFormat && EPISODE_FORMATS[u.epFormat]) lenEl.value = u.epFormat;
+  const modeEl = document.getElementById('storyModeSelect');
+  if (modeEl && ['narrated','cast'].includes(u.storyMode)) modeEl.value = u.storyMode;
+  const endEl = document.getElementById('endingModeSelect');
+  if (endEl && ['complete','cliffhanger'].includes(u.endingMode)) endEl.value = u.endingMode;
   applyDemoCompatibility();
   updateEpFormatNote();
 }
@@ -3753,7 +3787,7 @@ Responde SOLO JSON válido sin markdown.`;
             setProg(15, `Generando imágenes de ${newChars.length} personaje(s) nuevo(s)...`);
             for (const ch of newChars) {
               try {
-                const prompt = `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. Render the clothing's fabric, colors and CONDITION exactly as described — if it says coarse, faded, patched or frayed, show it clearly; do NOT beautify, enrich or upgrade the clothes. NO text, NO letters, NO watermarks. Clean professional anime 2D art style, white background, character turnaround showing front side and back.`;
+                const prompt = `Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render clothing exactly as described. No turnaround, no collage, no alternate poses, no expression sheet, no text, no watermark. Authentic Japanese hand-drawn 2D anime, crisp linework, hard-edged cel shading.`;
                 const imgB64 = await generateImage(prompt, null, null, { charSheet: true });
                 await dbSet(charImgKey(ch.id), imgB64);
                 renderCharacters();
@@ -4203,7 +4237,7 @@ async function renderCharacters() {
     return { ch, imgB64 };
   }));
   c.innerHTML = items.map(({ ch, imgB64 }) => {
-    const defaultPrompt = `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. Render the clothing's fabric, colors and CONDITION exactly as described — if it says coarse, faded, patched or frayed, show it clearly; do NOT beautify, enrich or upgrade the clothes. NO text, NO letters, NO watermarks, NO labels anywhere in the image. Clean professional 2D anime hand-drawn style, white background, character turnaround showing front side and back.`;
+    const defaultPrompt = `Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, natural neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render the clothing's fabric, colors and CONDITION exactly as described; do not beautify or upgrade it. No turnaround, no collage, no alternate poses, no expression sheet, no inset faces, no text, no labels, no watermark. Authentic Japanese hand-drawn 2D anime character design with crisp linework and hard-edged cel shading.`;
     return `
     <div class="char-card">
       <div class="char-header">
@@ -4233,7 +4267,7 @@ window.generateCharImage = async function(charId) {
     // Use editable prompt from textarea if available, else build default
     const textarea = document.getElementById('charPrompt_' + charId);
     const prompt = textarea?.value.trim() ||
-      `Full body character reference sheet of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. Render the clothing's fabric, colors and CONDITION exactly as described — if it says coarse, faded, patched or frayed, show it clearly; do NOT beautify, enrich or upgrade the clothes. NO text, NO letters, NO watermarks. Clean professional 2D anime hand-drawn style, white background, character turnaround showing front side and back.`;
+      `Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, natural neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render clothing exactly as described. No turnaround, no collage, no alternate poses, no expression sheet, no text, no watermark. Authentic Japanese hand-drawn 2D anime character design, crisp linework, hard-edged cel shading.`;
 
     // Never pass existing image as reference — it prevents the prompt from taking effect
     let imgB64 = null, lastErr = null;
@@ -4973,26 +5007,28 @@ function anclaDeEscenario(esc) {
 // nearest PREVIOUS scene that happens in the SAME escenario (its last C/B/A).
 // The chain resets automatically whenever the location changes.
 async function getContinuityRef(s, slot) {
-  // Apagado a mano para esta escena: la imagen anterior la estaba bloqueando.
   if (s?.sinContinuidad) return null;
   try {
     const tryList = [];
+    // Inside one scene, references are useful because the action is genuinely
+    // consecutive and wardrobe/location have not changed.
     if (slot === 'C') tryList.push([s.id, 'B'], [s.id, 'A']);
     else if (slot === 'B') tryList.push([s.id, 'A']);
-    if (s.escenario) {
+    // A new scene NEVER grabs an arbitrary older shot merely because it shares
+    // a location. It may anchor to the immediately previous scene only when the
+    // director explicitly marked a physical continuation.
+    else if (slot === 'A' && s?.continuarAnterior === true) {
       const idx = state.scenes.findIndex(x => x.id === s.id);
-      for (let i = idx - 1; i >= 0; i--) {
-        const p = state.scenes[i];
-        if (!p || p.escenario !== s.escenario) continue;
+      const p = idx > 0 ? state.scenes[idx - 1] : null;
+      if (p && (!s.escenario || !p.escenario || p.escenario === s.escenario)) {
         tryList.push([p.id, 'C'], [p.id, 'B'], [p.id, 'A']);
-        break;
       }
     }
     for (const [id, sl] of tryList) {
       const img = await dbGet(sceneImgKeyBy(id, sl));
       if (img && String(img).length > 100) return String(img);
     }
-  } catch(_) {}
+  } catch (_) {}
   return null;
 }
 
