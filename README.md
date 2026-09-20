@@ -31,7 +31,10 @@ Estudio personal para producir historias anime largas desde el móvil. Tiene exa
 - Multi-episodio con continuidad de personajes y escenarios
 - Escenarios extraídos de la historia y reutilizados entre episodios
 - Formato 9:16 vertical o 16:9 widescreen
-- Persistencia en localStorage + IndexedDB
+- **Google Cloud Storage es la fuente de verdad**: proyectos, guiones, personajes y estado se guardan como manifiestos en el bucket; imágenes, audios, música, operaciones y referencias se reflejan al bucket al generarse
+- `localStorage` e IndexedDB son sólo caché del dispositivo activo; la app elimina caché de proyectos inactivos para que el iPhone no se llene al acumular animes
+- Migración automática: la primera vez que se abre esta versión en el dispositivo que contiene proyectos antiguos, sube esos proyectos y sus medios al bucket antes de limpiar ninguna caché
+- La lista **Proyectos** se reconstruye desde GCS: el mismo anime aparece al abrir la aplicación desde otro teléfono o computadora
 - Export ZIP: imágenes, videos, audios, música, subtítulos .srt y la dirección creativa
 - Subtítulos alineados palabra a palabra con el audio real (Speech-to-Text), con respaldo proporcional por escena
 - Ensamblaje del MP4 final en la propia app: cada escena dura exactamente su narración, con música mezclada y subtítulos quemados

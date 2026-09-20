@@ -324,7 +324,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-19.109 ✨</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-19.110 ✨</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -698,10 +698,143 @@ function initDB() {
     req.onerror = e => rej(e);
   });
 }
-function dbSet(k, v) { return new Promise((res, rej) => { const tx = db.transaction('blobs','readwrite'); tx.objectStore('blobs').put(v, k); tx.oncomplete = res; tx.onerror = rej; }); }
-function dbGet(k)    { return new Promise((res, rej) => { const tx = db.transaction('blobs','readonly'); const r = tx.objectStore('blobs').get(k); r.onsuccess = () => res(r.result || null); r.onerror = rej; }); }
-function dbDel(k)    { return new Promise(res => { const tx = db.transaction('blobs','readwrite'); tx.objectStore('blobs').delete(k); tx.oncomplete = res; }); }
-function dbKeys()    { return new Promise((res, rej) => { const tx = db.transaction('blobs','readonly'); const r = tx.objectStore('blobs').getAllKeys(); r.onsuccess = () => res(r.result || []); r.onerror = rej; }); }
+function localDbSet(k, v) { return new Promise((res, rej) => { const tx = db.transaction('blobs','readwrite'); tx.objectStore('blobs').put(v, k); tx.oncomplete = res; tx.onerror = rej; }); }
+function localDbGet(k)    { return new Promise((res, rej) => { const tx = db.transaction('blobs','readonly'); const r = tx.objectStore('blobs').get(k); r.onsuccess = () => res(r.result ?? null); r.onerror = rej; }); }
+function localDbDel(k)    { return new Promise(res => { const tx = db.transaction('blobs','readwrite'); tx.objectStore('blobs').delete(k); tx.oncomplete = res; }); }
+function localDbKeys()    { return new Promise((res, rej) => { const tx = db.transaction('blobs','readonly'); const r = tx.objectStore('blobs').getAllKeys(); r.onsuccess = () => res(r.result || []); r.onerror = rej; }); }
+
+const cloudMissingKeys = new Set();
+const signedVideoCache = new Map();
+
+function projectIdFromDbKey(k) {
+  const m = /^[a-z]+_(p[a-zA-Z0-9-]{5,80})(?:_|$)/.exec(String(k || ''));
+  return m ? m[1] : null;
+}
+function isVideoDbKey(k) { return /^sv[abc]_/.test(String(k || '')); }
+
+function canonicalVideoValue(v) {
+  const raw = String(v || '');
+  if (raw.startsWith('gs://')) return raw;
+  try {
+    const u = new URL(raw);
+    if (u.hostname !== 'storage.googleapis.com') return raw;
+    const p = u.pathname.replace(/^\/+/, '').split('/');
+    if (p.length < 2) return raw;
+    const bucket = p.shift();
+    const objectPath = decodeURIComponent(p.join('/'));
+    return `gs://${bucket}/${objectPath}`;
+  } catch (_) {
+    return raw;
+  }
+}
+
+async function signProjectAsset(projectId, key, method) {
+  const r = await fetch('/api/upload-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action:'assetSign', projectId, key, method }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.url) throw new Error(d.error || `upload-url ${r.status}`);
+  return d.url;
+}
+
+async function cloudPutDbValue(k, v) {
+  const projectId = projectIdFromDbKey(k);
+  if (!projectId) return;
+  const value = isVideoDbKey(k) ? canonicalVideoValue(v) : String(v ?? '');
+  let last = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const url = await signProjectAsset(projectId, k, 'PUT');
+      const r = await fetch(url, { method:'PUT', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:value });
+      if (!r.ok) throw new Error(`GCS ${r.status}`);
+      cloudMissingKeys.delete(k);
+      return;
+    } catch (e) {
+      last = e;
+      if (attempt < 2) await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+    }
+  }
+  throw new Error(`No se pudo guardar ${k} en el bucket: ${last?.message || 'error'}`);
+}
+
+async function cloudGetDbValue(k) {
+  const projectId = projectIdFromDbKey(k);
+  if (!projectId || cloudMissingKeys.has(k)) return null;
+  try {
+    const url = await signProjectAsset(projectId, k, 'GET');
+    const r = await fetch(url, { cache:'no-store' });
+    if (r.status === 404) { cloudMissingKeys.add(k); return null; }
+    if (!r.ok) throw new Error(`GCS ${r.status}`);
+    return await r.text();
+  } catch (e) {
+    if (/404/.test(String(e.message))) { cloudMissingKeys.add(k); return null; }
+    console.warn('Lectura cloud:', k, e.message);
+    return null;
+  }
+}
+
+async function resolveVideoValue(v) {
+  const canonical = canonicalVideoValue(v);
+  if (!canonical.startsWith('gs://')) return v;
+  const cached = signedVideoCache.get(canonical);
+  if (cached && cached.expiresAt > Date.now() + 60_000) return cached.url;
+  const r = await fetch('/api/download-url', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ gcsUri:canonical, descarga:false }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.url) throw new Error(d.error || 'No se pudo firmar el video');
+  signedVideoCache.set(canonical, { url:d.url, expiresAt:Date.now() + 5 * 3600_000 });
+  return d.url;
+}
+
+// Device storage is a cache only. Every project value is mirrored to GCS
+// immediately; another device can rebuild it even with empty browser storage.
+async function dbSet(k, v) {
+  const canonical = isVideoDbKey(k) ? canonicalVideoValue(v) : v;
+  await localDbSet(k, canonical);
+  const pid = projectIdFromDbKey(k);
+  if (pid) await cloudPutDbValue(k, canonical);
+}
+async function dbGet(k) {
+  let v = await localDbGet(k);
+  if (v == null) {
+    v = await cloudGetDbValue(k);
+    if (v != null) await localDbSet(k, v);
+  }
+  if (v == null) return null;
+  return isVideoDbKey(k) ? resolveVideoValue(v) : v;
+}
+async function dbDel(k) {
+  await localDbDel(k);
+  cloudMissingKeys.add(k);
+  const projectId = projectIdFromDbKey(k);
+  if (!projectId) return;
+  try {
+    await fetch('/api/upload-url', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ action:'assetDelete', projectId, key:k }),
+    });
+  } catch (e) {
+    console.warn('Borrado cloud:', k, e.message);
+  }
+}
+async function dbKeys() {
+  const local = await localDbKeys();
+  const projectId = state.projectId;
+  if (!projectId) return local;
+  try {
+    const r = await fetch('/api/upload-url', {
+      method:'POST', headers:{'Content-Type':'application/json'}, cache:'no-store',
+      body:JSON.stringify({ action:'assetList', projectId }),
+    });
+    const d = await r.json();
+    if (r.ok && Array.isArray(d.keys)) return [...new Set([...local, ...d.keys])];
+  } catch (_) {}
+  return local;
+}
 
 const charImgKey   = id => `ci_${state.projectId}_${id}`;
 const sceneImgKey  = id => `si_${state.projectId}_${id}`;
@@ -1537,70 +1670,279 @@ window.switchEpisode = function(ep) {
 // ════════════════════════════════════════════════════════════════
 // FRAME CAPTURE → Image B
 // ════════════════════════════════════════════════════════════════
-function saveState() {
-  if (!state.projectId) return;
-  // Sync current episode scenes into episodes map
+function stateDataSnapshot() {
   if (!state.episodes) state.episodes = {};
   state.episodes[state.currentEpisode || 1] = state.scenes;
-  const data = {
+  return {
     universe: state.universe,
     characters: state.characters,
     episodes: state.episodes,
     currentEpisode: state.currentEpisode || 1,
     episodeDirection: state.episodeDirection || {},
   };
-  localStorage.setItem(`proj_${state.projectId}`, JSON.stringify(data));
-  const i = projects.findIndex(p => p.id === state.projectId);
-  if (i >= 0) { projects[i].name = state.universe?.title || projects[i].name; projects[i].updated = Date.now(); saveProjects(); }
 }
-function loadStateFor(pid) {
-  const raw = localStorage.getItem(`proj_${pid}`);
-  state = { projectId: pid, universe: null, characters: [], episodes: { 1: [] }, currentEpisode: 1, scenes: [], episodeDirection: {} };
-  if (!raw) return;
-  try {
-    const d = JSON.parse(raw);
-    state.universe   = d.universe;
-    state.characters = d.characters || [];
-    state.episodeDirection = d.episodeDirection || {};
-    if (d.episodes) {
-      // New multi-episode format
-      state.episodes      = d.episodes;
-      state.currentEpisode = d.currentEpisode || 1;
-    } else {
-      // Old single-episode format — migrate to episode 1
-      state.episodes      = { 1: d.scenes || [] };
-      state.currentEpisode = 1;
+
+let cloudSaveTimer = null;
+let pendingCloudSave = null;
+let cloudSyncWarningShown = false;
+
+async function cloudSaveProject(projectId, data, meta = {}) {
+  const r = await fetch('/api/upload-url', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      action:'projectSave',
+      id:projectId,
+      name:meta.name || data?.universe?.title || 'Proyecto',
+      created:meta.created || Date.now(),
+      updated:meta.updated || Date.now(),
+      data,
+    }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.ok) throw new Error(d.error || `upload-url ${r.status}`);
+  return d.project;
+}
+
+function queueCloudProjectSave(projectId, data, meta) {
+  // Only the newest snapshot matters. localStorage is a cache; GCS receives the
+  // latest canonical JSON after a short debounce so one generation step does
+  // not produce dozens of writes while state fields are being filled.
+  pendingCloudSave = {
+    projectId,
+    data: JSON.parse(JSON.stringify(data)),
+    meta: { ...meta },
+  };
+  clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = setTimeout(async () => {
+    const job = pendingCloudSave;
+    pendingCloudSave = null;
+    if (!job) return;
+    try {
+      await cloudSaveProject(job.projectId, job.data, job.meta);
+      cloudSyncWarningShown = false;
+    } catch (e) {
+      console.error('Sincronización GCS:', e);
+      if (!cloudSyncWarningShown) {
+        cloudSyncWarningShown = true;
+        showToast('⚠️ No se pudo sincronizar el proyecto con Google Cloud. Se reintentará al abrir la app.', 'error');
+      }
     }
-    state.scenes = state.episodes[state.currentEpisode] || [];
-  } catch(e) {}
+  }, 350);
 }
-function saveProjects() { localStorage.setItem('projects_index', JSON.stringify(projects)); }
-function loadProjects() { try { projects = JSON.parse(localStorage.getItem('projects_index') || '[]'); } catch(e) { projects = []; } }
+
+function saveState() {
+  if (!state.projectId) return;
+  const data = stateDataSnapshot();
+  // Browser copy = cache only. The durable copy is project.json in GCS.
+  try { localStorage.setItem(`proj_${state.projectId}`, JSON.stringify(data)); } catch (_) {}
+
+  const now = Date.now();
+  let i = projects.findIndex(p => p.id === state.projectId);
+  if (i < 0) {
+    projects.push({ id:state.projectId, name:state.universe?.title || 'Proyecto', created:now, updated:now });
+    i = projects.length - 1;
+  }
+  projects[i].name = state.universe?.title || projects[i].name || 'Proyecto';
+  projects[i].created = projects[i].created || now;
+  projects[i].updated = now;
+  saveProjects();
+
+  queueCloudProjectSave(state.projectId, data, projects[i]);
+}
+
+function applyStateData(pid, d) {
+  state = { projectId: pid, universe: null, characters: [], episodes: { 1: [] }, currentEpisode: 1, scenes: [], episodeDirection: {} };
+  if (!d || typeof d !== 'object') return;
+  state.universe = d.universe || null;
+  state.characters = d.characters || [];
+  state.episodeDirection = d.episodeDirection || {};
+  if (d.episodes) {
+    state.episodes = d.episodes;
+    state.currentEpisode = d.currentEpisode || 1;
+  } else {
+    state.episodes = { 1: d.scenes || [] };
+    state.currentEpisode = 1;
+  }
+  state.scenes = state.episodes[state.currentEpisode] || [];
+}
+
+async function cloudLoadProject(pid) {
+  const r = await fetch('/api/upload-url', {
+    method:'POST', headers:{'Content-Type':'application/json'}, cache:'no-store',
+    body:JSON.stringify({ action:'projectGet', id:pid }),
+  });
+  if (r.status === 404) return null;
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.project) throw new Error(d.error || `upload-url ${r.status}`);
+  return d.project;
+}
+
+async function loadStateFor(pid) {
+  // Cloud FIRST. The device copy is only an offline/emergency cache.
+  try {
+    const remote = await cloudLoadProject(pid);
+    if (remote?.data) {
+      applyStateData(pid, remote.data);
+      try { localStorage.setItem(`proj_${pid}`, JSON.stringify(remote.data)); } catch (_) {}
+      return true;
+    }
+  } catch (e) {
+    console.warn('Carga desde bucket:', e.message);
+  }
+
+  const raw = localStorage.getItem(`proj_${pid}`);
+  if (!raw) { applyStateData(pid, null); return false; }
+  try { applyStateData(pid, JSON.parse(raw)); return false; }
+  catch (_) { applyStateData(pid, null); return false; }
+}
+
+function saveProjects() {
+  // Small summary cache for fast paint/offline fallback. The real list comes
+  // from GCS every time the app starts or Proyectos is opened.
+  try { localStorage.setItem('projects_index', JSON.stringify(projects)); } catch (_) {}
+}
+function loadProjects() {
+  try { projects = JSON.parse(localStorage.getItem('projects_index') || '[]'); }
+  catch (_) { projects = []; }
+  if (!Array.isArray(projects)) projects = [];
+}
+
+async function cloudListProjects() {
+  const r = await fetch('/api/upload-url', {
+    method:'POST', headers:{'Content-Type':'application/json'}, cache:'no-store',
+    body:JSON.stringify({ action:'projectList' }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !Array.isArray(d.projects)) throw new Error(d.error || `upload-url ${r.status}`);
+  return d.projects;
+}
+
+async function migrateThisBrowserToCloud() {
+  const marker = 'anime_cloud_migrated_v1';
+  if (localStorage.getItem(marker) === '1') return;
+
+  const locals = Array.isArray(projects) ? projects.slice() : [];
+  let remote = [];
+  try { remote = await cloudListProjects(); } catch (e) {
+    console.warn('No se pudo iniciar migración cloud:', e.message);
+    return;
+  }
+  const remoteMap = new Map(remote.map(p => [p.id, p]));
+
+  // 1) Every old local project gets a project.json before we remove ANY cache.
+  for (const p of locals) {
+    const raw = localStorage.getItem(`proj_${p.id}`);
+    if (!raw) continue;
+    try {
+      const data = JSON.parse(raw);
+      const rp = remoteMap.get(p.id);
+      if (!rp || Number(p.updated || 0) >= Number(rp.updated || 0)) {
+        await cloudSaveProject(p.id, data, {
+          name:p.name || data?.universe?.title || 'Proyecto',
+          created:p.created || p.updated || Date.now(),
+          updated:p.updated || Date.now(),
+        });
+      }
+    } catch (e) {
+      console.error('Migración proyecto', p.id, e);
+      return; // no marker: next load retries; never purge first
+    }
+  }
+
+  // 2) Mirror ALL old IndexedDB media from every local anime into its project.
+  // Existing videos are normalized to durable gs:// URIs before upload.
+  const keys = await localDbKeys();
+  for (let i = 0; i < keys.length; i++) {
+    const k = String(keys[i]);
+    const pid = projectIdFromDbKey(k);
+    if (!pid || !locals.some(p => p.id === pid)) continue;
+    const v = await localDbGet(k);
+    if (v == null) continue;
+    try {
+      await cloudPutDbValue(k, isVideoDbKey(k) ? canonicalVideoValue(v) : v);
+    } catch (e) {
+      console.error('Migración medio', k, e);
+      return; // keep everything local and retry automatically next load
+    }
+  }
+
+  localStorage.setItem(marker, '1');
+}
+
+async function refreshProjectsFromCloud() {
+  const remote = await cloudListProjects();
+  projects = remote;
+  saveProjects();
+  return remote;
+}
+
+async function pruneDeviceCacheExcept(projectId) {
+  // Once migration succeeded, browser storage must not grow with the number of
+  // animes. Keep only the active project's state/media on this device.
+  if (localStorage.getItem('anime_cloud_migrated_v1') !== '1') return;
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k?.startsWith('proj_') && k !== `proj_${projectId}`) localStorage.removeItem(k);
+    }
+  } catch (_) {}
+  const keys = await localDbKeys();
+  for (const k0 of keys) {
+    const k = String(k0);
+    const pid = projectIdFromDbKey(k);
+    if (pid && pid !== projectId) await localDbDel(k);
+  }
+}
 
 async function newProject() {
   const pid = 'p' + Date.now();
-  projects.push({ id: pid, name: 'Nuevo proyecto', updated: Date.now() });
+  const now = Date.now();
+  projects.unshift({ id: pid, name: 'Nuevo proyecto', created:now, updated:now });
   saveProjects();
-  state = { projectId: pid, universe: null, characters: [], scenes: [], episodeDirection: {} };
-  saveState();
+  state = { projectId: pid, universe: null, characters: [], episodes:{1:[]}, currentEpisode:1, scenes: [], episodeDirection: {} };
+  // Create the cloud manifest immediately: even an empty new project exists on
+  // every device from the moment it is created.
+  const data = stateDataSnapshot();
+  await cloudSaveProject(pid, data, projects[0]);
+  try { localStorage.setItem(`proj_${pid}`, JSON.stringify(data)); } catch (_) {}
+  await pruneDeviceCacheExcept(pid);
   renderAll();
 }
-function switchProject(pid) {
-  loadStateFor(pid);
+
+async function switchProject(pid) {
+  await loadStateFor(pid);
+  await pruneDeviceCacheExcept(pid);
   renderAll();
   closeModal();
-  showToast('Proyecto cargado', 'success');
+  showToast('Proyecto cargado desde Google Cloud', 'success');
 }
+
 async function deleteProject(pid) {
-  if (!confirm('¿Eliminar este proyecto?')) return;
+  if (!confirm('¿Eliminar este proyecto de Google Cloud y de todos tus dispositivos?')) return;
+  try {
+    const r = await fetch('/api/upload-url', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ action:'projectDelete', id:pid }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) throw new Error(d.error || `upload-url ${r.status}`);
+  } catch (e) {
+    openErrorModal('No se pudo borrar del bucket', e.message);
+    return;
+  }
+
   localStorage.removeItem(`proj_${pid}`);
+  // local media for this project is cache and can now be dropped.
+  for (const k0 of await localDbKeys()) if (projectIdFromDbKey(String(k0)) === pid) await localDbDel(k0);
   projects = projects.filter(p => p.id !== pid);
   saveProjects();
+
   if (state.projectId === pid) {
-    if (projects.length) switchProject(projects[0].id);
-    else { await newProject(); }
+    if (projects.length) await switchProject(projects[0].id);
+    else await newProject();
   }
-  openProjectsModal();
+  await openProjectsModal();
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1901,24 +2243,29 @@ ECCHI/HAREM ACTIVO — REGLA GENERAL (contenido adulto):
 // ════════════════════════════════════════════════════════════════
 // PROJECTS MODAL
 // ════════════════════════════════════════════════════════════════
-function openProjectsModal() {
+async function openProjectsModal() {
+  try { await refreshProjectsFromCloud(); }
+  catch (e) { console.warn('Lista cloud:', e.message); }
+  projects.sort((a,b) => Number(b.updated || 0) - Number(a.updated || 0));
+
   const list = projects.length ? projects.map(p => `
     <div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
       <div style="flex:1;cursor:pointer" onclick="switchProject('${p.id}')">
-        <div style="font-weight:600;font-size:14px">${p.name}</div>
-        <div style="font-size:11px;color:var(--text-dim)">${new Date(p.updated).toLocaleString()}</div>
+        <div style="font-weight:600;font-size:14px">☁️ ${p.name}</div>
+        <div style="font-size:11px;color:var(--text-dim)">Google Cloud · ${new Date(p.updated).toLocaleString()}</div>
       </div>
       <button class="btn-sec btn-danger" style="width:auto;padding:6px 10px;font-size:11px" onclick="deleteProject('${p.id}')">🗑️</button>
     </div>
-  `).join('') : '<p style="color:var(--text-dim);text-align:center">Sin proyectos</p>';
+  `).join('') : '<p style="color:var(--text-dim);text-align:center">Sin proyectos en Google Cloud</p>';
 
   openModal(`
     <h3>📁 Proyectos</h3>
+    <p style="font-size:11px;color:var(--text-dim);margin:-4px 0 12px;line-height:1.5">Esta lista viene del bucket de Google Cloud. Es la misma en cualquier teléfono o computadora.</p>
     ${list}
-    <button class="btn" style="margin-top:10px" onclick="newProject();closeModal();showToast('Proyecto creado','success')">➕ Nuevo Proyecto</button>
+    <button class="btn" style="margin-top:10px" onclick="newProject();closeModal();showToast('Proyecto creado en Google Cloud','success')">➕ Nuevo Proyecto</button>
   `);
 }
-document.getElementById('btnProjects').addEventListener('click', openProjectsModal);
+document.getElementById('btnProjects').addEventListener('click', () => openProjectsModal());
 
 // ════════════════════════════════════════════════════════════════
 // GEMINI TEXT API (via /api/script → Vertex AI, gemini-3.1-pro-preview)
@@ -5960,6 +6307,7 @@ window.generateSceneVideo = async function(sceneId, slot = 'A') {
       lastFrameMimeType: final ? final.mimeType : undefined,
       durationSeconds: segundos,
       aspectRatio,
+      studioProjectId: state.projectId,
       generateAudio: false,
       veoModel: document.getElementById('veoModelSelect')?.value || undefined,
     });
@@ -7845,11 +8193,25 @@ function renderAll() {
 // ════════════════════════════════════════════════════════════════
 (async function init() {
   await initDB();
+
+  // 1) Read whatever this device had BEFORE the cloud architecture existed.
+  // 2) Upload it once (project JSON + every IndexedDB asset) to the bucket.
+  // 3) From this point on, rebuild the project list from GCS on every device.
   loadProjects();
+  await migrateThisBrowserToCloud();
+
+  try {
+    await refreshProjectsFromCloud();
+  } catch (e) {
+    console.warn('No se pudo leer proyectos del bucket; usando caché local:', e.message);
+  }
+
   if (!projects.length) {
     await newProject();
   } else {
-    loadStateFor(projects[projects.length - 1].id);
+    projects.sort((a,b) => Number(b.updated || 0) - Number(a.updated || 0));
+    await loadStateFor(projects[0].id);
+    await pruneDeviceCacheExcept(projects[0].id);
   }
   updateApiDot();
   // Antes de dibujar nada: el formato (9:16 / 16:9) decide cómo se recortan las

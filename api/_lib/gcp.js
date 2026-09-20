@@ -303,6 +303,33 @@ async function gcsReadText(token, bucket, objectPath) {
   return r.text();
 }
 
+async function gcsList(token, bucket, prefix) {
+  const out = [];
+  let pageToken = '';
+  do {
+    const qs = new URLSearchParams({ prefix: String(prefix || '') });
+    if (pageToken) qs.set('pageToken', pageToken);
+    const r = await fetch(`https://storage.googleapis.com/storage/v1/b/${bucket}/o?${qs.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(`GCS lista ${prefix}: ${r.status} ${d.error?.message || ''}`);
+    for (const item of (d.items || [])) if (item?.name) out.push(item);
+    pageToken = d.nextPageToken || '';
+  } while (pageToken);
+  return out;
+}
+
+async function gcsDelete(token, bucket, objectPath) {
+  const r = await fetch(
+    `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodeURIComponent(objectPath)}`,
+    { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (r.status === 404) return false;
+  if (!r.ok) throw new Error(`GCS borrar ${objectPath}: ${r.status} ${(await r.text()).slice(0, 160)}`);
+  return true;
+}
+
 // Convenience: credentials + project + token in one call.
 async function auth() {
   const sa = loadServiceAccount();
@@ -347,7 +374,7 @@ function fail(res, e) {
 
 module.exports = {
   cfg, imageModelLocation, imageModelLocations, signedUrl, getIdToken,
-  gcsUpload, gcsReadText, asegurarCors,
+  gcsUpload, gcsReadText, gcsList, gcsDelete, asegurarCors,
   ConfigError, loadServiceAccount, getAccessToken, auth,
   vertexUrl, CORS, begin, fail,
 };

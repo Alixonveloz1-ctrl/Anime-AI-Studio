@@ -70,7 +70,12 @@ const required = [
   ['btnAllCharacterRefs', 'generación en lote de referencias maestras'],
   ['generationDrafts', 'reanudación persistente para cualquier duración'],
   ['sceneVidOpKeyBy', 'reanudación de operaciones Veo en curso'],
-  ['creativeVersion', 'versionado compatible de proyectos']
+  ['creativeVersion', 'versionado compatible de proyectos'],
+  ['cloudSaveProject', 'estado permanente de proyectos en GCS'],
+  ['migrateThisBrowserToCloud', 'migración automática del primer almacenamiento local'],
+  ['refreshProjectsFromCloud', 'lista de proyectos reconstruida desde el bucket'],
+  ['cloudPutDbValue', 'medios de IndexedDB espejados en GCS'],
+  ['pruneDeviceCacheExcept', 'caché del dispositivo limitada al proyecto activo']
 ];
 for (const [needle, label] of required) html.includes(needle) ? ok(label) : fail('Falta ' + label);
 
@@ -127,6 +132,14 @@ if (!gcp.includes("anime-studio-montage") || !setup.includes('anime-studio-monta
 else ok('Montador y aplicación usan el mismo Job');
 if (!setup.includes("gcloud auth list") || !setup.includes("Cuenta Google activa")) fail('setup.sh no valida la cuenta activa de Cloud Shell');
 else ok('setup.sh usa la sesión/proyecto activos; no depende de un correo hardcodeado');
+
+const storageApi = fs.readFileSync('api/upload-url.js','utf8');
+if (!/project-manifests/.test(storageApi) || !/projectList/.test(storageApi) || !/projectSave/.test(storageApi)) {
+  fail('upload-url no contiene el índice autoritativo de proyectos en GCS');
+} else ok('El bucket es la fuente de verdad de la lista y estado de proyectos');
+if (!/assetSign/.test(storageApi) || !/assetList/.test(storageApi) || !/cache\//.test(storageApi)) {
+  fail('upload-url no refleja los medios del proyecto en GCS');
+} else ok('Los medios del proyecto tienen espejo cloud sin sumar funciones de Vercel');
 
 if (process.exitCode) process.exit(process.exitCode);
 console.log('\nValidación estática completa.');
