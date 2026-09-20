@@ -4310,14 +4310,24 @@ Responde SOLO JSON válido.`;
 
     const imageSysPrompt = `Eres el DIRECTOR DE FOTOGRAFÍA de este anime. Tu tarea: decidir CUÁNTOS PLANOS necesita cada escena y escribir sus prompts de imagen en inglés, basados en la narración YA ESCRITA — no inventas historia nueva, solo decides el desglose visual de lo que ya ocurre.
 
-⚠️ DECISIÓN 1 — CUÁNTOS PLANOS (montaje anime):
-La narración de una escena suele durar decenas de segundos. La imagen no puede quedarse congelada todo ese tiempo. Decide 1, 2 o 3 ILUSTRACIONES distintas por FUNCIÓN EDITORIAL:
-- 1 PLANO sólo para un beat realmente breve y autosuficiente: establishing corto, insert de objeto, reacción aislada, pensamiento corto o una acción cuya misma composición sostiene todo el fragmento.
+⚠️ DECISIÓN 1 — CUÁNTOS PLANOS (ritmo observado en los videos de referencia):
+La fórmula que estamos reproduciendo NO es "una ilustración por escena". Es motion-comic de montaje rápido: la imagen cambia por frase, turno de habla, reacción o nueva información aunque el personaje siga quieto.
+- Cadencia NORMAL: un cambio visual cada ~3–7 s.
+- Conversación/exposición estable: ~4–6 s por composición.
+- Tensión, acción o remate cómico: ~2–4 s por composición.
+- Sostener >8 s la misma composición es excepcional: sólo una pausa emocional deliberada o un plano cuya inmovilidad sea el punto.
+Como todavía no existe el audio final, usa la longitud del texto como proxy y RESPETA el mínimo indicado junto a cada escena:
+- beat breve (~<18 palabras): 1 plano puede bastar;
+- beat medio (~18–35 palabras): mínimo 2;
+- beat largo (~36+ palabras): mínimo 3.
+Decide 1, 2 o 3 ILUSTRACIONES distintas por FUNCIÓN EDITORIAL:
+- 1 PLANO sólo para un beat realmente breve y autosuficiente: insert de objeto, reacción aislada, pensamiento corto o una acción cuya misma composición sostiene todo el fragmento.
 - 2 PLANOS para acción→reacción, pregunta→respuesta, llegada→descubrimiento, o una conversación corta que necesita ver al hablante y a quien escucha.
-- 3 PLANOS para conversaciones largas, confrontaciones, revelaciones o secuencias con varios focos: por ejemplo conjunto → hablante → reacción/detalle; amenaza → decisión → consecuencia.
-- Un cambio de ángulo SÍ justifica otra ilustración cuando cambia QUÉ INFORMACIÓN mira el espectador: otro hablante, una reacción, un objeto decisivo, una mirada o la relación espacial. No lo hagas sólo por variedad decorativa.
+- 3 PLANOS para conversaciones largas, confrontaciones, revelaciones o secuencias con varios focos: conjunto → hablante → reacción/detalle; amenaza → decisión → consecuencia.
+- En diálogo, cambia de imagen cuando cambia el centro dramático: quien habla, quien recibe, la reacción o el detalle que altera lo que entendemos.
+- Un cambio de ángulo SÍ justifica otra ilustración cuando cambia QUÉ INFORMACIÓN mira el espectador. No lo hagas sólo por variedad decorativa.
 
-🚫 PROHIBIDO RELLENAR: los planos adicionales tienen una función distinta. No generes tres versiones casi iguales del mismo personaje con la misma expresión. Tampoco reduzcas automáticamente una conversación de 30–45 segundos a una sola imagen sólo porque nadie camina.
+🚫 PROHIBIDO RELLENAR: los planos adicionales tienen una función distinta. No generes tres versiones casi iguales del mismo personaje con la misma expresión. El movimiento digital del montaje (zoom/pan) ayuda, pero NO sustituye la cobertura cuando la escena necesita hablante, reacción y consecuencia.
 
 ⚠️ DECISIÓN 2 — QUÉ MUESTRA CADA PLANO (cuando hay más de uno):
 - Los planos son momentos CONSECUTIVOS: prompt 1 = primer beat, y el último = la consecuencia o revelación con la que cierra el fragmento.
@@ -4332,9 +4342,11 @@ La narración de una escena suele durar decenas de segundos. La imagen no puede 
 
 ⚠️ DECISIÓN 3 — ¿ESTE PLANO MERECE VIDEO?
 Para CADA plano devuelve "videoRecomendado": true | false.
-- true cuando el movimiento aporta información o actuación que una ilustración con paneo/zoom no puede comunicar bien: golpe, caída, transformación, entrada/salida física importante, carrera, interacción compleja con un objeto, poder en acción, gesto corporal decisivo o actuación facial/corporal que sea el centro del beat.
-- false cuando una ilustración fuerte con un movimiento de cámara visible durante el montaje funciona bien: exposición, reacción, conversación estable, mirada, detalle, establecimiento del lugar o pose sostenida.
-No ahorres video artificialmente y tampoco lo marques por espectáculo: decide por función narrativa. El usuario puede generar manualmente un clip incluso cuando tú marques false; si ese clip existe, el montaje lo usará.
+La referencia real usa MAYORITARIAMENTE ilustraciones 2D con cortes, paneos y zooms; el video completo se reserva para momentos donde el TIEMPO del movimiento comunica algo que una imagen no puede.
+- true: carrera, caída, forcejeo, transformación, poder desplegándose, entrada/salida física importante, interacción compleja con un objeto o una acción corporal cuyo desarrollo sea el beat.
+- false: exposición, diálogo, reacción facial, mirada, gesto corto de mano, pose sostenida, establishing, detalle, beso/contacto que puede resolverse en un fotograma fuerte, o cualquier acción que visualmente dure menos de ~4 s.
+- Parpadeo, boca, cabello, respiración, partículas y pequeños gestos NO justifican por sí solos pagar Veo; son animación limitada.
+No ahorres video donde hace falta, pero tampoco conviertas el episodio entero en Veo. El patrón buscado es: ilustración frecuente + movimiento editorial + clips puntuales de alto valor. El usuario puede generar manualmente un clip aunque marques false; si existe, el montaje lo usa.
 
 Campo "movimientos": describe en INGLÉS qué debe hacer Veo SI se genera video para ese plano. Debe ser una acción corta y clara que conserve el dibujo japonés 2D.
 - Nada de órbitas 3D, cámaras flotantes, transformación de perspectiva, movimientos de videojuego ni acciones inventadas.
@@ -4388,12 +4400,26 @@ Responde SOLO JSON válido sin markdown`;
         u.escenarios.map(e => `${e.id} = "${e.name}": ${e.desc}`).join('\n')
       : 'ESCENARIOS DEL UNIVERSO: (ninguno definido — dejá "escenario" como "")';
 
+    // The reference videos change composition every few seconds. Before TTS
+    // exists, word count is the only deterministic duration proxy available.
+    function minPlanosPorTexto(texto) {
+      const n = String(texto || '').trim().split(/\s+/).filter(Boolean).length;
+      if (n >= 36) return 3;
+      if (n >= 18) return 2;
+      return 1;
+    }
+
     // Shot prompts + the motion of each shot, onto the scene.
     function aplicarPlanos(s, p) {
       const [a, b, c] = p?.prompts || [];
       const [ma, mb, mc] = p?.movimientos || [];
       const [va, vb, vc] = p?.videoRecomendado || [];
       const [ca, cb, cc] = p?.continuos || [];
+      const [pa, pb, pc] = p?.pesos || [];
+      const peso = v => {
+        const n = Number(v);
+        return Number.isFinite(n) && n > 0 ? Math.min(5, Math.max(1, n)) : 1;
+      };
       // Long-form coverage is edited by CUTS. Repeating a medium or close shot
       // is perfectly valid when the dramatic function demands it; forcing an
       // alternating pattern made conversations feel mechanical and game-like.
@@ -4414,6 +4440,10 @@ Responde SOLO JSON válido sin markdown`;
         motionA: a ? (va === true ? 'action' : 'still') : '',
         motionB: b ? (vb === true ? 'action' : 'still') : '',
         motionC: c ? (vc === true ? 'action' : 'still') : '',
+        // Relative screen time: 1 quick insert/reaction, 5 dominant beat.
+        pesoA: a ? peso(pa) : 0,
+        pesoB: b ? peso(pb) : 0,
+        pesoC: c ? peso(pc) : 0,
         sueltoPlanoA: ca !== true, sueltoPlanoB: cb !== true, sueltoPlanoC: true,
         continuarAnterior: p?.continuarAnterior === true,
       };
@@ -4421,11 +4451,13 @@ Responde SOLO JSON válido sin markdown`;
 
     async function generateImagePromptsBatch(scenesForPrompt, prevContext = '') {
       const scenesText = scenesForPrompt.map(s =>
-        `Escena ${s.num} [${s.act}] "${s.title}": ${s.narration}`
+        `Escena ${s.num} [${s.act}] "${s.title}" — MÍNIMO ${minPlanosPorTexto(s.narration)} plano(s): ${s.narration}`
       ).join('\n\n');
-      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales y genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":1,"continuarAnterior":false,"prompts":["Scene with..."],"tamanos":["general"],"videoRecomendado":[false],"movimientos":["visible purposeful motion in English"],"continuos":[false]},...]} con EXACTAMENTE ${scenesForPrompt.length} objetos. "prompts", "tamanos", "videoRecomendado", "movimientos" y "continuos" llevan exactamente la cantidad de planos elegida.
+      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales. El texto ya te indica el MÍNIMO permitido por su duración estimada. Genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":3,"continuarAnterior":false,"prompts":["Scene with...","Scene with...","Scene with..."],"tamanos":["general","cerca","medio"],"pesos":[2,1,2],"videoRecomendado":[false,false,true],"movimientos":["...","...","..."],"continuos":[false,false,false]},...]} con EXACTAMENTE ${scenesForPrompt.length} objetos. "prompts", "tamanos", "pesos", "videoRecomendado", "movimientos" y "continuos" llevan exactamente la cantidad de planos elegida.
 
-⚠️ "tamanos": general | medio | cerca | escorzo | detalle. Elige el tamaño por FUNCIÓN DRAMÁTICA. "videoRecomendado" es true SÓLO cuando animar ese plano con Veo mejora materialmente la acción/actuación; false cuando una ilustración con montaje de cámara es suficiente. Esto es una recomendación del director, no un bloqueo: el usuario puede animar cualquier plano manualmente. Sólo cuando "continuos" sea true, dos fotogramas deben describir estados físicamente compatibles para una interpolación corta.`;
+⚠️ "tamanos": general | medio | cerca | escorzo | detalle. Elige el tamaño por FUNCIÓN DRAMÁTICA.
+⚠️ "pesos": enteros 1–5 y representan DURACIÓN RELATIVA EN PANTALLA, no calidad. 1 = insert/reacción muy corta; 2–3 = frase o beat normal; 4–5 = beat dominante. Úsalos para que el corte visual caiga donde cambia la frase/acción, no en tercios matemáticos.
+"videoRecomendado" es true SÓLO cuando el movimiento temporal necesita Veo; false cuando una ilustración con montaje de cámara es suficiente. Esto es una recomendación del director, no un bloqueo: el usuario puede animar cualquier plano manualmente. Sólo cuando "continuos" sea true, dos fotogramas deben describir estados físicamente compatibles para una interpolación corta.`;
 
       const accumulated = new Map();
       let lastErr = null;
@@ -4434,7 +4466,9 @@ Responde SOLO JSON válido sin markdown`;
           const raw = await callGemini(prompt, imageSysPrompt);
           const arr = safeParseJSON(raw).imagePrompts || [];
           for (const p of arr) {
-            if (p && p.num && Array.isArray(p.prompts) && p.prompts.filter(Boolean).length >= 1) {
+            const scene = scenesForPrompt.find(s => Number(s.num) === Number(p?.num));
+            const min = scene ? minPlanosPorTexto(scene.narration) : 1;
+            if (p && p.num && Array.isArray(p.prompts) && p.prompts.filter(Boolean).length >= min) {
               accumulated.set(Number(p.num), p);
             }
           }
@@ -6351,6 +6385,7 @@ Devuelve JSON:
   "narrativa": "La VOZ del relato. Elige UNA: primera_presente | tercera_presente | tercera_pasado | segunda. Elige la que sirva al concepto, no por una regla de manhua. Sólo el identificador.",
   "identidadMusical": "Familia instrumental, textura y tempo del colchón musical. Debe acompañar voz durante mucho tiempo sin competir con ella. 2-3 frases.",
   "ritmo": "Cómo respira una historia LARGA: dónde acelera, dónde deja reaccionar una revelación y cómo alterna presión/relación/descubrimiento. 2-3 frases.",
+  "ritmoVisual": "Cadencia de MONTAJE para esta serie dentro de la fórmula base: composición nueva normalmente cada 3–7 s, 4–6 s en diálogo estable y 2–4 s en tensión/acción/comedia. Explica en 1–2 frases cuándo esta serie usa el extremo rápido o el lento, sin romper esos rangos.",
   "arcoTemporada": ["Macroacto 1: gancho y primera alteración", "Macroacto 2: consecuencias y relaciones", "Macroacto 3: punto medio/revelación", "Macroacto 4: escalada y costo", "Macroacto 5: clímax y consecuencia"],
   "motivosRecurrentes": ["objeto, gesto o encuadre que reaparece con sentido", "otro", "otro"],
   "reglasDeOro": ["regla causal concreta que esta historia nunca rompe", "regla de personaje", "regla de tono", "regla de continuidad"]
@@ -6393,7 +6428,7 @@ function bibleVisualBrief() {
   // a sheet of music force a table to hold them, and that table gets drawn even
   // in a corridor. The writer's copy of the bible always had the softener
   // "(hacelos aparecer con naturalidad)"; the art side did not.
-  return `\n\nDIRECCIÓN VISUAL DE LA SERIE (del director creativo — aplicala en TODOS los prompts): ${b.direccionVisual}${motifs.length ? `\nMotivos visuales recurrentes: ${motifs.join(' · ')} — NO son obligatorios en cada plano: aparecen solo donde el lugar y la acción los admiten de forma natural. Un motivo NUNCA justifica meter en la escena un mueble u objeto que ese escenario no tiene.` : ''}`;
+  return `\n\nDIRECCIÓN VISUAL DE LA SERIE (del director creativo — aplicala en TODOS los prompts): ${b.direccionVisual}\nRITMO VISUAL: ${b.ritmoVisual || 'Composición nueva normalmente cada 3–7 s; 4–6 s en diálogo estable y 2–4 s en tensión, acción o remate cómico.'}${motifs.length ? `\nMotivos visuales recurrentes: ${motifs.join(' · ')} — NO son obligatorios en cada plano: aparecen solo donde el lugar y la acción los admiten de forma natural. Un motivo NUNCA justifica meter en la escena un mueble u objeto que ese escenario no tiene.` : ''}`;
 }
 
 // ─── 2. EPISODE DIRECTION ───
@@ -6749,17 +6784,22 @@ function buildMontarScript(scenes, opts) {
     const planos = (s.planos && s.planos.length) ? s.planos : [{ clip: s.clip, image: s.image }];
     p('', `# escena ${i + 1} — ${planos.length} plano${planos.length > 1 ? 's' : ''}`);
     p(s.audio ? `D=$(dur ${s.audio})` : 'D=2.0');
-    if (planos.length > 1) {
-      // Every shot gets the same slice, and the last one absorbs the rounding
-      // so the shots always add up to the narration exactly.
-      p(`P=$(awk "BEGIN{printf \\"%.3f\\", $D/${planos.length}}")`,
-        `PL=$(awk "BEGIN{printf \\"%.3f\\", $D-${planos.length - 1}*$P}")`);
-    }
+    const pesos = planos.map(pl => {
+      const n = Number(pl?.peso);
+      return Number.isFinite(n) && n > 0 ? n : 1;
+    });
+    const totalPeso = pesos.reduce((a, b) => a + b, 0) || planos.length || 1;
     planos.forEach((pl, k) => {
       const sufijo = planos.length > 1 ? `${n}_${k + 1}` : n;
-      // $T is what THIS shot lasts: its slice, or the whole scene when there is
-      // only one shot.
-      const T = planos.length === 1 ? '$D' : (k === planos.length - 1 ? '$PL' : '$P');
+      // The DP marks quick inserts/reactions versus beats that deserve to breathe.
+      // Old projects have no weights and therefore keep equal timing.
+      const prevShare = pesos.slice(0, k).reduce((a, b) => a + b, 0) / totalPeso;
+      const share = pesos[k] / totalPeso;
+      const T = planos.length === 1
+        ? '$D'
+        : (k === planos.length - 1
+          ? `$(awk "BEGIN{printf \\"%.3f\\", $D*(1-${prevShare.toFixed(8)});}")`
+          : `$(awk "BEGIN{printf \\"%.3f\\", $D*${share.toFixed(8)}}")`);
       const duplicateClip = !!(pl && pl.clip && lastClipPath && pl.clip === lastClipPath);
       const useClip = !!(pl && pl.clip && !duplicateClip);
       if (duplicateClip) {
@@ -7070,14 +7110,14 @@ async function assembleEpisode() {
         entry.audio = `narr_${n}.wav`;
       } else missingAudio++;
 
-      // One entry per shot: the scene's narration is split evenly between the
-      // shots the director asked for, so a three-shot scene shows three pieces
-      // of picture over the same voice line instead of one held still.
+      // One entry per shot. The director also gives each composition a relative
+      // screen-time weight so cuts follow dialogue/action beats instead of
+      // mechanically splitting every scene into equal thirds.
       entry.planos = [];
       const slots = await sceneSlots(s);
       for (let k = 0; k < slots.length; k++) {
         const sufijo = `${n}_${k + 1}`;
-        const plano = {};
+        const plano = { peso: Math.max(1, Number(s['peso' + slots[k]]) || 1) };
         // Veo clips already live in the bucket: reference them instead of
         // downloading and re-uploading megabytes through the phone.
         const clipUrl = useClips ? await dbGet(sceneVidKeyBy(s.id, slots[k])) : null;
