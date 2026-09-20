@@ -19,8 +19,11 @@ Estudio personal para producir historias anime largas desde el móvil. Tiene exa
 
 - Duración configurable: ~5 / 8 / 15 / 30 / 60 / 90 minutos
 - Dos tipos de proyecto, y sólo dos: **Narrado** (una voz conduce y lee diálogos) o **Voces por personaje** (voz estable por personaje)
+- El guion largo aplica una huella narrativa basada en las referencias estudiadas: español oral, frases cortas, diálogo directo, punto de vista cercano, microcambios frecuentes y rechazo automático de prosa literaria/IA antes de aceptar cada bloque
 - Dos tipos de cierre: historia completa o cliffhanger deliberado
 - El director decide 1, 2 o 3 planos según duración y función editorial: ritmo base de ~3–7 s por composición, ~4–6 s en diálogo estable y ~2–4 s en tensión/acción
+- Cada plano queda anclado a un fragmento literal y ordenado de la narración para impedir adelantar acontecimientos; dentro de una escena se conserva posición, ropa, lesiones, objetos y estado físico entre tomas
+- Las tomas con personajes recurrentes exigen su referencia maestra antes de generar, para no cambiar de identidad entre planos
 - El director marca qué planos recomienda animar con Veo; tú puedes generar video manualmente para cualquier imagen y el montaje siempre usa el clip si existe
 - Los cortes son normales; sólo se interpola entre fotogramas cuando una acción necesita continuidad física
 - Veo genera clips de hasta 8 s; el montaje ajusta su velocidad para cubrir la duración real de la toma sin repetir el clip consecutivamente
@@ -37,9 +40,9 @@ Estudio personal para producir historias anime largas desde el móvil. Tiene exa
 ## Uso
 
 1. Elige demografía, género principal y subgéneros → Genera Universo.
-1. Elige duración, modo **Narrado/Dramatizado** y tipo de cierre.
+1. Elige duración, tipo **Narrado/Voces por personaje** y tipo de cierre.
 1. Genera la historia: el universo/sinopsis se conservan y el motor desarrolla el conflicto por causalidad, reacciones y consecuencias.
-1. Genera una referencia limpia por personaje y luego las imágenes de las escenas.
+1. Genera una referencia maestra limpia por personaje y luego las imágenes de las escenas; la app bloquea una toma si falta la referencia de un personaje recurrente nombrado.
 1. Genera las voces. En modo dramatizado cada personaje conserva su voz.
 1. Usa **Videos recomendados** para generar lo que pidió el director, o el botón 🎬 de cualquier imagen para animarla manualmente.
 1. Genera música si la quieres y ensambla el MP4 final. Imágenes, audio, música y videos ya terminados se conservan si recargas y las tandas continúan sólo con lo que falta.
