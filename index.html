@@ -324,7 +324,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-20.115 🎬</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-20.116 ✍️</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -1012,31 +1012,28 @@ const planoEn = id => (PLANOS_ANIME.find(p => p.id === id) || PLANOS_ANIME[0]).e
 // una joven" lo deja mirando un recuerdo.
 // ════════════════════════════════════════════════════════════════
 const MODOS_NARRATIVOS = {
+  primera_referencia: {
+    nombre: 'Primera persona, pasado inmediato + presente reactivo',
+    regla: 'REGISTRO DE REFERENCIA: el protagonista cuenta en PRIMERA PERSONA lo que le fue pasando, normalmente en pasado inmediato ("volví", "vi", "acepté", "pensé"), mientras diálogos, pensamientos instantáneos, sistema y reacciones viven en presente. La sensación es de alguien contando una historia a otra persona, no de una novela leída. Cada frase avanza un hecho, juicio o reacción. Si hace falta mostrar brevemente otro frente, usa tercera persona durante pocas frases y vuelve enseguida al protagonista. No uses narrador omnisciente sostenido.',
+  },
   primera_presente: {
-    nombre: 'Primera persona, presente',
-    regla: 'PRIMERA PERSONA EN PRESENTE para el protagonista ("entro", "veo", "no entiendo qué está pasando"). '
-      + 'La voz vive el hecho AHORA, no lo recuerda desde el futuro. Es conversacional, concreta y pegada a sus decisiones: '
-      + 'qué ve, qué entiende, qué teme, qué decide y qué cambia por eso. El tono lo manda el género; NO fuerces ironía, sarcasmo '
-      + 'ni introspección si la escena no los necesita. Si hay un segundo frente, se cuenta brevemente en tercera persona presente '
-      + 'y se vuelve al protagonista sin convertir la historia en narrador omnisciente.',
+    nombre: 'Primera persona, presente (legado)',
+    regla: 'PRIMERA PERSONA EN PRESENTE, conservada por compatibilidad con proyectos anteriores. Mantén voz oral, cercana y concreta.',
   },
   tercera_presente: {
-    nombre: 'Tercera persona, presente',
-    regla: 'TERCERA PERSONA CERCANA EN PRESENTE. La cámara narrativa sigue a un personaje por vez: "[NOMBRE] entra, ve X y decide Y". '
-      + 'No narres desde una voz omnisciente que conoce todo a la vez. El espectador descubre la información cuando el personaje la descubre, '
-      + 'salvo una asimetría de información deliberada que la historia haya sembrado.',
+    nombre: 'Tercera persona, presente (legado)',
+    regla: 'TERCERA PERSONA CERCANA EN PRESENTE, conservada por compatibilidad. No uses omnisciencia total ni prosa literaria.',
   },
   tercera_pasado: {
-    nombre: 'Tercera persona, pasado',
-    regla: 'TERCERA PERSONA CERCANA EN PASADO INMEDIATO, conservada sólo para proyectos anteriores. Mantén el punto de vista pegado al personaje '
-      + 'y evita la narración literaria omnisciente.',
+    nombre: 'Tercera persona, pasado (legado)',
+    regla: 'TERCERA PERSONA CERCANA EN PASADO, conservada sólo para proyectos anteriores.',
   },
   segunda: {
     nombre: 'Segunda persona ("tú")',
-    regla: 'SEGUNDA PERSONA EN PRESENTE, conservada sólo por compatibilidad con proyectos antiguos. Los proyectos nuevos no la eligen automáticamente.',
+    regla: 'SEGUNDA PERSONA EN PRESENTE, conservada sólo por compatibilidad con proyectos antiguos.',
   },
 };
-const MODO_NARRATIVO_POR_DEFECTO = 'primera_presente';
+const MODO_NARRATIVO_POR_DEFECTO = 'primera_referencia';
 
 function modoNarrativo(id) {
   return MODOS_NARRATIVOS[id] || MODOS_NARRATIVOS[MODO_NARRATIVO_POR_DEFECTO];
@@ -1113,21 +1110,31 @@ se le encienden los ojos porque así ocurre en ese mundo, se dibuja tal cual y c
 // puesta. Decir otra vez que la bata es translúcida no dibuja nada nuevo — sólo
 // pone en el texto la frase que hace saltar el filtro, y esa escena se queda en
 // negro.
-const REGISTRO_LONGFORM_REFERENCIA = `HUELLA NARRATIVA DE LAS REFERENCIAS ESTUDIADAS — esto manda sobre la prosa:
-- SUENA A HISTORIA CONTADA EN YOUTUBE, NO A NOVELA. Español oral, claro y directo. El tiempo avanza oración por oración.
-- ARRANQUE: en las primeras 2-4 frases ya hay una persona concreta dentro de un problema concreto. Prohibido abrir con clima, paisaje, historia del mundo o una reflexión abstracta.
-- FRASE: normalmente 8-18 palabras, una acción/idea principal por oración. Evita cadenas de subordinadas, prosa ornamental y párrafos que "ambientan" sin mover nada.
-- RITMO DE VOZ: acción o dato -> frase directa/pensamiento -> reacción o consecuencia. Varía el patrón, pero no dejes bloques largos donde sólo el narrador explica.
-- DIÁLOGO REAL: cuando una confrontación, negociación, broma, amenaza o confesión importa, deja que el personaje la diga. No la resumas como "discutieron" o "él le explicó". En modo narrado, la misma voz leerá esas frases; siguen siendo diálogo directo.
-- PUNTO DE VISTA CERCANO: el espectador sabe lo que el protagonista acaba de ver/entender, no una explicación total del narrador. Evita "sin saber que...", "el destino tenía otros planes", "lo que nadie sabía era..." salvo que la historia cambie deliberadamente de frente y muestre esa información.
-- MICROCAMBIOS: cada 30-60 segundos debe ocurrir algo concreto que altere información, relación, objetivo, recurso, amenaza o posición. Cada 5-8 minutos debe haber un giro de mayor peso. No significa pelea: significa CAMBIO.
-- COBRAR LOS GIROS: después de una revelación importante, muestra quién reacciona, qué decide y qué cambia. No saltes a otro tema como una lista de acontecimientos.
-- COMPRESIÓN, NO RESUMEN VACÍO: omite trayectos y explicaciones obvias, pero dramatiza los momentos donde cambia algo. "Pasaron tres días" puede durar una frase; una traición, una decisión o una humillación necesita acción + frase + reacción.
-- LENGUAJE CONCRETO: dinero, tiempo, rangos, objetos, promesas, puertas, heridas, mensajes, contratos, comida, recursos. Menos "sentía una mezcla indescriptible"; más qué hace porque siente eso.
-- PROHIBIDO EL TONO IA/LITERARIO: nada de "el aire estaba cargado de tensión", "sus ojos reflejaban mil emociones", "un silencio ensordecedor llenó la habitación", "el destino estaba a punto de cambiar", ni moralejas al final de cada bloque.
-- PROHIBIDO REEXPLICAR: si el espectador ya sabe una regla, una relación o un objetivo, no vuelvas a explicarlo salvo que nueva información lo cambie.
-- NO HAY MINI-REEL POR ESCENA. Una historia de 60-90 minutos respira, pero incluso la respiración cambia relación, información o expectativa.
-- La historia puede usar progresión, romance, misterio, venganza, sistema, reencarnación o poder oculto sólo si pertenecen al concepto elegido. No copies una trama de referencia; copia su MECÁNICA DE NARRACIÓN Y RETENCIÓN.
+const REGISTRO_LONGFORM_REFERENCIA = `HUELLA NARRATIVA REAL DE LOS GUIONES DE REFERENCIA — NO ES UNA SUGERENCIA:
+Se estudiaron los guiones largos de las dos familias de referencia. En la muestra, la frase típica tiene alrededor de 6-10 palabras y más del 90% de las oraciones quedan por debajo de 18 palabras. Ese ritmo manda.
+
+CÓMO SUENA:
+- Una persona cuenta lo que le pasa, casi siempre desde muy cerca del protagonista. No "narra bonito": cuenta.
+- ACCIONES en pasado inmediato: "volví", "vi", "entré", "acepté", "me llamó". DIÁLOGOS, pensamientos rápidos, sistema y reacción inmediata en presente.
+- Una oración suele cargar UNA sola cosa: acción, dato, juicio, pregunta, respuesta o reacción.
+- El motor básico es: HECHO → PENSAMIENTO/JUICIO → DIÁLOGO O RESPUESTA → RESULTADO → NUEVA NECESIDAD. No hace falta usar las cinco piezas siempre, pero nunca pases páginas enteras sólo explicando.
+- Cada 1-3 frases ocurre algo visible o alguien responde. El narrador no se queda cinco frases describiendo el mismo sentimiento.
+- La información del mundo entra CUANDO hace falta para entender lo que acaba de ocurrir. Máximo 1-3 frases de explicación seguidas; después vuelve a una acción o conversación.
+- Los pensamientos internos son BLUNTOS y coloquiales: una pregunta, una conclusión, una queja, una sospecha, un cálculo. No son ensayos psicológicos.
+- El diálogo va DIRECTO. En el campo story usa raya larga (—) para marcar lo que alguien dice. No sustituyas "—Dame el contrato" por "me pidió que le diera el contrato".
+- Después de una humillación, revelación, demostración o giro, alguien REACCIONA enseguida. La reacción puede ser una frase, una decisión, una retirada, una amenaza, una compra, una llamada, un cambio de trato.
+- TRANSICIÓN: encadena por causalidad. "Pasó X. Por eso hice Y. Entonces apareció Z." Evita conectores de tesis como "por consiguiente", "en este sentido", "cabe destacar".
+- El humor, cuando existe, suele ser pensamiento/reacción del protagonista ante una situación seria. No conviertas a todos en comediantes.
+- PROHIBIDO RESUMEN ESCOLAR: "durante los días siguientes entrenó y mejoró mucho". Si ese crecimiento importa, muestra dos o tres hechos concretos que lo prueben.
+- PROHIBIDO NOVELA: paisaje de apertura, metáforas largas, descripción de ojos/ropa/ambiente, monólogos solemnes, moralejas intermedias, introspección poética.
+- PROHIBIDO GUION DE IA: "el aire estaba cargado de tensión", "sus ojos reflejaban...", "un silencio ensordecedor", "el destino tenía otros planes", "una mezcla indescriptible", "en lo más profundo de su corazón".
+- NO EXPLIQUES DOS VECES. Si el espectador ya entendió quién odia a quién, cuánto dinero falta o qué hace una habilidad, sigue adelante.
+
+DOS EJEMPLOS INVENTADOS DE CADENCIA — NO COPIES ESTAS FRASES; COPIA EL MECANISMO:
+1) "Hace tres días me echaron del refugio. Hoy vuelvo porque necesito comida. En la entrada está el mismo tipo que me llamó inútil. —¿Todavía sigues vivo? Perfecto. Ya sé a quién no voy a dejar entrar cuando abra mi propia base."
+2) "Firmé el divorcio sin discutir. Ella se quedó mirándome. —¿Eso es todo? Claro que es todo. Vi la cifra de la compensación y casi tuve que morderme la lengua para no sonreír."
+
+OBJETIVO: que al leer el texto en voz alta parezca el relato continuo de esos canales: rápido, concreto, adictivo y fácil de seguir; NO una novela adaptada a YouTube.
 `;
 
 const PROMPT_ES_UN_PLANO = `⚠️ EL PROMPT DE IMAGEN NO ES LA NARRACIÓN: ES LA ORDEN DE UN PLANO.
@@ -3822,7 +3829,7 @@ Devuelve JSON:
     state.universe.subgenres = subgenres;
     state.universe.viralFormulaId = viralFormulaId;
     state.universe.viralFormulaLabel = viralFormula.label;
-    state.universe.storyEngineVersion = 3;
+    state.universe.storyEngineVersion = 4;
     state.universe.creativeVersion = 2;
     state.universe.epFormat  = document.getElementById('epLengthSelect')?.value || 'hora';
     state.universe.storyMode = document.getElementById('storyModeSelect')?.value || 'narrated';
@@ -4099,16 +4106,16 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
       const vf = seleccionarFormulaViral(genero, subgenres, u.conceptoOriginal || u.concepto || '');
       u.viralFormulaId = idFormulaViral(vf);
       u.viralFormulaLabel = vf.label;
-      u.storyEngineVersion = 3;
+      u.storyEngineVersion = 4;
       u.bible = null;
       saveState();
       setProg(2, 'Aplicando fórmula viral al proyecto...');
       await generateSeriesBible();
-    } else if ((u.storyEngineVersion || 0) < 3) {
-      u.storyEngineVersion = 3;
+    } else if ((u.storyEngineVersion || 0) < 4) {
+      u.storyEngineVersion = 4;
       u.bible = null;
       saveState();
-      setProg(2, 'Actualizando la dirección narrativa viral...');
+      setProg(2, 'Actualizando la narración al estilo de las referencias...');
       await generateSeriesBible();
     }
 
@@ -4245,18 +4252,23 @@ document.getElementById('btnGenerarEpisodio').addEventListener('click', async ()
       || 'un personaje con nombre ya metido en lo que el género considera un problema';
 
     const storyModeRules = storyMode === 'cast'
-      ? `MODO VOCES POR PERSONAJE:
-- El diálogo y los pensamientos son el cuerpo de la escena. Como objetivo editorial, cuando la situación lo permita, 60-80% de las palabras pronunciadas vienen de personajes; el narrador sólo conecta tiempo, lugar, antecedentes o información imposible de decir naturalmente.
-- Cada frase importante se escucha DIRECTAMENTE del personaje que la piensa o la dice. No conviertas una discusión en "ellos discutieron durante varios minutos".
-- El narrador jamás describe una emoción que el diálogo y la acción ya dejan clara.
-- No escribas nombres de hablante ni acotaciones teatrales dentro de la frase; el etiquetado de voces se hace después.
-- Las intervenciones son cortas y reactivas: alguien quiere algo, otro responde, eso cambia la situación.`
-      : `MODO NARRADO — UNA VOZ PRINCIPAL:
-- Copia la cadencia de los resúmenes largos estudiados: una sola voz conduce, pero LOS PERSONAJES SIGUEN HABLANDO EN DIRECTO dentro de la narración.
-- No suena a audiolibro. Suena a alguien contándote lo que acaba de pasar, paso a paso, con frases cortas y hechos concretos.
-- Cuando el protagonista habla o piensa algo que mueve la escena, escribe esa frase. No la sustituyas por "le dijo que..." o "pensó que...".
-- La narración comprime lo rutinario y se detiene en el cambio: decisión, amenaza, revelación, humillación, descubrimiento, negociación, giro afectivo.
-- EJEMPLO DE CADENCIA (inventado, no pertenece a ninguna referencia): "Vuelvo a casa y la puerta está abierta. No debería haber nadie. Entro y veo a mi hermano sentado en mi sofá. —Pensé que no volverías. Hace tres años que no lo veo, y lo primero que hace es pedirme dinero." Ese es el registro: acción -> frase -> reacción; no descripción ornamental.`;
+      ? `MODO VOCES POR PERSONAJE — CADENCIA MANHWA:
+- La HISTORIA sigue pegada al protagonista en primera persona de referencia. Después, la app separa las voces por personaje.
+- Como objetivo editorial, 60-80% de lo PRONUNCIADO en una escena con interacción debe ser diálogo o pensamiento de personajes, no narrador.
+- El narrador sólo conecta: tiempo, lugar, una acción breve o un dato que nadie puede decir naturalmente.
+- Una conversación no se resume. Se oye: frase → respuesta → pensamiento/reacción → siguiente frase.
+- Intervenciones cortas: normalmente 3-16 palabras. Una frase larga sólo cuando el contenido realmente lo exige.
+- Los pensamientos del protagonista son inmediatos y coloquiales, no reflexiones literarias. "¿Está loca?" funciona. Un párrafo explicando por qué siente confusión, no.
+- Cuando cambia quién domina una conversación, muéstralo en lo que DICE y en la reacción del otro.
+- Nunca escribas etiquetas como "Juan:" dentro del story; usa raya larga para el diálogo y el etiquetado de speaker se hace después.`
+      : `MODO NARRADO — CADENCIA PLATAANIM:
+- Una voz principal cuenta TODO, pero cuenta como una persona relatando acontecimientos, no como un narrador literario.
+- Primera persona del protagonista por defecto. Acciones en pasado inmediato; diálogo/pensamiento/reacción inmediata en presente.
+- Mucho discurso directo aunque haya una sola voz: —Entrégame el cristal. —Ni lo sueñes. La misma voz leerá ambas líneas.
+- El narrador puede decir una frase de contexto y enseguida vuelve al hecho. No hace bloques de lore.
+- Sistema/poder/estatus se expresa en mensajes cortos y concretos cuando existe en la historia; luego el protagonista reacciona y actúa.
+- Cada recompensa crea la siguiente necesidad: comida → gente → defensa → enemigo mayor; una relación → malentendido → aclaración → nueva decisión. Esa cadena causal mantiene el relato vivo.
+- Pensamientos internos breves y útiles: sospecha, cálculo, miedo, ambición, burla. No análisis psicológico largo.`;
 
     const endingRule = endingMode === 'complete'
       ? `CIERRE COMPLETO: el conflicto central de ESTA historia queda pagado. Puede quedar mundo para otras historias, pero el espectador no termina sintiendo que faltó el último acto. La última secuencia muestra la consecuencia de la decisión final.`
@@ -4553,7 +4565,7 @@ Responde SOLO JSON válido sin markdown.`;
     // Pressing Generate again resumes from the first missing block.
     const episodeInstructionsNow = document.getElementById('episodeInstructions')?.value.trim() || '';
     const draftSignature = JSON.stringify({
-      v: 6, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
+      v: 7, epNum, format: fmt.key, scenes: fmt.scenes, parts: fmt.parts,
       storyMode, endingMode, instructions: episodeInstructionsNow,
       viralFormula: idFormulaViral(formulaViralActual(u)),
       title: u.title || '', concept: u.concepto || '', conflict: u.conflicto || '',
@@ -4593,18 +4605,26 @@ Responde SOLO JSON válido sin markdown.`;
       const txt = String(story || '').trim();
       const sentences = (txt.match(/[^.!?…]+[.!?…]+/g) || []).map(x => x.trim()).filter(Boolean);
       const counts = sentences.map(x => x.split(/\s+/).filter(Boolean).length);
+      const sorted = [...counts].sort((a,b)=>a-b);
       const avg = counts.length ? counts.reduce((a,b)=>a+b,0) / counts.length : 999;
+      const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 999;
+      const shortRatio = counts.length ? counts.filter(n => n <= 18).length / counts.length : 0;
       const longRatio = counts.length ? counts.filter(n => n > 30).length / counts.length : 1;
       const low = txt.toLowerCase();
       const problems = [];
+      const wc = txt.split(/\s+/).filter(Boolean).length;
 
-      if (avg > 22) problems.push(`frases demasiado largas (media ${avg.toFixed(1)} palabras)`);
-      if (longRatio > 0.22) problems.push('demasiadas frases de más de 30 palabras');
+      // Reference transcripts measured ~6.7-9.6 words/sentence, median ~6-8,
+      // 91-98% of sentences <=18 words and almost none >30.
+      if (avg > 14) problems.push(`cadencia demasiado larga (media ${avg.toFixed(1)}; referencia ~7-10)`);
+      if (median > 12) problems.push(`frase típica demasiado larga (mediana ${median}; referencia ~6-8)`);
+      if (shortRatio < 0.82) problems.push(`faltan frases cortas (${Math.round(shortRatio*100)}% <=18; objetivo >=82%)`);
+      if (longRatio > 0.08) problems.push('demasiadas frases de más de 30 palabras');
 
       if (esApertura) {
         const first = low.split(/\s+/).slice(0, 45).join(' ');
         if (/^(el sol|la lluvia|el cielo|la noche|el viento|el aire|era una|en un mundo|desde tiempos|la ciudad|aquella mañana)/.test(first)) {
-          problems.push('abre con ambientación en vez de una persona dentro del problema');
+          problems.push('abre con ambientación en vez de entrar en el problema');
         }
       }
 
@@ -4616,19 +4636,31 @@ Responde SOLO JSON válido sin markdown.`;
         /una mezcla (?:de emociones|indescriptible)/,
         /no podía evitar preguntarse/,
         /en lo más profundo de su (?:ser|corazón)/,
-        /como si el tiempo se hubiera detenido/
+        /como si el tiempo se hubiera detenido/,
+        /una oleada de emociones/,
+        /el peso de (?:sus|mis|las) palabras/
       ];
       const literaryHits = literary.reduce((n,re)=>n+(re.test(low)?1:0),0);
-      if (literaryHits >= 2) problems.push('prosa literaria/IA en lugar de voz oral directa');
+      if (literaryHits >= 1) problems.push('apareció prosa literaria/IA que las referencias no usan');
 
-      // Direct speech is part of both reference families. The dash/quotes are
-      // only writing punctuation; TTS does not read them as speaker labels.
-      const directMarks = (txt.match(/[—“”«»]/g) || []).length + (txt.match(/"[^"]{3,}"/g) || []).length;
-      const wc = txt.split(/\s+/).filter(Boolean).length;
+      // Direct speech must be common, not an occasional decoration.
+      const directMarks = (txt.match(/—/g) || []).length + (txt.match(/"[^"]{3,}"/g) || []).length;
       const minDirect = storyMode === 'cast'
-        ? Math.max(4, Math.floor(wc / 180))
-        : Math.max(2, Math.floor(wc / 450));
-      if (directMarks < minDirect) problems.push('casi no hay diálogo directo; suena a resumen expositivo');
+        ? Math.max(6, Math.floor(wc / 90))
+        : Math.max(3, Math.floor(wc / 180));
+      if (directMarks < minDirect) problems.push(`poco diálogo directo (${directMarks}; mínimo ${minDirect} para este bloque)`);
+
+      // The references stay near the protagonist. First-person markers are not
+      // every sentence, but they recur constantly through action and thought.
+      const fp = (low.match(/\b(?:yo|me|mi|mis|pensé|dije|miré|vi|sentí|quise|quería|sabía|tenía|fui|volví|entré|salí|acepté|respondí|pregunté|recordé|descubrí|noté|decidí|hice|llegué|agarré|tomé|dejé)\b/g) || []).length;
+      const minFp = Math.max(3, Math.floor(wc / (storyMode === 'cast' ? 220 : 140)));
+      if (fp < minFp) problems.push(`el relato se alejó demasiado del protagonista en primera persona (${fp}; mínimo ${minFp})`);
+
+      // Too much indirect speech is exactly the "summary" sound the user rejects.
+      const indirect = (low.match(/\b(?:le dijo que|les dijo que|explicó que|respondió que|preguntó si|le contó que|les contó que|discutieron sobre|hablaron sobre)\b/g) || []).length;
+      if (indirect > Math.max(2, Math.floor(wc / 450))) {
+        problems.push('demasiado diálogo resumido en estilo indirecto; debe oírse la conversación');
+      }
 
       return problems;
     }
@@ -4668,7 +4700,7 @@ Responde SOLO JSON válido sin markdown.`;
             }
             if (!problems.length) return story;
             lastErr = 'bloque fuera del motor viral: ' + problems.join('; ');
-            styleFeedback = `\n\nREINTENTO OBLIGATORIO: el bloque anterior fue rechazado porque ${problems.join('; ')}. Mantén la continuidad, pero vuelve a escribir DESDE CERO. El hito "${requiredBeat}" debe OCURRIR y después debe CAMBIAR algo observable. Copia 8-30 palabras literales del hito en "viralEvidence" y 8-30 palabras literales de su reacción/consecuencia POSTERIOR en "viralConsequence". Conserva español oral, frases cortas y diálogo directo.`;
+            styleFeedback = `\n\nREINTENTO OBLIGATORIO: el bloque anterior fue rechazado porque ${problems.join('; ')}. Mantén LOS MISMOS ACONTECIMIENTOS y continuidad, pero vuelve a escribir DESDE CERO con la cadencia de los guiones de referencia: primera persona cercana, acciones en pasado inmediato, frase típica de 6-10 palabras, más del 80% de frases <=18 palabras, diálogo directo frecuente con raya larga, pensamiento corto y reacción inmediata. Cero párrafos literarios. El hito "${requiredBeat}" debe OCURRIR y después debe CAMBIAR algo observable. Copia 8-30 palabras literales del hito en "viralEvidence" y 8-30 palabras literales de su consecuencia POSTERIOR en "viralConsequence".`;
           } else {
             lastErr = story ? `demasiado corto (${wc} palabras, mínimo ${minWords})` : 'respuesta vacía o sin campo "story"';
           }
@@ -7219,7 +7251,7 @@ Escribe la BIBLIA DE DIRECCIÓN. El universo, la sinopsis Y la FÓRMULA VIRAL se
 Devuelve JSON:
 {
   "direccionVisual": "SOLO paleta concreta (3-4 colores), tratamiento de luz, composición y motivos visuales. El render ya está fijado como anime japonés 2D; no lo redefinas. 3-4 frases ejecutables.",
-  "narrativa": "${u.storyMode === 'cast' ? 'tercera_presente' : 'Para modo narrado elige UNA: primera_presente | tercera_presente. Prefiere primera_presente cuando hay un protagonista claro; usa tercera_presente sólo si la historia necesita seguir varios frentes. Nunca segunda ni tercera_pasado en proyectos nuevos. Devuelve sólo el identificador.'}",
+  "narrativa": "primera_referencia",
   "identidadMusical": "Familia instrumental, textura y tempo del colchón musical. Debe acompañar voz durante mucho tiempo sin competir con ella. 2-3 frases.",
   "ritmo": "Cómo respira una historia LARGA: dónde acelera, dónde deja reaccionar una revelación y cómo alterna presión/relación/descubrimiento. 2-3 frases.",
   "ritmoVisual": "Cadencia de MONTAJE para esta serie dentro de la fórmula base: composición nueva normalmente cada 3–7 s, 4–6 s en diálogo estable y 2–4 s en tensión/acción/comedia. Explica en 1–2 frases cuándo esta serie usa el extremo rápido o el lento, sin romper esos rangos.",
@@ -7230,11 +7262,9 @@ Devuelve JSON:
 
   const raw = await callGemini(prompt, directorSystemPrompt(u.genero, comedyMode));
   const bible = safeParseJSON(raw);
-  const allowedNarratives = u.storyMode === 'cast'
-    ? ['tercera_presente']
-    : ['primera_presente', 'tercera_presente'];
+  const allowedNarratives = ['primera_referencia'];
   if (!allowedNarratives.includes(bible.narrativa)) {
-    bible.narrativa = u.storyMode === 'cast' ? 'tercera_presente' : 'primera_presente';
+    bible.narrativa = 'primera_referencia';
   }
   state.universe.bible = bible;
   saveState();
