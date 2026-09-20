@@ -729,13 +729,13 @@ function canonicalVideoValue(v) {
 }
 
 async function signProjectAsset(projectId, key, method) {
-  const r = await fetch('/api/project-asset', {
+  const r = await fetch('/api/upload-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ projectId, key, method }),
+    body: JSON.stringify({ action:'assetSign', projectId, key, method }),
   });
   const d = await r.json().catch(() => ({}));
-  if (!r.ok || !d.url) throw new Error(d.error || `project-asset ${r.status}`);
+  if (!r.ok || !d.url) throw new Error(d.error || `upload-url ${r.status}`);
   return d.url;
 }
 
@@ -813,9 +813,9 @@ async function dbDel(k) {
   const projectId = projectIdFromDbKey(k);
   if (!projectId) return;
   try {
-    await fetch('/api/project-asset', {
-      method:'DELETE', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ projectId, key:k }),
+    await fetch('/api/upload-url', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ action:'assetDelete', projectId, key:k }),
     });
   } catch (e) {
     console.warn('Borrado cloud:', k, e.message);
@@ -826,7 +826,10 @@ async function dbKeys() {
   const projectId = state.projectId;
   if (!projectId) return local;
   try {
-    const r = await fetch('/api/project-asset?projectId=' + encodeURIComponent(projectId), { cache:'no-store' });
+    const r = await fetch('/api/upload-url', {
+      method:'POST', headers:{'Content-Type':'application/json'}, cache:'no-store',
+      body:JSON.stringify({ action:'assetList', projectId }),
+    });
     const d = await r.json();
     if (r.ok && Array.isArray(d.keys)) return [...new Set([...local, ...d.keys])];
   } catch (_) {}
@@ -1684,10 +1687,11 @@ let pendingCloudSave = null;
 let cloudSyncWarningShown = false;
 
 async function cloudSaveProject(projectId, data, meta = {}) {
-  const r = await fetch('/api/project-store', {
+  const r = await fetch('/api/upload-url', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
+      action:'projectSave',
       id:projectId,
       name:meta.name || data?.universe?.title || 'Proyecto',
       created:meta.created || Date.now(),
@@ -1696,7 +1700,7 @@ async function cloudSaveProject(projectId, data, meta = {}) {
     }),
   });
   const d = await r.json().catch(() => ({}));
-  if (!r.ok || !d.ok) throw new Error(d.error || `project-store ${r.status}`);
+  if (!r.ok || !d.ok) throw new Error(d.error || `upload-url ${r.status}`);
   return d.project;
 }
 
@@ -1764,10 +1768,13 @@ function applyStateData(pid, d) {
 }
 
 async function cloudLoadProject(pid) {
-  const r = await fetch('/api/project-store?id=' + encodeURIComponent(pid), { cache:'no-store' });
+  const r = await fetch('/api/upload-url', {
+    method:'POST', headers:{'Content-Type':'application/json'}, cache:'no-store',
+    body:JSON.stringify({ action:'projectGet', id:pid }),
+  });
   if (r.status === 404) return null;
   const d = await r.json().catch(() => ({}));
-  if (!r.ok || !d.project) throw new Error(d.error || `project-store ${r.status}`);
+  if (!r.ok || !d.project) throw new Error(d.error || `upload-url ${r.status}`);
   return d.project;
 }
 
@@ -1802,9 +1809,12 @@ function loadProjects() {
 }
 
 async function cloudListProjects() {
-  const r = await fetch('/api/project-store', { cache:'no-store' });
+  const r = await fetch('/api/upload-url', {
+    method:'POST', headers:{'Content-Type':'application/json'}, cache:'no-store',
+    body:JSON.stringify({ action:'projectList' }),
+  });
   const d = await r.json().catch(() => ({}));
-  if (!r.ok || !Array.isArray(d.projects)) throw new Error(d.error || `project-store ${r.status}`);
+  if (!r.ok || !Array.isArray(d.projects)) throw new Error(d.error || `upload-url ${r.status}`);
   return d.projects;
 }
 
@@ -1911,11 +1921,12 @@ async function switchProject(pid) {
 async function deleteProject(pid) {
   if (!confirm('¿Eliminar este proyecto de Google Cloud y de todos tus dispositivos?')) return;
   try {
-    const r = await fetch('/api/project-store', {
-      method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:pid}),
+    const r = await fetch('/api/upload-url', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ action:'projectDelete', id:pid }),
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.ok) throw new Error(d.error || `project-store ${r.status}`);
+    if (!r.ok || !d.ok) throw new Error(d.error || `upload-url ${r.status}`);
   } catch (e) {
     openErrorModal('No se pudo borrar del bucket', e.message);
     return;
