@@ -6289,7 +6289,7 @@ Escribe la BIBLIA DE DIRECCIÓN. El universo y la sinopsis ya son buenos: proté
 Devuelve JSON:
 {
   "direccionVisual": "SOLO paleta concreta (3-4 colores), tratamiento de luz, composición y motivos visuales. El render ya está fijado como anime japonés 2D; no lo redefinas. 3-4 frases ejecutables.",
-  "narrativa": "La VOZ del relato. Elige UNA: primera_presente | tercera_presente | tercera_pasado | segunda. Elige la que sirva al concepto, no por una regla de manhua. Sólo el identificador.",
+  "narrativa": "${u.storyMode === 'cast' ? 'tercera_presente' : 'Para modo narrado elige UNA: primera_presente | tercera_presente. Prefiere primera_presente cuando hay un protagonista claro; usa tercera_presente sólo si la historia necesita seguir varios frentes. Nunca segunda ni tercera_pasado en proyectos nuevos. Devuelve sólo el identificador.'}",
   "identidadMusical": "Familia instrumental, textura y tempo del colchón musical. Debe acompañar voz durante mucho tiempo sin competir con ella. 2-3 frases.",
   "ritmo": "Cómo respira una historia LARGA: dónde acelera, dónde deja reaccionar una revelación y cómo alterna presión/relación/descubrimiento. 2-3 frases.",
   "ritmoVisual": "Cadencia de MONTAJE para esta serie dentro de la fórmula base: composición nueva normalmente cada 3–7 s, 4–6 s en diálogo estable y 2–4 s en tensión/acción/comedia. Explica en 1–2 frases cuándo esta serie usa el extremo rápido o el lento, sin romper esos rangos.",
@@ -6300,6 +6300,12 @@ Devuelve JSON:
 
   const raw = await callGemini(prompt, directorSystemPrompt(u.genero, comedyMode));
   const bible = safeParseJSON(raw);
+  const allowedNarratives = u.storyMode === 'cast'
+    ? ['tercera_presente']
+    : ['primera_presente', 'tercera_presente'];
+  if (!allowedNarratives.includes(bible.narrativa)) {
+    bible.narrativa = u.storyMode === 'cast' ? 'tercera_presente' : 'primera_presente';
+  }
   state.universe.bible = bible;
   saveState();
   return bible;
