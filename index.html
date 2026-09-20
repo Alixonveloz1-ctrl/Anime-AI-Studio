@@ -3983,14 +3983,17 @@ Responde SOLO JSON válido sin markdown.`;
       bible: u.bible || null,
       chars: state.characters.map(ch => [ch.id, ch.name, ch.role, ch.age, ch.personality])
     });
-    if (!u.longformDrafts || typeof u.longformDrafts !== 'object') u.longformDrafts = {};
-    let longDraft = u.longformDrafts[epNum];
+    if (!u.generationDrafts || typeof u.generationDrafts !== 'object') {
+      u.generationDrafts = (u.longformDrafts && typeof u.longformDrafts === 'object') ? u.longformDrafts : {};
+      delete u.longformDrafts;
+    }
+    let longDraft = u.generationDrafts[epNum];
     if (!longDraft || longDraft.signature !== draftSignature) {
       longDraft = {
         signature: draftSignature, storyParts: [], sceneChunks: [], visualChunks: [],
         createdAt: Date.now(), updatedAt: Date.now()
       };
-      u.longformDrafts[epNum] = longDraft;
+      u.generationDrafts[epNum] = longDraft;
       saveState();
     }
     const resumingLongDraft = (longDraft.storyParts?.length || longDraft.sceneChunks?.length || longDraft.visualChunks?.length) > 0;
@@ -4000,7 +4003,7 @@ Responde SOLO JSON válido sin markdown.`;
       `El Episodio ${epNum} ya tiene ${materialViejo.length} archivo(s) generados (imágenes, voces, videos y música).\n\n` +
       `Generar una historia nueva hará que ese material deje de corresponderle y se borrará SÓLO cuando la historia nueva termine correctamente.\n\n` +
       `El universo, los personajes y sus referencias NO se tocan.\n\n¿Seguir?`)) {
-      delete u.longformDrafts[epNum];
+      delete u.generationDrafts[epNum];
       saveState();
       return;
     }
@@ -4499,7 +4502,7 @@ Responde SOLO JSON válido sin markdown`;
 
     state.scenes = scenes;
     state.episodes[epNum] = scenes;
-    if (u.longformDrafts) delete u.longformDrafts[epNum];
+    if (u.generationDrafts) delete u.generationDrafts[epNum];
     saveState();
     renderScenes();
     renderScenarios();
