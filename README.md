@@ -20,7 +20,7 @@ Estudio personal para producir historias anime largas desde el móvil. Conserva 
 - Duración configurable: ~5 / 8 / 15 / 30 / 60 / 90 minutos
 - Dos modos de audio: **Narrada** (una voz conduce y lee diálogos) o **Dramatizada** (voz estable por personaje)
 - Dos tipos de cierre: historia completa o cliffhanger deliberado
-- El director decide cuántos planos necesita cada escena (1, 2 o 3) — no se generan imágenes de relleno
+- El director decide 1, 2 o 3 planos según duración y función editorial: ritmo base de ~3–7 s por composición, ~4–6 s en diálogo estable y ~2–4 s en tensión/acción
 - El director marca qué planos recomienda animar con Veo; tú puedes generar video manualmente para cualquier imagen y el montaje siempre usa el clip si existe
 - Los cortes son normales; sólo se interpola entre fotogramas cuando una acción necesita continuidad física
 - Veo genera clips de hasta 8 s; el montaje ajusta su velocidad para cubrir la duración real de la toma sin repetir el clip consecutivamente
@@ -94,11 +94,11 @@ lo dice: nunca reporta "sin fallos" sobre algo que no llegó a mirar.
 
 ### Los tres niveles del director creativo
 
-1. **Biblia de serie** — se escribe al crear el universo: dirección visual (paleta y luz concretas), identidad musical, regla de ritmo, motivos recurrentes, reglas de oro y arco de temporada. Se inyecta en todos los prompts posteriores.
+1. **Biblia de serie** — se escribe al crear el universo: dirección visual (paleta y luz concretas), identidad musical, ritmo narrativo, **ritmo visual de montaje**, motivos recurrentes, reglas de oro y arco de temporada. Se inyecta en todos los prompts posteriores.
 2. **Nota de capítulo** — antes de escribir cada episodio: qué debe lograr en el arco, curva emocional, imagen clave y qué queda abierto.
 3. **Dirección musical** — el brief de cada pista, a partir de la identidad musical y de lo que ocurre en cada acto.
-4. **Desglose de planos** — cuántas imágenes necesita cada escena. Una conversación larga puede necesitar hablante, reacción y plano conjunto aunque nadie camine; no hay una regla de “una conversación = una imagen”.
-5. **Recomendación de video** — por cada imagen el director decide si Veo aporta algo real. Esa recomendación no bloquea al usuario: cualquier imagen conserva su botón 🎬 manual. Cuando no hay clip, el montaje aplica zoom/paneo visible sobre la ilustración.
+4. **Desglose de planos** — cuántas imágenes necesita cada escena y cuánto debe respirar cada una. Como proxy antes del TTS: <18 palabras puede usar 1 plano, 18–35 exige al menos 2 y 36+ exige 3. El director asigna además un peso 1–5 para que los cortes sigan frases, reacciones y acciones en vez de dividir el audio en tercios iguales.
+5. **Recomendación de video** — el patrón por defecto es ilustración + corte/pan/zoom; Veo se reserva para movimiento temporal que realmente aporta información (carrera, caída, forcejeo, transformación, poder, interacción compleja). Acciones de menos de ~4 s, diálogo, miradas y reacciones simples quedan normalmente como ilustración. La recomendación no bloquea al usuario: cualquier imagen conserva su botón 🎬 manual.
 
 El director **no puede cambiar el género**: recibe el mismo contrato de fidelidad que el resto del pipeline y su trabajo es hacer que ese género se sienta excelente, no reinterpretarlo. Puedes regenerar la biblia desde la pantalla de Universo.
 
@@ -164,11 +164,12 @@ imagen del plano N+1 como último (`lastFrame`), así el clip termina justo dond
 empieza el siguiente y el corte no salta. El último plano de la escena no lleva
 fotograma final: ahí la escena corta.
 
-La duración también se controla: a Veo se le pide la parte de narración que le
-toca a ese plano (narración de la escena ÷ número de planos), redondeada a lo que
-el modelo acepta — 4, 6 u 8 s en Veo 3.1; 5 a 8 s en Veo 2. Sin eso, un plano de
-tres segundos se generaría de ocho y el personaje se pondría a inventar
-movimiento en los cinco sobrantes.
+La duración también se controla: el director asigna a cada plano un **peso editorial**
+de 1 a 5. El audio de la escena se reparte proporcionalmente con esos pesos, de modo
+que un insert o una reacción rápida duran menos que la frase o acción principal.
+Después, a Veo se le pide la duración compatible más cercana — 4, 6 u 8 s en Veo
+3.1; 5 a 8 s en Veo 2. Sin eso, un plano de tres segundos se generaría de ocho y
+el personaje se pondría a inventar movimiento en los cinco sobrantes.
 
 Como el redondeo nunca cae exacto, **el montaje ajusta la velocidad, no recorta**.
 Recortar el final sería justo tirar el fotograma de enganche, que es lo único que
@@ -400,8 +401,9 @@ El encargo que se deja en `gs://<bucket>/<prefijo>/proyectos/<proyecto>/ep<NN>/`
 `error.txt` vacío. El job se lanza con `TRABAJO`, `PREFIJO` y `SALIDA`.
 
 Cada escena dura exactamente su narración (medida con ffprobe), y dentro de la
-escena esa duración se reparte entre sus planos: el último absorbe el redondeo,
-así los planos siempre suman la narración exacta. Cada clip se encaja en su hueco
+escena esa duración se reparte según los **pesos editoriales** de sus planos; el
+último absorbe el redondeo, así todos los planos siguen sumando la narración exacta.
+Cada clip se encaja en su hueco
 ajustando la velocidad, nunca recortándolo (ver *Continuidad entre planos*). Los
 clips de Veo ya están en el bucket, así que se referencian en su sitio en vez de
 bajarlos y volverlos a subir desde el teléfono. Si el render falla, el motivo real
