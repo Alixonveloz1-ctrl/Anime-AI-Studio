@@ -97,13 +97,23 @@ class ConfigError extends Error {}
 function loadServiceAccount() {
   const raw = (process.env.GCP_SERVICE_ACCOUNT || '').trim();
   if (!raw) throw new ConfigError('GCP_SERVICE_ACCOUNT no configurado en Vercel');
-  let sa;
+
+  // Acepta JSON normal O el mismo JSON codificado en base64.
+  // Base64 existe por una razón práctica: desde un iPhone copiar JSON largo
+  // puede introducir retornos/espacios. Base64 es una sola línea simple.
+  let sa = null;
   try {
     sa = JSON.parse(raw);
-  } catch (e) {
-    throw new ConfigError('GCP_SERVICE_ACCOUNT no es JSON válido — pega el archivo completo de la service account');
+  } catch (jsonErr) {
+    try {
+      const decoded = Buffer.from(raw, 'base64').toString('utf8').trim();
+      sa = JSON.parse(decoded);
+    } catch (b64Err) {
+      throw new ConfigError('GCP_SERVICE_ACCOUNT no es JSON ni base64 válido');
+    }
   }
-  if (!sa.project_id)   throw new ConfigError('GCP_SERVICE_ACCOUNT sin project_id — ¿pegaste el JSON completo?');
+
+  if (!sa.project_id)   throw new ConfigError('GCP_SERVICE_ACCOUNT sin project_id');
   if (!sa.client_email) throw new ConfigError('GCP_SERVICE_ACCOUNT sin client_email');
   if (!sa.private_key)  throw new ConfigError('GCP_SERVICE_ACCOUNT sin private_key');
   if (!sa.token_uri)    sa.token_uri = 'https://oauth2.googleapis.com/token';

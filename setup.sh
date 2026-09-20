@@ -201,30 +201,32 @@ echo
 
 mkdir -p .secrets
 ONE_LINE=".secrets/GCP_SERVICE_ACCOUNT-one-line.txt"
+B64_FILE=".secrets/GCP_SERVICE_ACCOUNT-base64.txt"
+KEY_SOURCE=""
 
 if [[ -n "$EXISTING_KEY" ]]; then
-  python3 - "$EXISTING_KEY" "$ONE_LINE" <<'PY'
-import json, sys
-src, dst = sys.argv[1], sys.argv[2]
-with open(src, encoding="utf-8") as f:
-    d = json.load(f)
-with open(dst, "w", encoding="utf-8") as f:
-    f.write(json.dumps(d, separators=(",", ":")))
-PY
-  chmod 600 "$ONE_LINE"
+  KEY_SOURCE="$EXISTING_KEY"
   echo "✅ Se reutilizó la clave JSON que ya existía para esta misma service account."
   echo "No se creó ninguna clave nueva."
-  echo "Versión de una línea para Vercel: $ONE_LINE"
 elif [[ "${1:-}" == "key" ]]; then
   KEY=".secrets/anime-studio-service-account.json"
   if [[ -e "$KEY" ]]; then
     echo "Ya existe $KEY; no se creó otra clave."
   else
     gcloud iam service-accounts keys create "$KEY" \
-      --iam-account="$SA_EMAIL" --project="$PROJECT_ID"
+      --iam-account="$SA_EMAIL" --project "$PROJECT_ID"
     chmod 600 "$KEY"
   fi
-  python3 - "$KEY" "$ONE_LINE" <<'PY'
+  KEY_SOURCE="$KEY"
+  echo "Clave nueva creada porque no había una reutilizable."
+else
+  echo "⚠️ No encontré en Cloud Shell una clave JSON local que corresponda a esta service account."
+  echo "No se creó ninguna nueva automáticamente."
+  echo "Si luego confirmas que hace falta crear una, usa: bash setup.sh key"
+fi
+
+if [[ -n "$KEY_SOURCE" ]]; then
+  python3 - "$KEY_SOURCE" "$ONE_LINE" <<'PY'
 import json, sys
 src, dst = sys.argv[1], sys.argv[2]
 with open(src, encoding="utf-8") as f:
@@ -232,13 +234,20 @@ with open(src, encoding="utf-8") as f:
 with open(dst, "w", encoding="utf-8") as f:
     f.write(json.dumps(d, separators=(",", ":")))
 PY
-  chmod 600 "$ONE_LINE"
-  echo "Clave nueva creada porque no había una reutilizable."
-  echo "Versión de una línea para Vercel: $ONE_LINE"
-else
-  echo "⚠️ No encontré en Cloud Shell una clave JSON local que corresponda a esta service account."
-  echo "No se creó ninguna nueva automáticamente."
-  echo "Si luego confirmas que hace falta crear una, usa: bash setup.sh key"
+  python3 - "$KEY_SOURCE" "$B64_FILE" <<'PY'
+import base64, sys
+src, dst = sys.argv[1], sys.argv[2]
+with open(src, "rb") as f:
+    raw = f.read()
+with open(dst, "w", encoding="ascii") as f:
+    f.write(base64.b64encode(raw).decode("ascii"))
+PY
+  chmod 600 "$ONE_LINE" "$B64_FILE"
+  echo "Para Vercel desde iPhone usa preferiblemente:"
+  echo "  $B64_FILE"
+  echo "Es una sola línea base64: no contiene retornos ni espacios internos."
+  echo "También queda disponible el JSON de una línea:"
+  echo "  $ONE_LINE"
 fi
 
 echo "⚠️ No subas .secrets/ ni ninguna clave a GitHub."
