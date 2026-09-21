@@ -140,8 +140,42 @@ module.exports = async function handler(req, res) {
         const id = safeProjectId(body.projectId), key = safeCacheKey(body.key);
         if (!id || !key) return res.status(400).json({ error:'projectId/key inválidos' });
         const { token } = await auth();
+
+        // The cache entry for an image now contains only a gs:// pointer. Delete
+        // the pointed binary too, otherwise regenerating an episode would leave
+        // orphaned media in the bucket.
+        const raw = await gcsReadText(token, cfg.bucket, cachePath(id, key));
+        let mediaDeleted = false;
+        if (raw && String(raw).startsWith(`gs://${cfg.bucket}/${cfg.prefix}/`)) {
+          const objectPath = String(raw).slice(`gs://${cfg.bucket}/`.length);
+          mediaDeleted = await gcsDelete(token, cfg.bucket, objectPath);
+        }
         const deleted = await gcsDelete(token, cfg.bucket, cachePath(id, key));
-        return res.status(200).json({ ok:true, deleted });
+        return res.status(200).json({ ok:true, deleted, mediaDeleted });
+      }
+
+      if (action === 'mediaSign') {
+        const id = safeProjectId(body.projectId), key = safeCacheKey(body.key);
+        const method = String(body.method || 'PUT').toUpperCase();
+        const mime = String(body.mime || 'image/png').toLowerCase();
+        if (!id || !key || !['GET','PUT'].includes(method)) {
+          return res.status(400).json({ error:'projectId/key/method inválidos' });
+        }
+        const ext = /jpe?g/.test(mime) ? 'jpg' : /webp/.test(mime) ? 'webp' : 'png';
+        const objectPath = `${projectRoot(id)}/media/${key}.${ext}`;
+        const sa = loadServiceAccount();
+        if (method === 'PUT') {
+          try {
+            const token = await getAccessToken(sa);
+            const cors = await asegurarCors(token, cfg.bucket);
+            if (!cors.ok) console.warn('CORS media asset:', cors.error);
+          } catch (e) { console.warn('CORS media asset:', e.message); }
+        }
+        return res.status(200).json({
+          path: objectPath,
+          gcsUri: `gs://${cfg.bucket}/${objectPath}`,
+          url: signedUrl(sa, cfg.bucket, objectPath, { method, expiresSeconds:method === 'PUT' ? 3600 : 6 * 3600 }),
+        });
       }
 
       if (action === 'assetSign') {
