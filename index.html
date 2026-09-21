@@ -6972,7 +6972,7 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   if (!state.scenes.length) { showToast('Genera escenas primero', 'error'); return; }
   const missingRefs=[];
   for (const ch of state.characters || []) {
-    if (!(await dbGet(charImgKey(ch.id)))) missingRefs.push(ch.name);
+    if (!(await dbHas(charImgKey(ch.id)))) missingRefs.push(ch.name);
   }
   if (missingRefs.length) {
     showToast(`Faltan ${missingRefs.length} referencias de personaje. Ve a Personajes → Generar referencias faltantes.`, 'error');
@@ -7028,7 +7028,7 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
       const desdeNarracion = !s['imagePrompt' + slot] && !s.imagePromptEN;
       const tam = s['tamano' + slot];
       const prompt = tam ? `${planoEn(tam)}. ${base}` : base;
-      const existing = await dbGet(sceneImgKeyBy(s.id, slot));
+      const existing = await dbHas(sceneImgKeyBy(s.id, slot));
       if (!existing) queue.push({ s, ab: slot, prompt, desdeNarracion, tam });
     }
   }
@@ -7053,13 +7053,14 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
         const previo = { B: 'tamanoA', C: 'tamanoB' }[ab];
         return generateImageRaw(prompt + anclaDeEscena(prompt, s) + limiteCronologicoPlano(s, ab) + anclaPuestaEnEscena(s, ab), refsDeEscena(prompt, s), {
           ...envForScene(s), continuityRef: contRef, desdeNarracion,
+          storageKey: sceneImgKeyBy(s.id, ab),
           planoPrevio: (contRef && tam && previo && s[previo]) ? planoEn(s[previo]) : '',
           planoNuevo: (contRef && tam) ? planoEn(tam) : '',
         });
       }, (seg, n, de) => { bt.textContent = `⏳ Cuota agotada — esperando ${seg}s (${n}/${de})...`; });
       await dbSet(sceneImgKeyBy(s.id, ab), imgB64);
       success = true; completed++;
-      renderScenes(); // update UI immediately so user sees each image appear
+      // Do not rerender the whole episode here: on iPhone that decodes every previous image again and can make Safari reload the page.
     } catch(e) {
       if (esBloqueo(e)) bt.textContent = `⚠️ Escena ${s.num} (${ab}) bloqueada, sigo con la siguiente`;
       else bt.textContent = `⚠️ Escena ${s.num} (${ab}): ${String(e.message).slice(0, 70)}`;
@@ -7126,6 +7127,8 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
       // anime" y desmiente al estilo elegido antes de que el prompt hable.
       styleSpec: estiloCore(),
       desdeNarracion: env.desdeNarracion === true,
+      studioProjectId: env.storageKey ? state.projectId : undefined,
+      storageKey: env.storageKey || undefined,
     };
     const res = await fetch('/api/image', {
       method: 'POST',
@@ -7133,7 +7136,14 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
       body: JSON.stringify(bodyObj),
     });
     const data = await res.json();
-    if (res.ok && !data.error && data.imageData) { avisarRescate(data); return data.imageData; }
+    if (res.ok && !data.error && (data.imageData || data.imageUri)) {
+      avisarRescate(data);
+      if (data.imageUri) {
+        rememberImageUrl(data.imageUri, data.imageUrl);
+        return data.imageUri;
+      }
+      return data.imageData;
+    }
 
     const isRefError = data.error && (
       data.error.includes('character reference') ||
