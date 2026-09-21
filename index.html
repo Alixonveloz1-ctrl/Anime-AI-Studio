@@ -2614,6 +2614,8 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
     planoPrevio: opts.planoPrevio || undefined,
     planoNuevo: opts.planoNuevo || undefined,
     desdeNarracion: opts.desdeNarracion === true,
+    studioProjectId: opts.storageKey ? state.projectId : undefined,
+    storageKey: opts.storageKey || undefined,
   };
 
   const bodyStr = JSON.stringify(bodyObj);
@@ -2638,8 +2640,12 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
     }
     throw new Error(data.error || `Image proxy ${res.status}`);
   }
-  if (!data.imageData) throw new Error('Imagen: respuesta sin datos');
+  if (!data.imageData && !data.imageUri) throw new Error('Imagen: respuesta sin datos');
   avisarRescate(data);
+  if (data.imageUri) {
+    rememberImageUrl(data.imageUri, data.imageUrl);
+    return data.imageUri;
+  }
   return data.imageData;
 }
 
@@ -4586,7 +4592,7 @@ Responde SOLO JSON válido sin markdown.`;
             for (const ch of newChars) {
               try {
                 const prompt = `Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render clothing exactly as described. No turnaround, no collage, no alternate poses, no expression sheet, no text, no watermark. Authentic Japanese hand-drawn 2D anime, crisp linework, hard-edged cel shading.`;
-                const imgB64 = await generateImage(prompt, null, null, { charSheet: true });
+                const imgB64 = await generateImage(prompt, null, null, { charSheet: true, storageKey: charImgKey(ch.id) });
                 await dbSet(charImgKey(ch.id), imgB64);
                 renderCharacters();
                 showToast(`✅ Imagen generada: ${ch.name}`, 'success');
@@ -5495,7 +5501,7 @@ window.generateCharImage = async function(charId) {
     let imgB64 = null, lastErr = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
-        imgB64 = await generateImage(prompt, null, null, { charSheet: true });
+        imgB64 = await generateImage(prompt, null, null, { charSheet: true, storageKey: charImgKey(ch.id) });
         break;
       } catch(e) {
         lastErr = e;
@@ -5531,7 +5537,7 @@ document.getElementById('btnAllCharacterRefs')?.addEventListener('click', async 
       const prompt=`Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, natural neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render clothing exactly as described. No turnaround, no collage, no alternate poses, no expression sheet, no inset faces, no text, no labels, no watermark. Authentic Japanese hand-drawn 2D anime character design, crisp variable linework, hard-edged cel shading, matte skin.`;
       try {
         const img=await conEsperaDeCuota(
-          () => generateImage(prompt, null, null, { charSheet:true, estilo:'japon_2d' }),
+          () => generateImage(prompt, null, null, { charSheet:true, estilo:'japon_2d', storageKey: charImgKey(ch.id) }),
           (secs) => { btn.textContent=`Cuota: esperando ${secs}s antes de ${ch.name}...`; }
         );
         await dbSet(charImgKey(ch.id), img);
@@ -6429,6 +6435,7 @@ window.generateSceneImageAB = async function(sceneId, slot) {
     const prompt = conPlano + ancla + limiteCronologicoPlano(s, slot) + anclaPuestaEnEscena(s, slot);
     const env = buildSceneEnvContext(s);
     env.desdeNarracion = desdeNarracion;
+    env.storageKey = sceneImgKeyBy(s.id, slot);
     env.continuityRef = await getContinuityRef(s, slot);
     const previo = { B: 'tamanoA', C: 'tamanoB' }[slot];
     if (env.continuityRef && tam) {
