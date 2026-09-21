@@ -8077,13 +8077,30 @@ async function assembleEpisode() {
         } else {
           // A repeated adjacent clip is replaced by THIS shot's illustration.
           // Never loop the action back to frame 1.
-          const img = await dbGet(sceneImgKeyBy(s.id, slots[k]));
-          if (img) {
-            add(`img_${sufijo}.png`, img, 'image/png');
-            plano.image = `img_${sufijo}.png`;
-            lastClipObject = null;
+          const imgKey = sceneImgKeyBy(s.id, slots[k]);
+          const storedImg = await dbGetStored(imgKey);
+          if (storedImg && isGcsUri(storedImg)) {
+            // The illustration already lives in the bucket. Give Cloud Run the
+            // object directly instead of downloading it to the phone and then
+            // uploading the same bytes back to GCS.
+            const rest = storedImg.slice('gs://'.length);
+            const slash = rest.indexOf('/');
+            const objectPath = slash > 0 ? rest.slice(slash + 1) : '';
+            if (objectPath) {
+              descargas.push({ origen: objectPath, destino: `img_${sufijo}.png` });
+              plano.image = `img_${sufijo}.png`;
+              lastClipObject = null;
+            } else missingVisual++;
           } else {
-            missingVisual++;
+            // Legacy projects may still have old base64 image cache entries.
+            const img = storedImg ? await dbGet(imgKey) : null;
+            if (img) {
+              add(`img_${sufijo}.png`, img, 'image/png');
+              plano.image = `img_${sufijo}.png`;
+              lastClipObject = null;
+            } else {
+              missingVisual++;
+            }
           }
         }
         if (plano.clip || plano.image) entry.planos.push(plano);
