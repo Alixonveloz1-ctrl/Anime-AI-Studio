@@ -7,7 +7,7 @@
 // caused the earlier character-generation timeout bug on this project.
 // Node.js runtime + Fluid compute actually honors maxDuration.
 // ════════════════════════════════════════════════════════════════
-const { cfg, auth, imageModelLocation, vertexUrl, gcsUpload, begin, fail } = require('./_lib/gcp');
+const { cfg, auth, imageModelLocation, vertexUrl, gcsUpload, signedUrl, begin, fail } = require('./_lib/gcp');
 
 // Google's wording when a model id does not exist for this project. Kept so the
 // region rotation does not treat it as a capacity problem: retrying the other
@@ -276,7 +276,7 @@ module.exports = async function handler(req, res) {
     // like every other endpoint. A GCP_PROJECT_ID override used to take
     // precedence here only, so switching accounts by replacing the service
     // account left images on the old project while everything else moved.
-    const { projectId, token } = await auth();
+    const { sa, projectId, token } = await auth();
 
     const aspectRatio = body.aspectRatio || '9:16';
     const model = forceModel || cfg.imageModel;
@@ -309,9 +309,11 @@ module.exports = async function handler(req, res) {
       const objectPath = `${cfg.prefix}/projects/${studioProjectId}/media/${storageKey}.${ext}`;
       await gcsUpload(token, cfg.bucket, objectPath, Buffer.from(result.imageData, 'base64'), mime);
       const { imageData, ...meta } = result;
+      const imageUri = `gs://${cfg.bucket}/${objectPath}`;
       return res.status(200).json({
         ...meta,
-        imageUri: `gs://${cfg.bucket}/${objectPath}`,
+        imageUri,
+        imageUrl: signedUrl(sa, cfg.bucket, objectPath, { expiresSeconds: 6 * 3600 }),
         imageMimeType: mime,
       });
     }
