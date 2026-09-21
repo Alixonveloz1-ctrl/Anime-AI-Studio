@@ -324,7 +324,7 @@
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
-      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-20.116 ✍️</span></div>
+      <div class="jp">アニメ・スタジオ <span style="opacity:0.4;font-size:10px">v2026-09-20.117 ☁️</span></div>
     </div>
     <div class="header-btns">
       <button class="header-btn" id="btnProjects">📁 Proyectos</button>
@@ -706,12 +706,15 @@ function localDbKeys()    { return new Promise((res, rej) => { const tx = db.tra
 
 const cloudMissingKeys = new Set();
 const signedVideoCache = new Map();
+const signedImageCache = new Map();
 
 function projectIdFromDbKey(k) {
   const m = /^[a-z]+_(p[a-zA-Z0-9-]{5,80})(?:_|$)/.exec(String(k || ''));
   return m ? m[1] : null;
 }
 function isVideoDbKey(k) { return /^sv[abc]_/.test(String(k || '')); }
+function isImageDbKey(k) { return /^(?:ci|sia|sib|sic)_/.test(String(k || '')); }
+function isGcsUri(v) { return typeof v === 'string' && v.startsWith('gs://'); }
 
 function canonicalVideoValue(v) {
   const raw = String(v || '');
@@ -791,8 +794,60 @@ async function resolveVideoValue(v) {
   return d.url;
 }
 
-// Device storage is a cache only. Every project value is mirrored to GCS
-// immediately; another device can rebuild it even with empty browser storage.
+async function dbGetStored(k) {
+  let v = await localDbGet(k);
+  if (v == null) {
+    v = await cloudGetDbValue(k);
+    if (v != null) await localDbSet(k, v);
+  }
+  return v == null ? null : v;
+}
+
+async function resolveImageValue(v) {
+  if (!isGcsUri(v)) return v;
+  const cached = signedImageCache.get(v);
+  if (cached && cached.expiresAt > Date.now() + 60_000) return cached.url;
+  const r = await fetch('/api/download-url', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ gcsUri:v, descarga:false }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.url) throw new Error(d.error || 'No se pudo firmar la imagen');
+  signedImageCache.set(v, { url:d.url, expiresAt:Date.now() + 5 * 3600_000 });
+  return d.url;
+}
+
+function rememberImageUrl(uri, url) {
+  if (isGcsUri(uri) && url) {
+    signedImageCache.set(uri, { url, expiresAt:Date.now() + 5 * 3600_000 });
+  }
+}
+
+async function imageUriToBase64(uri) {
+  const url = await resolveImageValue(uri);
+  const r = await fetch(url, { cache:'force-cache' });
+  if (!r.ok) throw new Error(`No se pudo leer la imagen del bucket (${r.status})`);
+  const buf = new Uint8Array(await r.arrayBuffer());
+  let out = '';
+  const step = 0x8000;
+  for (let i = 0; i < buf.length; i += step) out += String.fromCharCode(...buf.subarray(i, i + step));
+  return btoa(out);
+}
+
+async function dbHas(k) {
+  return (await dbGetStored(k)) != null;
+}
+
+async function dbGetImageSrc(k) {
+  const v = await dbGetStored(k);
+  if (v == null) return null;
+  if (isGcsUri(v)) return resolveImageValue(v);
+  if (/^data:image\//i.test(String(v))) return String(v);
+  return 'data:image/png;base64,' + String(v);
+}
+
+// Device storage is a cache only. Image entries now store a tiny gs:// pointer;
+// the binary lives in GCS. Old base64 entries remain readable for compatibility.
 async function dbSet(k, v) {
   const canonical = isVideoDbKey(k) ? canonicalVideoValue(v) : v;
   await localDbSet(k, canonical);
@@ -800,13 +855,11 @@ async function dbSet(k, v) {
   if (pid) await cloudPutDbValue(k, canonical);
 }
 async function dbGet(k) {
-  let v = await localDbGet(k);
-  if (v == null) {
-    v = await cloudGetDbValue(k);
-    if (v != null) await localDbSet(k, v);
-  }
+  const v = await dbGetStored(k);
   if (v == null) return null;
-  return isVideoDbKey(k) ? resolveVideoValue(v) : v;
+  if (isVideoDbKey(k)) return resolveVideoValue(v);
+  if (isImageDbKey(k) && isGcsUri(v)) return imageUriToBase64(v);
+  return v;
 }
 async function dbDel(k) {
   await localDbDel(k);
