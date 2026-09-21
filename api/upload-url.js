@@ -154,6 +154,30 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({ ok:true, deleted, mediaDeleted });
       }
 
+      if (action === 'mediaSign') {
+        const id = safeProjectId(body.projectId), key = safeCacheKey(body.key);
+        const method = String(body.method || 'PUT').toUpperCase();
+        const mime = String(body.mime || 'image/png').toLowerCase();
+        if (!id || !key || !['GET','PUT'].includes(method)) {
+          return res.status(400).json({ error:'projectId/key/method inválidos' });
+        }
+        const ext = /jpe?g/.test(mime) ? 'jpg' : /webp/.test(mime) ? 'webp' : 'png';
+        const objectPath = `${projectRoot(id)}/media/${key}.${ext}`;
+        const sa = loadServiceAccount();
+        if (method === 'PUT') {
+          try {
+            const token = await getAccessToken(sa);
+            const cors = await asegurarCors(token, cfg.bucket);
+            if (!cors.ok) console.warn('CORS media asset:', cors.error);
+          } catch (e) { console.warn('CORS media asset:', e.message); }
+        }
+        return res.status(200).json({
+          path: objectPath,
+          gcsUri: `gs://${cfg.bucket}/${objectPath}`,
+          url: signedUrl(sa, cfg.bucket, objectPath, { method, expiresSeconds:method === 'PUT' ? 3600 : 6 * 3600 }),
+        });
+      }
+
       if (action === 'assetSign') {
         const id = safeProjectId(body.projectId), key = safeCacheKey(body.key);
         const method = String(body.method || 'GET').toUpperCase();
