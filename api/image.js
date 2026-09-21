@@ -7,7 +7,7 @@
 // caused the earlier character-generation timeout bug on this project.
 // Node.js runtime + Fluid compute actually honors maxDuration.
 // ════════════════════════════════════════════════════════════════
-const { cfg, auth, imageModelLocation, vertexUrl, begin, fail } = require('./_lib/gcp');
+const { cfg, auth, imageModelLocation, vertexUrl, gcsUpload, begin, fail } = require('./_lib/gcp');
 
 // Google's wording when a model id does not exist for this project. Kept so the
 // region rotation does not treat it as a capacity problem: retrying the other
@@ -140,7 +140,7 @@ ${cleanPrompt}` });
     }
     if (!ok) return { error: data.error?.message || `Error ${model}` };
     const img = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.mimeType?.startsWith('image/'));
-    if (img) return { imageData: img.inlineData.data.replace(/\s/g,''), model, region: 'global' };
+    if (img) return { imageData: img.inlineData.data.replace(/\s/g,''), imageMimeType: img.inlineData.mimeType || 'image/png', model, region: 'global' };
     const fr = data.candidates?.[0]?.finishReason || 'UNKNOWN';
     const rat = data.candidates?.[0]?.safetyRatings?.filter(x => x.blocked)?.map(x => x.category.replace('HARM_CATEGORY_',''))?.join(', ');
     return { error: `bloqueado [${fr}]${rat ? ' — ' + rat : ''}`, bloqueado: true };
@@ -172,7 +172,7 @@ ${cleanPrompt}` });
     }
     if (!ok) { lastError = `${region}: ${data.error?.message?.slice(0,80) || 'error'}`; continue; }
     const img = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.mimeType?.startsWith('image/'));
-    if (img) return { imageData: img.inlineData.data.replace(/\s/g,''), model, region };
+    if (img) return { imageData: img.inlineData.data.replace(/\s/g,''), imageMimeType: img.inlineData.mimeType || 'image/png', model, region };
     const cand = data.candidates?.[0];
     const finishReason = cand?.finishReason || 'UNKNOWN';
     // Una respuesta SIN imagen no es falta de capacidad: es un rechazo. Aquí
@@ -286,6 +286,36 @@ module.exports = async function handler(req, res) {
     const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true,
       aspectRatio, continuityRef, body.styleSpec || '', body.sinCortes === true, Number(body.segundosEntre) || 8,
       String(body.planoPrevio || ''), String(body.planoNuevo || ''), body.desdeNarracion === true);
+
+    // Production images never need to come back through Safari as multi-megabyte
+    // base64 strings. When the client supplies its lightweight storage key, save
+    // the binary directly in this project's GCS media folder and return only a
+    // gs:// pointer. This keeps the browser cache tiny and avoids iOS killing the
+    // page during long image batches.
+    if (result.imageData && body.storageKey && body.studioProjectId) {
+      const studioProjectId = String(body.studioProjectId || '').trim();
+      const storageKey = String(body.storageKey || '').trim();
+      if (!/^p[a-zA-Z0-9_-]{5,80}$/.test(studioProjectId)) {
+        return res.status(400).json({ error:'studioProjectId inválido' });
+      }
+      if (!/^[a-zA-Z0-9_.-]{3,220}$/.test(storageKey)) {
+        return res.status(400).json({ error:'storageKey inválido' });
+      }
+      if (!cfg.bucket) {
+        return res.status(500).json({ error:'GCS_OUTPUT_BUCKET no configurado', configError:true });
+      }
+      const mime = result.imageMimeType || 'image/png';
+      const ext = /jpe?g/i.test(mime) ? 'jpg' : /webp/i.test(mime) ? 'webp' : 'png';
+      const objectPath = `${cfg.prefix}/projects/${studioProjectId}/media/${storageKey}.${ext}`;
+      await gcsUpload(token, cfg.bucket, objectPath, Buffer.from(result.imageData, 'base64'), mime);
+      const { imageData, ...meta } = result;
+      return res.status(200).json({
+        ...meta,
+        imageUri: `gs://${cfg.bucket}/${objectPath}`,
+        imageMimeType: mime,
+      });
+    }
+
     return res.status(200).json(result);
   } catch(e) {
     return fail(res, e);
