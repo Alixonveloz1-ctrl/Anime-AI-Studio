@@ -946,7 +946,7 @@ async function borrarMaterialDelEpisodio() {
 async function sceneSlots(s) {
   const out = [];
   for (const sl of ['A', 'B', 'C']) {
-    if (s['imagePrompt' + sl] || await dbGet(sceneImgKeyBy(s.id, sl))) out.push(sl);
+    if (s['imagePrompt' + sl] || await dbHas(sceneImgKeyBy(s.id, sl))) out.push(sl);
   }
   return out.length ? out : ['A'];
 }
@@ -5459,16 +5459,16 @@ async function renderCharacters() {
     return;
   }
   const items = await Promise.all(state.characters.map(async ch => {
-    const imgB64 = await dbGet(charImgKey(ch.id));
-    return { ch, imgB64 };
+    const imgSrc = await dbGetImageSrc(charImgKey(ch.id));
+    return { ch, imgSrc };
   }));
-  c.innerHTML = items.map(({ ch, imgB64 }) => {
+  c.innerHTML = items.map(({ ch, imgSrc }) => {
     const defaultPrompt = `Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, natural neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render the clothing's fabric, colors and CONDITION exactly as described; do not beautify or upgrade it. No turnaround, no collage, no alternate poses, no expression sheet, no inset faces, no text, no labels, no watermark. Authentic Japanese hand-drawn 2D anime character design with crisp linework and hard-edged cel shading.`;
     return `
     <div class="char-card">
       <div class="char-header">
-        <div class="char-img"${imgB64 ? ` style="position:relative;cursor:zoom-in" onclick="openCharImage('${ch.id}')"` : ''}>
-          ${imgB64 ? `<img src="data:image/png;base64,${imgB64}"><div class="img-zoom-badge">🔍</div>` : (ch.role || '').includes('femenino') || ch.appearance?.toLowerCase().includes('mujer') ? '👩' : '👤'}
+        <div class="char-img"${imgSrc ? ` style="position:relative;cursor:zoom-in" onclick="openCharImage('${ch.id}')"` : ''}>
+          ${imgSrc ? `<img src="${imgSrc}" loading="lazy" decoding="async"><div class="img-zoom-badge">🔍</div>` : (ch.role || '').includes('femenino') || ch.appearance?.toLowerCase().includes('mujer') ? '👩' : '👤'}
         </div>
         <div class="char-info">
           <h4>${ch.name}</h4>
@@ -5532,7 +5532,7 @@ document.getElementById('btnAllCharacterRefs')?.addEventListener('click', async 
     for (let i=0;i<state.characters.length;i++) {
       if (tanda.detener) break;
       const ch=state.characters[i];
-      if (await dbGet(charImgKey(ch.id))) { skipped++; continue; }
+      if (await dbHas(charImgKey(ch.id))) { skipped++; continue; }
       btn.innerHTML=`<div class="spinner"></div> Referencia ${i+1}/${state.characters.length}: ${ch.name}`;
       const prompt=`Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, natural neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render clothing exactly as described. No turnaround, no collage, no alternate poses, no expression sheet, no inset faces, no text, no labels, no watermark. Authentic Japanese hand-drawn 2D anime character design, crisp variable linework, hard-edged cel shading, matte skin.`;
       try {
@@ -6000,10 +6000,10 @@ async function renderScenes() {
   }
 
   const items = await Promise.all(state.scenes.map(async s => {
-    const imgA    = await dbGet(sceneImgKeyA(s.id));
-    const imgB    = await dbGet(sceneImgKeyB(s.id));
-    const imgC    = await dbGet(sceneImgKeyC(s.id));
-    const audData = await dbGet(sceneAudKey(s.id));
+    const imgA    = await dbGetImageSrc(sceneImgKeyA(s.id));
+    const imgB    = await dbGetImageSrc(sceneImgKeyB(s.id));
+    const imgC    = await dbGetImageSrc(sceneImgKeyC(s.id));
+    const audData = await dbHas(sceneAudKey(s.id));
     // One clip per shot, keyed by slot.
     const vids = {};
     for (const sl of ['A','B','C']) vids[sl] = await dbGet(sceneVidKeyBy(s.id, sl));
@@ -6035,7 +6035,7 @@ async function renderScenes() {
       <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
         <div class="scene-img" style="aspect-ratio:${cssRatio};overflow:hidden;min-height:0;margin-bottom:0;position:relative;${img ? 'cursor:zoom-in' : ''}"${img ? ` onclick="openImageFullscreen('${s.id}','${slot}')"` : ''}>
           ${img
-            ? `<img src="data:image/png;base64,${img}" style="width:100%;height:100%;object-fit:contain;display:block;background:#000"><div class="img-zoom-badge">🔍</div>`
+            ? `<img src="${img}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:contain;display:block;background:#000"><div class="img-zoom-badge">🔍</div>`
             : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim)">Plano ${numLbl}</div>`}
         </div>
         <button class="btn-sec" style="font-size:10px;padding:3px 4px;min-width:0" onclick="generateSceneImageAB('${s.id}','${slot}')">${img ? '🔄' : '🖼️'} ${numLbl}</button>
@@ -6093,8 +6093,8 @@ async function renderScenes() {
 }
 
 // Core fullscreen image viewer — reused by scenes, characters and scenarios.
-function showFullscreenImage(imgB64, label) {
-  if (!imgB64) { showToast('Esa imagen aún no se ha generado', 'error'); return; }
+function showFullscreenImage(imgSrc, label) {
+  if (!imgSrc) { showToast('Esa imagen aún no se ha generado', 'error'); return; }
   const overlay = document.createElement('div');
   overlay.className = 'img-fs-overlay';
   overlay.innerHTML = `
@@ -6102,7 +6102,7 @@ function showFullscreenImage(imgB64, label) {
       <span class="img-fs-label">${label || ''}</span>
       <button class="img-fs-close" aria-label="Cerrar">✕</button>
     </div>
-    <div class="img-fs-body"><img src="data:image/png;base64,${imgB64}" alt=""></div>
+    <div class="img-fs-body"><img src="${imgSrc}" alt=""></div>
     <div class="img-fs-hint">Tocá la imagen para acercar · tocá fuera o ✕ para cerrar</div>`;
   document.body.appendChild(overlay);
   document.body.style.overflow = 'hidden';
@@ -6117,7 +6117,7 @@ function showFullscreenImage(imgB64, label) {
 // Open a stored image (by its IndexedDB key) in the fullscreen viewer.
 window.openImageByKey = async function(dbKey, label) {
   let img = null;
-  try { img = await dbGet(dbKey); } catch { img = null; }
+  try { img = await dbGetImageSrc(dbKey); } catch { img = null; }
   showFullscreenImage(img, label);
 };
 
@@ -6576,7 +6576,7 @@ async function referenciasNombradasFaltantes(prompt) {
   const named = seleccionarRefs(prompt, state.characters || []);
   const missing = [];
   for (const ch of named) {
-    if (!(await dbGet(charImgKey(ch.id)))) missing.push(ch.name);
+    if (!(await dbHas(charImgKey(ch.id)))) missing.push(ch.name);
   }
   return missing;
 }
