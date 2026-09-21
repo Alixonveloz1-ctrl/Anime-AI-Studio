@@ -846,10 +846,42 @@ async function dbGetImageSrc(k) {
   return 'data:image/png;base64,' + String(v);
 }
 
+async function persistImagePointer(k, value) {
+  if (isGcsUri(value)) return value;
+  const projectId = projectIdFromDbKey(k);
+  if (!projectId) return value;
+
+  const str = String(value || '');
+  const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s.exec(str);
+  const mime = m?.[1] || 'image/png';
+  const b64 = (m?.[2] || str).replace(/\s/g, '');
+  if (b64.length < 100) return value;
+
+  const sign = await fetch('/api/upload-url', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ action:'mediaSign', projectId, key:k, method:'PUT', mime }),
+  });
+  const d = await sign.json().catch(() => ({}));
+  if (!sign.ok || !d.url || !d.gcsUri) throw new Error(d.error || 'No se pudo preparar la subida de imagen');
+
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const put = await fetch(d.url, { method:'PUT', headers:{'Content-Type':mime}, body:new Blob([bytes], { type:mime }) });
+  if (!put.ok) throw new Error(`GCS imagen ${put.status}`);
+  return d.gcsUri;
+}
+
 // Device storage is a cache only. Image entries now store a tiny gs:// pointer;
 // the binary lives in GCS. Old base64 entries remain readable for compatibility.
 async function dbSet(k, v) {
-  const canonical = isVideoDbKey(k) ? canonicalVideoValue(v) : v;
+  let canonical = isVideoDbKey(k) ? canonicalVideoValue(v) : v;
+  // Normal generation already returns gs://. This fallback guarantees that even
+  // a legacy/base64 image response is converted to a bucket object BEFORE it is
+  // written to IndexedDB, so the browser never becomes the image database again.
+  if (isImageDbKey(k) && !isGcsUri(canonical)) {
+    canonical = await persistImagePointer(k, canonical);
+  }
   await localDbSet(k, canonical);
   const pid = projectIdFromDbKey(k);
   if (pid) await cloudPutDbValue(k, canonical);
