@@ -88,7 +88,10 @@ const required = [
   ['validarPuestaEnEscena', 'validación mecánica de blocking y continuidad física'],
   ['CINEMATIC STAGING', 'estado físico enviado a imagen y Veo'],
   ['visualEngineVersion: 2', 'motor visual versionado para no reutilizar planes antiguos'],
-  ["v.familia === 'gemini'", 'Gemini TTS visible junto a Chirp']
+  ["v.familia === 'gemini'", 'Gemini TTS visible junto a Chirp'],
+  ['dbGetImageSrc', 'imágenes renderizadas desde URL ligera'],
+  ['persistImagePointer', 'fallback convierte base64 a puntero GCS antes de IndexedDB'],
+  ['storageKey: opts.storageKey', 'generación individual envía destino GCS al servidor']
 ];
 for (const [needle, label] of required) html.includes(needle) ? ok(label) : fail('Falta ' + label);
 
@@ -154,6 +157,10 @@ if (/REGLAS DE PERSONAJES FEMENINOS/.test(html)) fail('Persisten reglas de apari
 else ok('El reparto no usa un molde femenino obligatorio');
 
 const imageApi = fs.readFileSync('api/image.js','utf8');
+if (!/imageUri/.test(imageApi) || !/gcsUpload/.test(imageApi) || !/studioProjectId/.test(imageApi)) {
+  fail('api/image.js todavía devuelve las imágenes como payload principal en vez de guardarlas en GCS');
+} else ok('api/image.js guarda imágenes en GCS y devuelve un puntero ligero');
+
 if (!/AUTHENTIC JAPANESE HAND-DRAWN 2D TV ANIME FRAME/.test(imageApi)) fail('api/image.js no comparte el contrato japonés 2D');
 else ok('api/image.js comparte el contrato japonés 2D');
 if (/form-fitting clothing, blushing expressions, suggestive poses/.test(imageApi)) fail('api/image.js todavía fuerza fan service genérico en todas las escenas');
@@ -187,6 +194,10 @@ const storageApi = fs.readFileSync('api/upload-url.js','utf8');
 if (!/project-manifests/.test(storageApi) || !/projectList/.test(storageApi) || !/projectSave/.test(storageApi)) {
   fail('upload-url no contiene el índice autoritativo de proyectos en GCS');
 } else ok('El bucket es la fuente de verdad de la lista y estado de proyectos');
+if (!/mediaSign/.test(storageApi) || !/\/media\//.test(storageApi)) {
+  fail('upload-url no soporta imágenes binarias directas en GCS');
+} else ok('El bucket acepta medios binarios directos y el cache guarda sólo referencias');
+
 if (!/assetSign/.test(storageApi) || !/assetList/.test(storageApi) || !/cache\//.test(storageApi)) {
   fail('upload-url no refleja los medios del proyecto en GCS');
 } else ok('Los medios del proyecto tienen espejo cloud sin sumar funciones de Vercel');
