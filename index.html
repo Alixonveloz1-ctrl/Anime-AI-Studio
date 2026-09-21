@@ -6985,13 +6985,15 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   const bt = document.getElementById('bulkText'), bb = document.getElementById('bulkBar');
 
   bt.textContent = 'Preparando referencias...';
-  // Pre-compress ALL character refs once
-  const allRawRefs = await getAllCharacterRefs();
+  // Pre-compress character refs one by one. Do NOT load every full-resolution
+  // reference into one array first: on iPhone that creates a needless memory
+  // spike before the scene batch even starts.
   const cachedRefMap = {}; // name -> compressed ref
-  for (const r of allRawRefs) {
-    if (!r.img) continue;
-    const compressed = await compressBase64Image(r.img.replace(/^data:image\/[a-z]+;base64,/i, ''), 768, 0.85);
-    cachedRefMap[r.name.toLowerCase()] = { name: r.name, role: r.role, img: compressed, mimeType: 'image/jpeg' };
+  for (const ch of state.characters || []) {
+    const raw = await dbGet(charImgKey(ch.id));
+    if (!raw) continue;
+    const compressed = await compressBase64Image(String(raw).replace(/^data:image\/[a-z]+;base64,/i, ''), 768, 0.85);
+    cachedRefMap[ch.name.toLowerCase()] = { name: ch.name, role: ch.role, img: compressed, mimeType: 'image/jpeg' };
   }
   console.log('Refs cacheadas:', Object.keys(cachedRefMap).join(', '));
 
@@ -7036,7 +7038,7 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   const total = queue.length;
   let completed = 0, failed = 0, failedIds = [], detenida = false;
 
-  // Sequential — one image at a time, UI updates immediately after each one
+  // Sequential — one image at a time. The UI is rendered once at the end to keep iPhone memory stable.
   for (let i = 0; i < queue.length; i++) {
     const { s, ab, prompt, desdeNarracion, tam } = queue[i];
     if (tanda.detener) { detenida = true; break; }
