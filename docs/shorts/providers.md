@@ -9,7 +9,7 @@ Revisión documental: 2026-09-23. No se hicieron llamadas de generación ni se v
 | Video | `veo-3.1-generate-001` | Vertex `v1 … :predictLongRunning` / `:fetchPredictOperation`, `us-central1` | Payload fixture, sin llamada real |
 | Voz | `gemini-2.5-pro-tts` | Cloud TTS `v1/text:synthesize`, `global` | Texto japonés separado de prompt, fixture |
 | Música | `lyria-3-pro-preview` | Vertex `v1beta1/projects/…/locations/global/interactions` | Contrato documental; API pendiente |
-| Transcripción | Cloud Speech `speech:longrunningrecognize` | URI GCS, `ja-JP` | Envío implementado; polling/alineación aún pendientes |
+| Transcripción | Cloud Speech `speech:longrunningrecognize` | URI GCS, `ja-JP` | Envío/polling y propuesta de marcas implementados; API real pendiente |
 
 Veo usa imagen aprobada, 4/6/8 segundos, un resultado, 720p y `generateAudio:false` fijado en servidor. El original permanece inaccesible a previews/finales; un derivado normalizado pasa FFprobe y se vuelve a comprobar antes del montaje. No se admite cambiar esa opción para resolver un error del proveedor.
 
@@ -30,7 +30,7 @@ El servidor conserva una reserva al producirse un timeout o error de resultado d
 - [Vercel: variables por rama](https://vercel.com/docs/rest-api/projects/create-one-or-more-environment-variables)
 - [Vercel: creación de preview](https://vercel.com/docs/rest-api/deployments/create-a-new-deployment)
 
-La página de precios distingue modalidad Veo con/sin audio y publica TTS por tokens. Falta cerrar el estimador por unidades máximas, liquidación de uso real y vigencia de tarifas. `SHORTS_RATE_TABLE` queda vacío en la configuración de ejemplo; este bloqueo es intencional, no una tarifa cero ni una afirmación de ahorro. Health y CI no verifican permisos de generación pagada.
+La página de precios distingue modalidad Veo con/sin audio y publica TTS por tokens. El catálogo instalado incluye reservas conservadoras, conciliación y vigencia; una configuración sin tarifa válida bloquea la generación. Health y CI no verifican acceso a modelos ni cargos reales.
 
 ## Tarifas y registro de consumo (2026-09-23)
 
@@ -39,3 +39,9 @@ La página de precios distingue modalidad Veo con/sin audio y publica TTS por to
 Fuentes: https://cloud.google.com/vertex-ai/generative-ai/pricing ; https://cloud.google.com/text-to-speech/pricing ; https://cloud.google.com/text-to-speech/docs/gemini-tts ; https://cloud.google.com/speech-to-text/pricing ; https://cloud.google.com/run/pricing .
 
 Speech v1 convierte copia de trabajo a mono PCM16, guarda el ID y consulta GET /v1/operations/{name}; conserva marcas como propuesta y no sobrescribe subtítulos manuales. Referencia: https://docs.cloud.google.com/speech-to-text/docs/v1/async-time-offsets . Sin prueba API pagada todavía.
+
+## Instalador y permisos verificados documentalmente
+
+El build fija `E2_STANDARD_2`, timeout de 1.800 segundos y cuenta de servicio dedicada. El menú muestra USD 0,006/min (hasta 0,18 por build) y USD 0,000044/s para el Job de 2 CPU/4 GiB (hasta 0,1584 por intento de 1 h). Son techos de cómputo bajo las tarifas consultadas el 2026-09-23, no un límite de la factura: servicio, datos, imágenes y transferencias se añaden según uso. No se asumen créditos.
+
+Fuentes oficiales: https://cloud.google.com/build/pricing ; https://docs.cloud.google.com/build/docs/api/reference/rest/v1/projects.builds#machinetype ; https://cloud.google.com/run/pricing ; https://docs.cloud.google.com/build/docs/securing-builds/configure-user-specified-service-accounts ; https://docs.cloud.google.com/tasks/docs/creating-http-target-tasks . Cloud Tasks exige actAs además de la firma; el instalador concede ServiceAccountUser solo sobre la identidad propia y verifica una entrega OIDC de diagnóstico. El builder puede escribir el repositorio Docker propio, leer objetos build-source y emitir logs; no usa la identidad del runtime.

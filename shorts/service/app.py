@@ -301,11 +301,12 @@ def import_asset(pid):
 def upload(pid,sid):
     p=owned(pid);d=body();ident(sid);require(expected()==p['revision'],'REVISION_CONFLICT','Revisión cambió',409)
     dev=cloud().entity(pid,'developments',p['activeDevelopment'])['data']
-    require(any(r['id']==sid for r in dev['soundRequests']),'SOUND_REQUEST','Solicitud inexistente')
+    sound=next((r for r in dev['soundRequests'] if r['id']==sid),None)
+    require(sound,'SOUND_REQUEST','Solicitud inexistente')
     require(d.get('mime') in ('audio/mpeg','audio/mp3','audio/wav','audio/x-wav','audio/mp4','audio/flac','audio/ogg'),'MIME','Formato no admitido')
     require(type(d.get('size'))is int and 0<d['size']<=250*1024*1024,'SIZE','Máximo 250 MB',413)
     file_key=d.get('fileKey','');require(isinstance(file_key,str) and len(file_key)==64 and all(c in '0123456789abcdef' for c in file_key),'FILE_KEY','Falta huella del archivo')
-    aid=digest([pid,sid,file_key]);ref=cloud().entity_ref(pid,'uploads',aid);existing=ref.get().to_dict()
+    aid=digest([pid,sid,digest(sound),file_key]);ref=cloud().entity_ref(pid,'uploads',aid);existing=ref.get().to_dict()
     if existing:
         require(existing['size']==d['size'] and existing['mimeType']==d['mime'],'UPLOAD_CONFLICT','Archivo distinto',409)
         if d.get('renew'):
@@ -361,10 +362,14 @@ def cue_edit(pid,cid):
 @app.post('/projects/<pid>/cues/<cid>:approve')
 def cue_approve(pid,cid):
     p=owned(pid);d=body();preview=cloud().entity(pid,'previews',d['previewId']);ref=cloud().entity_ref(pid,'cues',cid)
+    from shorts.core.contracts import cue_render_data
+    requests=cloud().entity(pid,'developments',p['activeDevelopment'])['data']['soundRequests']
     def change(tx,current):
         cue=ref.get(transaction=tx).to_dict()
-        require(preview.get('state')=='ready' and preview.get('cueHashes',{}).get(cid)==digest(cue),'STALE_PREVIEW','Escucha una preview de este ajuste',409)
-        cue.update(approvalState='approved',manualLock=cue.get('correctionSource')=='manual',approvedBy=p['owner'],approvedAt=time.time())
+        require(preview.get('state')=='ready' and preview.get('cueHashes',{}).get(cid)==digest(cue_render_data(cue)),'STALE_PREVIEW','Escucha una preview de este ajuste',409)
+        sound=next((r for r in requests if r['id']==cue['requestId']),None);require(sound,'SOUND_REQUEST','Solicitud ya no vigente')
+        require(cue['shotId']==sound['shotId'],'SOUND_SHOT_CHANGED','La solicitud cambió de toma. Vuelve a seleccionar el archivo para crear su nueva candidata.')
+        cue.update(approvalState='approved',manualLock=cue.get('correctionSource')=='manual',approvedBy=p['owner'],approvedAt=time.time(),requestFingerprint=digest(sound))
         tx.set(ref,cue);current['timelineStale']=True
         current.setdefault('cueSelections',{})[cue['requestId']]=cid
         tx.create(cloud().entity_ref(pid,'approvals',new_id()),{'kind':'cue','entity':cid,'snapshot':cue,'author':p['owner'],'at':time.time()})
@@ -515,12 +520,22 @@ def job_action(jid,action):
     elif j['state']=='cancelled':cloud().finish(jid,'cancelled',{'reason':'Cancelado antes de despachar'})
     return jsonify(state=j['state'],message='Las operaciones aceptadas por Google pueden terminar y facturarse.')
 
-@app.post('/internal/dispatch')
-def dispatch():
+def internal_identity():
     c=config();token=request.headers.get('Authorization','').removeprefix('Bearer ')
     try:claims=id_token.verify_oauth2_token(token,Request(),c['service'])
     except Exception:raise ContractError('INTERNAL_AUTH','Identidad interna inválida',403)
     require(claims.get('email')==c['serviceAccount'] and claims.get('email_verified'),'INTERNAL_AUTH','Identidad no autorizada',403)
+    return c
+
+@app.post('/internal/diagnostic')
+def diagnostic_callback():
+    internal_identity();key=ident(body()['key']);ref=cloud().db.collection('animeShortsDiagnostics').document(key)
+    require(key.startswith('diagnostic_') and ref.get().exists,'DIAGNOSTIC','Prueba no registrada',404)
+    ref.update({'queueDelivered':True});return jsonify(delivered=True)
+
+@app.post('/internal/dispatch')
+def dispatch():
+    c=internal_identity()
     jid=ident(body()['jobId']);j,should_dispatch=cloud().acquire_dispatch(jid)
     if not should_dispatch:return jsonify(dispatched=False)
     ref=cloud().db.collection('animeShortsJobs').document(jid)

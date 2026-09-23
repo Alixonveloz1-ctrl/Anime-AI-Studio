@@ -10,6 +10,24 @@ import urllib.request
 
 ROOT=Path(__file__).resolve().parents[2]
 PREFIX='anime-shorts-preview'
+BUILD_MACHINE='E2_STANDARD_2'
+
+def show_costs():
+    print('Estimación USD, tarifas consultadas 2026-09-23, us-central1; sin descontar créditos:')
+    print('Construcción e2-standard-2: 0,006/min; timeout 30 min → hasta 0,18 de cómputo por intento.')
+    print('Autoprueba Job 2 CPU/4 GiB: 0,000044/s; timeout 1 h → hasta 0,1584 de cómputo por intento.')
+    print('Se añaden servicio web, Firestore, cola, imágenes Docker, almacenamiento y transferencia según uso. No es un límite total de facturación; los datos e imágenes conservados siguen ocupando espacio.')
+    print('Modelos durante instalación: 0 solicitudes. La generación posterior exige su propia reserva/autorización.')
+    print('Tarifas: https://cloud.google.com/build/pricing y https://cloud.google.com/run/pricing')
+
+def check_fresh_namespace(project,region):
+    checks=[('run','services','describe',PREFIX,'--region',region,'--project',project),
+        ('firestore','databases','describe','--database',PREFIX,'--project',project),
+        ('tasks','queues','describe',PREFIX,'--location',region,'--project',project),
+        ('artifacts','repositories','describe',PREFIX,'--location',region,'--project',project)]
+    checks += [('iam','service-accounts','describe',f'{name}@{project}.iam.gserviceaccount.com','--project',project) for name in (PREFIX,PREFIX+'-build')]
+    for args in checks:
+        if exists(*args):raise RuntimeError('Existe un recurso Cortos sin registro de propiedad del instalador. No se adoptó ni modificó: '+args[0])
 
 def command(args, capture=True, check=True, cwd=None):
     result=subprocess.run(args,cwd=cwd,text=True,stdout=subprocess.PIPE if capture else None,stderr=subprocess.PIPE if capture else None)
@@ -88,34 +106,42 @@ def install(account,project,region,bucket):
     billing=json.loads(g('billing','projects','describe',project,'--format=json'))
     if not billing.get('billingEnabled'):raise RuntimeError('La facturación no está habilitada en el proyecto seleccionado.')
     sha=command(['git','rev-parse','HEAD'],cwd=ROOT)
-    old=state_load(bucket) if check_owned(bucket,project) else None
+    owned=check_owned(bucket,project)
+    old=state_load(bucket) if owned else None
     print(f'\nCuenta: {account}\nProyecto: {project}\nEntorno: preview\nRegión de infraestructura: {region}\nCommit: {sha}')
-    print('Recursos aislados: bucket, base Firestore, cola, servicio y Job. Cloud Build, almacenamiento y render pueden generar cargos. No se pagarán modelos durante instalación.')
+    print('Recursos aislados: bucket privado, base Firestore, cola, servicio, Job y cuentas de servicio de ejecución/build con sus permisos. Cloud Build, almacenamiento y render pueden generar cargos. No se pagarán modelos durante instalación.')
+    show_costs()
     if pick('¿Autorizar estos cambios de infraestructura?', ['Cancelar','Autorizar instalación/actualización'])=='Cancelar':return
+    if not owned:check_fresh_namespace(project,region)
     with tempfile.TemporaryDirectory(prefix='anime-shorts-install-') as tmp:
         work=Path(tmp)/'source';work.mkdir()
         archive=Path(tmp)/'source.tar'
         command(['git','archive','--format=tar','-o',str(archive),sha],cwd=ROOT)
         command(['tar','-xf',str(archive),'-C',str(work)])
         command(['python3','-m','unittest','discover','-s','tests/shorts','-p','test_contracts.py'],cwd=work,capture=False)
-        for api in ['run','cloudbuild','artifactregistry','storage','firestore','cloudtasks','iamcredentials','aiplatform','texttospeech','speech','identitytoolkit','firebase']:
+        for api in ['run','cloudbuild','artifactregistry','storage','firestore','cloudtasks','iam','iamcredentials','logging','aiplatform','texttospeech','speech','identitytoolkit','firebase']:
             g('services','enable',api+'.googleapis.com','--project',project,'--quiet')
         sa=f'{PREFIX}@{project}.iam.gserviceaccount.com'
-        if not exists('iam','service-accounts','describe',sa,'--project',project):g('iam','service-accounts','create',PREFIX,'--project',project,'--display-name','Anime Cortos preview')
         if not check_owned(bucket,project):
             g('storage','buckets','create','gs://'+bucket,'--project',project,'--location',region,'--uniform-bucket-level-access')
             g('storage','buckets','update','gs://'+bucket,'--update-labels=managed-by=anime-shorts-v2,environment=preview')
+        g('storage','buckets','update','gs://'+bucket,'--public-access-prevention')
+        if not exists('iam','service-accounts','describe',sa,'--project',project):g('iam','service-accounts','create',PREFIX,'--project',project,'--display-name','Anime Cortos preview')
         g('storage','buckets','add-iam-policy-binding','gs://'+bucket,'--member=serviceAccount:'+sa,'--role=roles/storage.objectAdmin')
         for role in ['roles/aiplatform.user','roles/datastore.user','roles/cloudtasks.enqueuer','roles/run.jobsExecutorWithOverrides','roles/serviceusage.serviceUsageConsumer','roles/firebaseauth.viewer','roles/speech.client','roles/run.viewer']:
             g('projects','add-iam-policy-binding',project,'--member=serviceAccount:'+sa,'--role='+role,'--quiet')
         g('iam','service-accounts','add-iam-policy-binding',sa,'--project',project,'--member=serviceAccount:'+sa,'--role=roles/iam.serviceAccountTokenCreator','--quiet')
+        # Cloud Tasks create_task with an OIDC serviceAccountEmail also needs
+        # actAs. TokenCreator alone does not include that permission.
+        g('iam','service-accounts','add-iam-policy-binding',sa,'--project',project,'--member=serviceAccount:'+sa,'--role=roles/iam.serviceAccountUser','--quiet')
         if not exists('firestore','databases','describe','--database',PREFIX,'--project',project):g('firestore','databases','create','--database',PREFIX,'--location',region,'--type=firestore-native','--project',project,'--quiet')
         if not exists('tasks','queues','describe',PREFIX,'--location',region,'--project',project):g('tasks','queues','create',PREFIX,'--location',region,'--project',project,'--max-concurrent-dispatches=1','--max-dispatches-per-second=1','--max-attempts=3')
         if not exists('artifacts','repositories','describe',PREFIX,'--location',region,'--project',project):g('artifacts','repositories','create',PREFIX,'--repository-format=docker','--location',region,'--project',project)
         image=f'{region}-docker.pkg.dev/{project}/{PREFIX}/worker:{sha}'
-        build={'steps':[{'name':'gcr.io/cloud-builders/docker','args':['build','-t',image,'-f','worker/montage-shorts/Dockerfile','.']},{'name':'gcr.io/cloud-builders/docker','args':['run','--rm','-e','SHORTS_SELF_TEST=1',image]}],'images':[image],'timeout':'1800s'}
+        builder=prepare_builder(project,region,bucket)
+        build=build_config(image,builder)
         buildfile=Path(tmp)/'build.json';buildfile.write_text(json.dumps(build))
-        g('builds','submit',str(work),'--config',str(buildfile),'--project',project,'--quiet',capture=False)
+        g('builds','submit',str(work),'--config',str(buildfile),'--project',project,'--region',region,'--gcs-source-staging-dir','gs://'+bucket+'/build-source','--quiet',capture=False)
         image_digest=g('artifacts','docker','images','describe',image,'--project',project,'--format=value(image_summary.digest)')
         if not image_digest.startswith('sha256:'):raise RuntimeError('No se pudo verificar el digest. No se activó la candidata.')
         immutable=image.rsplit(':',1)[0]+'@'+image_digest
@@ -135,12 +161,24 @@ def install(account,project,region,bucket):
         if not health(project,region,candidate):raise RuntimeError('Health de candidata falló. Se conserva la versión anterior.')
         g('run','jobs','update',job,'--region',region,'--project',project,'--env-vars-file',str(envfile),'--quiet')
         # Verify persistence with the actual runtime identity before activation.
-        g('run','jobs','execute',job,'--region',region,'--project',project,'--update-env-vars=SHORTS_CLOUD_SELF_TEST=1','--wait','--quiet',capture=False)
+        g('run','jobs','execute',job,'--region',region,'--project',project,'--update-env-vars=SHORTS_CLOUD_SELF_TEST=1,SHORTS_DIAGNOSTIC_URL='+candidate_url,'--wait','--quiet',capture=False)
         candidate['url']=url
         from connect import connect
         activate(project,region,bucket,candidate,old,tmp,
             lambda state,save:connect(command,g,pick,state,save))
         print('Worker instalado; tarifas incluidas y generación pendiente de autorización. Configuración recuperable en nube.')
+
+def prepare_builder(project,region,bucket):
+    name=PREFIX+'-build';sa=f'{name}@{project}.iam.gserviceaccount.com'
+    if not exists('iam','service-accounts','describe',sa,'--project',project):g('iam','service-accounts','create',name,'--project',project,'--display-name','Cortos image builder')
+    g('artifacts','repositories','add-iam-policy-binding',PREFIX,'--location',region,'--project',project,'--member=serviceAccount:'+sa,'--role=roles/artifactregistry.writer','--quiet')
+    condition=f"expression=resource.name.startsWith('projects/_/buckets/{bucket}/objects/build-source/'),title=shorts-build-source"
+    g('storage','buckets','add-iam-policy-binding','gs://'+bucket,'--member=serviceAccount:'+sa,'--role=roles/storage.objectViewer','--condition='+condition,'--quiet')
+    g('projects','add-iam-policy-binding',project,'--member=serviceAccount:'+sa,'--role=roles/logging.logWriter','--quiet')
+    return f'projects/{project}/serviceAccounts/{sa}'
+
+def build_config(image,builder):
+    return {'steps':[{'name':'gcr.io/cloud-builders/docker','args':['build','-t',image,'-f','worker/montage-shorts/Dockerfile','.']},{'name':'gcr.io/cloud-builders/docker','args':['run','--rm','-e','SHORTS_SELF_TEST=1',image]}],'images':[image],'timeout':'1800s','serviceAccount':builder,'options':{'logging':'CLOUD_LOGGING_ONLY','machineType':BUILD_MACHINE}}
 
 def rollback(project,region,bucket):
     state=state_load(bucket);old=state.get('previous') if state else None

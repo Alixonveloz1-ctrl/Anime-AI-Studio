@@ -1,4 +1,4 @@
-from shorts.core.contracts import require, RATE, FPS, FRAMES, plan_beats
+from shorts.core.contracts import require, RATE, FPS, FRAMES, plan_beats, cue_render_data, digest
 from shorts.core.dependencies import select_assets
 from shorts.core.subtitles import subtitle_segments,validate_segments
 from shorts.core.timing import voice_layout,shot_bounds
@@ -10,7 +10,9 @@ def approved_assets(cloud,pid):
 def assemble_plan(cloud,p,cue_overrides=None):
     pid=p['id'];dev=cloud.entity(pid,'developments',p['activeDevelopment'])
     require(dev['approvalState']=='approved','SCRIPT_APPROVAL','Guion sin aprobar')
-    d=dev['data'];available=approved_assets(cloud,pid);by=select_assets(available,d,dev['id'],p.get('assetSelections'))
+    d=dev['data'];available=approved_assets(cloud,pid)
+    if 'approvedAssetIds' in p:available=[a for a in available if a['id'] in p['approvedAssetIds']]
+    by=select_assets(available,d,dev['id'],p.get('assetSelections'))
     assets={};shots=[];cues=[];subtitles=[];elastic=[];voice_by_shot={};issues=[]
     for u in d['utterances']:
         a=by.get((u['id'],'pcm'))
@@ -90,7 +92,9 @@ def assemble_plan(cloud,p,cue_overrides=None):
         event=cloud.entity(pid,'events',c['eventId']) if c.get('eventId') else None
         if event and event.get('videoRevision')!=current_shot['assetRevision']:
             issues.append('Revisar ancla tras cambiar material: '+c['id']);continue
-        assets[a['id']]=a;cues.append(c)
+        req=next(r for r in d['soundRequests'] if r['id']==c['requestId'])
+        if c.get('requestFingerprint') and c['requestFingerprint']!=digest(req):issues.append('Revisar efecto tras cambiar solicitud: '+c['id'])
+        assets[a['id']]=a;cues.append(cue_render_data(c))
     for req in d['soundRequests']:
         if not any(c.get('requestId')==req['id'] for c in stored) and req.get('required',True) and req['id'] not in omitted:issues.append('Falta efecto obligatorio: '+req['name'])
     for r in d['musicRequests']:

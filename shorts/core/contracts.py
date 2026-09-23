@@ -121,6 +121,12 @@ def stale_on_change(cue, old_shot, new_shot, audio_revision):
         out['approvalState']='stale'
     return out
 
+def cue_render_data(cue):
+    # Analysis proposals and attempts are workflow metadata, not changes to a
+    # locked edit. They must not invalidate an approved preview or its cache.
+    ignored={'analysisAttempts','analysisScan','proposedEventId','created','jobId','at','author'}
+    return {k:copy.deepcopy(v) for k,v in cue.items() if k not in ignored}
+
 def compile_timeline(manifest, final=False):
     allowed={'schemaVersion','projectId','format','fps','sampleRate','frames','assets','shots','cues','events','subtitles','developmentId','globalGainDb','draftIssues','cueOverrides','mixPolicy'}
     require(set(manifest)<=allowed,'MANIFEST_FIELDS','El manifiesto contiene campos no admitidos; no se ejecutan comandos')

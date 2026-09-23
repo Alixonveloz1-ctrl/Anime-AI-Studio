@@ -31,8 +31,26 @@ def main():
             from google.auth.transport.requests import Request
             import datetime
             cloud.credentials.refresh(Request())
-            obj.generate_signed_url(version='v4',expiration=datetime.timedelta(minutes=1),method='GET',service_account_email=cloud.c['serviceAccount'],access_token=cloud.credentials.token)
-            print('Cloud identity, Firestore, Storage and signing: OK. No model calls.')
+            url=obj.generate_signed_url(version='v4',expiration=datetime.timedelta(minutes=1),method='GET',service_account_email=cloud.c['serviceAccount'],access_token=cloud.credentials.token)
+            import requests,time
+            try:response=requests.get(url,timeout=20)
+            except requests.RequestException:raise RuntimeError('Signed media request failed') from None
+            if not response.ok or response.text!=key:raise RuntimeError('Signed media readback failed')
+            # An actual Cloud Tasks delivery verifies both caller actAs and the
+            # managed agent's OIDC token. It never creates a production job.
+            from google.cloud import tasks_v2
+            client=tasks_v2.CloudTasksClient();parent=client.queue_path(cloud.c['project'],cloud.c['region'],cloud.c['queue'])
+            target=os.environ['SHORTS_DIAGNOSTIC_URL']
+            from urllib.parse import urlparse
+            parsed=urlparse(target)
+            if parsed.scheme!='https' or not parsed.hostname.endswith('.run.app'):raise RuntimeError('Diagnostic target invalid')
+            client.create_task(parent=parent,task={'name':parent+'/tasks/'+key,'http_request':{'http_method':tasks_v2.HttpMethod.POST,'url':target+'/internal/diagnostic','headers':{'Content-Type':'application/json'},'body':json.dumps({'key':key}).encode(),'oidc_token':{'service_account_email':cloud.c['serviceAccount'],'audience':cloud.c['service']}}})
+            deadline=time.time()+75
+            while time.time()<deadline:
+                if doc.get().to_dict().get('queueDelivered'):break
+                time.sleep(2)
+            else:raise RuntimeError('Authenticated queue delivery failed; candidate not activated')
+            print('Cloud identity, Firestore, Storage, signed media and authenticated queue: OK. No model calls.')
         finally:
             doc.delete();obj.delete()
         return

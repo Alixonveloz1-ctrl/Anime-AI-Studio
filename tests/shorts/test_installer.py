@@ -28,6 +28,10 @@ class InstallerTests(unittest.TestCase):
     def test_A090_refuses_foreign_bucket(self):
         with patch.object(install,'exists',return_value=True),patch.object(install,'g',return_value='{"labels":{}}'):
             with self.assertRaisesRegex(RuntimeError,'no pertenece'):install.check_owned('b','p')
+    def test_A090_refuses_unowned_namespace(self):
+        with patch.object(install,'exists',side_effect=lambda *args:args[0]=='firestore'),patch.object(install,'g') as g:
+            with self.assertRaisesRegex(RuntimeError,'sin registro de propiedad'):install.check_fresh_namespace('p','us-central1')
+            g.assert_not_called()
     def test_A094_cancel_before_infrastructure(self):
         calls=[]
         def g(*args,**kw):calls.append(args);return '{"billingEnabled":true}'
@@ -42,6 +46,20 @@ class InstallerTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):install.activate('p','r','b',candidate,old,'/tmp',lambda *a:(_ for _ in ()).throw(RuntimeError('connection failed')))
             self.assertIn('old-r=100',g.call_args.args)
             self.assertEqual(save.call_args.args[1],old)
+
+    def test_A082_builder_isolated_from_runtime_identity(self):
+        with patch.object(install,'exists',return_value=True),patch.object(install,'g') as g:
+            builder=install.prepare_builder('project','us-central1','owned-bucket')
+        config=install.build_config('image:commit',builder)
+        self.assertEqual(config['options']['logging'],'CLOUD_LOGGING_ONLY')
+        self.assertEqual(config['options']['machineType'],'E2_STANDARD_2')
+        self.assertEqual(config['timeout'],'1800s')
+        self.assertIn('anime-shorts-preview-build@',config['serviceAccount'])
+        calls=[c.args for c in g.call_args_list]
+        self.assertTrue(any('--role=roles/artifactregistry.writer' in x and x[:2]==('artifacts','repositories') for x in calls))
+        source=next(x for x in calls if '--role=roles/storage.objectViewer' in x)
+        self.assertTrue(any('objects/build-source/' in value for value in source))
+        self.assertFalse(any('--role=roles/editor' in x or '--role=roles/owner' in x for x in calls))
 
 class ConnectorTests(unittest.TestCase):
     def setUp(self):

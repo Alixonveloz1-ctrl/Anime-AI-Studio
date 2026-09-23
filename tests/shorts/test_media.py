@@ -93,6 +93,21 @@ class MediaTests(unittest.TestCase):
         with wave.open(str(self.root/'mix.wav'),'rb') as w:self.assertEqual(w.getnframes(),14400000)
         m=copy.deepcopy(self.manifest);m['cues'][0]['approvalState']='stale'
         with self.assertRaises(ContractError):compile_timeline(m,True)
+    def test_A048_A049_one_file_continues_across_cuts_and_keeps_tail(self):
+        continuous=self.root/'continuous.wav'
+        ff(['-f','lavfi','-i','sine=frequency=311:sample_rate=48000:duration=12','-af','volume=0.4','-ac',2,'-c:a','pcm_s24le',continuous])
+        m=copy.deepcopy(self.manifest);m['assets']['continuous']={'id':'continuous','projectId':'p','kind':'pcm','samples':576000,'sampleRate':48000,'sha256':checksum(continuous),'local':continuous.name,'approvalState':'approved'}
+        m['shots']=[{'id':'cut'+str(i),'startFrame':i*72,'frames':72,'assetRevision':'i','treatment':'hold'} for i in range(4)]+[{'id':'remaining','startFrame':288,'frames':6912,'assetRevision':'i','treatment':'hold'}]
+        m['cues']=[{'id':'ambience','track':'ambience','audioRevision':'continuous','anchorSample':0,'sourceSyncSample':0,'approvalState':'approved'},{'id':'tail','track':'sfx','audioRevision':'continuous','anchorSample':138000,'sourceSyncSample':9600,'trimOutSample':96000,'approvalState':'approved'}]
+        plan=compile_timeline(m);files={k:local_asset(self.root,a) for k,a in plan['assets'].items()};mix(plan,self.root,files)
+        with wave.open(str(continuous),'rb') as w:source=w.readframes(w.getnframes())
+        with wave.open(str(self.root/'ambience.wav'),'rb') as w:self.assertEqual(w.readframes(576000),source)
+        with wave.open(str(self.root/'sfx.wav'),'rb') as w:
+            w.setpos(128400);actual=w.readframes(96000)
+        with wave.open(str(continuous),'rb') as w:self.assertEqual(actual,w.readframes(96000))
+        self.assertEqual(plan['cues'][1]['resolvedStartSample'],128400)
+        self.assertGreater(128400+96000,144000) # tail crosses the first visual cut
+
     def test_A061_A063_A064_A069_render_and_decode(self):
         r=render(self.manifest,self.root,2400,2520,False,width=160)
         self.assertEqual(r['frames'],120)

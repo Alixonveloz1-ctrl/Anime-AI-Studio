@@ -21,6 +21,7 @@ def run_job(cloud,j,p):
     pid=p['id'];op=j['operation'];data=j['payload'];provider=Providers(cloud.c,cloud.http,JobMeter(cloud,j['id']))
     if data.get('developmentId'):p={**p,'activeDevelopment':data['developmentId']}
     if 'assetSelections' in data:p={**p,'assetSelections':data['assetSelections']}
+    if 'approvedAssetIds' in data:p={**p,'approvedAssetIds':data['approvedAssetIds']}
     def entity(kind,value):
         record={'id':ident_new(),'revision':1,'approvalState':'candidate','created':time.time(),'jobId':j['id'],**value}
         cloud.put_entity(pid,kind,record);return record
@@ -143,7 +144,7 @@ def run_job(cloud,j,p):
             dev=development();req=next(x for x in dev['data']['soundRequests'] if x['id']==data['requestId'])
             attacks=meta['waveform']['attackCandidates'];ambience=req.get('type')=='ambience'
             anchor={'anchorShotId':req['shotId'],'anchorFrameOffset':0} if ambience else {'eventId':'event_'+ident_new()}
-            cue=entity('cues',{'audioRevision':a['id'],'requestId':req['id'],'track':'ambience' if ambience else 'sfx','shotId':req['shotId'],'sourceSyncSample':0 if ambience else (attacks[0] if attacks else 0),'trimInSample':0,'trimOutSample':meta['samples'],'offsetSamples':0,'gainDb':0,**anchor,'correctionSource':'detector','manualLock':False,'eventDescription':req['eventDescription'],'analysisAttempts':0})
+            cue=entity('cues',{'audioRevision':a['id'],'requestId':req['id'],'track':'ambience' if ambience else 'sfx','shotId':req['shotId'],'sourceSyncSample':0 if ambience else (attacks[0] if attacks else 0),'trimInSample':0,'trimOutSample':meta['samples'],'offsetSamples':0,'gainDb':0,**anchor,'correctionSource':'detector','manualLock':False,'eventDescription':req['eventDescription'],'requestFingerprint':digest(req),'analysisAttempts':0})
             cloud.entity_ref(pid,'uploads',u['id']).update({'state':'decoded','assetId':a['id'],'cueId':cue['id']})
             auto_job=None
             try:
@@ -159,16 +160,26 @@ def run_job(cloud,j,p):
                 require(cue.get('analysisAttempts',0)<2,'ANALYSIS_LIMIT','Dos intentos agotados. El ajuste manual sigue disponible.')
                 tx.update(ref,{'analysisAttempts':cue.get('analysisAttempts',0)+1})
                 return cue
-            cue=start_attempt(cloud.db.transaction());a=selected(cue['shotId'],'veo_silent_validated');path=root/'silent.mp4';cloud.download(pid,a['object'],path)
+            cue=start_attempt(cloud.db.transaction())
+            from shorts.service.timeline import assemble_plan
+            from shorts.core.contracts import visual_fingerprint
+            manifest=assemble_plan(cloud,p);shot=next(s for s in manifest['shots'] if s['id']==cue['shotId'])
+            require(shot['treatment']!='black' and not shot.get('draftPlaceholder'),'EVENT_MATERIAL','Falta composición visual aprobada; el ajuste manual sigue disponible')
+            a=manifest['assets'][shot['assetRevision']];files={}
+            for aid in {shot['assetRevision'],*(x['assetRevision'] for x in shot.get('layers',[]))}:
+                local=root/(aid+'.media');cloud.download(pid,manifest['assets'][aid]['object'],local);files[aid]=local
+            path=root/'silent.mp4';visual_clip(shot,files,path,480,270 if p['format']=='16:9' else 854,0,shot['frames'])
+            composed=cloud.upload_file(pid,ident_new(),path,path.name,'video/mp4');composed_uri='gs://'+cloud.c['bucket']+'/'+composed
+            visual_hash=visual_fingerprint(shot)
             from shorts.core.events import contact_options,choose_contact
             scan=cue.get('analysisScan') if data.get('occurrenceIndex') is not None else None
             if scan:
-                require(scan['videoRevision']==a['id'] and scan['eventDescription']==cue['eventDescription'],'EVENT_SCAN_STALE','Cambió el video o el evento; revisa con fotogramas manuales')
+                require(scan['videoRevision']==a['id'] and scan.get('visualFingerprint')==visual_hash and scan['eventDescription']==cue['eventDescription'],'EVENT_SCAN_STALE','Cambió el video o el evento; revisa con fotogramas manuales')
                 options=scan['options'];result={'confidence':scan.get('confidence')}
             else:
-                result=provider.text(RULES+'\nExamina el video real. Evento: '+cue['eventDescription']+'. Corrección solicitada: '+data.get('reason','Localizar contacto')+'. Devuelve {visible:boolean,approxSeconds:number|null,occurrences:[{seconds:number,description:string}],evidence:string,confidence:number}. Incluye CADA contacto visible separado y no inventes contacto.',[{'fileData':{'fileUri':uri(a),'mimeType':'video/mp4'}}],True)
+                result=provider.text(RULES+'\nExamina el video real. Evento: '+cue['eventDescription']+'. Corrección solicitada: '+data.get('reason','Localizar contacto')+'. Devuelve {visible:boolean,approxSeconds:number|null,occurrences:[{seconds:number,description:string}],evidence:string,confidence:number}. Incluye CADA contacto visible separado y no inventes contacto.',[{'fileData':{'fileUri':composed_uri,'mimeType':'video/mp4'}}],True)
                 options=contact_options(result,float(probe(path)['format']['duration']))
-                scan={'videoRevision':a['id'],'eventDescription':cue['eventDescription'],'options':options,'confidence':result.get('confidence')}
+                scan={'videoRevision':a['id'],'visualFingerprint':visual_hash,'eventDescription':cue['eventDescription'],'options':options,'confidence':result.get('confidence')}
                 cloud.entity_ref(pid,'cues',cue['id']).update({'analysisScan':scan})
             choice=choose_contact(options,data.get('occurrenceIndex'))
             if choice is None:return {'cueId':cue['id'],'state':'awaiting_occurrence_selection','error':'Hay varios contactos. Elige el que corresponde al sonido antes de afinarlo.'}
@@ -179,7 +190,7 @@ def run_job(cloud,j,p):
                 parts.extend([{'text':f'Frame {f["index"]}'},{'inlineData':{'mimeType':'image/jpeg','data':base64.b64encode((root/'frames'/f['file']).read_bytes()).decode()}}])
             fine=provider.text(RULES+'\nElige fotograma de contacto, solo con evidencia. Devuelve {visible:boolean,frameIndex:number|null,evidence:string}. Evento: '+cue['eventDescription'],parts,True)
             require(fine.get('visible') and any(f['index']==fine.get('frameIndex') for f in frames),'EVENT_UNCERTAIN','Contacto no concluyente; usa ajuste manual')
-            proposal=entity('events',{'shotId':cue['shotId'],'videoRevision':a['id'],'pts':fine['frameIndex'],'timebase':24,'visible':True,'evidence':fine['evidence'],'source':'analysis','occurrence':choice,'occurrenceIndex':data.get('occurrenceIndex',0),'confidence':result.get('confidence')})
+            proposal=entity('events',{'shotId':cue['shotId'],'videoRevision':a['id'],'pts':fine['frameIndex'],'timebase':24,'visible':True,'evidence':fine['evidence'],'source':'analysis','visualFingerprint':visual_hash,'coordinateSpace':'shot_output','occurrence':choice,'occurrenceIndex':data.get('occurrenceIndex',0),'confidence':result.get('confidence')})
             # An automatic pass proposes; it never overwrites a manually locked cue.
             from google.cloud import firestore
             @firestore.transactional

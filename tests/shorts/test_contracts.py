@@ -37,6 +37,11 @@ class TimelineTests(unittest.TestCase):
         with self.assertRaises(ContractError):edit_cue(c,{'gainDb':0},1,'analysis')
         updated=edit_cue(c,{'gainDb':-4},1)
         self.assertEqual(c['approvalState'],'approved');self.assertEqual(updated['approvalState'],'candidate')
+    def test_A059_analysis_metadata_does_not_invalidate_manual_approval(self):
+        cue={'id':'cue','revision':3,'approvalState':'approved','manualLock':True,'eventId':'manual','gainDb':-3}
+        analyzed={**cue,'analysisAttempts':2,'analysisScan':{'options':[1,2]},'proposedEventId':'automatic'}
+        self.assertEqual(digest(cue_render_data(cue)),digest(cue_render_data(analyzed)))
+        self.assertNotEqual(digest(cue_render_data(cue)),digest(cue_render_data({**analyzed,'offsetSamples':2000})))
     def test_A076_conflict(self):
         with self.assertRaises(ContractError) as ctx:edit_cue({'revision':3},{},2)
         self.assertEqual(ctx.exception.status,409)

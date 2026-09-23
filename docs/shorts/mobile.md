@@ -7,8 +7,8 @@ La sección está en `/cortos/`, dentro del mismo repositorio y proyecto Vercel.
 1. Pulsa **Instalación y estado → Abrir instalador de Cortos en Cloud Shell**. El enlace incluye el repositorio y la rama `feature/cortos-anime-v2`.
 2. En la terminal escribe solamente `./c`. Si el sistema no permite ejecutarlo directamente, escribe `bash c`.
 3. El menú ofrece **1 Instalar/actualizar**, **2 Diagnóstico**, **3 Restaurar versión anterior**, **4 Salir**, **5 Conectar/recuperar Vercel** y **6 Buscar actualización de la rama**.
-4. Selecciona cuenta/proyecto por número. Antes de crear recursos verás el proyecto, región, commit y aviso de costes. Cancelar conserva la configuración existente.
-5. El instalador construye una imagen del commit, ejecuta fixtures dentro de ella y prepara el servicio y Job aislados. No llama a modelos. Una candidata que falla el build o health no sustituye la versión activa anterior.
+4. Selecciona cuenta/proyecto por número. Antes de crear recursos verás el proyecto, región, commit y desglose de costes de build/autoprueba más cargos variables. Cancelar conserva la configuración existente.
+5. El instalador construye una imagen del commit, ejecuta fixtures dentro de ella y prepara el servicio y Job aislados. No llama a modelos. Después comprueba escritura/lectura cloud, descarga firmada y entrega de cola autenticada. Una candidata que falla el build, diagnóstico cloud o health no sustituye la versión activa anterior.
 6. Para conectar Vercel, autoriza su cliente oficial desde el enlace del navegador y elige el equipo/proyecto por número. Se exige el proyecto ya conectado a este repositorio. Solo se escriben variables `SHORTS_*` de esta rama de preview.
 7. Si Google aún no está activado en Firebase, el menú ofrece el enlace a su pantalla oficial. Allí selecciona Google y el correo de soporte; vuelve y elige **Comprobar de nuevo**. No debes copiar una clave, JSON ni un ID largo.
 8. El resultado se guarda en nube. Si se pierde Cloud Shell, vuelve al botón, escribe `./c` y usa Diagnóstico o Conectar/recuperar. La opción 6 abre la actualización en otro checkout y conserva tus archivos locales.
@@ -32,7 +32,7 @@ En Sonido, cada solicitud tiene prompt, duración, perspectiva, preparación, co
 5. Pulsa **Probar ajuste**. Se obtiene un MP4 muxado; no se arrancan dos reproductores separados. **Comparar anterior/candidata** alterna archivos; **Deshacer** recupera el ajuste previo.
 6. Escucha y pulsa **Aprobar y fijar**. El análisis automático no puede sobrescribirlo. Una dependencia cambiada obliga a revisar su uso; conserva el material y aprobación históricos.
 
-La extracción usa el mismo compositor para Veo, ilustración y cámara. Cambiar la edición visual exige revisar su ancla. Si hay varios contactos, elige el número y descripción correctos antes del análisis fino. En Tomas → Movimiento y capas puedes editar la cámara o aplicar variantes aprobadas dentro de una región rectangular. Los recorridos móviles siguen pendientes de verificación. El botón de IA tiene intentos limitados; no sustituye al ajuste manual.
+La extracción usa el mismo compositor para Veo, ilustración y cámara. Cambiar la edición visual exige revisar su ancla. Si hay varios contactos, elige el número y descripción correctos antes del análisis fino. En Tomas → Movimiento y capas puedes editar la cámara o aplicar variantes aprobadas dentro de una región rectangular. Los recorridos móviles siguen pendientes de verificación. **Corregir sonido con IA** pide el cambio concreto y analiza la composición visual efectiva. El botón de IA tiene intentos limitados; no sustituye al ajuste manual.
 
 ## Preview, exportación y recuperación
 

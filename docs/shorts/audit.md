@@ -58,3 +58,13 @@ Referencias consultadas para reanudación: https://docs.cloud.google.com/storage
 No se ejecutó Docker/GCP ni producción pagada. Las decisiones de cuenta/proyecto y autorización de costes siguen siendo necesarias para probar la instalación real. La aceptación A097/A098 requiere dos producciones revisadas, no videos sintéticos.
 
 Suite consolidada de este bloque: **90 pruebas Python correctas en 91,029 s**, sin skips (`fixtures.log`). Cinco pruebas Node (gateway/checksum), regresión original y comparación byte a byte de Animes también pasan.
+
+## Revisión de instalación y sonido
+
+El análisis localizado usa la composición efectiva también para cámara/capas. Las propuestas y contadores de análisis quedan fuera de la huella de un ajuste manual fijado; cambiar la solicitud sí marca revisión pendiente. Las selecciones explícitas de versiones se respetan también en la UI, que agrupa voces/visuales por toma y música en Sonido.
+
+Se corrigió actAs de Cloud Tasks y se separó la cuenta de build. Antes de activar se ejecutarán lecturas/escrituras reales, descarga firmada y entrega de cola OIDC de diagnóstico; esta autoprueba está implementada pero NO ejecutada en GCP. Se rechazan recursos ajenos antes de adoptarlos. El menú desglosa costes y pide autorización antes de crear/modificar recursos.
+
+En preview 3de1942 se comprobó raíz → Cortos → raíz y el enlace de instalación con repo/rama. La interfaz Animes muestra sus modos originales; su autosave acusa GCS_OUTPUT_BUCKET ausente en ese entorno preview. No se copiaron variables ni recursos de producción. Esto no verifica exportación de Animes ni funcionamiento en Safari/iPhone.
+
+Suite consolidada tras esta revisión: **94 pruebas Python correctas en 108,650 s**, sin skips; cinco pruebas Node y regresión original correctas. `fixtures.log` contiene la salida completa; los tests de instalador se repitieron tras ajustar el orden de creación del bucket y la identidad (12 correctos).

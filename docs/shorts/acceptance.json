@@ -11,7 +11,7 @@
     "fixture": "not_covered",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Pendiente recorrido móvil de ambas rutas."
+    "remaining": "Recorrido raíz → Cortos → raíz comprobado en navegador Chrome sobre preview 3de1942; falta iPhone/Safari y preferencias con proyecto real."
   },
   {
     "id": "A002",
@@ -25,7 +25,7 @@
     "fixture": "not_covered",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Falta exportar una copia real representativa de Animes; no se han leído proyectos privados."
+    "remaining": "Código legado intacto. En preview falta GCS_OUTPUT_BUCKET de Animes; exportación de copia real pendiente de entorno autorizado. Producción no modificada."
   },
   {
     "id": "A003",
@@ -273,7 +273,7 @@
     "fixture": "not_covered",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Biblia y voz por ID; falta control completo de perfiles/lecturas en UI."
+    "remaining": "Biblia, voz y lecturas editables por personaje; falta comprobar pronunciación y consistencia en voces reales."
   },
   {
     "id": "A019",
@@ -424,7 +424,7 @@
     "fixture": "not_covered",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "lastFrame condicionado a acción continua aprobada; UI de esa aprobación pendiente."
+    "remaining": "El adaptador permite lastFrame solo con acción continua explícita; el flujo normal no lo envía entre cortes. Falta prueba visual con Veo real."
   },
   {
     "id": "A029",
@@ -517,7 +517,7 @@
     "fixture": "not_covered",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Servidor bloquea sin tarifa fechada; falta cálculo de costes por tokens/segundos contrastado y tabla instalable."
+    "remaining": "Catálogo fechado, reserva previa y conciliación conservadora integrados y probados con fixtures; faltan consumo y factura de llamadas reales autorizadas."
   },
   {
     "id": "A035",
@@ -642,7 +642,7 @@
     "fixture": "not_covered",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Prompt instrumental no garantiza resultado; falta gate auditivo específico."
+    "remaining": "Revisión auditiva específica exigida antes de aprobar música. Pendiente audición de Lyria real; el prompt no garantiza ausencia de voz."
   },
   {
     "id": "A043",
@@ -708,7 +708,7 @@
     "fixture": "not_covered",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Duración real medida y devuelta; falta mostrar comparación persistente en tarjeta."
+    "remaining": "Tarjeta muestra duración solicitada y recibida de forma persistente. Falta recorrido con MP3 real desde iPhone."
   },
   {
     "id": "A047",
@@ -736,11 +736,13 @@
       "cortos/app.js",
       "shorts/core/contracts.py"
     ],
-    "tests": [],
-    "fixture": "not_covered",
+    "tests": [
+      "tests/shorts/test_media.py:test_A048_A049_one_file_continues_across_cuts_and_keeps_tail"
+    ],
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Mezcla continua por archivo; falta fixture de ambiente atravesando cuatro cortes con cursor verificado."
+    "remaining": "Fixture verifica PCM continuo del mismo archivo a través de cuatro cortes, sin reiniciar cursor. Falta escucha del material real."
   },
   {
     "id": "A049",
@@ -751,11 +753,13 @@
       "cortos/app.js",
       "shorts/core/contracts.py"
     ],
-    "tests": [],
-    "fixture": "not_covered",
+    "tests": [
+      "tests/shorts/test_media.py:test_A048_A049_one_file_continues_across_cuts_and_keeps_tail"
+    ],
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Compilador conserva cola; falta fixture específico y escucha."
+    "remaining": "Fixture verifica muestras de una cola que cruza un corte sin truncarla. Falta escucha y comparación con video real."
   },
   {
     "id": "A050",
@@ -786,7 +790,7 @@
     "fixture": "not_covered",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "La carga programa análisis autorizado; falta recorrido real y fallback para tomas sin Veo."
+    "remaining": "La IA analiza el video de la composición efectiva (Veo, cámara o capas) y propone el contacto. Falta API real y validación perceptiva; manual independiente disponible."
   },
   {
     "id": "A052",
@@ -818,7 +822,7 @@
     "fixture": "not_covered",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Trabajo analyze separado de Veo/TTS; falta recorrido real y alcance confirmado."
+    "remaining": "Corrección IA con motivo localizado y hasta dos intentos; solo analiza composición/audio existente. Falta recorrido con proveedores reales."
   },
   {
     "id": "A054",
@@ -913,12 +917,13 @@
       "shorts/core/contracts.py"
     ],
     "tests": [
-      "tests/shorts/test_contracts.py:test_A059_manual_lock"
+      "tests/shorts/test_contracts.py:test_A059_manual_lock",
+      "tests/shorts/test_contracts.py:test_A059_analysis_metadata_does_not_invalidate_manual_approval"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Bloqueo manual probado en núcleo; falta verificar interacción transaccional con reanálisis."
+    "remaining": "Fixture prueba bloqueo manual y que metadatos de reanálisis no invaliden la aprobación. Falta verificar concurrencia real Firestore/worker."
   },
   {
     "id": "A060",
@@ -965,7 +970,7 @@
     "fixture": "not_covered",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Ventanas arbitrarias soportadas; falta selector de escena definido y su recorrido."
+    "remaining": "Selector de preview de escena agrupa tomas de una unidad dramática; comparte compilador y mezcla. Falta recorrido cloud y escucha."
   },
   {
     "id": "A063",
@@ -1296,11 +1301,13 @@
       "worker/montage-shorts/runner.py",
       "worker/montage-shorts/render.py"
     ],
-    "tests": [],
-    "fixture": "not_covered",
+    "tests": [
+      "tests/shorts/test_installer.py:test_A082_builder_isolated_from_runtime_identity"
+    ],
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Nombres/worker aislados; pendiente build y despliegue autorizados."
+    "remaining": "Worker aislado, builder dedicado y permisos acotados implementados; fixture valida identidad/configuración. Pendiente construcción y despliegue GCP autorizados."
   },
   {
     "id": "A083",
@@ -1422,12 +1429,13 @@
     "tests": [
       "tests/shorts/test_installer.py:test_A090_old_installers_unchanged",
       "tests/shorts/test_installer.py:test_A090_refuses_foreign_bucket",
-      "tests/shorts/test_installer.py:test_A090_cannot_overwrite_legacy_environment"
+      "tests/shorts/test_installer.py:test_A090_cannot_overwrite_legacy_environment",
+      "tests/shorts/test_installer.py:test_A090_refuses_unowned_namespace"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Archivos legacy intactos y bucket ajeno rechazado por fixture."
+    "remaining": "Legacy intacto; fixtures rechazan bucket ajeno, recursos sin propiedad y variables Animes. Falta instalación/recuperación real."
   },
   {
     "id": "A091",
@@ -1492,7 +1500,7 @@
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Cancelación/health sin modelos probado; instalación cloud no ejecutada."
+    "remaining": "Cancelar no cambia infraestructura; instalación muestra cuenta/proyecto/recursos y costes antes de confirmar. Autoprueba cloud verifica persistencia, URLs y cola sin modelos; ejecución real pendiente."
   },
   {
     "id": "A095",

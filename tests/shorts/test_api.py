@@ -17,6 +17,8 @@ class ApiTests(unittest.TestCase):
     def test_A078_internal_no_fake_queue_header(self):
         r=self.client.post('/internal/dispatch',json={'jobId':'x'},headers={'X-CloudTasks-TaskName':'fake'})
         self.assertEqual(r.status_code,403)
+        r=self.client.post('/internal/diagnostic',json={'key':'diagnostic_fake'},headers={'X-CloudTasks-TaskName':'fake'})
+        self.assertEqual(r.status_code,403)
     def test_A076_missing_revision(self):
         with patch('shorts.service.app.uid',return_value='u'),patch('shorts.service.app.cloud') as cloud:
             cloud.return_value.project.return_value={'owner':'u','id':'p','revision':2}
