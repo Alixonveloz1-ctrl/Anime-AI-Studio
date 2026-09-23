@@ -1,5 +1,5 @@
-const test=require('node:test'),assert=require('node:assert/strict');const handler=require('../../api/shorts.js');
-async function call(path,env={}){const before={...process.env};Object.assign(process.env,env);let status=200,result;const res={setHeader(){},status(n){status=n;return this},json(j){result=j;return this}};try{await handler({query:{path},method:'GET',headers:{}},res);return {status,result}}finally{process.env=before}}
+const test=require('node:test'),assert=require('node:assert/strict');
+async function call(path,env={}){const {handleShortsRequest}=await import('../../shorts/gateway.mjs');const r=await handleShortsRequest(new Request('https://preview.example/api/shorts?path='+encodeURIComponent(path)),env);return {status:r.status,result:await r.json()};}
 test('A005 disabled independent',async()=>{const r=await call('/projects',{SHORTS_ENABLED:'false'});assert.equal(r.status,503);assert.equal(r.result.code,'SHORTS_DISABLED')});
 test('A086 preview refuses production configuration',async()=>{const r=await call('/projects',{SHORTS_ENABLED:'true',SHORTS_PRODUCTION_URL:'https://example.run.app',VERCEL_ENV:'preview',SHORTS_ENVIRONMENT:'production'});assert.equal(r.result.code,'PREVIEW_ISOLATION')});
 test('A079 rejects path traversal before fetch',async()=>{const r=await call('/projects/../internal',{SHORTS_ENABLED:'true',SHORTS_PRODUCTION_URL:'https://example.run.app',VERCEL_ENV:'preview',SHORTS_ENVIRONMENT:'preview'});assert.equal(r.status,400)});

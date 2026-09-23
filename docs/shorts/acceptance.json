@@ -3,7 +3,7 @@
     "id": "A001",
     "requirement": "Abrir ambas secciones. La raíz conserva Animes y /cortos abre la sección nueva; regreso sin perder preferencias.",
     "files": [
-      "api/shorts.js",
+      "shorts/gateway.mjs",
       "cortos/index.html",
       "tests/shorts/legacy-regression.cjs"
     ],
@@ -17,7 +17,7 @@
     "id": "A002",
     "requirement": "Proyectos antiguos. Abrir y exportar una copia representativa anterior sin migrarla ni exigir nuevos campos.",
     "files": [
-      "api/shorts.js",
+      "shorts/gateway.mjs",
       "cortos/index.html",
       "tests/shorts/legacy-regression.cjs"
     ],
@@ -31,7 +31,7 @@
     "id": "A003",
     "requirement": "Contratos previos. Comparar payloads y configuración de endpoints de Animes antes/después.",
     "files": [
-      "api/shorts.js",
+      "shorts/gateway.mjs",
       "cortos/index.html",
       "tests/shorts/legacy-regression.cjs"
     ],
@@ -47,7 +47,7 @@
     "id": "A004",
     "requirement": "Datos aislados. Crear Cortos no añade sus proyectos, cachés o medios al listado antiguo.",
     "files": [
-      "api/shorts.js",
+      "shorts/gateway.mjs",
       "cortos/index.html",
       "tests/shorts/legacy-regression.cjs"
     ],
@@ -61,7 +61,7 @@
     "id": "A005",
     "requirement": "Fallo aislado. Desactivar Cortos o fallar su API no impide usar Animes.",
     "files": [
-      "api/shorts.js",
+      "shorts/gateway.mjs",
       "cortos/index.html",
       "tests/shorts/legacy-regression.cjs"
     ],
@@ -77,7 +77,7 @@
     "id": "A006",
     "requirement": "Pruebas heredadas. Se conservan pruebas antiguas; prohibiciones del flujo legado no bloquean la sección nueva.",
     "files": [
-      "api/shorts.js",
+      "shorts/gateway.mjs",
       "cortos/index.html",
       "tests/shorts/legacy-regression.cjs"
     ],
@@ -93,7 +93,7 @@
     "id": "A007",
     "requirement": "Build y rutas. Build no borra assets/rutas antiguas y Vercel sirve ambos módulos.",
     "files": [
-      "api/shorts.js",
+      "shorts/gateway.mjs",
       "cortos/index.html",
       "tests/shorts/legacy-regression.cjs"
     ],
@@ -107,7 +107,7 @@
     "id": "A008",
     "requirement": "Configuración por sección. Cambiar japonés/modelo/video sin audio en Cortos no altera Animes.",
     "files": [
-      "api/shorts.js",
+      "shorts/gateway.mjs",
       "cortos/index.html",
       "tests/shorts/legacy-regression.cjs"
     ],
@@ -124,7 +124,7 @@
     "id": "A009",
     "requirement": "Versiones previas. Regenerar crea candidata y conserva el archivo/aprobación anterior.",
     "files": [
-      "api/shorts.js",
+      "shorts/gateway.mjs",
       "cortos/index.html",
       "tests/shorts/legacy-regression.cjs"
     ],
@@ -141,7 +141,7 @@
     "id": "A010",
     "requirement": "Importación explícita. Referencias de otro proyecto se rechazan salvo importación autorizada con procedencia.",
     "files": [
-      "api/shorts.js",
+      "shorts/gateway.mjs",
       "cortos/index.html",
       "tests/shorts/legacy-regression.cjs"
     ],
@@ -1293,7 +1293,7 @@
     "requirement": "Preview Vercel. PR sirve ambas secciones y no escribe por defecto en recursos de producción.",
     "files": [
       "vercel.json",
-      "api/shorts.js"
+      "shorts/gateway.mjs"
     ],
     "tests": [
       "tests/shorts/test_installer.py:test_A086_environment_is_branch_preview_only",

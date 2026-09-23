@@ -35,9 +35,6 @@
     },
     "api/download-url.js": {
       "maxDuration": 15
-    },
-    "api/shorts.js": {
-      "maxDuration": 30
     }
   }
 }
