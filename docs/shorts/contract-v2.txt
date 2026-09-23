@@ -1,0 +1,712 @@
+ESPECIFICACIÓN MAESTRA  /  VERSIÓN 2.0
+Anime-AI-Studio
+Cortos de anime
+31 secciones  ·  100 pruebas de aceptación
+22 de septiembre de 2026 · Documento de implementación y aceptación
+Repositorio: Alixonveloz1-ctrl/Anime-AI-StudioUbicación: nueva sección de la aplicación existente, sin sustituir Animes.Entrega audiovisual: 300 segundos, japonés hablado y subtítulos españoles.Estado: especificación completa para construir; no afirma que el código, instalador o despliegue ya existan.
+Principio rector: conservar continuidad e intención dramática. La herramienta dirige, genera y monta; el usuario selecciona, aprueba y entrega efectos externos. Cuando la automatización falle, puede corregir el sonido manualmente dentro de la misma aplicación.
+Cómo usar este documento
+Adjunta este archivo completo en la conversación donde se vaya a trabajar sobre el código y utiliza el prompt maestro de la última sección. La copia Markdown contiene el mismo contenido que Word y puede incorporarse a docs/shorts/ al implementar. No es necesario adjuntar versiones anteriores.
+La lectura funcional está en las secciones 1–17; datos, arquitectura, montador e instalación en 18–26; pruebas, fases y decisiones en 27–29. La sección 30 reúne fuentes. La sección 31 contiene el prompt maestro.
+Cambios vinculantes respecto a v1: misma aplicación con dos secciones; Veo sin audio desde la petición; previews locales antes del render final; editor manual preciso de SFX; corrección/reconstrucción del montador incluida; todos sus archivos/dependencias dentro del repositorio y un instalador corto para iPhone.
+Atención al comando: ./c es el acceso que deberá implementarse. Este documento no instala nada y no indica que ese archivo ya esté publicado.
+Índice de secciones
+Pulsa un título para ir a su sección. Los encabezados también aparecen en el panel de navegación de Word.
+01   Alcance, prioridades y decisiones vinculantes
+02   Integración en Anime-AI-Studio y protección del funcionamiento actual
+03   Experiencia de uso y pantallas
+04   Generación y selección de ideas
+05   Guion audiovisual y dirección dramática
+06   Biblias por historia
+07   Planos, continuidad y gramática visual
+08   Modelos e integración con Google Cloud
+09   Generación de imágenes y videos
+10   Interpretación y continuidad vocal
+11   Subtítulos españoles y tiempo real
+12   Música continua con Lyria 3 Pro
+13   Solicitudes de efectos y ambientes externos
+14   Detección y colocación automática de efectos
+15   Vistas previas audiovisuales antes de exportar
+16   Corrección automática y ajuste manual preciso del sonido
+17   Montaje y duración exacta
+18   Persistencia y control de versiones
+19   Arquitectura técnica integrada y responsabilidades
+20   Trabajos, reintentos, pausa y cancelación
+21   Modelo de datos, anclas y contratos versionados
+22   API, organización del repositorio y estados de operación
+23   Montador: auditoría, corrección o reconstrucción completa
+24   Instalador completo de un comando desde iPhone
+25   Costos, seguridad operativa y diagnóstico
+26   Despliegue, entornos y compatibilidad operativa
+27   Matriz de 100 pruebas de aceptación
+28   Orden de implementación y definición de terminado
+29   Decisiones cerradas, parámetros propuestos y preguntas pendientes
+30   Fuentes, procedencia y notas de verificación
+31   Prompt maestro para iniciar el trabajo de código
+01. Alcance, prioridades y decisiones vinculantes
+1.1 Producto y ubicación definitiva
+Se añade una sección nueva «Cortos de anime» dentro de la aplicación existente Anime-AI-Studio, en el mismo repositorio y despliegue Vercel. La sección actual de animes continúa funcionando tal como lo hace al iniciar la implementación. No se crea una aplicación sustituta ni se transforma el motor antiguo para que todos sus proyectos sean cortos.
+Repositorio exacto: https:/​/​github.com/​Alixonveloz1-ctrl/​Anime-AI-Studio.git.
+La sección nueva produce escenas dramatizadas de cinco minutos: una experiencia audiovisual con actuación, pensamientos, narración útil, acciones, pausas y emoción. No debe parecer un resumen de una serie leído sobre ilustraciones. Puede incluir varios lugares, elipsis o montaje temporal cuando lo exija la idea seleccionada.
+REQ-001. El programa final dura 300 segundos en total, incluyendo palabras, silencios, acciones, transiciones y cualquier título aprobado. No son cinco minutos de voz más lo demás.
+REQ-002. Todo texto hablado del corto está en japonés. La interfaz, la revisión del guion, las explicaciones del director y los subtítulos finales están en español. Los prompts técnicos pueden estar en inglés, acompañados de explicación en español.
+REQ-003. GitHub aloja el código; Vercel sirve la aplicación; Google Cloud ejecuta generación, almacenamiento y trabajos pesados. Imágenes: Gemini. Video: Veo. Voz: Gemini TTS. Música: Lyria 3 Pro, denominación técnica del servicio al que se refirió el usuario como «Lyra Pro».
+REQ-004. Cada solicitud de Veo de la sección nueva fija generateAudio: false en la API. Una instrucción escrita o silenciar después el reproductor no sustituyen este requisito. Se rechaza una combinación que no admita video sin audio; no se cambia a audio activado para lograr una respuesta. Ninguna pista inesperada de Veo puede entrar en vistas previas o exportaciones. [G16]
+REQ-005. Los efectos y ambientes se generan externamente por el usuario, inicialmente con su cuenta de ElevenLabs. La aplicación no necesita acceder a esa cuenta: emite solicitudes con prompt y duración, cada una con botón de carga, y luego posiciona, sincroniza y mezcla automáticamente el archivo entregado. MP3 es un formato admitido obligatorio.
+REQ-006. El usuario puede revisar sonido en contexto antes de exportar los cinco minutos. Si falla la corrección automática, puede fijar manualmente el fotograma y el punto del sonido, adelantar/retrasar y volver a escuchar dentro de la aplicación. No se exige editor externo.
+REQ-007. No hay cuota obligatoria de imágenes fijas o de videos. El tratamiento depende de la escena y de la continuidad. Una reacción mínima puede justificar animación; no se fuerza movimiento innecesario para aparentar calidad.
+REQ-008. La entrada es género principal, subgéneros y concepto opcional. Se entregan exactamente tres ideas distintas; solo la elegida pasa a guion, biblias y producción.
+REQ-009. Cada historia tiene biblia dramática, de personajes, lugares y objetos relevantes; referencias y estados versionados. La imagen inmediatamente anterior nunca es la única memoria de continuidad.
+REQ-010. Lo aprobado se conserva. Una regeneración crea una candidata, no borra ni reemplaza silenciosamente la versión aprobada. El render ejecuta decisiones guardadas y no vuelve a improvisarlas.
+REQ-011. El ejemplo de la cabaña fue ilustrativo: no es un corto encargado, una plantilla, un género fijo ni un caso obligatorio de generación.
+REQ-012. Se usa desde iPhone: controles táctiles, almacenamiento en nube, vistas ligeras, carga por Archivo y restauración sin pérdida de trabajo. El usuario supervisa y decide; no escribe manualmente todos los planos.
+1.2 Alcance completo, sin confundir exclusiones
+Todas las funciones de esta especificación pertenecen a la primera versión completa de la sección, aunque se implementen por etapas. No se declara completada por tener formularios o botones sin conexión real.
+Fuera del alcance nuevo: publicación automática, analítica de redes, episodios largos dentro de Cortos, clonación de voces reales, editor DAW completo, integración automática con ElevenLabs, generación sexual explícita y autoalojamiento de modelos externos de efectos. Los formatos largos y demás funciones que YA tenga la sección antigua se conservan; esta exclusión no autoriza eliminarlos.
+Comedia, romance, tensión, terror, drama, acción y momentos sugerentes no explícitos son compatibles con el encargo. Todo personaje en situaciones sexualizadas debe ser inequívocamente adulto. No se diseña la herramienta para eludir protecciones del proveedor. Las restricciones no deben convertirse en un cambio silencioso del género elegido.
+1.3 Jerarquía y estado del documento
+La petición actual de integrar una sección nueva reemplaza la alternativa de aplicación/repositorio independiente de la v1. También reemplaza su excepción que permitía pedir Veo con audio y descartarlo después. Queda confirmado el respaldo manual de sincronización.
+Prioridad de implementación: instrucciones explícitas posteriores del usuario; requisitos vinculantes de esta v2; decisiones técnicas identificadas como propuestas; código y documentación anteriores como referencia. Una regla antigua «no existe sección de cortos» no puede prohibir la nueva sección ahora solicitada; sí debe impedir que se reactive por accidente el antiguo flujo descartado.
+Los valores numéricos editoriales y las tecnologías auxiliares aquí elegidas son propuestas de ingeniería concretas. No se atribuyen al usuario como decisiones que hubiera pronunciado. Se aplican como base de trabajo sin alterar los requisitos y cualquier cambio relevante se registra. No se inventan credenciales, acceso a modelos, presupuesto ni estado del despliegue.
+02. Integración en Anime-AI-Studio y protección del funcionamiento actual
+2.1 Dos secciones, dos contratos
+La navegación incorpora «Animes» y «Cortos de anime». «Animes» abre la experiencia actual; conserva sus tipos Narrado/Voces por personaje, duraciones, modelos, voces, proyectos, exportaciones y comportamiento real. «Cortos de anime» abre el flujo nuevo de 300 segundos descrito aquí.
+Ruta técnica propuesta para Cortos: /cortos/, con rutas internas en hash (/cortos/#/proyectos/...) para reducir cambios en el enrutamiento antiguo. La raíz y las URLs antiguas mantienen su destino. El enlace de regreso a Animes no cambia preferencias ni carga un proyecto de otra sección.
+Los proyectos nuevos usan projectKind: "anime_short" y un esquema propio. Los antiguos se identifican por su adaptador existente; no se les exige un campo nuevo para poder abrirse. Listas, búsquedas, índices, cachés, claves del navegador y presupuestos operativos de Cortos están separados.
+2.2 Auditoría obligatoria antes de editar
+La referencia de código revisada antes en esta conversación fue el commit 958248ec2fe90fb4a2b0b5004d2a53642a274995 de main. Es una referencia histórica de integración, no una afirmación de que siga siendo HEAD. En esta entrega se consolidan documentos; no se ha verificado nuevamente todo el código ni ejecutado una producción.
+Al empezar a programar: obtener el HEAD real, anotar SHA, detectar cambios del usuario, crear una rama nueva y ejecutar primero las pruebas existentes. Leer README.md, index.html, api/, vercel.json, setup.sh, worker/montage/, tests/static-check.mjs y docs/acceptance.md, o sus equivalentes si cambiaron. Documentar qué existe y qué falta antes de proponer sustituciones.
+La inspección histórica identificó generación de imágenes, audio Gemini/Cloud TTS, Veo, subtítulos, persistencia GCS y un montador FFmpeg. Encontró diferencias entre README y código sobre voces y referencias. El implementador debe resolver con código y pruebas, no copiar afirmaciones antiguas como hechos nuevos. [R1]
+2.3 Qué se puede reutilizar
+Reutilizar autenticación de servicio, firma/carga GCS, consulta de operaciones y utilidades comprobadas mediante adaptadores compatibles. Compartir diseño visual y componentes solo si no altera contratos anteriores. Extraer una función compartida exige pruebas de ambos consumidores; una copia aislada temporal es preferible a una regresión encubierta.
+No heredar automáticamente en Cortos: validadores de palabras por minuto del relato largo, hitos de estatus obligatorios, primera persona universal, obligación de cambiar todos los ángulos, cuota rígida de video, máximo fijo de tres personajes, filtros globales de vestuario o el idioma español de la voz antigua.
+2.4 Aislamiento exigible
+INT-001. Añadir sección, no reemplazar la aplicación ni crear otro repositorio de producto. Una rama de trabajo y una preview sí son necesarias para desarrollar sin afectar producción.
+INT-002. Configuración SHORTS_*, director, esquemas, workers, colecciones y prefijos nuevos. Elegir japonés, Lyria Pro o generateAudio: false en Cortos no altera lo que Animes envía hoy.
+INT-003. El instalador nuevo es setup-shorts.sh. No ejecuta migraciones o borrados del estudio antiguo. Si aprovecha funciones del instalador actual, lo hace mediante interfaces verificadas y sin cambiar su comportamiento por defecto.
+INT-004. El montador nuevo recibe manifiestos estructurados. No reemplaza automáticamente el Job antiguo ni empieza a interpretar sus manifiestos con el esquema nuevo.
+INT-005. Las pruebas antiguas que prohíban «el flujo legado de cortos» deben acotarse a ese flujo y a Animes. No se borran para obtener un CI verde. Se añaden pruebas positivas de la nueva sección y de no regresión de la antigua.
+INT-006. Un fallo o desactivación de Cortos no impide abrir Animes. Se incorpora un indicador de disponibilidad/feature flag específico. Enlazar ambas secciones no autoriza migrar archivos ni transformar historias existentes.
+2.5 Migración y despliegue
+No habrá migración automática de proyectos antiguos. Una importación futura es explícita, crea copia y registra procedencia; los originales permanecen intactos. Las migraciones de Cortos son versionadas y solo afectan su espacio de datos. Cambios compartidos requieren comparación de rutas, payloads, preferencias y renders antes/después.
+03. Experiencia de uso y pantallas
+Dentro de la nueva sección, la navegación sigue: Proyectos → Ideas → Guion y biblias → Voces y montaje preliminar → Tomas → Sonido → Revisión y exportación. Se puede regresar a revisar material sin reiniciar una generación.
+Proyectos. Tarjetas con título, miniatura, género, etapa, pendientes y última actualización. Crear, abrir, duplicar explícitamente o archivar. La recuperación se hace desde la nube, no desde archivos locales del teléfono.
+Ideas. Selectores de género y subgéneros, concepto opcional, formato y botón «Generar tres ideas». Cada tarjeta permite «Elegir», «Ajustar esta idea» y «Cambiar esta propuesta». «Otras tres» conserva el historial sin mezclar ideas descartadas con la seleccionada.
+Guion y biblias. Lectura en español, versión japonesa desplegable, personajes, lugares, objetos importantes y referencias. La corrección se puede pedir en lenguaje natural. Antes de aplicarla, se presenta el alcance de los cambios.
+Voces y montaje preliminar. Pruebas por personaje, escucha de las intervenciones, selección de versión y reproducción del borrador audiovisual. No se obliga a conocer japonés para entender qué debería estar diciendo cada intervención.
+Tomas. Tarjetas en orden con texto de la escena, imagen, tratamiento visual, referencias utilizadas, estado y botones «Aprobar», «Corregir», «Generar video», «Ver en secuencia» y «Versiones». Se muestra siempre cuál es la versión aprobada y cuál es una candidata nueva.
+Sonido. Música, ambientes y efectos separados. Las solicitudes pendientes tienen el botón de carga en su propia tarjeta. «Escuchar aquí» reproduce el efecto dentro de su contexto, no solamente el archivo aislado.
+Revisión. Reproductor del montaje, incidencias con acceso al momento afectado y exportación. La línea de tiempo no es obligatoria para el flujo automático. Hay un editor local de corrección manual de sonido, con fotogramas y onda sonora, siempre accesible desde una incidencia o efecto; no obliga a montar toda la obra.
+UX-001. En un ancho de 390 píxeles no habrá desplazamiento horizontal para las tareas principales. Controles táctiles de al menos 44 píxeles, listas virtualizadas, miniaturas bajo demanda y reproductor playsinline.
+UX-002. Una actualización de estado no recarga la página ni desplaza la posición de lectura. No se reproducen varios videos o audios a la vez.
+UX-003. «Generar pendientes» omite recursos válidos ya terminados. «Regenerar» crea otra versión y requiere confirmar costo y alcance. Los detalles técnicos quedan plegados, no ocupan la pantalla principal.
+UX-004. El editor manual está disponible sin esperar a que la IA agote intentos, y sigue operativo si falla Gemini de análisis. El usuario puede alternar automático/manual, comparar, deshacer y aprobar sin perder la vista anterior.
+UX-005. Cambio de sección durante una tanda activa muestra «Pausar y salir» o «Seguir aquí»; no despacha trabajo nuevo oculto. Se conserva progreso y posición de lectura por sección. Un proyecto de Cortos nunca se restaura dentro del formulario antiguo.
+UX-006. Cada botón tiene estados listo, ejecutando, completado, fallido y deshabilitado con motivo. «Montar» no aparece como exitoso hasta que existe un archivo validado. La interfaz distingue análisis realizado, pendiente y resultado no concluyente.
+UX-007. El usuario ve el guion o acontecimiento de la toma al aprobar una imagen; no una galería sin contexto. Las diferencias de versión se presentan sin mostrar bloques de datos técnicos por defecto.
+04. Generación y selección de ideas
+4.1 Entradas
+Género principal obligatorio. Catálogo inicial propuesto: acción, aventura, fantasía, isekai, drama, psicológico, terror, misterio, romance, comedia, comedia romántica, vida cotidiana, ciencia ficción, mecha, sobrenatural, supervivencia, deportes y videojuego/sistema.
+Subgéneros opcionales. Catálogo extensible: absurdo, humor negro, sátira, tensión romántica, ecchi adulto no explícito, tragedia, venganza, suspenso, terror psicológico, fantasía oscura, misterio sobrenatural, rivalidad, entrenamiento/superación, sistema/progresión, exploración, relación laboral, familia, reencuentro, conflicto moral, apocalipsis y combate táctico. Cada opción tiene una breve definición y reglas de compatibilidad, sin limitar artificialmente el número de personajes o lugares.
+Concepto opcional. Campo vacío permitido. Cuando existe, sus condiciones explícitas tienen prioridad sobre los tropos genéricos. Una selección contradictoria se explica y se pide resolver solo la incompatibilidad real; no se cambia de género a escondidas.
+Formato. Selector 16:9 o 9:16 antes de generar referencias y planos. Se propone 16:9 como valor inicial visible, pendiente de aprobación del usuario. Cambiarlo después requiere una variante de composición, no un recorte automático destructivo del original.
+4.2 Salida de cada idea
+Identificador, título provisional, premisa, personajes centrales, situación inicial, objetivo, obstáculo, progresión emocional, acontecimiento culminante, cierre propuesto y complejidad visual estimada. La tarjeta explica lo suficiente para elegir, sin generar todavía todos los guiones y recursos.
+IDEA-001. Las tres propuestas deben diferir en conflicto, mecanismo dramático o situación, no solo en nombres o decorado. Un segundo pase verifica esa diversidad y solicita reemplazar las redundantes.
+IDEA-002. Comedia no equivale a drama con chistes añadidos. Romance no necesita niveles de poder; fantasía no implica un sistema de estadísticas. La aplicación no introduce subgéneros no elegidos salvo que el concepto los establezca claramente y el usuario lo confirme.
+IDEA-003. El suspenso final es una preferencia inicial derivada del encargo. Se presenta el cierre en cada propuesta; el usuario puede elegir uno resuelto. No se añade un giro ajeno al género solo para terminar con un gancho.
+IDEA-004. Al elegir una idea se congela su versión. Las propuestas rechazadas no entran en los prompts de producción. Un ajuste del concepto crea una revisión de la idea seleccionada.
+IDEA-005. «Ajustar esta idea» recibe una corrección libre y conserva lo que no fue solicitado cambiar. «Otras tres» no consume generación de imágenes, TTS, música ni video. Los nombres y tropos de ejemplos internos no se vuelven respuestas fijas.
+IDEA-006. El catálogo nuevo se guarda dentro de Cortos. Se pueden reutilizar etiquetas del estudio antiguo, pero no importar todos sus prompts o restricciones por referencia global mutable. Un selector de demografía, si existe en Animes, no se añade como requisito nuevo indispensable.
+05. Guion audiovisual y dirección dramática
+5.1 Flujo de escritura
+El proceso produce una intención dramática, una escaleta temporal, biblias preliminares, guion audiovisual español, adaptación japonesa y subtítulos españoles vinculados. Guion y biblias se revisan conjuntamente antes de producir referencias costosas.
+El director, guionista, revisor de continuidad, director de voz y montador son responsabilidades del sistema, no personajes decorativos. Cada pase recibe entradas concretas y devuelve un resultado estructurado. Se pueden agrupar llamadas para ahorrar trabajo, pero no simular que una revisión ocurrió cuando no se ejecutó.
+GUI-001. Cada unidad dramática o beat define qué cambia, qué ve el espectador, qué oye, la intención, el estado emocional y su relación causal con el siguiente momento.
+GUI-002. Cada intervención tiene utteranceId, personaje, tipo (dialogue, thought, narration, system), texto español de revisión, texto japonés pronunciado e indicación de actuación separada.
+GUI-003. Los silencios, respiraciones, miradas y acciones sin palabras se escriben como eventos. No se fuerzan diálogos para alcanzar una cantidad de palabras. La intensidad puede expresarse con contención; no todo el corto tiene que estar gritado.
+GUI-004. El narrador no repite rutinariamente lo que vemos. El pensamiento pertenece al personaje, no a un narrador intercambiable. Una voz de sistema solo existe cuando la historia la requiere.
+GUI-005. No se incrustan reglas universales de humillación, recompensa, primera persona o frases de cierta longitud. La escritura debe servir a la escena elegida. Los ejemplos usados para pruebas no se convierten en argumentos predeterminados.
+5.2 Adaptación japonesa
+Se mantienen nombres, relaciones, intención, información y orden de revelaciones. Un glosario conserva lecturas de nombres, términos propios, registros de habla y formas de tratamiento. El japonés se adapta como actuación natural, no mediante una traducción literal palabra por palabra.
+Un pase de revisión compara el japonés con el significado español y señala adiciones, omisiones o contradicciones. No puede certificar por sí solo una calidad nativa perfecta; se conserva el texto y audio para revisión y se marca la incertidumbre cuando corresponda.
+Los subtítulos españoles parten del significado de la versión japonesa definitiva y se condensan para lectura, sin inventar información. Cambiar una traducción no invalida automáticamente imágenes que siguen representando la misma acción.
+Entregables y revisión del director
+Se entregan escaleta con tiempos tentativos, guion técnico, curva emocional específica al género, lista de recursos y un mapa de riesgos de continuidad. Las indicaciones emocionales describen intención y transición, no un adjetivo «dramático» repetido en todas las líneas.
+El texto hablado y la acción se pueden corregir manualmente o con una instrucción a la IA. El sistema muestra qué líneas, imágenes, voces, efectos o subtítulos quedarían afectados antes de confirmar. La edición de una frase no reescribe el resto del corto sin permiso.
+El ritmo se revisa con voces reales: la duración no se infiere de palabras españolas para una interpretación japonesa. Una versión bilingüe aprobada conserva IDs, lecturas y pausas; la transliteración puede mostrarse como ayuda opcional, nunca sustituye el texto japonés entregado al TTS.
+06. Biblias por historia
+6.1 Biblia dramática y visual
+Incluye premisa aprobada, reglas pertinentes del mundo, cronología, información que conoce cada personaje, tono, paleta, tratamiento de luz, convenciones de efectos visuales, motivos sonoros y restricciones. Solo desarrolla el contexto útil para esta pieza; no inventa una enciclopedia innecesaria.
+6.2 Biblia de personajes
+Cada personaje conserva characterId, nombre y lectura japonesa, edad declarada, función dramática, personalidad, objetivo, relaciones, forma de hablar, voz y versiones de referencia. La referencia fija rostro, cabello, ojos, silueta, proporciones y rasgos distintivos.
+El vestuario se guarda como estado separado con costumeId. Lesiones, humedad, suciedad, cansancio, accesorios y objetos sostenidos también se registran por momento. Cambiar ropa no significa cambiar identidad.
+Se generan una referencia maestra limpia y las vistas necesarias para el corto; no se exigen turnarounds completos para personajes que solo aparecen de un modo. Las expresiones o poses adicionales se producen cuando tienen utilidad. La herramienta recorta y etiqueta las referencias apropiadas para que una ficha múltiple no provoque duplicaciones en una toma.
+6.3 Biblia de lugares y objetos
+Cada lugar tiene locationId, distribución, dimensiones relativas, puntos de entrada y salida, ventanas, muebles, objetos fijos, fuentes de luz, interior/exterior y zonas de sonido. Incluye una planta esquemática y referencias visuales aprobadas de los ángulos necesarios.
+Las ubicaciones se expresan respecto del espacio, no solo como «a la izquierda de la pantalla». Al cambiar la cámara, una persona no cambia de asiento. Un plano detalle no borra la distribución del resto del lugar.
+Los objetos narrativamente importantes tienen propId, diseño, posición, propietario y estado. Una puerta abierta permanece abierta hasta que ocurra su cierre. Los extras o grupos conservan identidad de grupo, cantidad relevante y ocupación del espacio; no se impone un máximo global de tres personas por imagen.
+6.4 Versiones y aislamiento
+Las biblias se almacenan por proyecto. El uso de elementos de otro proyecto requiere una importación explícita con procedencia. Se conserva la versión empleada por cada generación. Si cambia una referencia maestra, el sistema informa qué tomas dependen de ella; no regenera todo automáticamente.
+Control operativo de referencias
+El usuario puede aprobar, sustituir o pedir una variante de referencia. Cada imagen generada registra exactamente qué archivos/versiones se enviaron. Si un recurso requerido falta, se detiene esa toma con una explicación; no se genera sin identidad para ocultar el error.
+El paquete por toma separa identidad, vestuario, lugar, estado y estilo. Si el proveedor limita el número/tamaño de referencias, se prepara un paquete compatible y explícito sin descartar personajes a escondidas. Los grupos multitudinarios usan un layout de ocupación y la cobertura necesaria; un límite técnico de referencias no cambia el número de asistentes de la historia.
+07. Planos, continuidad y gramática visual
+Cada plano contiene shotId, beatId, duración propuesta, función, tamaño y ángulo de cámara, lugar, personajes visibles, personajes presentes fuera de cuadro, objetos, estado inicial/final, acción visible, trayectoria de miradas y referencias aprobadas.
+VIS-001. La función puede ser ubicación, interacción, acción, interlocutor, reacción, detalle o consecuencia. Un retrato bonito no sustituye una actuación dentro de la escena.
+VIS-002. Un corte y una acción continua son decisiones diferentes. No se intenta interpolar entre todos los planos. El último fotograma se utiliza como objetivo solo cuando una acción continua lo necesita y el modelo elegido lo admite.
+VIS-003. El paquete visual incluye identidad, lugar, vestuario y estado del momento. La imagen inmediatamente anterior es una referencia adicional, nunca la única memoria. Un plano de una lámpara no reemplaza las referencias del salón para el siguiente plano general.
+VIS-004. El guion fija qué puede mostrarse en cada momento. No se revelan consecuencias antes de la acción, ni se deshacen cambios ya ocurridos. Se permiten elipsis y montaje temporal, pero se declaran explícitamente.
+VIS-005. Se puede mantener o recuperar un encuadre cuando tiene intención. No se impone «ángulo distinto siempre» ni «zoom en todas las imágenes». La continuidad espacial no exige que dos imágenes sean idénticas.
+Tratamientos disponibles
+Ilustración sostenida. Composición aprobada sin movimiento cuando la puesta en escena lo justifica.
+Cámara 2D. Paneo, desplazamiento vertical o cambio de escala definidos por keyframes sobre la imagen. El motor valida límites, resolución útil y ausencia de bordes vacíos. El movimiento no altera cara, mobiliario ni contenido.
+Animación localizada. Cambios controlados de boca, párpado o una capa pequeña sobre base aprobada. Requiere capas/máscaras y variantes verificadas; una sola imagen no se trata como un personaje ya articulado. No se promete un rig automático universal.
+Veo. Acción corporal, transformación, interacción o gesto interpretativo cuando su desarrollo temporal aporta valor. Se conserva la opción de animar manualmente cualquier toma aprobada.
+Si un tratamiento no alcanza la calidad prevista, el director propone una alternativa con el mismo sentido dramático y muestra el cambio. No sustituye silenciosamente una acción importante por una imagen fija para aparentar éxito.
+Continuidad comprobada, no solo solicitada
+El revisor compara candidata y referencias: identidad, ropa, mobiliario, participantes, objetos, clima, eje de miradas y estado temporal. Devuelve incidencias localizadas y evidencia visual; una puntuación no prueba perfección. La aprobación humana sigue disponible.
+Las tomas de video se revisan al inicio, final y puntos de acción. Un corte directo no tiene que coincidir píxel a píxel; lo que se conserva es el mundo representado. No se inventa interpolación facial para transformar un primer plano en su contraplano.
+Los tratamientos localizados admiten edición de máscara, posición de capa y tiempos. Una máscara defectuosa se marca; no se vende una imagen con desplazamiento global como «animación de boca» ni se promete un rig universal a partir de una ilustración.
+08. Modelos e integración con Google Cloud
+La configuración exacta se guarda por proyecto y por recurso. Los identificadores son parámetros SHORTS_* del servidor y capacidades por adaptador, no constantes repartidas por la interfaz ni sustituciones de la configuración de Animes. No se cambia de proveedor, modelo o calidad sin informar y obtener aprobación.
+Modelos de partida propuestos
+Texto y revisión: gemini-3.1-pro-preview, mediante Vertex AI. Es un candidato documentado con salida estructurada, no una promesa de acceso para la cuenta del usuario. [G1]
+Imágenes: gemini-3.1-flash-image como candidato inicial. Google documenta generación y edición, referencias de imagen y formatos 16:9/9:16, entre otros. La identidad consistente sigue necesitando revisión del resultado. [G2]
+Video: veo-3.1-generate-001; una variante Fast solo se selecciona explícitamente. La documentación de este modelo incluye clips de 4, 6 u 8 segundos y 24 FPS. Las combinaciones de resolución, referencias, primer/último fotograma y duración se validan contra capacidades del modelo, no por suposiciones. [G3]
+Voz: Gemini TTS, con gemini-2.5-pro-tts como configuración inicial propuesta y gemini-3.1-flash-tts-preview disponible para pruebas explícitas. Google documenta japonés ja-JP e instrucciones de estilo; su API Cloud Text-to-Speech permite separar texto e indicación. Se utilizará esa ruta en la primera implementación. [G4]
+Música: Lyria 3 Pro, identificado como lyria-3-pro-preview. Está documentado en preview, con modo instrumental, salida MP3 a 44,1 kHz y duración máxima de 184 segundos por clip. No se supone que pueda producir una partitura continua de cinco minutos en una llamada. [G5]
+Contrato del adaptador
+Cada adaptador declara modelo, región, versión de API, entradas admitidas, salidas, límites, operación síncrona/asíncrona, posibilidad de consultar estado y política de cancelación. Los identificadores de operación y de recurso se guardan antes de avanzar la producción.
+El diagnóstico distingue API no habilitada, permisos, cuota, región incorrecta, modelo no disponible, contenido rechazado y error temporal. Un rechazo no provoca cambio de modelo ni eliminación de referencias.
+Las llamadas de prueba con costo requieren autorización. La existencia del modelo en documentación no demuestra que esté habilitado en el proyecto Google Cloud. El despliegue incluye una prueba pequeña autorizada por cada ruta antes de producir un corto completo.
+No se ha confirmado una API pública nativa de Google Cloud dedicada a efectos aislados que forme parte de esta integración. Eso no significa afirmar que Google sea incapaz de producir sonido. La primera versión usa la carga externa acordada; no utiliza audio de Veo ni añade servicios externos de pago automáticamente. [G3]
+Modo de video sin audio y costo
+generateAudio: false se valida en el servidor, en el payload enviado y en pruebas de contrato para cada modelo/resolución habilitados. El esquema general documenta este parámetro; no demuestra por sí solo que todas las combinaciones de tareas/modelos lo admitan. El diagnóstico debe validar la combinación concreta. [G16]
+La estimación selecciona la tarifa de video sin audio cuando exista para la modalidad elegida. La tabla pública distingue modalidades; no se publica un ahorro universal ni se hardcodea un costo por corto. Tarifas y disponibilidad se revisan al implementar y al cambiar modelo. [G19]
+Análisis visual: Gemini con comprensión de video/imagen, mediante el adaptador de análisis. Se usa para revisión y localización aproximada de eventos. El muestreo general no sustituye la extracción de fotogramas consecutivos alrededor de impactos rápidos. [G17]
+09. Generación de imágenes y videos
+Las imágenes se generan desde la dirección del plano y sus referencias versionadas. El estilo inicial es anime japonés 2D coherente; otros tratamientos visuales requieren una decisión explícita, no aparecen aleatoriamente durante la producción.
+GEN-001. Se separan instrucciones visuales de metáforas y acotaciones interpretativas. Un pensamiento figurado no se convierte en efectos físicos salvo que la historia lo pida.
+GEN-002. Los textos de sistema, rótulos y subtítulos se componen en edición como elementos separados. No se depende de letras generadas dentro de una ilustración para información que debe ser exacta.
+GEN-003. La imagen candidata pasa por revisión técnica y visual. El usuario puede comparar con su referencia, con la toma anterior y con la siguiente. Los avisos automáticos no se presentan como garantía de perfección.
+GEN-004. El video parte de una imagen aprobada. La indicación describe acción, cámara y estado de llegada, sin pedir que rediseñe el personaje ni invente una escena completa.
+GEN-005. Antes de llamar a Veo, el servidor exige generateAudio: false. Al recibir el resultado se comprueba que no haya audio. Solo se publica para previsualización un recurso de video validado sin pista sonora. Si apareció una pista inesperada, se aísla el original y se crea un derivado únicamente de video; se registra el incumplimiento. FFmpeg permite selección de streams y exclusión de audio. [G6][G16]
+GEN-006. Una configuración que exige audio se bloquea como incompatible antes de producir. No se permite un reintento con generateAudio: true, ni un fallback que omita el campo y active el valor por defecto. La instrucción visual puede reiterar ausencia de sonido, sin describir voces, música ni ruido. El contrato real es el parámetro de API. La regla nueva solo se aplica a Cortos.
+GEN-007. No se rellenan tomas repitiendo el mismo clip consecutivamente. No se impone ralentización automática intensa. Se propone un límite por defecto de velocidad 0,90–1,10; fuera de él, el director debe plantear otra solución y obtener aprobación.
+Conservar el último fotograma solo es válido cuando la acción puede detenerse ahí. No se alarga un parpadeo, un golpe o un paso para ocupar un hueco arbitrario. Se pueden añadir planos útiles o ajustar pausas antes de fijar el montaje.
+GEN-008. La prueba técnica de salida mide duración, dimensiones, FPS/PTS, streams, integridad y checksum. El frame rate solicitado no se da por cumplido sin inspección. Se crea una referencia temporal normalizada para montaje manteniendo trazabilidad al original.
+GEN-009. Toda candidata muestra si fue generada, compuesta o reencuadrada, con referencias y costo registrado. Reutilizar la misma imagen para otro movimiento de cámara no provoca otra llamada Gemini por defecto. El usuario puede comparar tres tomas contiguas, no solo el clip aislado.
+10. Interpretación y continuidad vocal
+Una ficha de voz por personaje guarda modelo, nombre de voz, japonés, registro base, pronunciación, velocidad orientativa, indicaciones permanentes y una muestra aprobada. El mismo personaje conserva esos valores; los cambios emocionales se indican por intervención.
+VOZ-001. Una voz elegida no se anuncia como identidad acústica matemáticamente garantizada entre generaciones. Las muestras y tomas se escuchan en conjunto para detectar variaciones de timbre o registro. Los cambios inesperados se marcan antes del montaje final.
+VOZ-002. Diálogo, pensamiento y narración usan pistas diferenciadas. Un pensamiento conserva la voz del personaje; su tratamiento sonoro no requiere un eco exagerado. Voces imaginadas, recuerdos o un sistema tienen identidad y función explícitas.
+VOZ-003. Se generan bloques interpretativos coherentes: una intervención o varias consecutivas del mismo intérprete cuando ayuda a conservar la actuación. Se evita fragmentar cada palabra en una llamada independiente. Cada bloque se alinea después con sus intervenciones.
+VOZ-004. Las indicaciones no se pronuncian. Se revisan idioma, omisiones, palabras añadidas, lectura accidental de acotaciones y finales truncados. TTS recibe texto japonés, no el español esperando que una voz lo traduzca.
+VOZ-005. Respiraciones, risas o quejidos se generan mediante Gemini TTS cuando funcionan; de lo contrario, se convierten en una solicitud externa identificada como vocalización no verbal. Las palabras no se externalizan a otro idioma o motor silenciosamente.
+Boca y voz
+Veo no se considera un sincronizador garantizado con el WAV de Gemini TTS. Para planos con boca visible, la primera versión implementa animación limitada desde variantes de boca y tiempos del audio real, con revisión. Puede utilizar apertura/cierre guiada por actividad vocal; no se etiqueta como sincronía fonética perfecta.
+Una toma Veo con boca moviéndose de manera incompatible se corrige, se sustituye o se cubre mediante una decisión de montaje aprobada. No se conserva hablando fuera de sincronía solo porque el clip sea atractivo. Cambiar la duración de la voz obliga a recalcular sus dependencias.
+Corrección de voz sin rehacer la historia
+«Corregir actuación» permite ajustar intención, tono, pausa o pronunciación y generar una versión únicamente del bloque afectado. Se conserva la anterior para comparar. No se sustituye Gemini TTS por Chirp al fallar ni se hereda el idioma elegido en Animes.
+El análisis busca discrepancias respecto al japonés aprobado, pero no declara exactitud nativa absoluta. Si cambia el tiempo del audio, se recalculan subtítulos, boca, pausas y anclas dependientes. Un ajuste solo de ganancia no cambia sus tiempos.
+11. Subtítulos españoles y tiempo real
+Cada intervención japonesa mantiene vínculo con uno o varios subtítulos españoles mediante IDs. Los tiempos se obtienen del audio definitivo, no repartiendo de forma uniforme el texto entre cinco minutos.
+Se propone un adaptador de Google Speech-to-Text para transcripción y tiempos en japonés, con detección de actividad vocal como apoyo. La transcripción se compara con el texto encargado; no se denomina alineación forzada exacta a una transcripción libre. Si faltan tiempos fiables, el segmento se marca para revisión y no se presenta como sincronizado automáticamente. [G7]
+SUB-001. La traducción no se alinea palabra por palabra con el japonés: se sincronizan unidades de sentido con el intervalo de la intervención. Se permite subdividir una intervención larga conservando su significado.
+SUB-002. Valores editoriales iniciales propuestos: máximo dos líneas; objetivo de 32–42 caracteres por línea según composición; objetivo de 12–17 caracteres por segundo; advertencia por encima de 20. Duración orientativa de 0,8–6 segundos por bloque, con excepciones justificadas y revisables.
+SUB-003. No se parten nombres ni grupos de sentido de forma absurda. Los subtítulos desaparecen durante silencios cuando ya no corresponden. No se añade el nombre del hablante a todos los textos sin necesidad.
+SUB-004. Se prueba legibilidad sobre fondos claros/oscuros y en móvil. El área segura se define por formato. Se producen archivos SRT y ASS; el MP4 principal lleva subtítulos quemados y existe una exportación limpia sin ellos.
+SUB-005. Cualquier ajuste de voz, velocidad, recorte o montaje invalida los tiempos dependientes. Antes de renderizar se exige que subtítulos y audio pertenezcan a la misma versión temporal.
+SUB-006. Se permite corrección manual del texto español, inicio y fin con vista previa en contexto. El revisor indica conflictos de lectura y duración; la corrección humana queda guardada y no la sobrescribe otra transcripción. Los ajustes temporales se almacenan respecto de la intervención y de la revisión vigentes.
+12. Música continua con Lyria 3 Pro
+La música se diseña por secuencias emocionales, no por clips Veo. El director prepara un mapa con entradas, salidas, intensidad, instrumentación, función, silencios y cambios justificados. Una pista puede cruzar muchas tomas.
+MUS-001. La primera versión encarga música instrumental. Si una salida contiene voz, letra o habla no solicitada, no se aprueba. No se garantiza que un prompt lo impida sin escuchar el resultado.
+MUS-002. Las piezas aprobadas se conservan como archivos maestros. Volver a usar la misma pieza significa reutilizar el mismo archivo, no pedir otra vez el mismo prompt.
+MUS-003. Debido al límite documentado de Lyria 3 Pro, la cobertura de cinco minutos se resuelve con cambios musicales deliberados, silencios y, cuando funcione, edición/reutilización musical del mismo material. No se promete que dos generaciones compartan exactamente melodía, instrumentos o carácter. [G5]
+MUS-004. No se presupone entrada de audio de referencia, extensión exacta ni entrega de stems separados por instrumento en la integración. Esas capacidades requieren verificación específica antes de ofrecerlas. El stem «música» de la exportación será nuestra pista musical mezclada, no instrumentos separados inventados.
+MUS-005. Los cortes musicales se hacen en puntos apropiados y las transiciones se escuchan. Un loop solo se permite cuando está marcado como utilizable y su empalme ha sido revisado. No se repite por defecto una pista entera desde el inicio para llenar tiempo.
+Cada encargo conserva prompt, modelo, archivo aprobado, duración real, cortes usados y versión. Los cambios de volumen y fundidos viven en el montaje; no obligan a regenerar la música.
+MUS-006. El usuario escucha una pieza sola o en su secuencia, aprueba una versión y puede ajustar volumen, entrada y salida sin nueva generación. La IA no vuelve a solicitar música al renderizar. El presupuesto de render se separa del presupuesto de generación.
+13. Solicitudes de efectos y ambientes externos
+13.1 Responsabilidad del director
+El director analiza guion y montaje para identificar los sonidos necesarios. Distingue efectos de acción, ambiente continuo, señales de objetos/sistema, transiciones sonoras y vocalizaciones no verbales. No solicita un sonido diferente para cada corte si el mismo ambiente debe continuar.
+Cada solicitud SoundRequest incluye:
+Identidad: soundRequestId, nombre claro, tipo, historia y momento al que sirve.
+Encargo: descripción en español y prompt copiable para el generador externo, normalmente en inglés, acompañado por su explicación española.
+Duración: segundos exactos pedidos, cuerpo del sonido, cola y, si aplica, posición del golpe o evento dentro del archivo.
+Carácter: materiales, intensidad, distancia, espacio acústico, mono/estéreo, sonido seco o reverberante, y si debe poder repetirse sin un corte perceptible.
+Restricciones: sin música, sin palabras ni voces no solicitadas; un solo efecto o una secuencia claramente descrita.
+Uso automático: evento, escena o intervalo vinculado, punto de sincronización, entradas/salidas, prioridad y si es obligatorio para exportar.
+13.2 Botones y estados
+Cada tarjeta presenta «Copiar prompt», «Subir efecto», «Escuchar archivo», «Ver efecto en contexto», «Corregir», «Ajuste manual», «Aprobar» y «Reemplazar». El botón de carga ya conoce soundRequestId: el usuario no necesita renombrar el archivo ni escribir dónde colocarlo.
+Estados visibles: Solicitado → Cargando → Verificando → Listo para escuchar → Aprobado. Alternativas: Necesita corrección, Desactualizado por cambio de montaje o Omitido con autorización. Subido no equivale automáticamente a aprobado.
+SFX-001. La carga valida duración, formato, decodificación, canales, saturación y contenido sonoro pertinente. WAV es preferido; se aceptan MP3, M4A/AAC, FLAC y OGG cuando el decodificador del servidor los soporte. Se propone un máximo de 250 MB por archivo, configurable.
+SFX-002. El original se conserva. Se prepara una copia de trabajo a 48 kHz sin alterar su identidad acústica. Si la duración difiere de lo pedido, se muestra lo recibido y lo requerido. No se estira automáticamente un golpe ni se inventa una cola.
+SFX-003. El director puede asignar un archivo a varios usos cuando sea el mismo sonido. Cada uso mantiene tiempo, volumen y perspectiva propios. Una nueva versión no reemplaza usos aprobados sin revisar sus dependencias.
+SFX-004. Los ambientes largos se piden para su intervalo real o como un loop expresamente solicitado. Se garantiza continuidad mediante reproducción del mismo archivo a través de los cortes, no mediante generaciones parecidas.
+13.3 Cuándo se pide el archivo
+Se puede mostrar un listado provisional al aprobar el guion. La solicitud definitiva se publica después de estabilizar duración y acción. Los impactos que dependen de Veo se ajustan al evento observado en el clip aprobado, no al instante ideal descrito antes de generarlo.
+Si luego cambia el montaje, se recalcula la ubicación automáticamente. Si también cambia la duración o el carácter del efecto, se solicita una revisión; no se sigue usando un encargo desactualizado como si nada hubiese cambiado.
+Entrega externa y MP3
+ElevenLabs es una opción que el usuario ya utiliza fuera de la app, no una integración API exigida. Puede entregar un MP3 de otra herramienta; no se le pide token ni conexión con el proveedor externo. El prompt debe especificar que se entregue solamente el sonido solicitado, sin música ni palabras añadidas.
+La copia de trabajo PCM será la fuente única de onda sonora, detección, preview y render. Se decodifica una sola vez y se comprueban duración, silencios y metadatos de retardo del códec cuando existan. No se asume que el primer byte del MP3 corresponde al ataque. Cambiar de decodificador entre detección y montaje no puede alterar su punto de sincronía. [G6]
+Un desfase de duración dentro de una tolerancia propuesta de 50 ms puede mostrarse como menor, pero la cola debe caber y el impacto debe conservarse. El sistema nunca alarga un golpe para satisfacer un número ni rechaza mecánicamente una cola útil un poco más larga: presenta recorte/aceptación como decisión editorial.
+Ejemplo de tarjeta, solo para explicar el contrato
+Nombre: «Objeto metálico impacta suelo de piedra». Duración pedida: 2,4 s. Preparación: 0,15 s. Cuerpo: un golpe único. Cola: resonancia decreciente. Perspectiva: cercana, interior seco. Prompt: «Single metal object dropping onto a stone floor, one clear main impact followed by a short metallic resonance and natural decay. Total 2.4 seconds, main impact near 0.15 seconds. Dry close perspective. No speech, no music, no extra impacts.» La posición real se mide al subir el resultado; el prompt no garantiza ese tiempo.
+14. Detección y colocación automática de efectos
+14.1 Eventos y anclas estables
+Cada uso de sonido (SoundCue) referencia un ActionEvent, una intervención o un intervalo. El director distingue sonido diegético ligado a contacto, sonido subjetivo, ambiente, anticipación deliberada y transición editorial. No todos los sonidos deben coincidir con un objeto visible; sí debe coincidir un impacto que fue encargado para un contacto visible y cercano.
+El minuto global es un dato derivado. El evento conserva eventId, toma, asset de video y revisión, descripción, ocurrencia elegida cuando hay varios contactos, PTS de origen y fotograma de salida. Un ambiente referencia un intervalo continuo con offset al archivo maestro, no una lista de nuevos sonidos por plano.
+14.2 Localización visual y sonora
+Gemini examina el material efectivamente generado y propone el intervalo del evento. Alrededor de ese intervalo, un worker extrae fotogramas consecutivos y sus tiempos reales; el analizador propone el contacto concreto y conserva evidencia. No se usa una muestra cada segundo para afirmar precisión de un fotograma. Google advierte limitaciones de muestreo para acciones rápidas; FFprobe permite inspección de frames y sus tiempos. [G17][G18]
+La aplicación decodifica el audio entregado, obtiene la onda sonora y propone el ataque pertinente mediante análisis de transitorios, no simplemente el pico más fuerte del archivo. En sonidos suaves o con varios golpes, ofrece candidatos y revisión. El punto del archivo siempre se guarda como muestra entera sobre el mismo PCM que se montará.
+confidence indica confianza estimada del detector, no porcentaje garantizado de aciertos. Estados mínimos: propuesto, verificado automáticamente, necesita revisión, fijado manualmente y aprobado. Un resultado «evento no visible» no se transforma en tiempo cero.
+14.3 Resolución temporal
+Con velocidad de video constante:
+eventoFinal = inicioToma + (eventoFuente - entradaClip) / velocidadClip
+Para un efecto reproducido a velocidad normal:
+inicioEfecto = eventoFinal - (puntoSincroniaAudio - entradaAudio) + offsetEditorial
+Los tiempos de audio se resuelven en muestras de 48 kHz; las posiciones visuales en fotogramas de salida y PTS racionales. A 24 FPS cada fotograma corresponde a 2.000 muestras. Se redondea únicamente al resolver el destino, no en cada transformación intermedia.
+Un mapa explícito fuente→salida sustituye la fórmula simple en rampas, congelados, clips de FPS variable y transiciones. La primera versión puede limitarse a velocidad constante, pero debe rechazar o marcar un caso que no soporte, no calcularlo como si lo soportara.
+14.4 Ejemplo verificable
+Impacto visual en 102,500 s: fotograma 2.460 a 24 FPS y muestra 4.920.000 a 48 kHz. El sonido tiene ataque en su muestra 9.600 (0,200 s), sin recorte inicial. Por tanto, comienza en la muestra 4.910.400 (102,300 s). Su ataque coincide con 102,500 s.
+Si la toma se mueve dos segundos conservando su contenido, el cue se mueve 96.000 muestras. Si cambia la velocidad o el video, se recompila el mapa y se marca la sincronización para revisión. Si se sustituye el MP3, se vuelve a medir su ataque aunque conserve el nombre del archivo.
+14.5 Casos que no se corrigen con un desplazamiento arbitrario
+Evento recortado: pedir nueva decisión de toma o suprimir explícitamente el cue. Evento inexistente: incidencia visual, no sincronización falsa. Inicio calculado negativo: mostrar que la preparación cae fuera del programa y proponer recorte autorizado o ajuste de cobertura, nunca sujetar a cero y desalinear el golpe. Varios impactos: un evento por contacto o secuencia con correspondencia explícita.
+Un sonido fuera de cuadro puede vincularse a una marca narrativa aprobada. Un retraso acústico o una anticipación expresiva intencionales se guardan como offsetEditorial, no se «corrigen» automáticamente a cero.
+14.6 Mezcla y continuidad
+Ganancia, panorama, perspectiva, ducking aprobado y fundidos viven en el cue o pista. No se atenúa el ataque con un fade automático que lo borre. Colas y reverberaciones pueden atravesar cortes. Los ambientes continúan con el mismo cursor del mismo asset.
+Si falta un efecto obligatorio se permite borrador con aviso, pero no final completo, salvo omisión autorizada y registrada. Una exportación no llama a la IA para recolocar sonidos: ejecuta los tiempos aprobados del manifiesto.
+Objetivo de aceptación propuesto para impactos visibles cercanos: ataque alineado con el fotograma de contacto, desviación máxima de un fotograma de salida, comprobada con fixtures y revisión. El motor puede colocar muestras con precisión; la detección semántica necesita validación y respaldo manual.
+15. Vistas previas audiovisuales antes de exportar
+15.1 Tres niveles reales de revisión
+«Ver efecto en contexto». Render de un fragmento alrededor del evento. Ventana inicial propuesta: 2 s anteriores y 3 s posteriores, ampliable para incluir preparación, acción y cola. El usuario no monta cinco minutos para revisar un golpe.
+«Ver escena con sonido». Reproduce la escena completa con voces, música, ambientes y efectos ya disponibles. Sirve para revisar sincronía, balance y continuidad entre planos.
+«Vista previa del corto». Render ligero de los 300 segundos para validar conjunto y ritmo. Solo se recalcula cuando cambian sus dependencias, no por reproducirlo otra vez.
+El animatic previo a la generación de clips es distinto de la preview de sincronización. El primero valida intención y duración con ilustraciones; el segundo usa el video definitivo de la toma. Se muestran claramente los recursos provisionales.
+15.2 Mismo montaje, no dos motores incompatibles
+Preview y final usan el mismo compilador, manifiesto versionado, archivos, recortes, velocidades, puntos de efecto y parámetros de mezcla. La preview puede bajar resolución/bitrate; conserva 24 FPS, los índices temporales y el contenido.
+El reproductor utiliza un archivo audiovisual muxado. No inicia un elemento de video y otro de audio por separado esperando que arranquen al mismo tiempo. FFmpeg permite producir segmentos y seleccionar/combinar streams. [G6]
+Cada preview guarda intervalo global, offset local, hash de manifiesto, versión de assets y configuración del compilador. La interfaz muestra ambos tiempos cuando se edita: tiempo de la escena y tiempo del corto. Una marca local jamás se guarda como minuto global sin conversión.
+15.3 Evitar discrepancias de mezcla entre fragmento y final
+No se normaliza por separado cada fragmento. Ganancia global, automatizaciones, sidechain, reverberación y colas conservan el contexto del programa. Se puede renderizar/cachear primero la mezcla de audio completa de 300 segundos y extraer su intervalo, sin renderizar todo el video.
+Si se procesan filtros solo en una ventana, el render incluye preroll suficiente y el estado necesario. Cuando no pueda garantizar paridad, debe usar stems/mezcla temporal completa. La música o el ambiente empiezan en el offset correspondiente, no desde el comienzo del archivo. Movimientos de cámara se evalúan en tiempo global de toma, no reiniciados en la preview.
+La salida comprimida se decodifica en pruebas para verificar que priming, edición de PTS o corte de paquetes no haya desplazado el ataque. Dos renders pueden diferir en bytes o metadatos; deben coincidir en montaje y sincronía, no se exige identidad binaria de los MP4.
+15.4 Caché y experiencia
+Estados: preparando, lista, desactualizada, fallida. La clave de caché incluye cue, intervalo, revisión temporal, audio, video, mezcla y versión del motor. Aprobar una preview vieja contra un video nuevo se bloquea. Reproducir una preview válida no genera recursos ni llama a modelos.
+El usuario ve el progreso y puede cerrar el panel sin perder el resultado. Solo suena un reproductor. Preparar previews requiere procesamiento de render, no nuevas llamadas de generación salvo petición explícita; ese costo se distingue.
+16. Corrección automática y ajuste manual preciso del sonido
+16.1 Automatización con salida manual, no intentos infinitos
+Cada efecto y cada incidencia dispone de «Corregir». Opciones: «Suena antes», «Suena después», «Evento equivocado», «Volumen/mezcla» y texto libre. El sistema reanaliza únicamente los puntos implicados y propone nueva ubicación. Un botón de corrección equivale a una nueva propuesta; no autoriza un bucle indefinido de generación/análisis.
+El límite inicial de intentos automáticos adicionales es dos por incidencia, dentro del presupuesto autorizado. «Ajuste manual» siempre está disponible desde el primer momento, también sin servicio de IA. Corregir sincronía no regenera por defecto Veo, TTS o música.
+16.2 Editor local en iPhone
+El panel muestra un reproductor en contexto, una tira de fotogramas y la onda sonora del efecto seleccionado. No abre un editor externo ni obliga a trabajar con todas las pistas del corto.
+Controles visuales obligatorios: reproducir/pausar; fotograma anterior; fotograma siguiente; ampliar intervalo; selector entre ocurrencias propuestas; botón «El sonido debe coincidir aquí». Se muestran número de fotograma y tiempo legible.
+La referencia de precisión son fotogramas extraídos/indexados en servidor o decodificados con correspondencia de frame verificada. No basta con video.currentTime += 1/24, porque el seeking del navegador no se toma como garantía de haber mostrado el frame exacto. La tira indexada es la vía obligatoria de respaldo para Safari/iPhone.
+Controles sonoros obligatorios: escuchar el archivo aislado, ampliar su onda, seleccionar el ataque con «Este es el golpe», escuchar la zona seleccionada y elegir otro transitorio. Se conserva una única escala PCM de 48 kHz. El marcador se guarda en muestras, no como una posición gráfica que cambia al redimensionar el teléfono.
+16.3 Ajustes directos
+«Adelantar 1 fotograma» resta 2.000 muestras al offset del cue; «Retrasar 1 fotograma» suma 2.000 a 24 FPS. Controles opcionales finos de ±1 ms y ±10 ms se convierten a 48 y 480 muestras. Campo numérico en milisegundos para ajuste absoluto, con signo claramente explicado.
+Se permite variar ganancia del efecto, recortar entrada/salida no destructivamente, marcar cola, ajustar fundidos y escuchar en mezcla. Los valores propuestos se validan: no cortar el ataque seleccionado ni crear duraciones negativas. El audio no se estira ni cambia de tono para corregir un desfase.
+16.4 Guardado y autoridad del usuario
+«Probar ajuste» genera una preview nueva del fragmento. «Comparar» alterna versión previa/candidata; «Deshacer» recupera el estado anterior; «Restablecer propuesta IA» es explícito; «Aprobar y fijar» crea revisión inmutable con source: manual y bloqueo frente a reanálisis automático.
+El bloqueo manual no significa fijar un minuto global aunque cambie la escena. Significa conservar la ocurrencia elegida, el punto fuente y el offset editorial del usuario. Si la misma toma se desplaza sin cambiar su contenido, el cue la sigue. Si cambia el video, el recorte relevante, la velocidad o el efecto, se marca desactualizado y se pide revalidar; no se transfiere una aprobación ciega.
+La IA puede proponer una alternativa a un cue fijado, pero no aplicarla. Cada edición guarda autor, fecha, versión previa, motivo, asset y revisión temporal. Otra sesión con una revisión vieja recibe conflicto y no sobrescribe la corrección más reciente.
+16.5 Correcciones según causa
+Desfase: corregir ancla visual/sonora u offset. Volumen incorrecto: modificar mezcla, no el tiempo. Efecto inadecuado: reemplazar asset conservando solicitud y remidiendo el ataque. Acción ausente: corregir únicamente la toma o aprobar cambio editorial. Cola cortada: ampliar cobertura sonora o ajustar corte autorizado. Varios golpes: corregir la ocurrencia pertinente, no desplazar la secuencia entera sin análisis.
+16.6 Cierre de la incidencia
+Una incidencia se cierra solo con una preview vigente y aprobación, o una omisión autorizada con motivo. Debe ser posible completar una corrección manual con Gemini de análisis desconectado, conservando la capacidad de render. La exportación final reproduce esa decisión exacta.
+17. Montaje y duración exacta
+17.1 Base temporal propuesta
+Video final: 24 FPS constantes, 7.200 fotogramas. Audio maestro: 48.000 muestras/segundo, 14.400.000 muestras por canal. La duración editorial es exactamente 300 segundos; la validación del contenedor permite hasta un fotograma por metadatos/codificación, nunca segundos de contenido añadido.
+El montaje preliminar se construye con el audio real y las imágenes aprobadas. Se corrige el ritmo antes de producir todos los clips y de pedir los efectos definitivos. La fase final sustituye material preliminar por material aprobado conservando o revisando sus anclas.
+17.2 Cómo se llega a cinco minutos
+Cada beat define duración mínima, preferida y máxima. El habla validada y las acciones esenciales son restricciones; las pausas y algunos planos admiten flexibilidad. El planificador distribuye tiempo solo entre segmentos elásticos y comprueba que la suma pueda ser 300 segundos.
+Si el contenido no cabe o queda demasiado corto, propone cambios de guion, pausas o cobertura. No acelera toda la voz, no elimina el clímax ni agrega un minuto de imagen inmóvil silenciosamente. Una vez aprobado el corte, la línea de tiempo se versiona y se congela para producción final.
+17.3 Pistas
+Se mantienen por separado video/ilustración, diálogo, pensamientos, narración/sistema, música, ambientes, efectos y subtítulos. Las pistas de sonido atraviesan cortes de imagen. El render mezcla el programa desde un manifiesto aprobado, sin importar automáticamente pistas incrustadas en los clips.
+Se proponen audio interno PCM de 24 bits y mezcla estéreo con objetivo inicial de −16 LUFS integrados y pico verdadero máximo de −1 dBTP. Son valores editoriales de partida, no un requisito atribuido a una plataforma. Se conserva contraste entre susurro, silencio y clímax; no se normaliza cada efecto aislado al mismo volumen.
+FFmpeg permite operaciones de mezcla, fundido, retardo, normalización y movimiento sobre imágenes; el código utilizará un subconjunto de filtros validado y no scripts libres escritos por el modelo. [G8]
+17.4 Exportaciones
+MP4 H.264, píxel yuv420p, 1080p según formato, audio AAC estéreo y faststart; subtítulos españoles quemados. También MP4 limpio, SRT, ASS y un paquete opcional con guion, biblias, manifiesto, recursos utilizados y stems propios de voz, música, ambiente y efectos.
+Una ampliación de resolución se identifica como tal; no se anuncia como detalle nativo. La descarga se hace desde almacenamiento con acceso temporal autorizado, no cargando el archivo final completo en memoria del iPhone.
+Compilación y contratos de render
+El manifiesto distingue tracks de imagen, diálogo, pensamiento, narración/sistema, música, ambiente, SFX y subtítulos; cada recurso incluye checksum y versión. El compilador resuelve todas las anclas antes de lanzar FFmpeg y emite lista de incidencias.
+El render de 300 segundos valida intervalos [inicio, fin), fotogramas 0–7.199 y exactamente 14.400.000 muestras de programa por canal antes de codificar AAC. El contenedor se comprueba tras decodificación; padding del códec no autoriza contenido extra ni pérdida del cierre. Se evita acumular redondeos al concatenar escenas.
+Se bloquean recursos faltantes, cues fuera de cobertura, aprobaciones desactualizadas, subtítulos posteriores al fin, referencias cruzadas indebidas y audio Veo. No se bloquean silencios o negros deliberados correctamente declarados y aprobados.
+18. Persistencia y control de versiones
+18.1 Fuentes de verdad propuestas
+Para Cortos se propone Firestore como fuente operativa de estado, índices, revisiones, aprobaciones, trabajos y reservas. Cloud Storage guarda todos los medios y snapshots/manifiestos inmutables. La sección Animes conserva su almacenamiento actual: no se migra a Firestore por añadir Cortos.
+La base de datos guarda identificadores y rutas de medios, no imágenes/audio completos en base64. Los manifiestos de GCS son snapshots versionados del estado aprobado, no una segunda copia editable que compita con Firestore. La infraestructura auxiliar se añade solo para la sección nueva; no crea una segunda fuente editable del estado antiguo.
+El navegador conserva solo caché limitada de interfaz y miniaturas. Borrar esa caché no borra proyectos. Una URL firmada que caduca se renueva a partir del assetId; no se guarda como identidad permanente del recurso.
+18.2 Esquema de objetos
+{SHORTS_GCS_PREFIX}/projects/{projectId}/assets/{assetId}/original.ext{SHORTS_GCS_PREFIX}/projects/{projectId}/assets/{assetId}/silent.mp4{SHORTS_GCS_PREFIX}/projects/{projectId}/assets/{assetId}/preview.mp4{SHORTS_GCS_PREFIX}/projects/{projectId}/revisions/{revisionId}/manifest.json{SHORTS_GCS_PREFIX}/projects/{projectId}/renders/{renderId}/final_es.mp4
+El bucket y prefijo se configuran. No se incorporan nombres de buckets antiguos, correos o credenciales al código. Los recursos se identifican con IDs estables; renombrar una historia no mueve ni rompe sus archivos.
+18.3 Aprobación e invalidación
+Cada recurso guarda versión de entradas, hash de dependencias, modelo, prompt, fecha, duración/resolución real y aprobación. Se separan el estado del trabajo técnico y el estado editorial del recurso.
+Una modificación de texto hablado invalida su audio y los tiempos dependientes. Una corrección solo de subtítulos invalida subtítulos y render, no todas las imágenes. Un cambio de duración puede mover efectos sin regenerarlos. Cambiar una puerta o la posición de un personaje marca las tomas dependientes, pero no toca lugares ajenos.
+Las versiones aprobadas son inmutables. Las transacciones y comprobaciones de versión evitan que dos sesiones sobrescriban cambios entre sí. Firestore documenta transacciones para operaciones atómicas; la aplicación debe además controlar las consecuencias externas de cada operación. [G9]
+Espacios de datos y recuperación
+Colecciones propuestas: animeShortsProjects, animeShortsJobs, animeShortsBudgetAuthorizations; subcolecciones por proyecto para entidades versionadas. El prefijo GCS se configura fuera de las carpetas de proyectos que enumera Animes. No se presupone que compartir bucket implique compartir listados o permisos.
+Publicar un asset requiere primero objeto GCS completo y verificado y después registro de recurso disponible. Una carga a medio terminar queda temporal; una escritura de manifiesto no declara disponible un archivo que no existe. El reconciliador identifica huérfanos sin borrar aprobados.
+Los borradores de textos se pueden cachear de forma limitada; los medios no se serializan masivamente a localStorage. Las claves de caché usan animeShorts:v2 y nunca limpian claves del estudio antiguo. Una URL firmada o de upload se trata como secreto temporal; se renueva con IDs autorizados y no se registra en logs.
+Retención propuesta: previews reemplazables y temporales pueden limpiarse tras 30 días si no hay referencias; originales y aprobaciones no se borran automáticamente. Borrado definitivo requiere confirmación con lista de dependencias. Se prueba restauración desde estado en nube y snapshots sin el dispositivo original.
+19. Arquitectura técnica integrada y responsabilidades
+19.1 Extensión modular, no reescritura global
+Base técnica propuesta: frontend React + TypeScript compilado como subaplicación estática con base /cortos/; código nuevo separado del HTML antiguo. Vercel sirve ambas secciones en el despliegue actual. No se convierte toda la raíz a Next.js para añadir Cortos.
+La construcción de la subapp debe preservar todos los archivos/rutas antiguos. El sistema de build y configuración Vercel se adapta aditivamente al repositorio real; se prohíbe una limpieza de directorio de salida que borre index.html, endpoints o assets antiguos. React/Vite son una elección local de la sección, no un requisito de migración del estudio.
+API de Cortos: router/BFF ligero bajo /api/shorts/, autorizado y validado; puede implementarse como router único para no multiplicar funciones en Vercel. Devuelve IDs de trabajos; no mantiene una petición abierta durante toda una generación.
+Google Cloud: Cloud Run Service coordina operaciones; Cloud Tasks despacha tareas acotadas; Cloud Run Jobs ejecuta render, extracción y procesamiento prolongado. Firestore mantiene estado transaccional y GCS conserva recursos. Las tareas y jobs tienen servicios/identidades propios de Cortos. [G9][G10][G11]
+19.2 Datos y medios
+Los archivos se suben directamente a GCS mediante sesiones autorizadas y reanudables. Vercel maneja metadatos, no MP3/PNG/MP4 completos. La documentación de Vercel fija 4,5 MB por payload de función; el protocolo GCS permite reanudar una transferencia. [G12][G13]
+Generadores escriben su resultado directamente en almacenamiento del servidor. El navegador recibe assetId, progreso y URL ligera. Compresión de referencias de entrada, cuando sea necesaria, respeta identidad y formato documentados; no se comprimen resultados aprobados destructivamente para pasarlos por un endpoint incorrecto.
+19.3 Autenticación y permisos
+Se propone Firebase Authentication con Google y lista de usuario autorizado para Cortos. Si hay sesión existente compatible y segura, se integra con ella mediante puente verificado. No se obliga a rediseñar el acceso antiguo; una debilidad detectada allí se documenta sin abrir las rutas nuevas.
+Backend verifica propietario/proyecto/revisión. Cloud Run valida identidad y no acepta solicitudes pagadas anónimas por conocer la URL. CORS no reemplaza autenticación. Vercel puede federar identidad con GCP por OIDC; se prefiere no añadir claves de servicio duraderas. Las credenciales actuales de Animes no se rotan ni sustituyen automáticamente. [G14]
+19.4 Servicios internos
+Director: propuestas/guion/biblias/plan sonoro estructurados. Producción: adaptadores Gemini/Veo/TTS/Lyria. Media: decodificación, métricas, thumbnails, frames y transitorios. Timeline: anclas, estados, recortes y muestras. Render: compilación FFmpeg y export. Revisión: incidencias, previews y aprobaciones. Ledger de producción: reservas, consumo estimado y permisos.
+Las llamadas de análisis y generación usan esquemas tipados compartidos; se valida su salida antes de persistirla como candidata. Una función llamada «Director» no es evidencia de revisión si nunca examinó el recurso.
+19.5 Render seguro y reproducción
+El cliente envía manifiesto JSON, nunca shell. El servidor compila una lista permitida de operaciones a argumentos FFmpeg sin interpolar texto libre del usuario. Se rechazan traversal, esquemas URL arbitrarios, hosts de metadatos y rutas fuera del proyecto.
+Los workers de medios tienen límites de CPU/memoria/duración/bytes y librerías fijadas. Un archivo con MIME engañoso o duración desproporcionada falla antes de consumir recursos masivos. Credenciales no viajan dentro de manifiestos de render. Los reproductores y descargas solo usan assets autorizados.
+20. Trabajos, reintentos, pausa y cancelación
+20.1 Trabajos persistentes
+Estados: queued, running, waiting_provider, validating, awaiting_review, succeeded, failed, cancel_requested, cancelled y submitted_unknown. El resultado y el error son visibles en español con detalle técnico desplegable.
+Cada operación lleva clave de idempotencia, proyecto, versión de entrada, permiso presupuestario y estado persistido. Una entrega repetida de la cola no debe iniciar otra generación. Si el proveedor recibió una petición pero no devolvió ID y no ofrece idempotencia/consulta suficiente, se marca submitted_unknown; no se promete «exactamente una llamada» ni se repite a ciegas con riesgo de doble cobro.
+Reintentos de transporte: máximo propuesto de tres intentos totales, espera exponencial y respeto a Retry-After. Rechazos de contenido, referencias inválidas, modelo inexistente y falta de permisos no se reintentan como congestión.
+Regeneraciones creativas tras una revisión fallida requieren permiso presupuestario propio. La configuración inicial no permite un bucle creativo infinito: una candidata por solicitud, revisión y decisión explícita de continuar.
+20.2 Cancelación y recarga
+Pausar detiene nuevas generaciones y conserva lo terminado. Cancelar lote invalida tareas pendientes y solicita detener lo que pueda cancelarse. Continuar retoma únicamente lo pendiente autorizado, sin rehacer recursos aprobados.
+Se conserva la recarga como freno de emergencia: al iniciar una nueva sesión de página, se invalida el lote de la instancia previa del mismo proyecto/dispositivo. No se reanuda automáticamente. Se propone un latido de control cada 10 segundos con permiso de despacho que caduca tras 30 segundos sin renovación.
+El navegador no puede distinguir siempre una recarga voluntaria de un reinicio del sistema; ambos detienen nuevos despachos por seguridad. Las tareas vuelven a consultar cancelación y permiso antes de llamar al proveedor. Una llamada ya aceptada por Google puede terminar y facturarse; la aplicación lo informa y conserva el resultado sin incorporarlo automáticamente como aprobado.
+No se depende exclusivamente de un evento de cierre del navegador. El control vive en el servidor. Una vez vuelve la conexión, el usuario ve qué terminó, qué se detuvo y qué requiere decisión. El plazo de cancelación de una operación ya iniciada depende de lo que permita su proveedor.
+Límites de pausa, recarga y sesiones
+El permiso de despacho es específico de sección, proyecto, lote y dispositivo; renovar el lease de Cortos no reanuda Animes. Un nuevo inicio invalida el lease previo propio. No se promete que el navegador informe instantáneamente cada cierre: el lease limita nuevos despachos después del plazo configurado.
+Cambiar a segundo plano en iPhone puede suspender latidos; por seguridad se detienen nuevos despachos al expirar el permiso, conservando resultados. La UI explica «Pausado por pérdida de conexión/sesión» y permite continuar. No hay recarga automática de la página como mecanismo de actualización.
+Los renders ya autorizados y enviados pueden terminar en servidor aunque se cierre el reproductor; no generan nuevas llamadas a proveedores. «Cancelar render» es una acción separada y expresa. Un lease de generación no sirve para borrar o abandonar resultados pagados.
+Los handlers transaccionales solo reservan/publican trabajo; no llaman a un proveedor dentro de una transacción que pueda reejecutarse. El patrón outbox permite recuperar despachos de estado confirmado sin duplicar operaciones conocidas. [G9]
+21. Modelo de datos, anclas y contratos versionados
+21.1 Entidades mínimas
+Todos los objetos incluyen ID estable, proyecto/propietario, versión de esquema y fechas. Las entidades son ShortProject, Idea, BibleRevision, Character, Costume, Location, Prop, Beat, Shot, Utterance, VoiceProfile, AssetRevision, ActionEvent, MusicRequest, SoundRequest, SoundCue, SubtitleCue, TimelineRevision, Preview, Correction, Job, Approval y BudgetAuthorization.
+ShortProject: projectKind=anime_short, género/subgéneros, concepto opcional, idea elegida, duración 300, formato, FPS, idiomas, configuración SHORTS_*, etapa y revisiones activas.
+Shot: función, beat, reparto visible/presente fuera de cuadro, lugar, props, estados antes/después, referencias exactas, tratamiento, recurso aprobado, entrada/salida del clip, velocidad y su intervalo de timeline. Las versiones candidatas no son fuentes del render final hasta aprobarlas.
+Utterance: tipo, speakerId, texto de revisión español, japonés pronunciado, lectura de nombres, actuación, muestra de voz, asset de audio y segmento dentro de ese asset. No confundir voz narradora con pensamiento del personaje.
+AssetRevision: fuente, ruta GCS, checksum, modelo, parámetros, prompt, dependencias, duración real, resolución, FPS/timebase, sample rate, canales, priming observado, métricas y estado editorial. veo_raw solo se usa para inspección interna; reproducción y montaje requieren veo_silent_validated.
+ActionEvent: descripción, tipo, shotId, videoAssetRevision, ocurrencia, sourcePts/timebase, frame resuelto, evidencia revisada, cobertura, confianza estimada y estado. Conservar también el mapa fuente→salida usado para resolverlo.
+SoundRequest describe el archivo encargado. SoundCue describe cada uso: asset, evento/intervalo, sourceSyncSample, trimIn/Out, offsetSamples, ganancia, panorama, fundidos, cola, repetición autorizada, origen de corrección, bloqueo manual y dependencias.
+TimelineRevision: manifiesto inmutable con intervalos, orden de pistas, tiempos resueltos, parámetros de mezcla, assets aprobados, globalGain y versión del compilador. Preview guarda ese hash y el intervalo visto. Approval vincula entidad, versión, preview/evidencia y aprobador; no es solo un booleano mutable.
+21.2 Cue de ejemplo, independiente de cualquier historia
+{
+  "schemaVersion": 2,
+  "cueId": "cue_demo_01",
+  "projectId": "short_demo",
+  "soundRequestId": "sfx_demo_01",
+  "audioAssetRevisionId": "aud_rev_03",
+  "timelineRevisionId": "tl_rev_08",
+  "anchor": {
+    "type": "action_event",
+    "eventId": "evt_demo_01",
+    "resolvedTimelineFrame": 2460,
+    "resolvedTimelineSample": 4920000
+  },
+  "audioSampleRate": 48000,
+  "sourceSyncSample": 9600,
+  "trimInSample": 0,
+  "offsetSamples": 0,
+  "resolvedStartSample": 4910400,
+  "gainDb": -8,
+  "loopAllowed": false,
+  "correctionSource": "manual",
+  "manualLock": true,
+  "approvalState": "approved"
+}
+El contacto ocurre en 102,500 s; el archivo empieza en 102,300 s. El ejemplo muestra campos principales; la implementación añade claves de dependencias, timebase y validaciones. El ataque debe estar entre trimIn y trimOut y no fuera de la duración decodificada.
+21.3 Esquemas y concurrencia
+Esquemas compartidos rechazan IDs inexistentes, referencias de otro propietario, números NaN/Infinity, tiempos fuera de programa, rutas no autorizadas y versiones incompatibles. Los enteros de muestras/fotogramas se conservan sin pasar por cadenas redondeadas de la interfaz.
+Toda mutación incluye revisión esperada o If-Match; ante conflicto devuelve 409 y no pisa el trabajo. Una corrección y su invalidación de previews se confirman atómicamente. Las operaciones externas se despachan después de confirmar estado, nunca dentro de una transacción reintentable.
+21.4 Invalidación mínima
+Cambio de subtítulo: revisar texto/legibilidad y regenerar render/subs. Cambio de voz o pronunciación: audio, tiempos, boca y cues dependientes. Cambio visual sin mover la acción: revisar identidad y evento; no borrar todo el sonido. Cambio de velocidad/recorte: recomputar mapa y revalidar anclas. Cambio de ganancia SFX: solo mezcla/previews/renders afectados.
+La IU presenta las dependencias antes de aplicar cambios importantes. Un recurso afectado queda stale, pero su versión anterior y sus archivos siguen disponibles. Reconstruir una dependencia no activa nuevas llamadas pagadas sin autorización.
+22. API, organización del repositorio y estados de operación
+22.1 API exclusiva de Cortos
+Prefijo propuesto: /api/shorts. Ningún endpoint nuevo ocupa el nombre o cambia el contrato de /api/audio, /api/assemble, /api/image u otras rutas del estudio actual.
+Proyectos e ideas: GET/POST /projects; GET/PATCH /projects/:id; POST /projects/:id/ideas:generate; POST /projects/:id/ideas/:ideaId:select; POST .../:ideaId:revise.
+Desarrollo y recursos: POST /projects/:id/develop; POST /projects/:id/revisions/:rev:approve; POST /projects/:id/assets:generate; POST /projects/:id/assets/:asset:revise; GET /projects/:id/assets/:asset/url.
+Sonido: POST /projects/:id/sound-requests/:request/upload-session; POST .../:request/complete; POST /projects/:id/cues/:cue:analyze; POST .../:cue:correct; PATCH /projects/:id/cues/:cue; POST .../:cue:approve.
+Precisión y previews: GET /projects/:id/shots/:shot/frames; GET /projects/:id/assets/:asset/waveform; POST /projects/:id/previews; GET /projects/:id/previews/:preview; POST /projects/:id/corrections/:correction:undo.
+Montaje: POST /projects/:id/timeline:compile; POST /projects/:id/renders; GET /projects/:id/renders/:render; POST /projects/:id/exports; GET /health. El health no genera recursos para demostrar conexión.
+Trabajo: GET /jobs/:job; POST /jobs/:job:pause, :cancel, :resume; POST /projects/:id/lease; gestión autorizada de presupuesto por proyecto/lote. Cada acción pagada requiere Idempotency-Key, revisión y autorización vigente; devuelve 202/jobId cuando sea asíncrona.
+La carga final se verifica en GCS por tamaño, checksum y pertenencia. El backend no cree el mensaje «terminó» del cliente sin comprobar el objeto. URLs firmadas son temporales y no se devuelven recursos originales en cuarentena.
+22.2 Errores y mensajes
+400 entrada inválida; 401 sin sesión; 403 permisos; 409 revisión desactualizada; 413 tamaño; 422 plan/contenido incompatible; 429 capacidad/límite; 503 servicio temporal. Los errores de presupuesto, sincronía incierta y audio requerido por un modelo tienen códigos de negocio explícitos.
+Ejemplos de mensajes visibles: «No se identificó con seguridad el contacto. Revisa el fragmento o marca el fotograma»; «Este modelo/configuración no admite video sin audio»; «La toma cambió después de aprobar este sonido»; «Falta autorización para generar». Una falla no devuelve una tarjeta vacía con estado completado.
+22.3 Carpetas propuestas, conservando las existentes
+shorts/web/: UI modular y reproductores. shorts/contracts/: esquemas y tipos. shorts/director/: prompts y validaciones. shorts/timeline/: tiempos/anclas. shorts/production/: orquestación y adaptadores. worker/montage-shorts/: todo el montador, Dockerfile, dependencias y pruebas de medios.
+api/shorts/: router o BFF compatible con el sistema actual. infra/shorts/: despliegue, IAM, configuración y verificaciones. tests/shorts/: unidad, integración y regresión. docs/shorts/: especificación, decisiones, matriz de avance, guía móvil. setup-shorts.sh: instalador completo; c: lanzador corto ejecutable.
+Se preservan index.html, api/ legado, worker/montage/, setup.sh y i existentes. Un cambio compartido se justifica y prueba. Versiones de librerías y contenedores se fijan con lockfiles/digests o versiones reproducibles; no se usa latest como contrato de producción.
+23. Montador: auditoría, corrección o reconstrucción completa
+23.1 El montador forma parte del producto
+El alcance incluye revisar y corregir todo lo necesario del montaje; también reconstruirlo si el actual no puede cumplir estos contratos. No se limita a agregar botones o a enviar una lista de ajustes para que el usuario haga la edición externamente.
+El implementador revisará el generador de scripts actual, api/assemble, el Dockerfile/runner del worker, manejo de errores, descargas, duración, retiming, selección de audio, subtítulos y publicación de resultados. Guardará un informe de compatibilidad basado en el código real.
+23.2 Decisión de implementación
+Opción preferida: montar Cortos con un compilador/worker nuevo y aislado, reutilizando utilidades verificadas. El Job de Animes sigue disponible. Si una mejora compartida es más segura, se puede extraer o reconstruir ese componente, pero debe aceptar el contrato anterior y pasar sus pruebas antes de sustituirlo.
+No se conserva una arquitectura defectuosa únicamente para evitar tocar un archivo; tampoco se rehace toda la aplicación sin necesidad. Se registra qué se reutiliza, qué se corrige, qué se sustituye y cómo se revierte. La aceptación exige que Animes siga produciendo sus resultados anteriores.
+23.3 Funciones que el montador debe ejecutar
+Normalizar medios y PTS sin destruir originales; generar fotogramas indexados y ondas; componer ilustraciones/cámara/capas/videos; aplicar recortes y velocidades autorizadas; resolver eventos y cues; mezclar pistas independientes con colas y ambientes continuos; producir previews locales y globales; quemar/exportar subtítulos; codificar 300 segundos; inspeccionar salida y publicar URLs autorizadas.
+No usar audio de Veo, loops de video de relleno, shell creado por el modelo ni duraciones inferidas solo del texto. Un filtro no compatible o recurso corrupto debe generar un error localizado y preservar el último render válido.
+23.4 Contrato de entrada/salida
+Entrada: manifiesto validado, renderId, revisión de timeline, rango global solicitado, perfil preview/final y referencias de recursos inmutables. Salida: archivo, checksum, frame/sample counts, duración decodificada, métricas, logs sanitizados e incidencias.
+Cada ejecución trabaja en su propia carpeta; no comparte nombres temporales con otro render. Al publicar, verifica integridad antes de apuntar la app al resultado. Un fallo no sobrescribe final con un archivo incompleto ni borra el render aprobado anterior.
+23.5 Pruebas que sí demuestran montaje
+Fixtures sintéticos con contacto visual y pulso conocido; MP3 con preparación interna; archivo con dos transitorios; fuente de FPS variable; clip retimado; cue negativo; ambiente que cruza cuatro cortes; cola que sale de una escena; texto acentuado; escena en silencio; mezcla con ducking; preview corta contra extracción equivalente del render final.
+Comparar índices visuales y muestras tras decodificación, no solo comprobar código de salida cero. Inspeccionar también reproducibilidad del plan y compatibilidad iPhone. Usar muestras sintéticas evita pagar a generadores en las pruebas de ingeniería; los builds y renders de nube pueden tener costo y requieren autorización de infraestructura.
+23.6 Todo el código queda en GitHub
+Se entregan fuentes del montador, compilador de timeline, procesamiento de sonido, extractor de frames, runner, Dockerfile, dependencias fijadas, licencias aplicables, scripts de build/deploy/health/rollback, fixtures y configuración de ejemplo sin secretos. No puede depender de un script olvidado en una sesión antigua de Cloud Shell ni de un archivo que solo exista en el contenedor de quien programó.
+24. Instalador completo de un comando desde iPhone
+24.1 Contrato del usuario
+El usuario solo tiene celular y no puede pegar bloques de texto en Cloud Shell. La instalación y las actualizaciones deben poder completarse sin computadora, sin editar archivos, sin escribir JSON ni ejecutar una secuencia extensa de comandos. Cloud Shell es el lugar de instalación; Cloud Run ejecuta los servicios/jobs una vez desplegados.
+Comando principal propuesto, desde la raíz abierta por el botón del repositorio:
+./c
+Respaldo corto si el entorno no conserva el permiso ejecutable: bash c. c será un archivo real versionado con modo ejecutable y llamará al instalador; no será un alias que haya que crear antes. Se elige un acceso nuevo para conservar i y su función actual. Estos comandos son requisitos de la futura implementación, no instaladores ya publicados por este documento.
+24.2 Entrada sin escribir URL ni clonar a mano
+README y la sección de configuración incluirán un botón «Abrir instalador de Cortos en Cloud Shell» con repositorio y rama explícitos. Cloud Shell documenta enlaces que clonan un repositorio y permiten fijar la rama. No se asume que el entorno nuevo ya tenga credenciales; los repositorios externos pueden abrirse en un entorno temporal con limitaciones de credenciales. [G20]
+El botón no ejecuta scripts sin consentimiento. Se abre la raíz correcta y se presenta el comando corto. Si hace falta autenticar Google o elegir proyecto, se guía mediante navegador y opciones numeradas. No se promete eludir pantallas de autorización o facturación del proveedor.
+24.3 Menú y tareas incluidas
+Con ./c se muestra un menú breve: 1 Instalar/actualizar Cortos; 2 Diagnóstico; 3 Restaurar versión anterior; 4 Salir. Se detecta instalación previa y se propone la acción pertinente. El usuario selecciona números y confirma recursos/costos; no escribe correos, IDs largos o nombres de contenedores.
+El instalador detecta cuenta/proyecto activos, región compatible y recursos existentes; pide confirmar antes de usar otro proyecto. Comprueba herramientas y permisos, APIs, facturación y espacio. Prepara los recursos aislados de Cortos, construye imágenes desde el repositorio, sube a Artifact Registry, crea/actualiza workers/Jobs y configuración, y ejecuta verificación funcional autorizada.
+Incluye todo lo necesario del montador: FFmpeg/FFprobe, librerías de audio e imagen, fuentes para subtítulos obtenidas de distribución autorizada con versión/licencia, scripts de procesamiento, compilador, fixtures y health checks. No pide al usuario instalar uno por uno estos componentes. Los binarios/dependencias se obtienen de fuentes verificadas durante el build; el código de aplicación no vive únicamente en un instalador remoto opaco.
+24.4 Idempotencia y actualización segura
+El instalador es idempotente: repetirlo con la misma versión no duplica buckets, servicios, claves ni Jobs. Mantiene un manifiesto de instalación con recursos, versión, commit, imágenes y estado anterior. Reutiliza únicamente recursos cuya pertenencia y compatibilidad hayan sido comprobadas.
+Actualiza desde una revisión/versión elegida y visible. No ejecuta git reset --hard, no borra cambios locales ni cambia a otra rama silenciosamente. Puede obtener una copia limpia de la versión en un directorio de instalación aislado; deja intacto el checkout del usuario. Si la sesión anterior desapareció, el botón vuelve a preparar una copia y el manifiesto en nube permite reconocer lo ya instalado.
+Build y pruebas de la candidata ocurren antes de activar el nuevo worker. Si fallan, se conserva la versión que funcionaba. Se guarda el digest/configuración anterior y se permite rollback de Cortos sin revertir datos aprobados ni tocar Animes. Para Jobs, se restaura explícitamente configuración/imagen o el puntero al Job anterior: no se presupone reparto de tráfico como en un Service.
+24.5 Vercel y credenciales
+Las variables nuevas llevan SHORTS_*. No se sobrescriben las variables de Animes, no se rotan sus claves ni se crean nuevas cuentas de servicio innecesarias. Credenciales, project ID concreto, correos, buckets privados y tokens no se hardcodean en el repositorio.
+La vinculación con Vercel se automatiza cuando existe autorización disponible, limitada al proyecto y entorno elegidos. De faltar autorización, se ofrece un paso de navegador o un archivo de configuración importable que no requiera pegar secretos en Cloud Shell; se indica exactamente qué falta. No se declara «listo» porque se haya construido el contenedor si Vercel todavía no puede comunicarse con él.
+No pedir tokens ni JSON secretos en el chat ni publicarlos en logs. Se prefiere identidad federada o credenciales administradas; se conserva la ruta existente de Animes. Los secretos temporales y sesiones de carga no van en documentación ni archivos exportados.
+24.6 Resultado visible y recuperación
+Al terminar: versión instalada, montador activo, conectividad de Cortos, secciones disponibles y pruebas realizadas. Acceso a modelos: «verificado con prueba autorizada» o «pendiente», nunca inferido solo de tener la API habilitada. Las pruebas de generación tienen autorización separada del build.
+Errores en español, código resumido y ubicación del diagnóstico. El mismo ./c debe poder continuar una instalación interrumpida o mostrar rollback por menú. Desinstalar/borrar recursos no es una acción implícita; cualquier eliminación exige confirmación específica y protección de originales.
+24.7 Archivos exigidos en el repositorio
+c, setup-shorts.sh, infra/shorts/install.*, scripts de preflight, actualización, health y rollback, plantillas parametrizadas de servicios/Jobs, build del montador, dependencias fijadas, .env.shorts.example sin valores privados, guía móvil y prueba automática del instalador. El empaquetado puede variar si conserva este contrato de un comando y no rompe el instalador anterior.
+25. Costos, seguridad operativa y diagnóstico
+COST-001. Dentro de Cortos, antes de un lote se muestra qué se generará, qué se reutiliza, número de llamadas previsto y estimación según una tabla de precios con fecha. No se inventa un costo fijo por corto ni se supone acceso a créditos gratuitos.
+COST-002. Se exige un límite de autorización elegido por el usuario antes de producir. Cada tarea reserva un costo estimado conservador mediante transacción; se libera o concilia al terminar. Las llamadas con estado desconocido mantienen reserva hasta aclararse.
+COST-003. Un límite interno detiene nuevos despachos, no cancela retroactivamente cobros ya aceptados ni garantiza que la factura total de nube sea idéntica al contador. Se separan generación, almacenamiento, render y transferencia. Las alertas de facturación no sustituyen estos controles; cualquier función adicional de tope de Cloud Billing se verifica para los servicios concretos. [G15]
+COST-004. Concurrencia inicial propuesta: un video y una petición por motor de audio por proyecto; hasta dos imágenes independientes. Las cadenas con dependencia visual se ejecutan en orden. Se ajusta al acceso real, sin asumir cuotas por leer documentación pública.
+No se incluye analítica de redes en la sección nueva. El panel técnico solo muestra salud, trabajos, costos estimados/autorizados, almacenamiento y errores necesarios para operar. Logs sin credenciales, URLs firmadas ni texto privado innecesario. No se publican buckets completos.
+Los contenidos externos se tratan como datos, no como instrucciones al sistema. Se verifica que el usuario tenga permiso para utilizar los archivos que aporta. La aplicación no ofrece eliminar marcas de procedencia ni desactivar protecciones del proveedor.
+Costos y autorizaciones separados
+Desarrollo y CI usan mocks/fixtures sin llamadas pagadas; eso no prueba calidad real de los modelos. Se separa autorización de instalar infraestructura, analizar material, generar recursos y publicar en producción. La suscripción de ElevenLabs es externa: no se conecta al presupuesto de GCP ni se asume acceso a su API.
+Lyria, Gemini TTS y análisis también consumen recursos: las previews reutilizan los assets y no regeneran por escuchar. Video se presupone en modalidad sin audio solo después de verificar compatibilidad y tarifa. Jobs con resultado desconocido conservan su reserva. Nunca se estima un costo exacto del corto sin contar tomas y parámetros reales.
+26. Despliegue, entornos y compatibilidad operativa
+26.1 GitHub y Vercel existentes
+Trabajo en una rama del repositorio exacto; PR con cambios aditivos y reporte. La preview sirve Animes y Cortos. Al integrar en la rama de producción, se respeta la conexión Vercel existente; no se crea otro sitio para reemplazarlo ni se cambia el dominio por decisión del implementador.
+La rama/URL de preview debe usar configuración y datos aislados, o modo de fixture explícito. No escribir en proyectos reales por abrir la preview. Un feature flag permite ocultar/desactivar Cortos manteniendo Animes. No hay recarga forzada de una página activa al desplegar.
+26.2 Configuración de Cortos
+Prefijos propuestos: SHORTS_ENABLED, SHORTS_GCP_PROJECT_ID, SHORTS_REGION, SHORTS_GCS_BUCKET, SHORTS_GCS_PREFIX, SHORTS_FIRESTORE_DATABASE, SHORTS_PRODUCTION_URL, SHORTS_RENDER_JOB, SHORTS_TEXT_MODEL, SHORTS_ANALYSIS_MODEL, SHORTS_IMAGE_MODEL, SHORTS_VEO_MODEL, SHORTS_TTS_MODEL, SHORTS_MUSIC_MODEL, regiones por motor y límites. Generación sin audio es política obligatoria del servidor, no un interruptor público para activarla.
+Los valores concretos se detectan/configuran, nunca se toman de otros proyectos. Una región única no se impone a servicios/modelos que requieren ubicaciones distintas. El instalador valida compatibilidad y permite elección numerada sin que el usuario escriba endpoints.
+26.3 Salud y rollback
+Health distingue frontend/API, storage, base de datos, cola, worker, versiones de esquema y acceso a proveedores. No expone secretos ni comprueba salud generando videos a escondidas.
+Migraciones nuevas son compatibles hacia atrás o cuentan con procedimiento de rollback probado sobre copias. Revertir código no borra archivos ni aprobaciones. Un worker incompatible con el schema falla con mensaje explícito en vez de producir un montaje parcialmente incorrecto.
+26.4 Entrega operativa
+Se entregan instrucciones móviles para abrir las secciones, crear tres ideas, subir un MP3, corregirlo manualmente, aprobar y exportar. La instalación se resume en el botón Cloud Shell, el comando corto y selecciones de autorización. Logs detallados y recuperación quedan accesibles sin computadora.
+27. Matriz de 100 pruebas de aceptación
+La siguiente matriz define 100 pruebas de aceptación. No son resultados ya obtenidos. Todas deben quedar implementadas y reportadas; una prueba con modelo real requiere autorización y se marca pendiente hasta ejecutarse. Las comprobaciones creativas se limitan a las muestras examinadas, sin prometer consistencia perfecta en cualquier futura generación.
+Cada ejecución guarda caso, commit, ambiente, entrada, resultado esperado/observado y evidencia (log, manifiesto, preview o medición). Una búsqueda de cadenas en el código o un botón visible no demuestra funcionamiento.
+Integración y no regresión
+A001 · Abrir ambas secciones. La raíz conserva Animes y /cortos abre la sección nueva; regreso sin perder preferencias.
+A002 · Proyectos antiguos. Abrir y exportar una copia representativa anterior sin migrarla ni exigir nuevos campos.
+A003 · Contratos previos. Comparar payloads y configuración de endpoints de Animes antes/después.
+A004 · Datos aislados. Crear Cortos no añade sus proyectos, cachés o medios al listado antiguo.
+A005 · Fallo aislado. Desactivar Cortos o fallar su API no impide usar Animes.
+A006 · Pruebas heredadas. Se conservan pruebas antiguas; prohibiciones del flujo legado no bloquean la sección nueva.
+A007 · Build y rutas. Build no borra assets/rutas antiguas y Vercel sirve ambos módulos.
+A008 · Configuración por sección. Cambiar japonés/modelo/video sin audio en Cortos no altera Animes.
+A009 · Versiones previas. Regenerar crea candidata y conserva el archivo/aprobación anterior.
+A010 · Importación explícita. Referencias de otro proyecto se rechazan salvo importación autorizada con procedencia.
+Ideas, guion y biblias
+A011 · Sin concepto. Género y subgéneros producen exactamente tres ideas distintas con el campo concepto vacío.
+A012 · Con concepto. Las tres propuestas respetan condiciones explícitas y no añaden elementos contradictorios.
+A013 · Diversidad real. Revisión de comedia, romance y psicológico sin una plantilla universal de poder/recompensa.
+A014 · Elección exclusiva. Desarrollar una idea no incorpora personajes ni acontecimientos de las otras.
+A015 · Ajuste localizado. Corregir una propuesta mantiene intactas las partes no solicitadas.
+A016 · Guion audiovisual. Se distinguen acciones, pensamientos, narración, diálogo, silencio y actuación.
+A017 · Idiomas vinculados. Japonés pronunciado y subtítulo español conservan intención y orden de revelación.
+A018 · Biblia de identidad. Personajes tienen IDs, referencias, vestuario, lectura y voz asignada.
+A019 · Biblia espacial. Lugar y objetos tienen distribución, estados y referencias para los ángulos necesarios.
+A020 · Duración planeada. El planner llega a 300 s con audio real y pausas autorizadas, sin relleno arbitrario.
+Continuidad e imagen
+A021 · Identidad. Aprobar secuencia de prueba con un mismo personaje en varios encuadres/estados.
+A022 · Geografía. Una puerta, mesa y ventanas conservan ubicación al cambiar de ángulo.
+A023 · Plano detalle. Insert intermedio no elimina la memoria de la habitación en el plano general siguiente.
+A024 · Participantes. Reunión mantiene personas/asientos relevantes y distingue fuera de cuadro de ausente.
+A025 · Vestuario. Cambio justificado de ropa conserva identidad y se propaga solo a los planos pertinentes.
+A026 · Estado acumulado. Objeto recogido y puerta abierta permanecen así hasta una acción que lo cambie.
+A027 · Sin cuota. Aprobar tomas de cuatro tratamientos sin porcentaje impuesto ni zoom obligatorio.
+A028 · Corte frente a interpolación. Contraplano normal no se convierte en una transformación continua.
+A029 · Referencias faltantes. No se envía generación sin identidad al fallar la carga de una referencia requerida.
+A030 · Revisión honesta. Informe dice cobertura observada; puntuación automática no se presenta como garantía.
+Veo, voces y subtítulos
+A031 · Payload sin audio. Capturar petición real/mock: generateAudio=false presente y no reemplazable por frontend.
+A032 · Sin fallback sonoro. Modelo/configuración incompatible se bloquea; no se omite campo ni se usa true.
+A033 · Salida inesperada. Veo con audio inesperado se aísla; todo recurso reproducible/renderizado carece de esa pista.
+A034 · Tarifa correcta. Estimador usa modalidad verificada de video sin audio y registra fecha; sin ahorro ficticio.
+A035 · Japonés y acotaciones. Audio dice el texto japonés aprobado, no instrucciones ni palabras en otro idioma.
+A036 · Continuidad vocal. Escuchar al mismo personaje en tres estados emocionales y corregir deriva detectada.
+A037 · Pensamientos. La voz mental corresponde al personaje y no se mezcla con narrador/sistema.
+A038 · Boca visible. Toma hablando fuera de sincronía no se aprueba sin corregir o decidir cobertura alternativa.
+A039 · Subtítulos. Tiempos siguen unidades del audio real; legibles en iPhone y dentro de los 300 s.
+A040 · Cambiar voz. Audio nuevo invalida tiempos/boca dependientes, no todo el material visual sin motivo.
+Música y archivos externos
+A041 · Música continua. La misma pieza aprobada atraviesa al menos tres cortes sin reiniciarse.
+A042 · Lyria instrumental. Pista con habla/letra inesperada requiere revisión; no se promete continuación idéntica entre llamadas.
+A043 · Solicitudes útiles. Tarjeta muestra prompt, duración, preparación/cola y botón vinculado al efecto correcto.
+A044 · MP3 obligatorio. Carga desde Archivos del iPhone; formato se decodifica y conserva el original.
+A045 · Transferencia reanudable. Interrumpir carga permite continuar sin duplicar asset o cambiar solicitud.
+A046 · Duración incorrecta. Mostrar duración pedida/recibida; no estirar silenciosamente golpe o música.
+A047 · Punto interno. Detectar/seleccionar ataque en PCM después de decodificar MP3, no por inicio de archivo.
+A048 · Ambiente entre cortes. Un archivo continuo cruza cuatro tomas con el mismo cursor y perspectiva prevista.
+A049 · Cola. Resonancia autorizada cruza el corte sin truncarse ni borrarse por un fade genérico.
+A050 · Reemplazo. Archivo nuevo conserva solicitud, pero recalcula ancla sonora y revalida usos aprobados.
+Sincronización y corrección manual
+A051 · Colocación automática. Subir efecto basta para proponer su colocación; no exige arrastrarlo a una timeline.
+A052 · Fixture exacto. Contacto en 102,500 s y ataque interno 0,200 s: inicio 102,300 s.
+A053 · Corrección IA localizada. “Suena después” reanaliza solo el evento/efecto; no regenera Veo/TTS.
+A054 · Múltiples contactos. Elegir el segundo golpe no alinea por error el primero.
+A055 · Manual sin IA. Con servicio de análisis caído, abrir editor, fijar frame y ataque y producir preview.
+A056 · Precisión visual móvil. Botones frame anterior/siguiente muestran frames indexados reales en Safari.
+A057 · Ajuste por fotograma. Adelantar/retrasar un frame mueve el cue exactamente 2.000 muestras a 24 FPS.
+A058 · Comparar y deshacer. Alternar anterior/candidata y recuperar ajuste previo sin perder archivos.
+A059 · Aprobación manual. “Aprobar y fijar” impide que nuevo análisis sobrescriba ese cue automáticamente.
+A060 · Evento inexistente. No inventar ancla: incidencia visual o decisión editorial explícita.
+Previews, tiempos y mezcla
+A061 · Preview local. Renderizar fragmento del efecto sin exigir render de cinco minutos de video.
+A062 · Escena y corto. Niveles escena/corto muestran voz, música, ambientes y efectos disponibles.
+A063 · Reproducción unida. Revisión usa archivo audiovisual muxado, no elementos independientes arrancados en JS.
+A064 · Paridad con final. Extraer intervalo final y comparar contacto/ataque con preview del mismo manifiesto.
+A065 · Contexto de filtros. Normalización, sidechain y colas no cambian por renderizar una ventana corta.
+A066 · Caché válida. Reproducir no recalcula; modificar dependencia marca preview vieja como desactualizada.
+A067 · Toma desplazada. Mover toma dos segundos mueve cue 96.000 muestras sin regenerar el efecto.
+A068 · Retime o recorte. Recalcular mapa y pedir revalidar sincronía tras cambio relevante del video.
+A069 · Duración y codec. 7.200 frames y 14.400.000 muestras de programa; verificar salida decodificada y padding.
+A070 · Render determinista. Dos renders conservan tiempos/mezcla del manifiesto, aunque bytes/metadatos difieran.
+Persistencia, seguridad y gasto
+A071 · Restauración desde nube. Borrar caché y abrir en otro dispositivo recupera proyecto y aprobaciones.
+A072 · Recarga y pausa. Recargar frena nuevos despachos según lease; conserva recursos ya completados.
+A073 · Reanudación. Continuar omite tareas válidas terminadas y recursos aprobados.
+A074 · Idempotencia. Entrega duplicada de trabajo conocido no inicia dos generaciones.
+A075 · Estado desconocido. Timeout tras envío sin operationId no autoriza reenvío ciego con doble cobro.
+A076 · Concurrencia editorial. Dos sesiones reciben 409 al intentar sobrescribir una revisión ya cambiada.
+A077 · Presupuesto. Sin saldo autorizado se detienen nuevos despachos; no se afirman cancelados cobros en curso.
+A078 · Privacidad. Usuario no autorizado no genera ni lee objetos; URLs temporales no aparecen en logs.
+A079 · Archivos y shell. Rechazar MIME engañoso, traversal y manifiesto con shell arbitrario.
+A080 · Ausencias e incertidumbre. Final bloquea recursos obligatorios faltantes/stale salvo omisión autorizada.
+Montador y despliegue
+A081 · Código completo. Checkout limpio incluye montador, Dockerfile, dependencias, compiler, runner y pruebas.
+A082 · Reconstrucción aislada. Build del nuevo montador no reemplaza automáticamente el Job de Animes.
+A083 · Error de render. Fallo conserva último render válido y muestra razón localizada.
+A084 · Salida y paquetes. MP4 con/sin subtítulos, SRT/ASS y stems pertenecen a la misma revisión.
+A085 · Compatibilidad anterior. Modificación compartida pasa fixture de montaje de Animes con contrato previo.
+A086 · Preview Vercel. PR sirve ambas secciones y no escribe por defecto en recursos de producción.
+A087 · Comando corto. Desde botón Cloud Shell, ./c abre instalación sin pegar scripts ni crear alias.
+A088 · Idempotencia instalador. Segunda ejecución no duplica recursos/keys ni migra proyectos antiguos.
+A089 · Fallo de actualización. Build/health fallido mantiene montador anterior y rollback probado por menú.
+A090 · Sin cambios destructivos. Instalador conserva i/setup.sh, checkout con cambios y recursos ajenos.
+Verificación final y uso desde celular
+A091 · Instalación completa móvil. Probar cuenta/proyecto, autorizaciones y despliegue sin escribir JSON ni IDs largos.
+A092 · Autorización externa. Falta de permisos GCP/Vercel se informa; no se presenta configuración parcial como lista.
+A093 · Actualización reanudable. Sesión Cloud Shell perdida se recupera con botón y comando; reconoce recursos instalados.
+A094 · Sin generaciones ocultas. Instalador/health/CI no pagan llamadas de modelo sin autorización explícita.
+A095 · UI móvil. Recorrido a 390 px sin desplazamiento horizontal, controles táctiles y un reproductor activo.
+A096 · Trabajo sin recargas. Actualizaciones de estado no reinician página ni cambian posición de lectura.
+A097 · Corto de prueba dramático. Aprobar producción autorizada de 300 s con pensamiento, silencio y evento sincronizado.
+A098 · Otro género. Aprobar prueba contrastante de comedia o romance que no recicle el mismo arco.
+A099 · Informe verificable. Matriz distingue implementado, probado con fixtures, probado con API y pendiente real.
+A100 · Handoff. Entregar commit/PR, instalación móvil, limitaciones comprobadas y guía de corrección manual.
+28. Orden de implementación y definición de terminado
+28.1 Fases sin recortar alcance
+Fase 0: línea base. Auditar HEAD, ejecutar pruebas de Animes, registrar contratos, crear rama y matriz de requisitos. Verificar capacidades de proveedores en documentación oficial; no cambiar modelos a escondidas.
+Fase 1: integración segura. Dos secciones, rutas/build, datos aislados, autenticación, jobs, presupuestos, instalador y worker mínimo con fixtures. La sección antigua sigue utilizable.
+Fase 2: preproducción. Géneros/concepto, tres ideas, selección, guion dramatizado y biblias; japonés y español vinculados. Validar que los géneros produzcan construcciones diferentes.
+Fase 3: imagen, voz y montaje preliminar. Referencias aprobadas, estados, imágenes, TTS, subtítulos, pausas y planificación a 300 segundos. El diseño del audio y sus anclas ya existe, aunque falten archivos.
+Fase 4: movimiento. Veo sin audio, cámara 2D, capas/animación localizada, revisión visual, normalización y eventos del material real.
+Fase 5: sonido, previews y corrección. Lyria, solicitudes externas, upload MP3, ataques, colocación, mezcla, previews por efecto/escena/corto, ajuste manual y versiones bloqueadas.
+Fase 6: producción completa. Exportación, errores, recuperación, regresión, instalador completo, actualización/rollback e iPhone. Ejecutar pruebas de calidad con modelos únicamente tras autorización.
+28.2 Entregables de código
+Código integrado y versionado; componentes reales sin botones placebo; esquemas, API y workers; montador íntegro; instalador de un comando; mocks/fixtures y pruebas; guía móvil; .env de ejemplo sin secretos; matriz requisito→archivo→prueba→estado; historial de decisiones; reporte de compatibilidad de Animes.
+No basta un prototipo visual ni una lista de tareas futuras. Los módulos se pueden entregar por commits revisables, pero el sistema no se declara completo mientras falten funciones del alcance. No se inventan pruebas ejecutadas, commits, URLs o accesos. Lo que no pudo probarse se identifica con causa concreta y sin presentar un éxito ficticio.
+28.3 Producción y autorizaciones
+Una entrega de código no autoriza por sí sola gastar en una producción ni modificar infraestructura de pago. Se solicita la autorización faltante mínima. El código y las pruebas con fixtures avanzan mientras se espera acceso a proveedores; no se sustituye un servicio real por un mock oculto en producción.
+Antes de activar Cortos en producción: Animes pasa regresión; instalador y rollback funcionan; previews/manual/exportación pasan sincronía; se han verificado las rutas de generación autorizadas; los límites de gasto están configurados y no quedan secretos en GitHub.
+29. Decisiones cerradas, parámetros propuestos y preguntas pendientes
+29.1 Cerrado por el usuario
+Mismo repositorio y herramienta con otra sección; conservar Animes actual; cortos de cinco minutos; géneros/subgéneros y concepto opcional; tres ideas y elección; dramatización y emoción; biblias por historia; Gemini imágenes, Veo video SIN audio desde la petición, Gemini TTS japonés, Lyria Pro música; subtítulos españoles; efectos externos subidos por solicitud; montaje automático; previews antes de exportar; corrección manual cuando haga falta; todo el código del montador y dependencias en repositorio; instalación/actualización móvil de un comando corto.
+29.2 Propuestas de ingeniería, no preferencias inventadas
+16:9 inicial con 9:16 seleccionable; 24 FPS y 48 kHz; valores de mezcla/subtítulos; implementación modular de Cortos con TypeScript/React; Firestore solo para datos nuevos, GCS para medios; colas/Jobs y autenticación/federación; límites iniciales de concurrencia, carga y retiming; comando ./c con respaldo bash c. Son valores de partida explícitos y ajustables si no rompen los requisitos.
+29.3 Pendiente antes de consumir servicios reales
+Formato del primer corto; proyecto/regiones y recursos Google Cloud que el usuario autorice; acceso efectivo a cada modelo; permisos de GitHub/Vercel; presupuesto de infraestructura y generación. No se necesitan secretos en el chat. No se pregunta otra vez si la sección nueva será parte de Anime-AI-Studio: ya quedó decidido.
+29.4 Límites que no deben ocultarse
+Misma voz elegida no garantiza timbre idéntico en llamadas separadas. Referencias no garantizan continuidad absoluta. IA visual no identifica todos los impactos al fotograma. TTS no sustituye un sincronizador labial perfecto. Lyria no promete música idéntica entre llamadas. Video sin audio debe validarse para la combinación concreta. El editor manual y las aprobaciones existen precisamente para resolver excepciones sin fingir que no ocurren.
+Esta versión sustituye la v1 para construir Cortos, no las decisiones operativas de Animes. Los cambios posteriores del usuario se incorporan como nuevas revisiones sin perder trazabilidad.
+30. Fuentes, procedencia y notas de verificación
+Documentación pública consultada el 22 de septiembre de 2026. Las fuentes respaldan capacidades concretas; las decisiones de arquitectura, experiencia, tolerancias y aceptación son especificaciones de este proyecto, no promesas de los proveedores. Modelos en preview, SDKs y precios se vuelven a verificar al implementar.
+El alcance proviene de esta conversación y de su aclaración más reciente sobre el instalador completo. Los requisitos vigentes se limitan a Anime-AI-Studio y a lo acordado para esta sección.
+[G1] Google Cloud — Gemini 3.1 Pro. Identificador candidato y salida estructurada; no demuestra acceso en la cuenta.
+https:/​/​docs.cloud.google.com/​gemini-enterprise-agent-platform/​models/​gemini/​3-1-pro
+[G2] Google Cloud — Gemini 3.1 Flash Image. Generación/edición y formatos; revisar capacidades vigentes del modelo.
+https:/​/​docs.cloud.google.com/​gemini-enterprise-agent-platform/​models/​gemini/​3-1-flash-image
+[G3] Google Cloud — Veo 3.1. Modelos, duraciones y especificaciones; confirmar combinación de entradas y resolución.
+https:/​/​docs.cloud.google.com/​gemini-enterprise-agent-platform/​models/​veo/​3-1-generate
+[G4] Google Cloud — Gemini TTS. Síntesis dirigida, japonés y rutas de API. No acredita continuidad vocal perfecta.
+https:/​/​docs.cloud.google.com/​text-to-speech/​docs/​gemini-tts
+[G5] Google Cloud — Lyria 3. Lyria 3 Pro Preview, modo instrumental, salida MP3 y máximo de 184 segundos.
+https:/​/​docs.cloud.google.com/​gemini-enterprise-agent-platform/​models/​lyria/​lyria-3
+[G6] FFmpeg — Manual. Selección de streams, procesamiento y composición de salidas.
+https:/​/​ffmpeg.org/​ffmpeg.html
+[G7] Google Cloud — Word timestamps. Tiempos de reconocimiento de voz. No es traducción ni alineación forzada infalible.
+https:/​/​docs.cloud.google.com/​speech-to-text/​docs/​v1/​async-time-offsets
+[G8] FFmpeg — Filtros. Operaciones de composición, mezcla y temporización. La política editorial es propia del producto.
+https:/​/​ffmpeg.org/​ffmpeg-filters.html
+[G9] Firebase — Transacciones de Firestore. Actualizaciones atómicas y control de concurrencia de estado.
+https:/​/​firebase.google.com/​docs/​firestore/​manage-data/​transactions
+[G10] Google Cloud — Cloud Tasks HTTP. Despacho autenticado de tareas HTTP; la aplicación agrega idempotencia.
+https:/​/​docs.cloud.google.com/​tasks/​docs/​creating-http-target-tasks
+[G11] Google Cloud — Cloud Run Jobs. Creación de trabajos de contenedor para procesamiento.
+https:/​/​docs.cloud.google.com/​run/​docs/​create-jobs
+[G12] Vercel — Function limits. Límite de payload y restricciones de funciones; no usarlo como transporte de medios pesados.
+https:/​/​vercel.com/​docs/​functions/​limitations
+[G13] Google Cloud — Resumable uploads. Cargas reanudables a Cloud Storage.
+https:/​/​docs.cloud.google.com/​storage/​docs/​performing-resumable-uploads
+[G14] Vercel — GCP OIDC. Federación de identidad como alternativa a agregar claves duraderas.
+https:/​/​vercel.com/​docs/​oidc/​gcp
+[G15] Google Cloud — Budgets. Presupuestos/alertas; no confundirlos con detener todos los cargos ya iniciados.
+https:/​/​docs.cloud.google.com/​billing/​docs/​how-to/​budgets
+[G16] Google Cloud — VideoGenerationModelParams. Campo generateAudio. Validar su soporte en el adaptador/tarea/modelo seleccionados.
+https:/​/​docs.cloud.google.com/​gemini-enterprise-agent-platform/​reference/​rest/​Shared.Types/​VideoGenerationModelParams
+[G17] Google Cloud — Video understanding. Análisis de video, marcas temporales y muestreo; la precisión de eventos necesita pruebas.
+https:/​/​docs.cloud.google.com/​gemini-enterprise-agent-platform/​models/​capabilities/​video-understanding
+[G18] FFprobe — Manual. Inspección de frames, tiempos y streams.
+https:/​/​ffmpeg.org/​ffprobe.html
+[G19] Google Cloud — Generative AI pricing. Tarifas por modalidad. El estimador debe guardar la fecha y verificar la configuración real.
+https:/​/​cloud.google.com/​vertex-ai/​generative-ai/​pricing
+[G20] Google Cloud — Open in Cloud Shell. Enlaces con repositorio/rama y condiciones del entorno/autenticación.
+https:/​/​docs.cloud.google.com/​shell/​docs/​open-in-cloud-shell
+[R1] Referencia histórica del repositorio en esta conversación. Revisión reportada del commit 958248ec2fe90fb4a2b0b5004d2a53642a274995, con lecturas de index.html, api/, README, montador y pruebas. No se presenta como auditoría del HEAD actual; se exigirá verificarlo al iniciar código.
+https:/​/​github.com/​Alixonveloz1-ctrl/​Anime-AI-Studio/​tree/​958248ec2fe90fb4a2b0b5004d2a53642a274995
+[D1] Documento anterior aportado en la conversación: Especificacion_Anime_5min_v1.md, v1.0. Se leyó completo para consolidar esta v2.0. Sus alternativas de aplicación independiente, video con audio y falta de edición manual quedan sustituidas expresamente por las decisiones actuales. No hace falta adjuntarlo al programar: esta versión contiene el contrato completo.
+[D2] Aclaraciones posteriores: generación Veo sin audio desde origen; colocación exacta de SFX; preview local/escena/corto; corrección manual además de IA; integración como segunda sección; montador completo instalable/actualizable con comando corto desde iPhone. Estas decisiones prevalecen sobre propuestas previas incompatibles.
+31. Prompt maestro para iniciar el trabajo de código
+Este prompt es para una conversación o entorno con acceso al repositorio. Adjuntar esta especificación completa en DOCX o Markdown; ambos contienen el mismo contrato. No adjuntar la v1 como alternativa vigente. Las autorizaciones de gasto/despliegue siguen siendo explícitas.
+Trabaja sobre el repositorio https://github.com/Alixonveloz1-ctrl/Anime-AI-Studio.git y usa el archivo adjunto «Anime_AI_Studio_Cortos_Especificacion_Maestra_v2» como contrato completo del proyecto. Lee todo el documento antes de editar: este prompt orienta la ejecución, pero no sustituye ni reduce sus requisitos.
+OBJETIVO Implementar dentro de la misma herramienta y el mismo despliegue Vercel una sección nueva «Cortos de anime». La sección actual «Animes» debe seguir funcionando con sus proyectos, modos, duraciones, preferencias, APIs y montaje existentes. No crees otro producto o repositorio ni conviertas el motor antiguo en el nuevo. Desarrolla en una rama y prueba en preview.
+ANTES DE CAMBIAR CÓDIGO Inspecciona el HEAD real, registra el commit, lee la estructura e instaladores actuales y ejecuta las pruebas disponibles. No asumas que el commit histórico mencionado en la especificación sigue vigente. Documenta componentes reutilizables, cambios necesarios y posibles regresiones. Mantén una matriz requisito→archivo→prueba→estado. No elimines pruebas para ocultar regresiones; adapta solo las prohibiciones del antiguo flujo de cortos que ahora deban quedar acotadas.
+PRODUCTO OBLIGATORIO Género principal, subgéneros y concepto opcional; exactamente tres ideas distintas; el usuario elige una; desarrollo de guion audiovisual y biblias por historia de personajes, lugares y objetos. Producir escenas dramatizadas de 300 segundos incluyendo pausas/acciones, no resúmenes sobre imágenes. Mucha emoción según el género, sin una plantilla narrativa universal. El ejemplo previo de la cabaña no es una historia encargada.
+Imágenes con Gemini; video con Veo; voces japonesas con Gemini TTS; música con Lyria 3 Pro; subtítulos españoles sincronizados al audio definitivo. Verifica IDs, endpoints, regiones y capacidades en documentación oficial y pruebas de contrato. No cambies proveedores/modelos silenciosamente. Cada petición Veo de Cortos exige generateAudio:false; nunca actives audio ni omitas el parámetro para sortear un fallo. Comprueba el archivo recibido y excluye cualquier pista inesperada de todas las previews y montajes.
+CONTINUIDAD Y APROBACIONES Aplica referencias visuales versionadas, distribución de lugares y estado físico antes/después de cada plano. La imagen anterior no es la única memoria. Elige ilustración sostenida, cámara 2D, animación localizada o Veo por valor dramático, sin cuotas. No prometas continuidad perfecta ni lip sync garantizado con prompts. Conserva aprobados; regenerar crea candidata y solo invalida dependencias afectadas. No compartas reglas/datos nuevos con Animes de forma que altere su comportamiento.
+SONIDO Y CORRECCIÓN Yo genero externamente los efectos/ambientes, inicialmente con ElevenLabs, y subo MP3. Cada solicitud necesita descripción, prompt, duración, perspectiva, preparación/cola y su propio botón de carga. La herramienta identifica la acción real del video y el ataque interno del sonido, los sincroniza y mezcla automáticamente. Música, ambiente y colas pueden cruzar cortes utilizando el mismo archivo, no nuevas generaciones parecidas.
+Implementa previews reales muxadas por efecto, escena y corto con el mismo compilador/manifiesto del final. No arranques audio/video por separado. Permite corrección IA localizada y ajuste manual siempre accesible: fotograma anterior/siguiente con frames indexados, «El sonido debe coincidir aquí», onda sonora/«Este es el golpe», adelantar/retrasar un fotograma, ganancia/recortes, comparar, deshacer y aprobar/fijar. Debe funcionar sin IA de análisis. Una corrección manual aprobada no se sobrescribe automáticamente; si cambia el material, marca revisión pendiente. No basta un botón «Corregir» que vuelva a intentar indefinidamente.
+MONTADOR E INSTALADOR COMPLETOS Audita y corrige o reconstruye el montador cuanto sea necesario. Entrega su código completo, compilador de tiempos, mezcla, previews, extractor de frames, FFmpeg/FFprobe, Dockerfile, dependencias fijadas, runner, pruebas y scripts de despliegue/diagnóstico/rollback dentro de ESTE repositorio. Prefiere worker aislado para Cortos; cualquier sustitución compartida conserva el contrato y resultado de Animes y pasa regresión antes de activarse.
+Solo tengo iPhone y no puedo pegar código en Cloud Shell. Implementa un botón que abra el repositorio/rama correctos y un lanzador real «c», de modo que solo escriba ./c (respaldo bash c). Instalación, actualización, diagnóstico y rollback por menú numérico; no me pidas escribir URLs largas, JSON, claves o editar archivos. Conserva i/setup.sh actuales. Detecta configuración, confirma cuenta/proyecto/costos, construye/despliega todo y verifica; si falla, conserva/restaura el montador válido. No hardcodees credenciales ni dependas de archivos que solo existan en una vieja sesión de Cloud Shell.
+CALIDAD Y ENTREGA Usa persistencia en nube, subida directa de medios, jobs reanudables, idempotencia, cancelación, reservas de gasto y seguridad descritas. No hagas generaciones pagadas ni cambios de infraestructura/producción sin la autorización correspondiente. No presentes mocks como funciones reales. Resuelve primero lo recuperable del repositorio/documento antes de preguntarme; pide solo permisos o decisiones realmente faltantes.
+Entrega código real, pruebas, matriz de las 100 pruebas de aceptación, documentación móvil y avance verificable. Diferencia lo probado con fixtures, con APIs y lo pendiente. Indica commit/PR y despliegue solo cuando existan. No te limites a una interfaz, un plan o prompts sin integración. No reduzcas el alcance sin mi aprobación. Empieza por la inspección y la implementación segura, respetando íntegramente la especificación adjunta.

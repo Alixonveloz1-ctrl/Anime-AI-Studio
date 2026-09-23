@@ -1,6 +1,6 @@
 # Anime AI Studio · Your Name Edition
 
-Estudio personal para producir historias anime largas desde el móvil. Tiene exactamente dos tipos de proyecto: **Narrado** y **Voces por personaje**. Conserva la generación de universos, personajes, imágenes, audio, música, clips y montaje, con motor narrativo de formato largo y dirección visual estrictamente japonesa 2D. No existe un flujo separado de cortos. Permite historias desde pruebas de 5 minutos hasta especiales de 60 y 90 minutos.
+Estudio personal para producir historias anime largas desde el móvil. Tiene exactamente dos tipos de proyecto: **Narrado** y **Voces por personaje**. Conserva la generación de universos, personajes, imágenes, audio, música, clips y montaje, con motor narrativo de formato largo y dirección visual estrictamente japonesa 2D. El flujo antiguo descartado de cortos sigue desactivado. La nueva sección aislada `/cortos/` se desarrolla en `feature/cortos-anime-v2`; no está declarada lista para producción. Permite historias desde pruebas de 5 minutos hasta especiales de 60 y 90 minutos.
 
 ## Pipeline
 
@@ -439,3 +439,11 @@ ese material una vez escrita la historia nueva — nunca antes, para que una
 generación que falle no se lleve nada por delante. Se borra solo lo de **ese**
 episodio: el universo, los personajes, sus imágenes, los escenarios y los demás
 episodios quedan intactos.
+
+## Cortos de anime · contrato v2
+
+La implementación nueva vive en `/cortos/`, `shorts/`, `api/shorts.js` y `worker/montage-shorts/`. La raíz conserva Animes. Estado verificable: [matriz de 100 pruebas](docs/shorts/acceptance.md), [auditoría](docs/shorts/audit.md), [guía móvil](docs/shorts/mobile.md).
+
+[Abrir instalador de Cortos en Cloud Shell](https://shell.cloud.google.com/?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2FAlixonveloz1-ctrl%2FAnime-AI-Studio&cloudshell_git_branch=feature%2Fcortos-anime-v2&cloudshell_working_dir=.)
+
+Escribe `./c` (respaldo `bash c`). El menú permite instalar/actualizar, diagnosticar y restaurar una versión anterior. Solicita autorización antes de infraestructura y nunca genera contenido en health/CI. La autenticación y enlace Vercel deben verificarse antes de activar la sección. `i` y `setup.sh` conservan su función anterior.

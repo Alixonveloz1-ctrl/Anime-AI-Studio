@@ -1,0 +1,63 @@
+test_A076_missing_revision (test_api.ApiTests.test_A076_missing_revision) ... ok
+test_A078_auth_required (test_api.ApiTests.test_A078_auth_required) ... ok
+test_A078_internal_no_fake_queue_header (test_api.ApiTests.test_A078_internal_no_fake_queue_header) ... ok
+test_A079_limit_metadata (test_api.ApiTests.test_A079_limit_metadata) ... ok
+test_A094_health_no_provider (test_api.ApiTests.test_A094_health_no_provider) ... ok
+test_A072_expired_lease (test_contracts.JobTests.test_A072_expired_lease) ... ok
+test_A074_duplicate (test_contracts.JobTests.test_A074_duplicate) ... ok
+test_A075_unknown_never_resubmitted (test_contracts.JobTests.test_A075_unknown_never_resubmitted) ... ok
+test_A077_reservation (test_contracts.JobTests.test_A077_reservation) ... ok
+test_settlement_once (test_contracts.JobTests.test_settlement_once) ... ok
+test_A031_payload_immutable_no_audio (test_contracts.ProviderTests.test_A031_payload_immutable_no_audio) ... ok
+test_A032_no_incompatible_fallback (test_contracts.ProviderTests.test_A032_no_incompatible_fallback) ... ok
+test_A035_tts_separate_japanese_acting (test_contracts.ProviderTests.test_A035_tts_separate_japanese_acting) ... ok
+test_A075_network_timeout_single_request (test_contracts.ProviderTests.test_A075_network_timeout_single_request) ... ok
+test_A020_planner_measured (test_contracts.TimelineTests.test_A020_planner_measured) ... ok
+test_A052_exact_fixture (test_contracts.TimelineTests.test_A052_exact_fixture) ... ok
+test_A057_one_frame (test_contracts.TimelineTests.test_A057_one_frame) ... ok
+test_A059_manual_lock (test_contracts.TimelineTests.test_A059_manual_lock) ... ok
+test_A060_missing_event (test_contracts.TimelineTests.test_A060_missing_event) ... ok
+test_A067_move_shot (test_contracts.TimelineTests.test_A067_move_shot) ... ok
+test_A068_manual_follows_move_not_changed_content (test_contracts.TimelineTests.test_A068_manual_follows_move_not_changed_content) ... ok
+test_A068_retime_and_trim (test_contracts.TimelineTests.test_A068_retime_and_trim) ... ok
+test_A076_conflict (test_contracts.TimelineTests.test_A076_conflict) ... ok
+test_cannot_trim_attack (test_contracts.TimelineTests.test_cannot_trim_attack) ... ok
+test_ids (test_contracts.TimelineTests.test_ids) ... ok
+test_negative_not_clamped (test_contracts.TimelineTests.test_negative_not_clamped) ... ok
+test_A009_A040_new_voice_preserves_visual_approvals (test_dependencies.DependencyTests.test_A009_A040_new_voice_preserves_visual_approvals) ... ok
+test_A009_unapproved_replacement_keeps_approved_parent (test_dependencies.DependencyTests.test_A009_unapproved_replacement_keeps_approved_parent) ... ok
+test_A017_translation_change_does_not_regenerate_japanese_voice (test_dependencies.DependencyTests.test_A017_translation_change_does_not_regenerate_japanese_voice) ... ok
+test_A025_costume_only_invalidates_dependents (test_dependencies.DependencyTests.test_A025_costume_only_invalidates_dependents) ... ok
+test_A029_new_master_invalidates_only_old_reference_uses (test_dependencies.DependencyTests.test_A029_new_master_invalidates_only_old_reference_uses) ... ok
+test_A067_move_does_not_invalidate_image (test_dependencies.DependencyTests.test_A067_move_does_not_invalidate_image) ... ok
+test_A086_environment_is_branch_preview_only (test_installer.ConnectorTests.test_A086_environment_is_branch_preview_only) ... ok
+test_A090_cannot_overwrite_legacy_environment (test_installer.ConnectorTests.test_A090_cannot_overwrite_legacy_environment) ... ok
+test_A092_partial_environment_not_ready (test_installer.ConnectorTests.test_A092_partial_environment_not_ready) ... ok
+test_A087_launcher (test_installer.InstallerTests.test_A087_launcher) ... ok
+test_A089_failed_health_cannot_rollback (test_installer.InstallerTests.test_A089_failed_health_cannot_rollback) ... ok
+test_A089_rollback_restores_old_revision_pointer (test_installer.InstallerTests.test_A089_rollback_restores_old_revision_pointer) ... ok
+test_A090_old_installers_unchanged (test_installer.InstallerTests.test_A090_old_installers_unchanged) ... ok
+test_A090_refuses_foreign_bucket (test_installer.InstallerTests.test_A090_refuses_foreign_bucket) ... ok
+test_A094_cancel_before_infrastructure (test_installer.InstallerTests.test_A094_cancel_before_infrastructure) ... ok
+test_A033_strip_and_inspect (test_media.MediaTests.test_A033_strip_and_inspect) ... ok
+test_A044_A047_mp3_same_pcm_attack (test_media.MediaTests.test_A044_A047_mp3_same_pcm_attack) ... ok
+test_A056_indexed_contact (test_media.MediaTests.test_A056_indexed_contact) ... ok
+test_A061_A063_A064_A069_render_and_decode (test_media.MediaTests.test_A061_A063_A064_A069_render_and_decode) ... ok
+test_A065_full_program_ducking_and_silence (test_media.MediaTests.test_A065_full_program_ducking_and_silence) ... ok
+test_A079_path_and_checksum (test_media.MediaTests.test_A079_path_and_checksum) ... ok
+test_A079_playlist_disguised_as_audio (test_media.MediaTests.test_A079_playlist_disguised_as_audio) ... ok
+test_A079_shell_manifest_rejected (test_media.MediaTests.test_A079_shell_manifest_rejected) ... ok
+test_A080_block_stale_and_raw (test_media.MediaTests.test_A080_block_stale_and_raw) ... ok
+
+----------------------------------------------------------------------
+Ran 50 tests in 88.291s
+
+OK
+Versión anterior restaurada; datos y aprobaciones intactos.
+
+Cuenta: account
+Proyecto: project
+Entorno: preview
+Región de infraestructura: us-central1
+Commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+Recursos aislados: bucket, base Firestore, cola, servicio y Job. Cloud Build, almacenamiento y render pueden generar cargos. No se pagarán modelos durante instalación.

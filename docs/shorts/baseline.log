@@ -1,0 +1,85 @@
+✅ index.html script 1 parsea
+✅ api/_lib/gcp.js parsea
+✅ api/_lib/texto.js parsea
+✅ api/assemble.js parsea
+✅ api/audio.js parsea
+✅ api/download-url.js parsea
+✅ api/health.js parsea
+✅ api/image.js parsea
+✅ api/music.js parsea
+✅ api/script.js parsea
+✅ api/transcribe.js parsea
+✅ api/upload-url.js parsea
+✅ api/video-start.js parsea
+✅ api/video-status.js parsea
+✅ api/voices.js parsea
+✅ buildMontarScript genera bash válido
+✅ selector Narrado/Voces por personaje
+✅ selector de cierre
+✅ formato de 60 minutos
+✅ formato de 90 minutos
+✅ anime japonés 2D por defecto
+✅ motor narrativo largo
+✅ huella de narración basada en las referencias
+✅ control automático contra la prosa vieja
+✅ anclas cronológicas por plano
+✅ validación de orden visual contra narración
+✅ límite cronológico enviado al generador de imagen
+✅ audio dramatizado por intervención
+✅ recomendación de video por plano
+✅ continuidad explícita entre escenas
+✅ generación en lote de referencias maestras
+✅ reanudación persistente para cualquier duración
+✅ reanudación de operaciones Veo en curso
+✅ versionado compatible de proyectos
+✅ biblioteca de fórmulas virales de referencia
+✅ selección de fórmula viral por concepto/género
+✅ hitos virales distribuidos por bloque
+✅ contrato viral inyectado en el guion
+✅ borrador versionado para no reutilizar guiones anteriores
+✅ menor deriva creativa en el guion largo
+✅ evidencia literal de ejecución del hito viral
+✅ evidencia literal de la consecuencia posterior
+✅ validación mecánica de hito y consecuencia en orden
+✅ migración automática al motor narrativo calibrado con referencias
+✅ estado permanente de proyectos en GCS
+✅ migración automática del primer almacenamiento local
+✅ lista de proyectos reconstruida desde el bucket
+✅ medios de IndexedDB espejados en GCS
+✅ caché del dispositivo limitada al proyecto activo
+✅ validación mecánica de blocking y continuidad física
+✅ estado físico enviado a imagen y Veo
+✅ motor visual versionado para no reutilizar planes antiguos
+✅ Gemini TTS visible junto a Chirp
+✅ imágenes renderizadas desde URL ligera
+✅ fallback convierte base64 a puntero GCS antes de IndexedDB
+✅ generación individual envía destino GCS al servidor
+✅ No existe botón de reparación post-hoc
+✅ Motion anime no es un tipo de proyecto; es interno al montaje
+✅ No existe un flujo separado de cortos
+✅ Sólo existen dos tipos de proyecto: Narrado y Voces por personaje
+✅ Los bloques de historia insuficientes no se aceptan
+✅ La división no rellena escenas con cadenas vacías
+✅ Nunca se eliminan referencias de identidad silenciosamente
+✅ Paneos de montaje expanden el conteo de fotogramas
+✅ Guion calibrado a frase corta, primera persona y diálogo directo de las referencias
+✅ El motor largo no hereda reglas de Facebook Reels
+✅ No quedan instrucciones de originalidad que contradigan las referencias
+✅ La fórmula probada tiene prioridad explícita sobre la originalidad
+✅ Cada bloque debe demostrar el hito viral y su consecuencia posterior, en orden
+✅ Todos los prompts por bloque exigen story + evidencia viral + consecuencia
+✅ El reparto no usa un molde femenino obligatorio
+✅ api/image.js guarda imágenes en GCS y devuelve un puntero ligero
+✅ api/image.js comparte el contrato japonés 2D
+✅ Fan service del servidor es situacional, no obligatorio por fotograma
+✅ La referencia anterior conserva estado físico, no sólo estilo
+✅ Catálogo de voces expone Chirp y Gemini TTS
+✅ El motor visual exige cobertura narrativa, no retratos
+✅ El generador de texto permite fijar menor temperatura para seguir la fórmula
+✅ Montador y aplicación usan el mismo Job
+✅ setup.sh usa la sesión/proyecto activos; no depende de un correo hardcodeado
+✅ El bucket es la fuente de verdad de la lista y estado de proyectos
+✅ El bucket acepta medios binarios directos y el cache guarda sólo referencias
+✅ Los medios del proyecto tienen espejo cloud sin sumar funciones de Vercel
+
+Validación estática completa.
