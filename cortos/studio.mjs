@@ -109,7 +109,13 @@ function readable(parent,value){
 }
 async function script(parent=screen){
  if(!p.selectedIdea){const c=card('Elige una idea primero','<p>Las tres propuestas son el punto de partida de tu guion.</p>');buttons(c,[['Ver ideas',()=>ideas(parent)]]);parent.append(c);return;}
- const intro=card('Guion y biblias',`<p>${esc(p.ideas.find(i=>i.id===p.selectedIdea?.id)?.data.title||'Tu historia elegida')}</p>`);buttons(intro,[[p.developments.length?'Crear otra versión del guion':'Desarrollar esta historia',()=>runTask('develop',route('/develop'))]]);parent.append(intro);
+ const intro=card('Guion y biblias',`<p>${esc(p.ideas.find(i=>i.id===p.selectedIdea?.id)?.data.title||'Tu historia elegida')}</p>`);
+ if(!p.developments.length)buttons(intro,[['Desarrollar esta historia',()=>runTask('develop',route('/develop'))]]);
+ else{
+  if(p.activeDevelopment)buttons(intro,[['Continuar a producción',()=>go('Producción')]]);
+  const more=fold(intro,'Crear una nueva versión');buttons(more,[['Crear otra versión del guion',()=>runTask('develop',route('/develop')),true]]);
+ }
+ parent.append(intro);
  const grouped=versions(p.developments,p.activeDevelopment);
  const show=(target,e)=>{const d=e.data,c=card(d.title,`<p class="badge">${esc(titleFor(e.approvalState))}${e.id===p.activeDevelopment?' · versión en uso':''}</p>`);
  for(const [index,shot] of d.shots.entries()){const scene=fold(c,`Toma ${index+1} · ${(shot.frames/24).toFixed(1)} s · ${shot.function}`);for(const u of d.utterances.filter(u=>u.shotId===shot.id)){const line=document.createElement('p');line.innerHTML=`<strong>${esc(entityName(d,u.speakerId))}</strong><br>${esc(u.spanish)}`;scene.append(line);const jp=fold(scene,'Japonés y actuación');jp.append(document.createTextNode(u.japanese+' · '+u.acting));}const direction=fold(scene,'Dirección visual');direction.append(document.createTextNode(shot.prompt));}
@@ -305,7 +311,7 @@ async function openEditor(initial){
  const image=document.createElement('img');image.className='frame';image.alt='Fotograma indexado del video aprobado';box.append(image);
  const info=document.createElement('p');info.className='frame-info';box.append(info);
  const frameInput=document.createElement('input');frameInput.type='number';frameInput.min=0;frameInput.value=0;const frameLabel=document.createElement('label');frameLabel.textContent='Inicio del intervalo de fotogramas';frameLabel.append(frameInput);const interval=fold(box,'Elegir otro intervalo');interval.append(frameLabel);
- function showFrame(){if(!frames.length)return;image.src=frames[framePos].url;info.textContent=`Fotograma ${frames[framePos].index} · ${frames[framePos].seconds} s`;}
+ function showFrame(){if(!frames.length)return;image.src=frames[framePos].url;info.textContent=`Fotograma ${frames[framePos].index} · ${Number(frames[framePos].seconds).toFixed(3)} s`;}
  async function save(patch){const result=await mutate(route(`/cues/${cue.id}`),{cueRevision:cue.revision,patch},'PATCH');cue=result.cue;correctionId=result.correctionId;status.textContent='Ajuste guardado como candidata. Prueba una nueva preview.';}
  buttons(box,[['Cargar fotogramas',async()=>{const jid=await runTask('frames',route(`/shots/${cue.shotId}/frames`),{start:Number(frameInput.value),count:48});if(!jid)return;const job=await api('/jobs/'+jid);framesId=job.result?.framesId;if(!framesId)throw new Error('La extracción no terminó. Consulta Producción.');const r=await api(route(`/frames/${framesId}`));frames=r.frames;framePos=0;showFrame();}],['← Fotograma',()=>{framePos=Math.max(0,framePos-1);showFrame();},true],['Fotograma →',()=>{framePos=Math.min(frames.length-1,framePos+1);showFrame();},true],['El sonido debe coincidir aquí',async()=>{if(!frames.length)throw new Error('Carga primero los fotogramas indexados.');cue=await mutate(route(`/cues/${cue.id}/anchor`),{cueRevision:cue.revision,framesId,frameIndex:frames[framePos].index});status.textContent='Contacto seleccionado. Marca ahora el ataque del sonido.';}]]);
  const data=await api(route(`/assets/${cue.audioRevision}/waveform`));let selected=cue.sourceSyncSample,viewStart=0,viewEnd=data.samples;

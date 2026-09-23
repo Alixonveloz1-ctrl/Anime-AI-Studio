@@ -82,3 +82,13 @@ La UI se separó en bootstrap Firebase, estudio y funciones de presentación. La
 Verificación local: 98 tests Python correctos en 120,812 s, sin skips; cinco recorridos DOM de interfaz con transporte sintético explícito. El recorrido incluye tres ideas, elegir/desarrollar/aprobar, revisar candidata, ajuste manual sin IA y subtítulos → preview automática → exportar. Las páginas `tests/shorts/ui/preview.html` y `frame.html` están rotuladas como pruebas sintéticas y no aparecen en la navegación del producto. No se presentan como servicio funcional.
 
 Riesgos pendientes: build/rollback GCP e IAM reales, acceso a modelos, calidad de guion/continuidad, cargas y reproducción en Safari/iPhone, y exportación representativa de Animes. El contrato de 100 aceptaciones sigue trazado, con A034/A077 sustituidos por orden del usuario. La publicación/CI y revisión visual del nuevo commit se registran en la PR tras existir.
+
+## Revisión de preview tras simplificación
+
+Commit publicado `4e0bf930f4659305747eef7470b754b7ed6e1a9a`: CI de Animes y Cortos correctos; preview `dpl_8dnFS9PfLepwLwyXPwMgjM7DDbzV` READY en el mismo proyecto Vercel. URL: https://anime-ai-studio-dl9yc8yvn-alixonveloz1-3809s-projects.vercel.app/cortos/ .
+
+En Chrome se revisaron los recorridos de la página sintética de interfaz: guion, tomas/versiones plegadas, solicitudes de efectos, editor manual (cargar frames, elegir contacto/ataque, probar y fijar), subtítulos y exportación con sus enlaces. Contenedor de 390 px: cuerpo de 375 px con scrollbar, scrollWidth también 375; botones de navegación de 63,8 × 60 px; editor sin desbordamiento horizontal. Contenedor de 1024 px: cuerpo/scrollWidth 1009 px. No es un dispositivo Safari ni una prueba de reproducción de audio de los modelos: los recursos de esa página son marcadores sintéticos.
+
+La ruta real muestra correctamente que falta conectar el ensamblador y ofrece Cloud Shell con repositorio/rama correctos. Animes carga sus modos previos y permite entrar a Cortos; no se generó ni exportó contenido en esa revisión. El único despliegue de producción continúa en el commit original `958248e`.
+
+Dos ajustes derivados de la revisión: el guion ya aprobado ofrece continuar a Producción y deja regeneración bajo un desplegable; los tiempos de frames se muestran con tres decimales. Se repitieron los cinco recorridos DOM tras esos ajustes. CI/preview del commit siguiente se registran en la PR al finalizar.

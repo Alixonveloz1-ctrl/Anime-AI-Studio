@@ -1,8 +1,8 @@
-✔ Five stages, no budgets, no financial fields in generation requests (155.339839ms)
-✔ Idea selection and development stay connected to the production actions (55.038815ms)
-✔ Current and candidate remain visible; previous versions are folded; one review approves (46.78468ms)
-✔ Manual synchronization is usable with analysis exhausted and without AI calls (59.005434ms)
-✔ Subtitle approval, automatic preview preparation and final export are connected (49.678744ms)
+✔ Five stages, no budgets, no financial fields in generation requests (161.652933ms)
+✔ Idea selection and development stay connected to the production actions (57.338458ms)
+✔ Current and candidate remain visible; previous versions are folded; one review approves (45.314013ms)
+✔ Manual synchronization is usable with analysis exhausted and without AI calls (69.448429ms)
+✔ Subtitle approval, automatic preview preparation and final export are connected (56.264843ms)
 ℹ tests 5
 ℹ suites 0
 ℹ pass 5
@@ -10,4 +10,4 @@
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 946.092287
+ℹ duration_ms 1010.445612

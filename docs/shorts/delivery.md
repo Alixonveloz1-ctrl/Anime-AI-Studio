@@ -2,7 +2,7 @@
 
 Base Animes inspeccionada: `958248ec2fe90fb4a2b0b5004d2a53642a274995`. Esta etapa partió del HEAD publicado `b5844747fab306a01a8efe8c2b755fe5c2cdf019`, en `feature/cortos-anime-v2`.
 
-PR real: https://github.com/Alixonveloz1-ctrl/Anime-AI-Studio/pull/20 (borrador; no fusionar todavía). La PR registra commit, CI y preview comprobados después de cada publicación. No se presume READY antes de que exista.
+PR real: https://github.com/Alixonveloz1-ctrl/Anime-AI-Studio/pull/20 (borrador; no fusionar todavía). CI de Animes/Cortos y preview READY comprobados para `4e0bf930f4659305747eef7470b754b7ed6e1a9a`: https://anime-ai-studio-dl9yc8yvn-alixonveloz1-3809s-projects.vercel.app/cortos/ . La PR registra el resultado del commit posterior, que incluye los últimos ajustes visuales.
 
 Se aplicaron [las decisiones posteriores del usuario](user-overrides.md): eliminación completa del subsistema monetario y simplificación funcional en cinco áreas. El código de Animes, sus APIs, `i` y `setup.sh` se conservan. Cortos tiene servicio y ensamblador aislados.
 
