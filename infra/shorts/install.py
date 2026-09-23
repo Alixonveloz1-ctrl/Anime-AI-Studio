@@ -9,7 +9,10 @@ import tempfile
 import urllib.request
 
 ROOT=Path(__file__).resolve().parents[2]
+# Resource IDs remain stable so updating from an earlier installer keeps data.
 PREFIX='anime-shorts-preview'
+BRANCH='main'
+REPOSITORY='https://github.com/Alixonveloz1-ctrl/Anime-AI-Studio.git'
 BUILD_MACHINE='E2_STANDARD_2'
 
 def check_fresh_namespace(project,region):
@@ -42,6 +45,7 @@ def pick(title,choices):
 def account_project():
     account=g('auth','list','--filter=status:ACTIVE','--format=value(account)').splitlines()
     if not account:raise RuntimeError('Inicia sesión de Google en Cloud Shell desde el navegador y vuelve a ./c.')
+    print('\nCuenta activa de Cloud Shell: '+account[0])
     projects=json.loads(g('projects','list','--format=json(projectId,name)'))
     labels=[f'{x["name"]} ({x["projectId"]})' for x in projects]
     label=pick('Proyecto autorizado para Cortos (no modifica Animes)',labels)
@@ -94,13 +98,20 @@ def activate(project,region,bucket,candidate,old,temp,connect):
             print('Se restauró el montador anterior tras el fallo de actualización/conexión.')
         raise
 
+def current_release():
+    sha=command(['git','rev-parse','HEAD'],cwd=ROOT)
+    remote=command(['git','ls-remote',REPOSITORY,'refs/heads/'+BRANCH],cwd=ROOT).split()
+    if not remote or remote[0]!=sha:
+        raise RuntimeError('Este instalador no es la versión actual de main. Elige 6 para actualizar y después 1 para instalar.')
+    return sha
+
 def install(account,project,region,bucket):
+    sha=current_release()
     billing=json.loads(g('billing','projects','describe',project,'--format=json'))
     if not billing.get('billingEnabled'):raise RuntimeError('La facturación no está habilitada en el proyecto seleccionado.')
-    sha=command(['git','rev-parse','HEAD'],cwd=ROOT)
     owned=check_owned(bucket,project)
     old=state_load(bucket) if owned else None
-    print(f'\nCuenta: {account}\nProyecto: {project}\nEntorno: preview\nRegión de infraestructura: {region}\nCommit: {sha}')
+    print(f'\nCuenta: {account}\nProyecto: {project}\nDestino: Cortos en tu página habitual\nRegión de infraestructura: {region}\nCommit: {sha}')
     print('Recursos aislados: bucket privado, base Firestore, cola, servicio, Job y cuentas de servicio de ejecución/build con sus permisos. Cloud Build, almacenamiento y render pueden generar cargos. No se pagarán modelos durante instalación.')
     if pick('¿Autorizar estos cambios de infraestructura?', ['Cancelar','Autorizar instalación/actualización'])=='Cancelar':return
     if not owned:check_fresh_namespace(project,region)
@@ -115,9 +126,9 @@ def install(account,project,region,bucket):
         sa=f'{PREFIX}@{project}.iam.gserviceaccount.com'
         if not check_owned(bucket,project):
             g('storage','buckets','create','gs://'+bucket,'--project',project,'--location',region,'--uniform-bucket-level-access')
-            g('storage','buckets','update','gs://'+bucket,'--update-labels=managed-by=anime-shorts-v2,environment=preview')
+            g('storage','buckets','update','gs://'+bucket,'--update-labels=managed-by=anime-shorts-v2,environment=production')
         g('storage','buckets','update','gs://'+bucket,'--public-access-prevention')
-        if not exists('iam','service-accounts','describe',sa,'--project',project):g('iam','service-accounts','create',PREFIX,'--project',project,'--display-name','Anime Cortos preview')
+        if not exists('iam','service-accounts','describe',sa,'--project',project):g('iam','service-accounts','create',PREFIX,'--project',project,'--display-name','Anime Cortos')
         g('storage','buckets','add-iam-policy-binding','gs://'+bucket,'--member=serviceAccount:'+sa,'--role=roles/storage.objectAdmin')
         for role in ['roles/aiplatform.user','roles/datastore.user','roles/cloudtasks.enqueuer','roles/run.jobsExecutorWithOverrides','roles/serviceusage.serviceUsageConsumer','roles/firebaseauth.viewer','roles/speech.client','roles/run.viewer']:
             g('projects','add-iam-policy-binding',project,'--member=serviceAccount:'+sa,'--role='+role,'--quiet')
@@ -137,7 +148,7 @@ def install(account,project,region,bucket):
         if not image_digest.startswith('sha256:'):raise RuntimeError('No se pudo verificar el digest. No se activó la candidata.')
         immutable=image.rsplit(':',1)[0]+'@'+image_digest
         job=PREFIX+'-'+sha[:10];service=PREFIX
-        env={'SHORTS_BUILD_COMMIT':sha,'SHORTS_GCP_PROJECT_ID':project,'SHORTS_GCS_BUCKET':bucket,'SHORTS_GCS_PREFIX':PREFIX,'SHORTS_ENVIRONMENT':'preview','SHORTS_FIRESTORE_DATABASE':PREFIX,'SHORTS_REGION':region,'SHORTS_RENDER_JOB':job,'SHORTS_QUEUE':PREFIX,'SHORTS_SERVICE_ACCOUNT':sa,'SHORTS_ALLOWED_EMAILS':account,'SHORTS_AUTH_PROJECT_ID':project}
+        env={'SHORTS_BUILD_COMMIT':sha,'SHORTS_GCP_PROJECT_ID':project,'SHORTS_GCS_BUCKET':bucket,'SHORTS_GCS_PREFIX':PREFIX,'SHORTS_ENVIRONMENT':'production','SHORTS_FIRESTORE_DATABASE':PREFIX,'SHORTS_REGION':region,'SHORTS_RENDER_JOB':job,'SHORTS_QUEUE':PREFIX,'SHORTS_SERVICE_ACCOUNT':sa,'SHORTS_ALLOWED_EMAILS':account,'SHORTS_AUTH_PROJECT_ID':project}
         envfile=Path(tmp)/'env.json';envfile.write_text(json.dumps(env))
         g('run','jobs','deploy',job,'--image',immutable,'--region',region,'--project',project,'--service-account',sa,'--env-vars-file',str(envfile),'--cpu=2','--memory=4Gi','--task-timeout=3600s','--max-retries=0','--labels=managed-by=anime-shorts-v2','--quiet')
         deploy=['run','deploy',service,'--image',immutable,'--region',region,'--project',project,'--service-account',sa,'--command=gunicorn','--args=--bind,:8080,--workers,2,--timeout,240,shorts.service.app:app','--env-vars-file',str(envfile),'--cpu=1','--memory=1Gi','--max-instances=2','--allow-unauthenticated','--tag=candidate-'+sha[:12],'--no-traffic','--labels=managed-by=anime-shorts-v2','--quiet']
@@ -157,7 +168,7 @@ def install(account,project,region,bucket):
         from connect import connect
         activate(project,region,bucket,candidate,old,tmp,
             lambda state,save:connect(command,g,pick,state,save))
-        print('Worker instalado. Abre la preview para producir; configuración recuperable en nube.')
+        print('Ensamblador instalado. Abre Cortos en tu página habitual; configuración recuperable en nube.')
 
 def prepare_builder(project,region,bucket):
     name=PREFIX+'-build';sa=f'{name}@{project}.iam.gserviceaccount.com'
@@ -190,7 +201,7 @@ def main():
         try:
             if choice=='Buscar actualización de la rama':
                 # Fetch without checking out/resetting a dirty working directory.
-                command(['git','fetch','https://github.com/Alixonveloz1-ctrl/Anime-AI-Studio.git','feature/cortos-anime-v2'],cwd=ROOT)
+                command(['git','fetch',REPOSITORY,BRANCH],cwd=ROOT)
                 latest=command(['git','rev-parse','FETCH_HEAD'],cwd=ROOT)
                 current=command(['git','rev-parse','HEAD'],cwd=ROOT)
                 if latest==current:print('Ya tienes el commit actual.');continue

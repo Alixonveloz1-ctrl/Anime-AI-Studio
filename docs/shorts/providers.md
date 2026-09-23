@@ -25,8 +25,8 @@ El servidor conserva el registro del envío al producirse un timeout o error de 
 - [Gemini TTS](https://docs.cloud.google.com/text-to-speech/docs/gemini-tts)
 - [Lyria 3](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/lyria/lyria-3)
 - [Firebase Management: configuración](https://firebase.google.com/docs/projects/api/workflow_set-up-and-manage-project)
-- [Vercel: variables por rama](https://vercel.com/docs/rest-api/projects/create-one-or-more-environment-variables)
-- [Vercel: creación de preview](https://vercel.com/docs/rest-api/deployments/create-a-new-deployment)
+- [Vercel: variables por entorno](https://vercel.com/docs/rest-api/projects/create-one-or-more-environment-variables)
+- [Vercel: creación de despliegues](https://vercel.com/docs/rest-api/deployments/create-a-new-deployment)
 
 ## Alcance de solicitudes
 
@@ -41,3 +41,7 @@ Speech v1 convierte copia de trabajo a mono PCM16, guarda el ID y consulta GET /
 El build fija `E2_STANDARD_2`, timeout de 1.800 segundos y cuenta de servicio dedicada. El instalador muestra cuenta/proyecto/recursos y solicita permiso antes de cambiarlos. No muestra precios ni calcula un presupuesto.
 
 Fuentes oficiales: https://docs.cloud.google.com/build/docs/api/reference/rest/v1/projects.builds#machinetype ; https://docs.cloud.google.com/build/docs/securing-builds/configure-user-specified-service-accounts ; https://docs.cloud.google.com/tasks/docs/creating-http-target-tasks . Cloud Tasks exige actAs además de la firma; el instalador concede ServiceAccountUser solo sobre la identidad propia y verifica una entrega OIDC de diagnóstico. El builder puede escribir el repositorio Docker propio, leer objetos build-source y emitir logs; no usa la identidad del runtime.
+
+## Enlace de instalación por cuenta
+
+El enlace se entrega por conversación, no dentro de la aplicación. `authuser` selecciona el correo que indique el usuario, siempre que ya haya iniciado sesión con él; de lo contrario Google puede usar la cuenta predeterminada. El instalador vuelve a mostrar la cuenta activa antes de autorizar recursos. Repo y rama se fijan con `cloudshell_git_repo` y `cloudshell_git_branch=main`; `cloudshell_workspace=.` abre la terminal en la raíz. Google documenta que los repositorios externos se abren en una sesión temporal sin heredar credenciales: la autorización efectiva debe comprobarse en la instalación real, que sigue pendiente. No se eluden estas restricciones. Fuentes oficiales: https://docs.cloud.google.com/shell/docs/configuring-cloud-shell y https://docs.cloud.google.com/shell/docs/open-in-cloud-shell .

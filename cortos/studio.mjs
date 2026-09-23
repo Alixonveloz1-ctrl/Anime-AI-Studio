@@ -412,4 +412,3 @@ export async function mountStudio(identity,options={}){
  await draw();
 }
 export {api,say};
-$('#settings-toggle').onclick=()=>{const panel=$('#setup-panel');panel.open=!panel.open;if(panel.open)panel.scrollIntoView({behavior:'smooth',block:'start'});};

@@ -25,7 +25,7 @@
     "fixture": "not_covered",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Código legado intacto. En preview falta GCS_OUTPUT_BUCKET de Animes; exportación de copia real pendiente de entorno autorizado. Producción no modificada."
+    "remaining": "Código legado intacto; health y configuración de montaje leídos en el despliegue anterior. Falta abrir/exportar una copia de proyecto antiguo con autorización; la disponibilidad configurada no acredita la ejecución del contenedor."
   },
   {
     "id": "A003",
@@ -1445,16 +1445,26 @@
     "requirement": "Preview Vercel. PR sirve ambas secciones y no escribe por defecto en recursos de producción.",
     "files": [
       "vercel.json",
-      "shorts/gateway.mjs"
+      "shorts/gateway.mjs",
+      "infra/shorts/connect.py",
+      "infra/shorts/install.py",
+      "docs/shorts/user-overrides.md"
     ],
     "tests": [
       "tests/shorts/test_installer.py:test_A086_environment_is_branch_preview_only",
-      "tests/shorts/gateway.test.cjs"
+      "tests/shorts/gateway.test.cjs",
+      "tests/shorts/test_installer.py:test_U003_production_variables_do_not_use_preview_branch_scope",
+      "tests/shorts/test_installer.py:test_U003_wrong_production_branch_stops_before_configuration",
+      "tests/shorts/test_installer.py:test_U003_connect_targets_main_and_existing_production_alias",
+      "tests/shorts/test_installer.py:test_U003_outdated_checkout_stops_before_cloud_changes",
+      "tests/shorts/test_installer.py:test_U003_reconnection_cannot_publish_an_outdated_worker_commit"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "No preview publicada todavía; gateway rechaza configuración de producción."
+    "remaining": "Payloads/aislamiento probados con fixtures. Commit, CI y despliegue efectivos se registran en PR 20. Servicios Google y recorrido completo todavía pendientes.",
+    "override": "U003 — autorización posterior de main y producción",
+    "effectiveRequirement": "Integrar ambas secciones en main y publicar el proyecto Vercel existente; preservar Animes y mantener aisladas las previews."
   },
   {
     "id": "A087",
@@ -1463,15 +1473,22 @@
       "c",
       "setup-shorts.sh",
       "infra/shorts/install.py",
-      "infra/shorts/connect.py"
+      "infra/shorts/connect.py",
+      "docs/shorts/user-overrides.md",
+      "docs/shorts/mobile.md",
+      "cortos/index.html",
+      "cortos/app.js"
     ],
     "tests": [
-      "tests/shorts/test_installer.py:test_A087_launcher"
+      "tests/shorts/test_installer.py:test_A087_launcher",
+      "tests/shorts/ui/studio.test.mjs"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "./c y bash c abren menú/help; enlace remoto depende de publicar rama."
+    "remaining": "Lanzador y ausencia de controles de instalación comprobados localmente. Falta instalación/recuperación real desde Cloud Shell/iPhone con la cuenta indicada por el usuario.",
+    "override": "U004 — instalación fuera de la interfaz",
+    "effectiveRequirement": "Desde un enlace entregado en la conversación, ./c abre instalación de main sin pegar scripts ni crear alias. No hay botón/panel Cloud Shell en la aplicación."
   },
   {
     "id": "A088",
@@ -1563,13 +1580,21 @@
       "c",
       "setup-shorts.sh",
       "infra/shorts/install.py",
-      "infra/shorts/connect.py"
+      "infra/shorts/connect.py",
+      "docs/shorts/user-overrides.md",
+      "docs/shorts/mobile.md",
+      "cortos/index.html",
+      "cortos/app.js"
     ],
-    "tests": [],
+    "tests": [
+      "tests/shorts/ui/studio.test.mjs"
+    ],
     "fixture": "not_covered",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Estado recuperable GCS y menú recuperar; falta corte real de sesión durante build/configuración."
+    "remaining": "Lanzador y ausencia de controles de instalación comprobados localmente. Falta instalación/recuperación real desde Cloud Shell/iPhone con la cuenta indicada por el usuario.",
+    "override": "U004 — instalación fuera de la interfaz",
+    "effectiveRequirement": "Sesión Cloud Shell perdida se recupera con el enlace de la conversación y ./c; reconoce recursos instalados y conserva estado cloud."
   },
   {
     "id": "A094",

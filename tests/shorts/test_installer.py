@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
 import unittest
@@ -39,6 +40,11 @@ class InstallerTests(unittest.TestCase):
             install.install('account','project','us-central1','bucket')
         self.assertEqual(len(calls),1);self.assertEqual(calls[0][:2],('billing','projects'))
 
+    def test_U003_outdated_checkout_stops_before_cloud_changes(self):
+        with patch.object(install,'command',side_effect=['a'*40,'b'*40+'\trefs/heads/main']),patch.object(install,'g') as g:
+            with self.assertRaisesRegex(RuntimeError,'Elige 6'):install.install('account','project','us-central1','bucket')
+            g.assert_not_called()
+
     def test_A089_connection_failure_restores_old_worker(self):
         old={'commit':'old','service':'service','revision':'old-r'}
         candidate={'commit':'new','service':'service','revision':'new-r'}
@@ -67,7 +73,7 @@ class ConnectorTests(unittest.TestCase):
         self.c=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.c)
     def test_A086_environment_is_branch_preview_only(self):
         with patch.object(self.c,'vercel',return_value={}) as api:
-            self.c.branch_vars(None,'project','team',{'SHORTS_ENABLED':'true'})
+            self.c.branch_vars(None,'project','team',{'SHORTS_ENABLED':'true'},target='preview',branch='feature/cortos-anime-v2')
             row=api.call_args.args[-1][0]
             self.assertEqual(row['target'],['preview']);self.assertEqual(row['gitBranch'],'feature/cortos-anime-v2')
     def test_A090_cannot_overwrite_legacy_environment(self):
@@ -77,3 +83,47 @@ class ConnectorTests(unittest.TestCase):
     def test_A092_partial_environment_not_ready(self):
         with patch.object(self.c,'vercel',return_value={'failed':[{'key':'SHORTS_ENABLED'}]}):
             with self.assertRaises(RuntimeError):self.c.branch_vars(None,'project','team',{'SHORTS_ENABLED':'true'})
+
+    def test_U003_production_variables_do_not_use_preview_branch_scope(self):
+        with patch.object(self.c,'vercel',return_value={}) as api:
+            self.c.branch_vars(None,'project','team',{'SHORTS_ENABLED':'true','SHORTS_ENVIRONMENT':'production'})
+            for row in api.call_args.args[-1]:
+                self.assertEqual(row['target'],['production']);self.assertNotIn('gitBranch',row)
+        with self.assertRaises(RuntimeError):self.c.branch_vars(None,'project','team',{},branch='other')
+
+    def test_U003_wrong_production_branch_stops_before_configuration(self):
+        project={'id':'p','name':'site','link':{'productionBranch':'different','repoId':1}}
+        with patch.object(self.c,'find_project',return_value=(project,'team')),patch.object(self.c,'firebase') as firebase,patch.object(self.c,'vercel') as api:
+            with self.assertRaisesRegex(RuntimeError,'publicar main'):self.c.connect(None,None,None,{'commit':'a'*40},None)
+            firebase.assert_not_called();api.assert_not_called()
+
+    def test_U003_connect_targets_main_and_existing_production_alias(self):
+        project={'id':'p','name':'site','link':{'productionBranch':'main','repoId':1}}
+        state={'project':'gcp','bucket':'own-bucket','url':'https://service.run.app','commit':'a'*40}
+        deployment={'id':'d','url':'unique.vercel.app','readyState':'READY','alias':['site.vercel.app','site-git-main-owner.vercel.app']}
+        calls=[];cors=[];google_calls=[]
+        def api(command,path,method='GET',data=None):
+            calls.append((path,method,data))
+            return deployment if path.startswith('/v13/deployments') else {}
+        def g(*args):
+            if '--cors-file' in args:cors.append(json.loads(Path(args[-1]).read_text()))
+            return '{"cors":[]}'
+        def google(g,host,path,method='GET',data=None):
+            google_calls.append((method,data));return {'authorizedDomains':['existing.example']}
+        with patch.object(self.c,'find_project',return_value=(project,'team')),patch.object(self.c,'firebase',return_value={'projectId':'gcp'}),patch.object(self.c,'vercel',side_effect=api),patch.object(self.c,'google',side_effect=google):
+            result=self.c.connect(lambda *_:'a'*40+'\trefs/heads/main',g,lambda *_:'Autorizar conexión',state,lambda s:None)
+        create=next(data for path,method,data in calls if path.startswith('/v13/deployments') and method=='POST')
+        self.assertEqual(create['target'],'production');self.assertEqual(create['gitSource']['ref'],'main');self.assertEqual(create['gitSource']['sha'],'a'*40)
+        env=next(data for path,method,data in calls if path.startswith('/v10/projects'))
+        self.assertTrue(all(row['key'].startswith('SHORTS_') and row['target']==['production'] for row in env))
+        self.assertEqual(result['siteUrl'],'https://site.vercel.app');self.assertEqual(result['vercel'],'production_ready')
+        domains=next(data['authorizedDomains'] for method,data in google_calls if method=='PATCH')
+        self.assertIn('existing.example',domains);self.assertIn('site.vercel.app',domains)
+        self.assertIn('https://site.vercel.app',cors[0][0]['origin'])
+
+    def test_U003_reconnection_cannot_publish_an_outdated_worker_commit(self):
+        project={'id':'p','name':'site','link':{'productionBranch':'main','repoId':1}}
+        with patch.object(self.c,'find_project',return_value=(project,'team')),patch.object(self.c,'firebase') as firebase,patch.object(self.c,'vercel') as api:
+            with self.assertRaisesRegex(RuntimeError,'Elige 6'):
+                self.c.connect(lambda *_:'b'*40+'\trefs/heads/main',None,None,{'commit':'a'*40},None)
+            firebase.assert_not_called();api.assert_not_called()

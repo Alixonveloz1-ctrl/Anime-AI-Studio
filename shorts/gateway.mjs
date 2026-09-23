@@ -20,6 +20,8 @@ export async function handleShortsRequest(request, env = {}) {
     return json(503, { error: 'Destino de Cortos inválido.' });
   if (env.VERCEL_ENV === 'preview' && env.SHORTS_ENVIRONMENT !== 'preview')
     return json(503, { code: 'PREVIEW_ISOLATION', error: 'La preview requiere configuración aislada.' });
+  if (env.VERCEL_ENV === 'production' && env.SHORTS_ENVIRONMENT !== 'production')
+    return json(503, { code: 'PRODUCTION_ISOLATION', error: 'Conecta Cortos a la página habitual desde el instalador de main.' });
   if (!/^\/(?:health|projects|jobs)(?:[A-Za-z0-9_/:.-]*)$/.test(path) || path.includes('..'))
     return json(400, { error: 'Ruta no válida.' });
   if (!['GET', 'POST', 'PATCH'].includes(request.method)) return json(405, { error: 'Método no admitido.' });

@@ -92,3 +92,13 @@ En Chrome se revisaron los recorridos de la página sintética de interfaz: guio
 La ruta real muestra correctamente que falta conectar el ensamblador y ofrece Cloud Shell con repositorio/rama correctos. Animes carga sus modos previos y permite entrar a Cortos; no se generó ni exportó contenido en esa revisión. El único despliegue de producción continúa en el commit original `958248e`.
 
 Dos ajustes derivados de la revisión: el guion ya aprobado ofrece continuar a Producción y deja regeneración bajo un desplegable; los tiempos de frames se muestran con tres decimales. Se repitieron los cinco recorridos DOM tras esos ajustes. CI/preview del commit siguiente se registran en la PR al finalizar.
+
+## Integración en main y retirada de instalación de la interfaz
+
+El usuario autorizó expresamente `main` y el despliegue habitual; además retiró el requisito del botón Cloud Shell. Estas decisiones se registran como U003/U004 y prevalecen sobre los cierres históricos anteriores. Se confirmó de nuevo main `958248ec2fe90fb4a2b0b5004d2a53642a274995` y rama de Cortos `7eb2d0d4778fbd0f338ecdb5fc4a61e4313630ee`. Antes de editar, la regresión heredada y los 12 tests existentes del instalador pasaron.
+
+Se retiran botón Ajustes, panel de instalación, manejador asociado y estilos; el arranque sin servicio informa que Cortos todavía no está conectado. El instalador y conector usan main/producción, conservan el proyecto Vercel y sus variables de Animes, añaden los dominios de producción a Firebase/CORS y mantienen los nombres GCP ya usados para no perder estado. La publicación no ejecuta el instalador ni llama a modelos. El enlace con correo se entrega en la conversación después de que el usuario indique la cuenta correcta.
+
+La comparación byte a byte de los componentes heredados sigue formando parte de las pruebas. Se añaden casos para detener checkout desactualizado antes de infraestructura, variables exclusivamente SHORTS_ de producción, rama Vercel incorrecta, alias y dominios existentes, y rechazo de cruce de entornos en gateway. El caso anterior de aislamiento preview se conserva con selección explícita del entorno. CI ahora se ejecuta también para pushes a main.
+
+Verificación antes de publicar: 103 tests Python correctos en 116,839 s, sin skips; 7 tests gateway/checksum y 5 recorridos DOM correctos. Contratos estáticos, comparación heredada, sintaxis de launchers/JS, matriz de 100 filas y diff sin errores correctos. El log incluye salidas del instalador simulado: no representan despliegues GCP reales.

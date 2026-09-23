@@ -21,7 +21,8 @@ async function setup(options={}){
 test('Five stages, no budgets, no financial fields in generation requests',async()=>{
  const {fixture,w,dom,click}=await setup({empty:true});
  assert.deepEqual([...w.document.querySelectorAll('#steps button')].map(b=>b.textContent),presentation.steps);
- assert.doesNotMatch(w.document.body.textContent,/USD|presupuesto|reserva máxima/);
+ assert.doesNotMatch(w.document.body.textContent,/USD|presupuesto|reserva máxima|Cloud Shell|Conectar el ensamblador/);
+ assert.equal(w.document.querySelector('#settings-toggle,#setup-panel,a[href*="cloudshell"]'),null);
  await click('Generar tres ideas');const sent=fixture.calls.find(c=>c.path.endsWith('/ideas:generate'));
  assert.ok(sent.body.session);assert.equal('budgetId' in sent.body,false);assert.equal(w.document.querySelectorAll('.story-content .grid>.card').length,3);
  dom.window.close();

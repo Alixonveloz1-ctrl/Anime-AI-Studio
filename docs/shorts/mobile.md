@@ -1,21 +1,23 @@
-# Cortos desde el iPhone — guía de la rama de desarrollo
+# Cortos desde el iPhone
 
-La sección está en `/cortos/`, dentro del mismo repositorio y proyecto Vercel. La implementación sigue en desarrollo: no está lista para producción ni equivale a 100 pruebas aceptadas. Consulta [la matriz completa](acceptance.md) y [la auditoría](audit.md).
+La sección está en `/cortos/`, dentro del mismo repositorio y proyecto Vercel. El código se integra en `main` por decisión del usuario. La publicación web y la instalación de los servicios Google son pasos distintos; no equivalen a 100 pruebas aceptadas. Consulta [la matriz completa](acceptance.md) y [la auditoría](audit.md).
 
 ## Instalación y actualización
 
-1. Pulsa **Ajustes → Abrir instalador en Cloud Shell**. El enlace incluye el repositorio y la rama `feature/cortos-anime-v2`.
+1. Abre **el enlace que recibirás en la conversación**, preparado para el correo de Google que indiques. Inicia sesión con ese correo. El enlace carga este repositorio y `main`; autoriza su apertura cuando Google lo solicite. La aplicación no contiene botones ni paneles de instalación.
 2. En la terminal escribe solamente `./c`. Si el sistema no permite ejecutarlo directamente, escribe `bash c`.
 3. El menú ofrece **1 Instalar/actualizar**, **2 Diagnóstico**, **3 Restaurar versión anterior**, **4 Salir**, **5 Conectar/recuperar Vercel** y **6 Buscar actualización de la rama**.
-4. Selecciona cuenta/proyecto por número. Antes de crear recursos verás la cuenta, proyecto, región, commit y recursos que se crearán o actualizarán. Cancelar conserva la configuración existente.
+4. Comprueba la cuenta activa que muestra Cloud Shell y selecciona el proyecto por número. Antes de crear recursos verás la cuenta, proyecto, región, commit y recursos que se crearán o actualizarán. Cancelar conserva la configuración existente.
 5. El instalador construye una imagen del commit, ejecuta fixtures dentro de ella y prepara el servicio y Job aislados. No llama a modelos. Después comprueba escritura/lectura cloud, descarga firmada y entrega de cola autenticada. Una candidata que falla el build, diagnóstico cloud o health no sustituye la versión activa anterior.
-6. Para conectar Vercel, autoriza su cliente oficial desde el enlace del navegador y elige el equipo/proyecto por número. Se exige el proyecto ya conectado a este repositorio. Solo se escriben variables `SHORTS_*` de esta rama de preview.
+6. Para conectar Vercel, autoriza su cliente oficial desde el enlace del navegador y elige el equipo/proyecto por número. Se exige el proyecto ya conectado a este repositorio. Solo se escriben variables `SHORTS_*` de producción. Se vuelve a desplegar `main` en tu página habitual para aplicar la conexión; las variables de Animes se conservan.
 7. Si Google aún no está activado en Firebase, el menú ofrece el enlace a su pantalla oficial. Allí selecciona Google y el correo de soporte; vuelve y elige **Comprobar de nuevo**. No debes copiar una clave, JSON ni un ID largo.
-8. El resultado se guarda en nube. Si se pierde Cloud Shell, vuelve al botón, escribe `./c` y usa Diagnóstico o Conectar/recuperar. La opción 6 abre la actualización en otro checkout y conserva tus archivos locales.
+8. El resultado se guarda en nube. Si se pierde Cloud Shell, vuelve al enlace de la conversación, escribe `./c` y usa Diagnóstico o Conectar/recuperar. La opción 6 abre la actualización en otro checkout y conserva tus archivos locales.
+
+Las dos variables existentes de Animes (cuenta de servicio y bucket) se conservan. El bucket propio de Cortos se configura en Cloud Run. No debes añadir manualmente una tercera variable de bucket en Vercel: el conector configura allí automáticamente la URL del servicio, el inicio de sesión y la activación de Cortos. Puedes elegir el mismo proyecto Google Cloud que ya usas para Animes.
 
 Si todavía no instalaste Cortos, usa la opción 1. Si ya instalaste una versión anterior de Cortos, usa **6 Buscar actualización de la rama** y después **1 Instalar/actualizar**. Este bloque cambió también el servicio/worker: actualizar solamente la web no basta. **No reinstales el ensamblador de Animes**; `i` y `setup.sh` se conservan.
 
-El instalador completo aún requiere ensayo real autorizado en Cloud Shell/iPhone. Una preview `READY` acredita el build de Vercel, no la conexión a Google. La autenticación, cargas, permisos y modelos se verifican por separado. La aplicación no tiene pantalla de costes, estimadores, saldos ni reservas; consulta tu facturación directamente en Google Cloud.
+El instalador completo aún requiere ensayo real autorizado en Cloud Shell/iPhone. Un despliegue `READY` acredita el build de Vercel; la conexión a Google se verifica por separado. La autenticación, cargas, permisos y modelos se verifican por separado. La aplicación no tiene pantalla de costes, estimadores, saldos ni reservas; consulta tu facturación directamente en Google Cloud.
 
 ## Flujo editorial implementado
 

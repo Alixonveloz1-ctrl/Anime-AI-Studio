@@ -1,6 +1,6 @@
 """Browser consent and numeric selection; no pasted tokens, keys or JSON.
 
-Called by the authorized installer only. Never changes Vercel production envs.
+Called by the authorized installer. Only SHORTS_* variables may be changed.
 """
 import json
 from pathlib import Path
@@ -12,7 +12,7 @@ import urllib.parse
 import urllib.request
 
 CLI = ['npx', '--yes', 'vercel@59.25.4']
-BRANCH = 'feature/cortos-anime-v2'
+BRANCH = 'main'
 OWNER = 'Alixonveloz1-ctrl'
 REPO = 'Anime-AI-Studio'
 
@@ -52,9 +52,9 @@ def firebase(g, pick, project):
     if existing is None:
         operation(g, google(g, host, base + ':addFirebase', 'POST', {}))
     apps = google(g, host, base + '/webApps').get('apps', [])
-    app = next((x for x in apps if x.get('displayName') == 'Anime Cortos preview'), None)
+    app = next((x for x in apps if x.get('displayName') in ('Anime Cortos', 'Anime Cortos preview')), None)
     if not app:
-        app = operation(g, google(g, host, base + '/webApps', 'POST', {'displayName': 'Anime Cortos preview'}))
+        app = operation(g, google(g, host, base + '/webApps', 'POST', {'displayName': 'Anime Cortos'}))
     cfg = google(g, host, '/v1beta1/' + app['name'] + '/config')
     # Firebase creates/manages the OAuth client from its Google sign-in screen.
     # Enabling an arbitrary client with invented credentials is never attempted.
@@ -100,44 +100,53 @@ def find_project(command, pick):
     return next(p for p in projects if p['name'] == name), team
 
 
-def branch_vars(command, project_id, team, values):
+def branch_vars(command, project_id, team, values, target='production', branch=BRANCH):
     if any(not k.startswith('SHORTS_') for k in values):
         raise RuntimeError('El instalador no puede editar configuración de Animes')
+    if target not in ('preview', 'production') or (target == 'production' and branch != BRANCH):
+        raise RuntimeError('El sitio habitual solo se conecta desde main')
     query = urllib.parse.urlencode({'upsert': 'true', **({'teamId': team} if team else {})})
-    payload = [{'key': k, 'value': v, 'type': 'encrypted', 'target': ['preview'], 'gitBranch': BRANCH} for k, v in values.items()]
+    scope = {'gitBranch': branch} if target == 'preview' else {}
+    payload = [{'key': k, 'value': v, 'type': 'encrypted', 'target': [target], **scope} for k, v in values.items()]
     result = vercel(command, '/v10/projects/' + project_id + '/env?' + query, 'POST', payload)
     if isinstance(result, dict) and result.get('failed'):
         raise RuntimeError('Vercel rechazó parte de la configuración; Cortos no está listo.')
 
 
+def deployment_payload(project, state):
+    if project['link'].get('productionBranch', 'main') != BRANCH:
+        raise RuntimeError('El proyecto Vercel debe publicar main. No se modificó su configuración.')
+    source = {'type': 'github', 'repoId': str(project['link']['repoId']), 'ref': BRANCH, 'sha': state['commit']}
+    return {'name': project['name'], 'project': project['id'], 'gitSource': source, 'target': 'production'}
+
+
 def connect(command, g, pick, state, save):
     project, team = find_project(command, pick)
-    print(f'\nGCP: {state["project"]}\nVercel: {project["name"]}\nRama: {BRANCH}\nEntorno: preview')
-    if pick('Configurar autenticación, cargas y preview (puede consumir build/almacenamiento)', ['Cancelar', 'Autorizar conexión']) == 'Cancelar':
+    payload = deployment_payload(project, state)
+    remote = command(['git', 'ls-remote', f'https://github.com/{OWNER}/{REPO}.git', 'refs/heads/' + BRANCH]).split()
+    if not remote or remote[0] != state['commit']:
+        raise RuntimeError('El ensamblador instalado no corresponde al main actual. Elige 6 y después 1 para actualizar antes de conectar.')
+    print(f'\nGCP: {state["project"]}\nVercel: {project["name"]}\nRama: {BRANCH}\nDestino: tu página habitual')
+    if pick('Conectar Cortos a tu página habitual (puede consumir build/almacenamiento)', ['Cancelar', 'Autorizar conexión']) == 'Cancelar':
         return state
     cfg = firebase(g, pick, state['project'])
-    values = {'SHORTS_ENABLED': 'true', 'SHORTS_ENVIRONMENT': 'preview', 'SHORTS_PRODUCTION_URL': state['url'], 'SHORTS_FIREBASE_WEB_CONFIG': json.dumps(cfg)}
+    values = {'SHORTS_ENABLED': 'true', 'SHORTS_ENVIRONMENT': 'production', 'SHORTS_PRODUCTION_URL': state['url'], 'SHORTS_FIREBASE_WEB_CONFIG': json.dumps(cfg)}
     branch_vars(command, project['id'], team, values)
     query = '?' + urllib.parse.urlencode({'teamId': team}) if team else ''
-    source = {'type': 'github', 'repoId': str(project['link']['repoId']), 'ref': BRANCH, 'sha': state['commit']}
-    if project['link'].get('productionBranch') == BRANCH:
-        raise RuntimeError('Esta rama está configurada como producción en Vercel. No se desplegará.')
-    # REST target is omitted for preview; "preview" is not a supported target
-    # enum on older versions of the API. The branch is explicitly non-production.
-    deployment = vercel(command, '/v13/deployments' + query, 'POST', {'name': project['name'], 'project': project['id'], 'gitSource': source})
+    deployment = vercel(command, '/v13/deployments' + query, 'POST', payload)
     state.update(vercelProjectId=project['id'], vercelTeamId=team, deploymentId=deployment['id'], auth='configured', vercel='building')
     save(state)
     for _ in range(120):
         deployment = vercel(command, '/v13/deployments/' + state['deploymentId'] + query)
         if deployment.get('readyState') in ('ERROR', 'CANCELED'):
-            raise RuntimeError('La preview no se construyó. Producción y montador anterior se conservan.')
+            raise RuntimeError('La página no se construyó. Se conserva el despliegue anterior.')
         if deployment.get('readyState') == 'READY':
             break
         time.sleep(3)
     else:
-        raise RuntimeError('Preview aún pendiente; su ID quedó guardado en nube.')
+        raise RuntimeError('Despliegue aún pendiente; su ID quedó guardado en nube.')
     domains = sorted(set([deployment['url'], *deployment.get('alias', [])]))
-    # Add exactly this preview's origins, preserving Firebase's existing domains.
+    # Include the production aliases; preserve existing Firebase domains.
     identity = '/admin/v2/projects/' + state['project'] + '/config'
     old = google(g, 'identitytoolkit.googleapis.com', identity)
     allowed = sorted(set(old.get('authorizedDomains', []) + domains))
@@ -149,8 +158,10 @@ def connect(command, g, pick, state, save):
         cors = Path(tmp) / 'cors.json'
         cors.write_text(json.dumps([{'origin': origins, 'method': ['GET', 'HEAD', 'PUT', 'POST'], 'responseHeader': ['Content-Type', 'Range', 'Content-Range', 'Location'], 'maxAgeSeconds': 3600}]))
         g('storage', 'buckets', 'update', 'gs://' + state['bucket'], '--cors-file', str(cors))
-    state.update(vercel='preview_ready', previewUrl='https://' + deployment['url'], auth='configured_not_browser_tested')
+    aliases = [d for d in deployment.get('alias', []) if '-git-' not in d]
+    site_url = 'https://' + (min(aliases, key=len) if aliases else deployment['url'])
+    state.update(vercel='production_ready', siteUrl=site_url, auth='configured_not_browser_tested', environment='production', branch=BRANCH)
     save(state)
-    print('Preview: ' + state['previewUrl'] + '/cortos/')
+    print('Cortos en tu página: ' + state['siteUrl'] + '/cortos/')
     print('Verifica Entrar con Google desde el iPhone. Las pruebas con modelos requieren autorización. No se generó contenido.')
     return state
