@@ -31,3 +31,11 @@ El servidor conserva una reserva al producirse un timeout o error de resultado d
 - [Vercel: creación de preview](https://vercel.com/docs/rest-api/deployments/create-a-new-deployment)
 
 La página de precios distingue modalidad Veo con/sin audio y publica TTS por tokens. Falta cerrar el estimador por unidades máximas, liquidación de uso real y vigencia de tarifas. `SHORTS_RATE_TABLE` queda vacío en la configuración de ejemplo; este bloqueo es intencional, no una tarifa cero ni una afirmación de ahorro. Health y CI no verifican permisos de generación pagada.
+
+## Tarifas y registro de consumo (2026-09-23)
+
+`shorts/core/pricing.py` incluye precios fechados y vencimiento. Reserva límites de entrada/salida verificados antes del envío, dos llamadas donde hay generación + revisión/análisis fino, y un worker de 2 CPU / 4 GiB / máximo 3600 s. No presupone descuentos ni créditos. Veo reserva ocho unidades de la modalidad sin audio de la tabla pública ($0.20/count); esta lectura conservadora se registra sin prometer una factura exacta por clip. El acceso/cargo real debe verificarse con una prueba autorizada.
+
+Fuentes: https://cloud.google.com/vertex-ai/generative-ai/pricing ; https://cloud.google.com/text-to-speech/pricing ; https://cloud.google.com/text-to-speech/docs/gemini-tts ; https://cloud.google.com/speech-to-text/pricing ; https://cloud.google.com/run/pricing .
+
+Speech v1 convierte copia de trabajo a mono PCM16, guarda el ID y consulta GET /v1/operations/{name}; conserva marcas como propuesta y no sobrescribe subtítulos manuales. Referencia: https://docs.cloud.google.com/speech-to-text/docs/v1/async-time-offsets . Sin prueba API pagada todavía.

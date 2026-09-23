@@ -35,6 +35,14 @@ class InstallerTests(unittest.TestCase):
             install.install('account','project','us-central1','bucket')
         self.assertEqual(len(calls),1);self.assertEqual(calls[0][:2],('billing','projects'))
 
+    def test_A089_connection_failure_restores_old_worker(self):
+        old={'commit':'old','service':'service','revision':'old-r'}
+        candidate={'commit':'new','service':'service','revision':'new-r'}
+        with patch.object(install,'g') as g,patch.object(install,'state_save') as save:
+            with self.assertRaises(RuntimeError):install.activate('p','r','b',candidate,old,'/tmp',lambda *a:(_ for _ in ()).throw(RuntimeError('connection failed')))
+            self.assertIn('old-r=100',g.call_args.args)
+            self.assertEqual(save.call_args.args[1],old)
+
 class ConnectorTests(unittest.TestCase):
     def setUp(self):
         spec=importlib.util.spec_from_file_location('shorts_connect',ROOT/'infra/shorts/connect.py')

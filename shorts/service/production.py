@@ -8,16 +8,17 @@ import uuid
 from pathlib import Path
 from shorts.core.contracts import require, digest, validate_ideas, ContractError
 from shorts.service.providers import Providers, UnknownSubmission
+from shorts.service.cloud import JobMeter
 from shorts.service.director import RULES, ideas_prompt, develop_prompt, validate_development
 from shorts.service.timeline import approved_assets
 from shorts.core.dependencies import fingerprint, select_assets, dependency_records
 from media import pcm, waveform, silent_video, inspect, checksum, extract_frames, probe
-from render import render
+from render import render, visual_clip
 
 def ident_new():return uuid.uuid4().hex
 
 def run_job(cloud,j,p):
-    pid=p['id'];op=j['operation'];data=j['payload'];provider=Providers(cloud.c,cloud.http)
+    pid=p['id'];op=j['operation'];data=j['payload'];provider=Providers(cloud.c,cloud.http,JobMeter(cloud,j['id']))
     if data.get('developmentId'):p={**p,'activeDevelopment':data['developmentId']}
     def entity(kind,value):
         record={'id':ident_new(),'revision':1,'approvalState':'candidate','created':time.time(),'jobId':j['id'],**value}
@@ -101,6 +102,7 @@ def run_job(cloud,j,p):
             return {'assetId':asset(target,'pcm',eid,meta)['id']}
         if op=='media':
             u=cloud.entity(pid,'uploads',data['uploadId']);source=root/'upload';cloud.download(pid,u['object'],source)
+            require(checksum(source)==u['sha256'],'UPLOAD_CHECKSUM','El archivo recibido no coincide con el seleccionado; no se crean cues')
             target=root/'audio.wav';meta=pcm(source,target);meta['waveform']=waveform(target);meta.update(requestId=data['requestId'],originalObject=u['object'])
             a=asset(target,'pcm',data['requestId'],meta)
             dev=development();req=next(x for x in dev['data']['soundRequests'] if x['id']==data['requestId'])
@@ -145,10 +147,19 @@ def run_job(cloud,j,p):
             propose(cloud.db.transaction())
             return {'proposalEventId':proposal['id'],'manualLock':cue.get('manualLock',False)}
         if op=='frames':
-            a=selected(data['shotId'],'veo_silent_validated');source=root/'video.mp4';cloud.download(pid,a['object'],source)
+            from shorts.service.timeline import assemble_plan
+            from shorts.core.contracts import visual_fingerprint
+            manifest=assemble_plan(cloud,p)
+            shot=next(s for s in manifest['shots'] if s['id']==data['shotId'])
+            require(shot['treatment']!='black','FRAME_MATERIAL','Aprueba material real de esta toma antes de marcar el evento')
+            a=manifest['assets'][shot['assetRevision']];files={}
+            for aid in {shot['assetRevision'],*(x['assetRevision'] for x in shot.get('layers',[]))}:
+                path=root/(aid+'.media');cloud.download(pid,manifest['assets'][aid]['object'],path);files[aid]=path
+            source=root/'visual.mp4'
+            visual_clip(shot,files,source,480,270 if p['format']=='16:9' else 854,0,shot['frames'])
             frames=extract_frames(source,root/'frames',data['start'],data['count']);aid=ident_new()
             for f in frames:f['object']=cloud.upload_file(pid,aid,root/'frames'/f['file'],f['file'],'image/jpeg')
-            record=entity('references',{'assetRevision':a['id'],'frames':frames,'kind':'indexed_frames','shotId':data['shotId']})
+            record=entity('references',{'assetRevision':a['id'],'visualFingerprint':visual_fingerprint(shot),'coordinateSpace':'shot_output','frames':frames,'kind':'indexed_frames','shotId':data['shotId']})
             return {'framesId':record['id']}
         if op in ('preview','render'):
             timeline=cloud.entity(pid,'timelines',data['timelineId']);m=copy.deepcopy(timeline['data'])
@@ -160,14 +171,43 @@ def run_job(cloud,j,p):
             names=[result['file'],'clean.mp4','subtitles.srt','subtitles.ass','compiled.json','result.json','mix-report.json']
             if op=='render':names+=['dialogue.wav','thought.wav','narration.wav','system.wav','music.wav','ambience.wav','sfx.wav','mix.wav']
             for name in names:files[name]=cloud.upload_file(pid,rid,root/name,name,mimetypes.guess_type(name)[0] or 'application/json')
-            record={'id':rid,'revision':1,'state':'ready','final':op=='render','timelineId':timeline['id'],'object':files[result['file']],'files':files,'draftIssues':timeline['data'].get('draftIssues',[]),'cueHashes':{c['id']:digest(c) for c in timeline['data']['cues']},**result}
+            record={'id':rid,'revision':1,'state':'ready','jobId':j['id'],'cacheKey':digest([result['manifestHash'],data['startFrame'],data['endFrame'],op=='render',result['compilerVersion']]),'final':op=='render','timelineId':timeline['id'],'object':files[result['file']],'files':files,'draftIssues':timeline['data'].get('draftIssues',[]),'cueHashes':{c['id']:digest(c) for c in timeline['data']['cues']},**result}
             cloud.put_entity(pid,'previews',record);return {'previewId':rid,'final':op=='render'}
         if op=='review':
             a=cloud.entity(pid,'assets',data['assetId'])
             result=provider.text(RULES+'\nRevisa solo el material observado contra estas biblias. Devuelve {issues:[],coverage:[],uncertainty:string}. No certifiques perfección.\n'+json.dumps(d['bible'],ensure_ascii=False),[{'fileData':{'fileUri':uri(a),'mimeType':a['mimeType']}}],True)
             return {'review':result,'assetId':a['id']}
         if op=='transcribe':
-            a=selected(eid,'pcm')
-            result=provider.post('https://speech.googleapis.com/v1/speech:longrunningrecognize',{'config':{'encoding':'LINEAR16','sampleRateHertz':48000,'languageCode':'ja-JP','enableWordTimeOffsets':True,'audioChannelCount':2},'audio':{'uri':uri(a)}})
-            return {'operationName':result['name'],'assetId':a['id'],'state':'awaiting_alignment_review'}
+            import re
+            from decimal import Decimal
+            from media import ff
+            a=selected(eid,'pcm');ref=cloud.db.collection('animeShortsJobs').document(j['id'])
+            name=j.get('providerOperation')
+            if not name:
+                source=root/'voice.wav';cloud.download(pid,a['object'],source)
+                target=root/'recognition.wav'
+                ff(['-i',source,'-map','0:a:0','-ar',48000,'-ac',1,'-c:a','pcm_s16le',target])
+                obj=cloud.upload_file(pid,ident_new(),target,target.name,'audio/wav')
+                result=provider.post('https://speech.googleapis.com/v1/speech:longrunningrecognize',{'config':{'encoding':'LINEAR16','sampleRateHertz':48000,'languageCode':'ja-JP','enableWordTimeOffsets':True,'audioChannelCount':1},'audio':{'uri':'gs://'+cloud.c['bucket']+'/'+obj}},'transcribe')
+                name=result.get('name');require(name,'SPEECH_OPERATION','Speech no devolvió una operación')
+                ref.update({'providerOperation':name,'state':'waiting_provider','speechAudioRevision':a['id']})
+            deadline=time.time()+900
+            while time.time()<deadline:
+                result=provider.poll_speech(name)
+                if result.get('done'):break
+                time.sleep(5)
+            else:raise ContractError('SPEECH_PENDING','La transcripción sigue en Google; conserva su ID',503)
+            require(not result.get('error'),'SPEECH_FAILED','Google informó un fallo de transcripción')
+            words=[];transcripts=[]
+            for row in result.get('response',{}).get('results',[]):
+                alt=(row.get('alternatives') or [{}])[0];transcripts.append(alt.get('transcript',''))
+                for w in alt.get('words',[]):
+                    times=[w.get(k,'0s') for k in ('startTime','endTime')]
+                    require(all(re.fullmatch(r'[0-9]+(?:\.[0-9]+)?s',t) for t in times),'SPEECH_TIME','Tiempo de reconocimiento inválido')
+                    start,end=[round(Decimal(t[:-1])*48000) for t in times]
+                    require(0<=start<=end<=a['samples'],'SPEECH_TIME','Palabra fuera del audio recibido')
+                    words.append({'text':w['word'],'startSample':start,'endSample':end})
+            require(words,'SPEECH_EMPTY','No se reconocieron palabras; el editor manual sigue disponible')
+            record=entity('references',{'kind':'speech_alignment','audioRevision':a['id'],'audioHash':a['sha256'],'utteranceId':eid,'words':words,'transcript':' '.join(transcripts),'source':'google-speech-v1','precisionNotice':'Marcas aproximadas de reconocimiento, revisa la voz real'})
+            return {'alignmentId':record['id'],'assetId':a['id'],'state':'awaiting_alignment_review'}
         raise ContractError('OPERATION','Operación no implementada')

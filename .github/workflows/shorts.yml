@@ -33,7 +33,7 @@ jobs:
           PYTHONPATH: '.:worker/montage-shorts'
         run: |
           python -m unittest discover -s tests/shorts -p 'test_*.py' -v
-          node --test tests/shorts/gateway.test.cjs
+          node --test tests/shorts/gateway.test.cjs tests/shorts/hash.test.mjs
           node --check cortos/app.js
       - name: Acceptance matrix completeness
         run: python tests/shorts/check_matrix.py

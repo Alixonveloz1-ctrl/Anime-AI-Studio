@@ -9,6 +9,8 @@ from google.auth.transport.requests import AuthorizedSession, Request
 from google.oauth2 import id_token
 from shorts.core.contracts import require, ident, revision, digest
 from shorts.core.jobs import reserve, claim, settle
+from shorts.core.pricing import catalog, CALLS, call_limit, reconcile
+from shorts.core.dispatch import resource_class, acquire
 
 class Cloud:
     def __init__(self,c):
@@ -59,13 +61,12 @@ class Cloud:
         def save(tx):
             current=self.project_ref(p['id']).get(transaction=tx).to_dict();b=b_ref.get(transaction=tx).to_dict();old=j_ref.get(transaction=tx).to_dict()
             require(b and b['owner']==p['owner'] and b['projectId']==p['id'],'BUDGET_AUTH','Autorización ajena',403)
-            # Estimates come exclusively from the server tariff table, never client payload.
-            rates=json.loads(__import__('os').environ.get('SHORTS_RATE_TABLE','{}'))
-            rate=rates.get(operation)
-            require(rate and rate.get('verifiedDate') and rate.get('maxMicros',0)>0,'PRICE_UNVERIFIED','Falta tarifa conservadora verificada para esta operación',503)
-            if operation=='veo':require(rate.get('generateAudio') is False,'PRICE_MODE','Tarifa Veo sin audio no verificada')
+            rate=catalog(self.c).get(operation)
+            require(rate,'OPERATION','Operación no presupuestable')
             job,new_budget,created=reserve(current,b,{j_id:old} if old else {},operation,payload,key,expected,rate['maxMicros'],time.time(),session)
-            if created:tx.set(j_ref,job);tx.set(b_ref,new_budget)
+            if created:
+                job['priceEstimate']=rate;job['providerCalls']=[]
+                tx.set(j_ref,job);tx.set(b_ref,new_budget)
             return job
         job=save(self.db.transaction())
         if job['state']=='queued':self.enqueue(job)
@@ -76,12 +77,34 @@ class Cloud:
         task={'name':parent+'/tasks/'+j['id']+'-'+str(j.get('dispatchAttempt',0)), 'http_request':{'http_method':tasks_v2.HttpMethod.POST,'url':self.c['service']+'/internal/dispatch','headers':{'Content-Type':'application/json'},'body':json.dumps({'jobId':j['id']}).encode(),'oidc_token':{'service_account_email':self.c['serviceAccount'],'audience':self.c['service']}}}
         try:client.create_task(parent=parent,task=task)
         except AlreadyExists:pass
+    def acquire_dispatch(self,jid):
+        ref=self.db.collection('animeShortsJobs').document(ident(jid))
+        @firestore.transactional
+        def apply(tx):
+            j=ref.get(transaction=tx).to_dict();require(j,'JOB','Trabajo inexistente',404)
+            p=self.project_ref(j['projectId']).get(transaction=tx).to_dict()
+            sr=self.db.collection('animeShortsCapacity').document(resource_class(j['operation']))
+            slot=sr.get(transaction=tx).to_dict()
+            out,slot,dispatch=acquire(j,p,slot,time.time())
+            if dispatch:tx.set(ref,out);tx.set(sr,slot)
+            return out,dispatch
+        return apply(self.db.transaction())
+
     def claim(self,jid):
         ref=self.db.collection('animeShortsJobs').document(ident(jid))
         @firestore.transactional
         def apply(tx):
             j=ref.get(transaction=tx).to_dict();require(j,'JOB','Trabajo inexistente',404)
-            p=self.project_ref(j['projectId']).get(transaction=tx).to_dict();out,dispatch=claim(j,p,time.time());tx.set(ref,out)
+            p=self.project_ref(j['projectId']).get(transaction=tx).to_dict()
+            b=self.db.collection('animeShortsBudgetAuthorizations').document(j['budgetId']).get(transaction=tx).to_dict()
+            if j['state']=='queued' and (b.get('expires',0)<=time.time() or j['operation'] not in b.get('operations',[])):
+                out={**j,'state':'cancelled','reason':'Autorización vencida'};dispatch=False
+            else:out,dispatch=claim(j,p,time.time())
+            if dispatch:
+                import os
+                execution=os.environ.get('CLOUD_RUN_EXECUTION','')
+                if execution:out['workerExecution']=f'projects/{self.c["project"]}/locations/{self.c["region"]}/jobs/{self.c["job"]}/executions/{ident(execution)}'
+            tx.set(ref,out)
             return out,p,dispatch
         return apply(self.db.transaction())
     def finish(self,jid,state,result):
@@ -89,5 +112,39 @@ class Cloud:
         @firestore.transactional
         def apply(tx):
             j=ref.get(transaction=tx).to_dict();br=self.db.collection('animeShortsBudgetAuthorizations').document(j['budgetId']);b=br.get(transaction=tx).to_dict()
+            sr=self.db.collection('animeShortsCapacity').document(resource_class(j['operation']));slot=sr.get(transaction=tx).to_dict()
+            if not j.get('settled') and j.get('started'):j['cost']=reconcile(j,time.time())
             j,b=settle(j,b,state,result);tx.set(ref,j);tx.set(br,b)
+            if slot and slot.get('jobId')==jid:tx.set(sr,{'jobId':None})
         apply(self.db.transaction())
+
+
+class JobMeter:
+    """Journal every paid request before transport, with an independent lease check."""
+    def __init__(self,cloud,jid):self.cloud,self.jid=cloud,jid
+    def begin_call(self,kind,url,payload):
+        @firestore.transactional
+        def apply(tx):
+            ref=self.cloud.db.collection('animeShortsJobs').document(self.jid)
+            job=ref.get(transaction=tx).to_dict()
+            p=self.cloud.project_ref(job['projectId']).get(transaction=tx).to_dict()
+            require(job['state'] not in ('cancel_requested','cancelled'),'CANCELLED','Se detuvieron nuevas llamadas',409)
+            require(p.get('lease',{}).get('session')==job['session'] and p['lease']['expires']>time.time(),'LEASE','Sesión pausada antes de llamar al proveedor',409)
+            budget=self.cloud.db.collection('animeShortsBudgetAuthorizations').document(job['budgetId']).get(transaction=tx).to_dict()
+            require(budget.get('expires',0)>time.time() and job['operation'] in budget.get('operations',[]),'BUDGET_AUTH','Autorización vencida o pausada',403)
+            catalog(self.cloud.c)
+            calls=job.get('providerCalls',[])
+            require(sum(c['kind']==kind for c in calls)<CALLS[job['operation']].get(kind,0),'CALL_LIMIT','Límite de llamadas del encargo agotado')
+            call={'id':uuid.uuid4().hex,'kind':kind,'state':'submitted_unknown','requestHash':digest([url,payload]),'started':time.time(),'ceilingMicros':call_limit(kind)}
+            tx.update(ref,{'providerCalls':calls+[call]})
+            return call['id']
+        return apply(self.cloud.db.transaction())
+    def end_call(self,cid,state,cost,basis):
+        @firestore.transactional
+        def apply(tx):
+            ref=self.cloud.db.collection('animeShortsJobs').document(self.jid)
+            job=ref.get(transaction=tx).to_dict();calls=job['providerCalls']
+            row=next(c for c in calls if c['id']==cid)
+            row.update(state=state,estimatedMicros=cost,basis=basis,finished=time.time())
+            tx.update(ref,{'providerCalls':calls})
+        apply(self.cloud.db.transaction())

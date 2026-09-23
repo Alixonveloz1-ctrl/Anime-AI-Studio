@@ -13,7 +13,7 @@ La sección está en `/cortos/`, dentro del mismo repositorio y proyecto Vercel.
 7. Si Google aún no está activado en Firebase, el menú ofrece el enlace a su pantalla oficial. Allí selecciona Google y el correo de soporte; vuelve y elige **Comprobar de nuevo**. No debes copiar una clave, JSON ni un ID largo.
 8. El resultado se guarda en nube. Si se pierde Cloud Shell, vuelve al botón, escribe `./c` y usa Diagnóstico o Conectar/recuperar. La opción 6 abre la actualización en otro checkout y conserva tus archivos locales.
 
-El instalador completo aún requiere ensayo real autorizado en Cloud Shell/iPhone. Una preview `READY` solo acredita el build de Vercel. La autenticación, cargas, permisos, tarifas y modelos se prueban por separado. Sin una tarifa conservadora verificada, el servidor bloquea la producción: no se habilita un precio ficticio para saltar este bloqueo. La tabla de tarifas todavía necesita completar su cálculo e integración; no se pide al usuario editar JSON.
+El instalador completo aún requiere ensayo real autorizado en Cloud Shell/iPhone. Una preview `READY` solo acredita el build de Vercel. La autenticación, cargas, permisos, tarifas y modelos se prueban por separado. Sin una tarifa conservadora verificada, el servidor bloquea la producción: no se habilita un precio ficticio para saltar este bloqueo. Las tarifas se incluyen con fecha y vencimiento; generación y worker se muestran por separado. La conciliación usa tokens/duración observados cuando están disponibles y conserva un techo en los demás casos. Almacenamiento, transferencia, hosting y builds no equivalen al contador de la app. No debes editar JSON.
 
 ## Flujo editorial implementado
 
@@ -32,7 +32,7 @@ En Sonido, cada solicitud tiene prompt, duración, perspectiva, preparación, co
 5. Pulsa **Probar ajuste**. Se obtiene un MP4 muxado; no se arrancan dos reproductores separados. **Comparar anterior/candidata** alterna archivos; **Deshacer** recupera el ajuste previo.
 6. Escucha y pulsa **Aprobar y fijar**. El análisis automático no puede sobrescribirlo. Una dependencia cambiada obliga a revisar su uso; conserva el material y aprobación históricos.
 
-La extracción manual actual cubre tomas Veo normalizadas. Falta completar el editor de frames de cámara/capas, la elección explícita de ocurrencias múltiples y varios recorridos móviles indicados en la matriz. El botón de IA tiene intentos limitados; no sustituye al ajuste manual.
+La extracción usa el mismo compositor para Veo, ilustración y cámara. Cambiar la edición visual exige revisar su ancla. Falta completar el editor de capas, la elección explícita de ocurrencias múltiples y los recorridos móviles indicados en la matriz. El botón de IA tiene intentos limitados; no sustituye al ajuste manual.
 
 ## Preview, exportación y recuperación
 
@@ -41,3 +41,9 @@ Compila el montaje y escucha una preview. Puede contener negros provisionales cl
 La exportación produce MP4 con subtítulos, MP4 limpio, SRT/ASS, manifiesto, informe y stems. Un render fallido no borra el anterior. La revisión lingüística, legibilidad y boca visible necesitan revisión humana; no se garantiza continuidad perfecta ni lip sync mediante prompts.
 
 Si un envío queda **desconocido**, no repitas a ciegas: el proveedor puede haberlo aceptado y facturado. El sistema conserva la reserva. Pausar frena despachos futuros; no promete cancelar cobros ya aceptados. El diagnóstico del menú no genera material.
+
+## Edición manual y subtítulos
+
+En Guion y biblias, pulsa **Editar manualmente**, cambia los campos, **Revisar cambios** y **Guardar candidata**. Verás los recursos afectados antes de guardar; aprueba después la candidata. En **Subtítulos** puedes cambiar español, dividir bloques y marcar inicio/fin mientras escuchas la voz definitiva. Las advertencias de lectura requieren corregir el bloque o justificar una excepción. Cambiar la voz conserva la corrección anterior y solicita revisión.
+
+En Producción, **Recuperar pendiente** reencola trabajo no despachado o consulta una operación conocida; **Diagnosticar ejecución** consulta Cloud Run sin generar. Un envío incierto nunca se repite con ese botón.

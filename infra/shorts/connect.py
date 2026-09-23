@@ -142,9 +142,12 @@ def connect(command, g, pick, state, save):
     old = google(g, 'identitytoolkit.googleapis.com', identity)
     allowed = sorted(set(old.get('authorizedDomains', []) + domains))
     google(g, 'identitytoolkit.googleapis.com', identity + '?updateMask=authorizedDomains', 'PATCH', {'name': 'projects/' + state['project'] + '/config', 'authorizedDomains': allowed})
+    prior=json.loads(g('storage','buckets','describe','gs://'+state['bucket'],'--format=json'))
+    previous_origins=[origin for rule in prior.get('cors',[]) for origin in rule.get('origin',[]) if origin.startswith('https://') and origin.endswith('.vercel.app')]
+    origins=sorted(set(previous_origins+['https://'+d for d in domains]))
     with tempfile.TemporaryDirectory() as tmp:
         cors = Path(tmp) / 'cors.json'
-        cors.write_text(json.dumps([{'origin': ['https://' + d for d in domains], 'method': ['GET', 'HEAD', 'PUT', 'POST'], 'responseHeader': ['Content-Type', 'Range', 'Content-Range', 'Location'], 'maxAgeSeconds': 3600}]))
+        cors.write_text(json.dumps([{'origin': origins, 'method': ['GET', 'HEAD', 'PUT', 'POST'], 'responseHeader': ['Content-Type', 'Range', 'Content-Range', 'Location'], 'maxAgeSeconds': 3600}]))
         g('storage', 'buckets', 'update', 'gs://' + state['bucket'], '--cors-file', str(cors))
     state.update(vercel='preview_ready', previewUrl='https://' + deployment['url'], auth='configured_not_browser_tested')
     save(state)

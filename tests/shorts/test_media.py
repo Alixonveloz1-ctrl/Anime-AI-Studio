@@ -35,6 +35,13 @@ class MediaTests(unittest.TestCase):
             'cues':[{'id':'sfx','track':'sfx','audioRevision':'a','eventId':'event','sourceSyncSample':9600,'approvalState':'approved'}], 'subtitles':[]}
     @classmethod
     def tearDownClass(cls):cls.temp.cleanup()
+    def test_A066_cache_hash_independent_of_worker_staging_path(self):
+        manifest=copy.deepcopy(self.manifest)
+        original=compile_timeline(manifest)['manifestHash']
+        for asset in manifest['assets'].values():asset.pop('local',None)
+        self.assertEqual(original,compile_timeline(manifest)['manifestHash'])
+        manifest['cues'][0]['gainDb']=-9
+        self.assertNotEqual(original,compile_timeline(manifest)['manifestHash'])
     def test_A033_strip_and_inspect(self):
         self.assertTrue(any(s['codec_type']=='audio' for s in probe(self.raw)['streams']))
         self.assertFalse(any(s['codec_type']=='audio' for s in probe(self.silent)['streams']))

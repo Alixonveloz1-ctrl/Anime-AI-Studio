@@ -35,6 +35,8 @@ def settle(job,budget,state,result=None):
     if job.get('settled'):return job,budget
     j=copy.deepcopy(job); b=copy.deepcopy(budget)
     b['reserved']-=j['reservation']
-    if state!='cancelled':b['spent']=b.get('spent',0)+j['reservation']
+    amount=j.get('cost',{}).get('totalMicros',j['reservation'] if state!='cancelled' else 0)
+    b['spent']=b.get('spent',0)+amount
+    if j.get('cost',{}).get('overReservation'):b['operations']=[];b['reason']='Revisar exceso de la estimación antes de nuevos despachos'
     j.update(state=state,result=result,settled=True,revision=j['revision']+1)
     return j,b

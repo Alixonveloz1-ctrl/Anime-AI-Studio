@@ -90,6 +90,37 @@ def mix(plan, root, files):
     with wave.open(str(root/'mix.wav'),'rb') as w:require(w.getnframes()==SAMPLES,'MIX_LENGTH','Longitud PCM incorrecta')
     return stems
 
+def visual_clip(s, files, target, w, h, offset, length):
+    typ=s['treatment']
+    args=[]; vf=[]
+    if typ=='black':args=['-f','lavfi','-i',f'color=black:s={w}x{h}:r=24'];vf=['null']
+    elif typ in ('hold','camera2d','localized'):
+        args=['-loop','1','-framerate',24,'-i',files[s['assetRevision']]]
+        if typ=='camera2d':
+            a,b=s.get('camera',{}).get('start',[1,0.5,0.5]),s.get('camera',{}).get('end',[1,0.5,0.5])
+            require(len(a)==len(b)==3 and all(isinstance(x,(int,float)) and math.isfinite(x) for x in a+b),'CAMERA','Cámara inválida')
+            require(1<=a[0]<=2 and 1<=b[0]<=2 and all(0<=v<=1 for v in a[1:]+b[1:]),'CAMERA','Cámara fuera de la imagen')
+            t=f'(on+{offset})/{max(1,s["frames"]-1)}'; z=f'{a[0]}+({b[0]-a[0]})*{t}';x=f'{a[1]}+({b[1]-a[1]})*{t}';y=f'{a[2]}+({b[2]-a[2]})*{t}'
+            vf=[f"scale={w*2}:{h*2}:force_original_aspect_ratio=increase,crop={w*2}:{h*2}",f"zoompan=z='{z}':x='(iw-iw/zoom)*({x})':y='(ih-ih/zoom)*({y})':d=1:s={w}x{h}:fps=24"]
+        else:vf=[f'scale={w}:{h}:force_original_aspect_ratio=decrease',f'pad={w}:{h}:(ow-iw)/2:(oh-ih)/2']
+    else:
+        speed=s.get('speed',1); trim=s.get('trimSeconds',0)+offset/24*speed
+        require(float(probe(files[s['assetRevision']])['format']['duration'])+1/24>=trim+length/24*speed,'VIDEO_COVERAGE','El video no cubre la toma')
+        args=['-i',files[s['assetRevision']]]
+        vf=[f'trim=start={trim}:duration={length/24*speed}',f'setpts=(PTS-STARTPTS)/{speed}','fps=24',f'scale={w}:{h}:force_original_aspect_ratio=decrease',f'pad={w}:{h}:(ow-iw)/2:(oh-ih)/2']
+    if typ=='localized':
+        layers=s.get('layers',[]); require(bool(layers),'LAYERS','Faltan variantes/capas aprobadas')
+        graph=f'[0:v]{",".join(vf)}[base]';previous='base'
+        for li,layer in enumerate(layers,1):
+            require(layer['assetRevision'] in files,'LAYER_ASSET','Capa ausente')
+            for field in ('x','y','width','height','startFrame','endFrame'):require(type(layer[field])is int and 0<=layer[field]<=max(7200,w,h),'LAYER','Capa inválida')
+            require(layer.get('approved') is True,'LAYER_APPROVAL','Máscara/capa sin aprobar')
+            args+=['-loop','1','-i',files[layer['assetRevision']]]
+            graph+=f';[{li}:v]scale={layer["width"]}:{layer["height"]}[l{li}];[{previous}][l{li}]overlay={layer["x"]}:{layer["y"]}:enable=between(n\\,{layer["startFrame"]-offset}\\,{layer["endFrame"]-offset-1})[b{li}]';previous=f'b{li}'
+        opts=['-filter_complex_threads','1','-filter_complex',graph,'-map',f'[{previous}]']
+    else:opts=['-vf',','.join(vf),'-map','0:v:0']
+    ff([*args,*opts,'-an','-frames:v',length,'-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p',target])
+
 def render(manifest, root, start=0, end=7200, final=False, width=None):
     root=Path(root).resolve();root.mkdir(parents=True,exist_ok=True)
     plan=compile_timeline(manifest,final)
@@ -107,34 +138,7 @@ def render(manifest, root, start=0, end=7200, final=False, width=None):
         left=max(start,s['startFrame']); right=min(end,s['startFrame']+s['frames'])
         if left>=right:continue
         offset=left-s['startFrame']; length=right-left; target=root/f'shot-{si}.mp4'; typ=s['treatment']
-        args=[]; vf=[]
-        if typ=='black':args=['-f','lavfi','-i',f'color=black:s={w}x{h}:r=24'];vf=['null']
-        elif typ in ('hold','camera2d','localized'):
-            args=['-loop','1','-framerate',24,'-i',files[s['assetRevision']]]
-            if typ=='camera2d':
-                a,b=s.get('camera',{}).get('start',[1,0.5,0.5]),s.get('camera',{}).get('end',[1,0.5,0.5])
-                require(len(a)==len(b)==3 and all(isinstance(x,(int,float)) and math.isfinite(x) for x in a+b),'CAMERA','Cámara inválida')
-                require(1<=a[0]<=2 and 1<=b[0]<=2 and all(0<=v<=1 for v in a[1:]+b[1:]),'CAMERA','Cámara fuera de la imagen')
-                t=f'(on+{offset})/{max(1,s["frames"]-1)}'; z=f'{a[0]}+({b[0]-a[0]})*{t}';x=f'{a[1]}+({b[1]-a[1]})*{t}';y=f'{a[2]}+({b[2]-a[2]})*{t}'
-                vf=[f"scale={w*2}:{h*2}:force_original_aspect_ratio=increase,crop={w*2}:{h*2}",f"zoompan=z='{z}':x='(iw-iw/zoom)*({x})':y='(ih-ih/zoom)*({y})':d=1:s={w}x{h}:fps=24"]
-            else:vf=[f'scale={w}:{h}:force_original_aspect_ratio=decrease',f'pad={w}:{h}:(ow-iw)/2:(oh-ih)/2']
-        else:
-            speed=s.get('speed',1); trim=s.get('trimSeconds',0)+offset/24*speed
-            require(float(probe(files[s['assetRevision']])['format']['duration'])+1/24>=trim+length/24*speed,'VIDEO_COVERAGE','El video no cubre la toma')
-            args=['-i',files[s['assetRevision']]]
-            vf=[f'trim=start={trim}:duration={length/24*speed}',f'setpts=(PTS-STARTPTS)/{speed}','fps=24',f'scale={w}:{h}:force_original_aspect_ratio=decrease',f'pad={w}:{h}:(ow-iw)/2:(oh-ih)/2']
-        if typ=='localized':
-            layers=s.get('layers',[]); require(bool(layers),'LAYERS','Faltan variantes/capas aprobadas')
-            graph=f'[0:v]{",".join(vf)}[base]';previous='base'
-            for li,layer in enumerate(layers,1):
-                require(layer['assetRevision'] in files,'LAYER_ASSET','Capa ausente')
-                for field in ('x','y','width','height','startFrame','endFrame'):require(type(layer[field])is int and 0<=layer[field]<=max(7200,w,h),'LAYER','Capa inválida')
-                require(layer.get('approved') is True,'LAYER_APPROVAL','Máscara/capa sin aprobar')
-                args+=['-loop','1','-i',files[layer['assetRevision']]]
-                graph+=f';[{li}:v]scale={layer["width"]}:{layer["height"]}[l{li}];[{previous}][l{li}]overlay={layer["x"]}:{layer["y"]}:enable=between(n\\,{layer["startFrame"]-offset}\\,{layer["endFrame"]-offset-1})[b{li}]';previous=f'b{li}'
-            opts=['-filter_complex_threads','1','-filter_complex',graph,'-map',f'[{previous}]']
-        else:opts=['-vf',','.join(vf),'-map','0:v:0']
-        ff([*args,*opts,'-an','-frames:v',length,'-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p',target])
+        visual_clip(s,files,target,w,h,offset,length)
         clips.append(target)
     listing=root/'concat.txt';listing.write_text(''.join(f"file '{p.name}'\n" for p in clips))
     ff(['-f','concat','-safe','1','-i',listing,'-i',root/'mix.wav','-filter_complex',f'[1:a]atrim=start_sample={start*2000}:end_sample={end*2000},asetpts=PTS-STARTPTS[a]','-map','0:v:0','-map','[a]','-c:v','copy','-c:a','aac','-b:a','192k','-movflags','+faststart',root/'clean.mp4'])

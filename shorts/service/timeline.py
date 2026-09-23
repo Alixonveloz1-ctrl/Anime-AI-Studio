@@ -1,5 +1,6 @@
 from shorts.core.contracts import require, RATE, FPS, FRAMES, plan_beats
 from shorts.core.dependencies import select_assets
+from shorts.core.subtitles import subtitle_segments,validate_segments
 
 def approved_assets(cloud,pid):
     assets=[x.to_dict() for x in cloud.project_ref(pid).collection('assets').stream()]
@@ -37,12 +38,20 @@ def assemble_plan(cloud,p,cue_overrides=None):
             cues.append({'id':'voice_'+u['id'],'track':u['type'],'audioRevision':audio['id'],'anchorSample':cursor,'sourceSyncSample':0,'trimOutSample':audio['samples'],'approvalState':'approved'})
             sub=next((x for x in d['subtitles'] if x['utteranceId']==u['id']),None)
             require(sub,'SUBTITLE_MISSING','Falta traducción española vinculada')
-            subtitles.append({'text':sub['text'],'startSample':cursor,'endSample':cursor+audio['samples'],'audioRevision':audio['id'],'approvalState':('approved' if p.get('subtitleApproval',{}).get('developmentId')==dev['id'] and p.get('subtitleApproval',{}).get('audioHashes',{}).get(audio['id'])==audio['sha256'] else 'needs_review'),'utteranceId':u['id']})
+            segments,stale=subtitle_segments(u,audio,sub['text'],p.get('subtitleEdits',{}))
+            if stale:issues.append('Revisar subtítulos tras cambiar audio: '+u['id'])
+            warnings=validate_segments(segments,audio['samples'])
+            if any(not w['exceptionApproved'] for w in warnings):issues.append('Legibilidad de subtítulos pendiente: '+u['id'])
+            approved=p.get('subtitleApproval',{}).get('developmentId')==dev['id'] and p.get('subtitleApproval',{}).get('audioHashes',{}).get(audio['id'])==audio['sha256'] and not stale
+            for segment in segments:
+                subtitles.append({**segment,'startSample':cursor+segment['startSample'],'endSample':cursor+segment['endSample'],'audioRevision':audio['id'],'approvalState':'approved' if approved else 'needs_review','utteranceId':u['id']})
             cursor+=audio['samples']
     all_cues=[x.to_dict() for x in cloud.project_ref(pid).collection('cues').stream()]
     selections={**p.get('cueSelections',{}),**(cue_overrides or {})}
     stored=[]
+    omitted={k for k,v in p.get('soundOmissions',{}).items() if v.get('developmentId')==dev['id']}
     for req in d['soundRequests']:
+        if req['id'] in omitted:continue
         versions=sorted([c for c in all_cues if c.get('requestId')==req['id']],key=lambda c:c.get('created',0))
         if versions:
             selected=next((c for c in versions if c['id']==selections.get(req['id'])),None) or versions[-1]
@@ -63,7 +72,7 @@ def assemble_plan(cloud,p,cue_overrides=None):
             issues.append('Revisar ancla tras cambiar material: '+c['id']);continue
         assets[a['id']]=a;cues.append(c)
     for req in d['soundRequests']:
-        if not any(c.get('requestId')==req['id'] for c in stored) and req.get('required',True):issues.append('Falta efecto obligatorio: '+req['name'])
+        if not any(c.get('requestId')==req['id'] for c in stored) and req.get('required',True) and req['id'] not in omitted:issues.append('Falta efecto obligatorio: '+req['name'])
     for r in d['musicRequests']:
         a=by.get((r['id'],'pcm'))
         if not a:

@@ -35,10 +35,16 @@ Ninguna generación pagada ni cambio GCP/producción realizado. No se ha constru
 
 ## Trabajo aún abierto (sin reducir el contrato)
 
-La [matriz A001–A100](acceptance.md) mantiene todos los requisitos abiertos hasta su aceptación. Los gaps de implementación incluyen: estimador/conciliación de costes por uso real; controles de concurrencia por proveedor; recuperador de trabajos huérfanos; importación explícita entre proyectos; diff/edición localizada de guion; editor de capas/máscaras y frames de tratamientos sin Veo; selección de ocurrencias múltiples; edición/alineación fina de subtítulos y polling de transcripción; gate de boca visible/voz/música; omisiones editoriales explícitas; caché de render por manifiesto; recorrido móvil completo.
+La [matriz A001–A100](acceptance.md) mantiene todos los requisitos abiertos hasta su aceptación. Los gaps de implementación incluyen: importación explícita entre proyectos; editor de capas/máscaras; selección explícita de ocurrencias múltiples; alcance estricto de corrección IA; generación en lote con omisión de válidos; planificación completa de pausas/actuación. Costes, concurrencia, recuperación, edición manual, subtítulos, gates, omisiones y caché ahora tienen código y pruebas parciales, pero necesitan integración cloud y recorrido móvil.
 
 También faltan build/instalación/rollback en GCP, pruebas IAM/Firestore/cargas desde iPhone, exportación de proyecto Animes representativo y las dos producciones reales autorizadas de géneros diferentes. Las pruebas sintéticas no cubren la calidad emocional ni continuidad visual o vocal de los modelos. Esta rama no debe fusionarse ni activarse en producción todavía.
 
 ## Preview y límite de funciones
 
 La rama fue publicada y se abrió la PR #20. El primer deployment de preview `dpl_AGsfuKmzWkFNWA6A4KAHLDCaEnto` falló con `exceeded_serverless_functions_per_deployment`: límite real de 12 funciones en el plan Hobby. Se sustituyó exclusivamente el gateway nuevo por Routing Middleware limitado a `/api/shorts`; las 12 funciones heredadas permanecen byte a byte intactas. Regresión original, cuatro pruebas del gateway y comparación legacy pasan tras el cambio. No se cambió el plan ni producción.
+
+## Segundo cierre de integración
+
+72 tests Python correctos (86,685 s) y SHA-256 incremental contrastado con Node crypto en límites de bloque y archivos grandes. Nuevas pruebas cubren conciliación conservadora, cuotas de llamadas, concurrencia de workers, cambios manuales, subtítulos y hash de preview. El instalador conserva/restaura la revisión anterior también si falla la conexión posterior a activarla; el diagnóstico compara commit real. Un self-test cloud escribe/lee/borra un registro y objeto de diagnóstico con la identidad del worker, sin llamar a modelos; todavía no ejecutado en GCP.
+
+Preview anterior `6ec4150` confirmó READY en Vercel. Cortos cargó su HTML/JS y mostró honestamente la falta de servicio configurado. El enlace a Animes en el navegador de prueba encontró la protección de Vercel; no se desactivó. CI de Animes y Cortos pasó para ese commit.

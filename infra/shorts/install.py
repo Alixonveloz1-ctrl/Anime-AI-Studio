@@ -64,11 +64,25 @@ def health(project,region,state):
     checks['queue']=exists('tasks','queues','describe',PREFIX,'--location',region,'--project',project)
     checks['storage']=exists('storage','buckets','describe','gs://'+state['bucket'])
     try:
-        with urllib.request.urlopen(state['url']+'/health',timeout=15) as response:checks['service']=json.load(response).get('schemaVersion')==2
+        with urllib.request.urlopen(state.get('diagnosticUrl',state['url'])+'/health',timeout=15) as response:
+            data=json.load(response);checks['service']=data.get('schemaVersion')==2 and data.get('commit')==state.get('commit')
     except Exception:checks['service']=False
     for key,value in checks.items():print(f'{key}: {"OK" if value else "PENDIENTE/FALLÓ"}')
     print('Acceso a modelos: pendiente de pruebas autorizadas. Health no genera contenido.')
     return all(checks.values())
+
+def activate(project,region,bucket,candidate,old,temp,connect):
+    """Restore the last working revision if any post-activation step fails."""
+    try:
+        g('run','services','update-traffic',candidate['service'],'--to-revisions',candidate['revision']+'=100','--region',region,'--project',project,'--quiet')
+        state_save(bucket,candidate,temp)
+        return connect(candidate,lambda state:state_save(bucket,state,temp))
+    except Exception:
+        if old:
+            g('run','services','update-traffic',old['service'],'--to-revisions',old['revision']+'=100','--region',region,'--project',project,'--quiet')
+            state_save(bucket,old,temp)
+            print('Se restauró el montador anterior tras el fallo de actualización/conexión.')
+        raise
 
 def install(account,project,region,bucket):
     billing=json.loads(g('billing','projects','describe',project,'--format=json'))
@@ -92,7 +106,7 @@ def install(account,project,region,bucket):
             g('storage','buckets','create','gs://'+bucket,'--project',project,'--location',region,'--uniform-bucket-level-access')
             g('storage','buckets','update','gs://'+bucket,'--update-labels=managed-by=anime-shorts-v2,environment=preview')
         g('storage','buckets','add-iam-policy-binding','gs://'+bucket,'--member=serviceAccount:'+sa,'--role=roles/storage.objectAdmin')
-        for role in ['roles/aiplatform.user','roles/datastore.user','roles/cloudtasks.enqueuer','roles/run.jobsExecutorWithOverrides','roles/serviceusage.serviceUsageConsumer','roles/firebaseauth.viewer']:
+        for role in ['roles/aiplatform.user','roles/datastore.user','roles/cloudtasks.enqueuer','roles/run.jobsExecutorWithOverrides','roles/serviceusage.serviceUsageConsumer','roles/firebaseauth.viewer','roles/speech.client','roles/run.viewer']:
             g('projects','add-iam-policy-binding',project,'--member=serviceAccount:'+sa,'--role='+role,'--quiet')
         g('iam','service-accounts','add-iam-policy-binding',sa,'--project',project,'--member=serviceAccount:'+sa,'--role=roles/iam.serviceAccountTokenCreator','--quiet')
         if not exists('firestore','databases','describe','--database',PREFIX,'--project',project):g('firestore','databases','create','--database',PREFIX,'--location',region,'--type=firestore-native','--project',project,'--quiet')
@@ -106,28 +120,27 @@ def install(account,project,region,bucket):
         if not image_digest.startswith('sha256:'):raise RuntimeError('No se pudo verificar el digest. No se activó la candidata.')
         immutable=image.rsplit(':',1)[0]+'@'+image_digest
         job=PREFIX+'-'+sha[:10];service=PREFIX
-        env={'SHORTS_GCP_PROJECT_ID':project,'SHORTS_GCS_BUCKET':bucket,'SHORTS_GCS_PREFIX':PREFIX,'SHORTS_ENVIRONMENT':'preview','SHORTS_FIRESTORE_DATABASE':PREFIX,'SHORTS_REGION':region,'SHORTS_RENDER_JOB':job,'SHORTS_QUEUE':PREFIX,'SHORTS_SERVICE_ACCOUNT':sa,'SHORTS_ALLOWED_EMAILS':account,'SHORTS_AUTH_PROJECT_ID':project}
+        env={'SHORTS_BUILD_COMMIT':sha,'SHORTS_GCP_PROJECT_ID':project,'SHORTS_GCS_BUCKET':bucket,'SHORTS_GCS_PREFIX':PREFIX,'SHORTS_ENVIRONMENT':'preview','SHORTS_FIRESTORE_DATABASE':PREFIX,'SHORTS_REGION':region,'SHORTS_RENDER_JOB':job,'SHORTS_QUEUE':PREFIX,'SHORTS_SERVICE_ACCOUNT':sa,'SHORTS_ALLOWED_EMAILS':account,'SHORTS_AUTH_PROJECT_ID':project}
         envfile=Path(tmp)/'env.json';envfile.write_text(json.dumps(env))
         g('run','jobs','deploy',job,'--image',immutable,'--region',region,'--project',project,'--service-account',sa,'--env-vars-file',str(envfile),'--cpu=2','--memory=4Gi','--task-timeout=3600s','--max-retries=0','--labels=managed-by=anime-shorts-v2','--quiet')
-        deploy=['run','deploy',service,'--image',immutable,'--region',region,'--project',project,'--service-account',sa,'--command=gunicorn','--args=--bind,:8080,--workers,2,--timeout,240,shorts.service.app:app','--env-vars-file',str(envfile),'--cpu=1','--memory=1Gi','--max-instances=2','--allow-unauthenticated','--tag=candidate','--no-traffic','--labels=managed-by=anime-shorts-v2','--quiet']
+        deploy=['run','deploy',service,'--image',immutable,'--region',region,'--project',project,'--service-account',sa,'--command=gunicorn','--args=--bind,:8080,--workers,2,--timeout,240,shorts.service.app:app','--env-vars-file',str(envfile),'--cpu=1','--memory=1Gi','--max-instances=2','--allow-unauthenticated','--tag=candidate-'+sha[:12],'--no-traffic','--labels=managed-by=anime-shorts-v2','--quiet']
+        if not exists('run','services','describe',service,'--region',region,'--project',project):deploy.remove('--no-traffic')
         g(*deploy)
         info=json.loads(g('run','services','describe',service,'--region',region,'--project',project,'--format=json'))
         url=info['status']['url'];env['SHORTS_PRODUCTION_URL']=url;envfile.write_text(json.dumps(env))
-        # Preserve saved tariff configuration on updates; no invented defaults.
-        if old and old.get('rateTable'):env['SHORTS_RATE_TABLE']=old['rateTable'];envfile.write_text(json.dumps(env))
         g(*deploy)
         info=json.loads(g('run','services','describe',service,'--region',region,'--project',project,'--format=json'))
-        revision=info['status']['latestReadyRevisionName'];candidate_url=next(t['url'] for t in info['status'].get('traffic',[]) if t.get('tag')=='candidate')
-        candidate={'project':project,'bucket':bucket,'region':region,'job':job,'service':service,'revision':revision,'image':immutable,'commit':sha,'url':candidate_url,'previous':old,'auth':'pending','vercel':'pending'}
+        revision=info['status']['latestReadyRevisionName'];candidate_url=next(t['url'] for t in info['status'].get('traffic',[]) if t.get('tag')=='candidate-'+sha[:12])
+        candidate={'project':project,'bucket':bucket,'region':region,'job':job,'service':service,'revision':revision,'image':immutable,'commit':sha,'url':candidate_url,'diagnosticUrl':candidate_url,'previous':old,'auth':'pending','vercel':'pending'}
         if not health(project,region,candidate):raise RuntimeError('Health de candidata falló. Se conserva la versión anterior.')
         g('run','jobs','update',job,'--region',region,'--project',project,'--env-vars-file',str(envfile),'--quiet')
-        # Activation only after image self-tests and service health.
-        g('run','services','update-traffic',service,'--to-revisions',revision+'=100','--region',region,'--project',project,'--quiet')
-        candidate['url']=url;state_save(bucket,candidate,tmp)
-        print('\nWorker instalado y probado con fixtures. Generación sigue bloqueada sin tarifas y autorización.')
-        print('Configuración recuperable guardada en nube. A continuación se verifica autenticación y conexión Vercel.')
+        # Verify persistence with the actual runtime identity before activation.
+        g('run','jobs','execute',job,'--region',region,'--project',project,'--update-env-vars=SHORTS_CLOUD_SELF_TEST=1','--wait','--quiet',capture=False)
+        candidate['url']=url
         from connect import connect
-        connect(command,g,pick,candidate,lambda s:state_save(bucket,s,tmp))
+        activate(project,region,bucket,candidate,old,tmp,
+            lambda state,save:connect(command,g,pick,state,save))
+        print('Worker instalado; tarifas incluidas y generación pendiente de autorización. Configuración recuperable en nube.')
 
 def rollback(project,region,bucket):
     state=state_load(bucket);old=state.get('previous') if state else None

@@ -75,15 +75,20 @@ def plan_beats(beats, target=FRAMES):
         start+=n
     return result
 
+def visual_fingerprint(shot):
+    return digest({k:v for k,v in shot.items() if k in ('assetRevision','frames','treatment','camera','layers','trimSeconds','speed')})
+
 def resolve_event(shot, event):
     require(event.get('visible') is True, 'EVENT_UNCERTAIN', 'Evento ausente o sin verificar')
     require(event['videoRevision']==shot['assetRevision'], 'STALE_EVENT', 'Cambió el video: revisa el evento')
+    if event.get('visualFingerprint'):
+        require(event['visualFingerprint']==visual_fingerprint(shot),'STALE_EVENT','La edición visual cambió: revisa el contacto')
     speed=Fraction(str(shot.get('speed',1)))
     require(Fraction(9,10)<=speed<=Fraction(11,10) or shot.get('retimeApproved') is True, 'RETIME_APPROVAL', 'Velocidad requiere aprobación')
     require(speed>0 and not shot.get('timeRamp'), 'UNSUPPORTED_TIME_MAP', 'Mapa temporal no compatible')
     source=Fraction(event['pts'], event['timebase'])
     trim=Fraction(str(shot.get('trimSeconds',0)))
-    local=(source-trim)/speed
+    local=source if event.get('coordinateSpace')=='shot_output' else (source-trim)/speed
     require(0<=local<Fraction(shot['frames'],FPS), 'EVENT_CUT', 'El evento queda fuera del recorte')
     sample=round((Fraction(shot['startFrame'],FPS)+local)*RATE)
     return {'sample':sample,'frame':round(Fraction(sample*FPS,RATE))}
@@ -169,6 +174,8 @@ def compile_timeline(manifest, final=False):
         require(0<=sub['startSample']<sub['endSample']<=SAMPLES,'SUBTITLE_TIME','Subtítulo fuera de programa')
         require(sub.get('audioRevision') in assets,'SUBTITLE_AUDIO','Subtítulo sin audio vinculado')
         require(not final or sub.get('approvalState')=='approved','SUBTITLE_REVIEW','Subtítulo pendiente')
-    out={**copy.deepcopy(manifest),'cues':resolved,'compilerVersion':'2.0.0','samples':SAMPLES}
-    out['manifestHash']=digest(out)
+    out={**copy.deepcopy(manifest),'cues':resolved,'compilerVersion':'2.1.0','samples':SAMPLES}
+    canonical=copy.deepcopy(out)
+    for asset in canonical['assets'].values():asset.pop('local',None)
+    out['manifestHash']=digest(canonical)
     return out

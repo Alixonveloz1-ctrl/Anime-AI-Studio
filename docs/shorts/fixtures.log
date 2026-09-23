@@ -30,10 +30,15 @@ test_A017_translation_change_does_not_regenerate_japanese_voice (test_dependenci
 test_A025_costume_only_invalidates_dependents (test_dependencies.DependencyTests.test_A025_costume_only_invalidates_dependents) ... ok
 test_A029_new_master_invalidates_only_old_reference_uses (test_dependencies.DependencyTests.test_A029_new_master_invalidates_only_old_reference_uses) ... ok
 test_A067_move_does_not_invalidate_image (test_dependencies.DependencyTests.test_A067_move_does_not_invalidate_image) ... ok
+test_A055_media_not_blocked_by_analysis_capacity (test_dispatch.DispatchTests.test_A055_media_not_blocked_by_analysis_capacity) ... ok
+test_A072_expired_lease_stops_dispatch (test_dispatch.DispatchTests.test_A072_expired_lease_stops_dispatch) ... ok
+test_A074_duplicate_queue_message_never_starts_second_worker (test_dispatch.DispatchTests.test_A074_duplicate_queue_message_never_starts_second_worker) ... ok
+test_A077_capacity_held_across_long_provider_operation (test_dispatch.DispatchTests.test_A077_capacity_held_across_long_provider_operation) ... ok
 test_A086_environment_is_branch_preview_only (test_installer.ConnectorTests.test_A086_environment_is_branch_preview_only) ... ok
 test_A090_cannot_overwrite_legacy_environment (test_installer.ConnectorTests.test_A090_cannot_overwrite_legacy_environment) ... ok
 test_A092_partial_environment_not_ready (test_installer.ConnectorTests.test_A092_partial_environment_not_ready) ... ok
 test_A087_launcher (test_installer.InstallerTests.test_A087_launcher) ... ok
+test_A089_connection_failure_restores_old_worker (test_installer.InstallerTests.test_A089_connection_failure_restores_old_worker) ... ok
 test_A089_failed_health_cannot_rollback (test_installer.InstallerTests.test_A089_failed_health_cannot_rollback) ... ok
 test_A089_rollback_restores_old_revision_pointer (test_installer.InstallerTests.test_A089_rollback_restores_old_revision_pointer) ... ok
 test_A090_old_installers_unchanged (test_installer.InstallerTests.test_A090_old_installers_unchanged) ... ok
@@ -44,15 +49,33 @@ test_A044_A047_mp3_same_pcm_attack (test_media.MediaTests.test_A044_A047_mp3_sam
 test_A056_indexed_contact (test_media.MediaTests.test_A056_indexed_contact) ... ok
 test_A061_A063_A064_A069_render_and_decode (test_media.MediaTests.test_A061_A063_A064_A069_render_and_decode) ... ok
 test_A065_full_program_ducking_and_silence (test_media.MediaTests.test_A065_full_program_ducking_and_silence) ... ok
+test_A066_cache_hash_independent_of_worker_staging_path (test_media.MediaTests.test_A066_cache_hash_independent_of_worker_staging_path) ... ok
 test_A079_path_and_checksum (test_media.MediaTests.test_A079_path_and_checksum) ... ok
 test_A079_playlist_disguised_as_audio (test_media.MediaTests.test_A079_playlist_disguised_as_audio) ... ok
 test_A079_shell_manifest_rejected (test_media.MediaTests.test_A079_shell_manifest_rejected) ... ok
 test_A080_block_stale_and_raw (test_media.MediaTests.test_A080_block_stale_and_raw) ... ok
+test_A035_tts_byte_limit_before_transport (test_pricing.PricingTests.test_A035_tts_byte_limit_before_transport) ... ok
+test_A075_failure_after_submit_is_not_retried (test_pricing.PricingTests.test_A075_failure_after_submit_is_not_retried) ... ok
+test_A075_unknown_keeps_reserve (test_pricing.PricingTests.test_A075_unknown_keeps_reserve) ... ok
+test_A077_default_install_has_all_operation_estimates (test_pricing.PricingTests.test_A077_default_install_has_all_operation_estimates) ... ok
+test_A077_model_change_and_expired_tariff_block (test_pricing.PricingTests.test_A077_model_change_and_expired_tariff_block) ... ok
+test_A077_token_preflight_rejects_before_paid_call (test_pricing.PricingTests.test_A077_token_preflight_rejects_before_paid_call) ... ok
+test_A077_usage_refunds_unused_reservation (test_pricing.PricingTests.test_A077_usage_refunds_unused_reservation) ... ok
+test_A009_actual_diff_does_not_trust_reported_ids (test_revisions.RevisionTests.test_A009_actual_diff_does_not_trust_reported_ids) ... ok
+test_A009_manual_keeps_original_approval_and_voice (test_revisions.RevisionTests.test_A009_manual_keeps_original_approval_and_voice) ... ok
+test_A040_japanese_change_only_invalidates_voice (test_revisions.RevisionTests.test_A040_japanese_change_only_invalidates_voice) ... ok
+test_A076_protect_ids_types_and_paths (test_revisions.RevisionTests.test_A076_protect_ids_types_and_paths) ... ok
+test_A055_manual_camera_frame_uses_compositor_time (test_subtitles.CompositeFrameTests.test_A055_manual_camera_frame_uses_compositor_time) ... ok
+test_A039_gaps_and_meaning_units_kept (test_subtitles.SubtitleTests.test_A039_gaps_and_meaning_units_kept) ... ok
+test_A039_outside_audio_or_overlap_rejected (test_subtitles.SubtitleTests.test_A039_outside_audio_or_overlap_rejected) ... ok
+test_A039_readability_requires_explicit_exception (test_subtitles.SubtitleTests.test_A039_readability_requires_explicit_exception) ... ok
+test_A040_changed_voice_preserves_manual_edit_but_flags_review (test_subtitles.SubtitleTests.test_A040_changed_voice_preserves_manual_edit_but_flags_review) ... ok
 
 ----------------------------------------------------------------------
-Ran 50 tests in 88.291s
+Ran 72 tests in 86.685s
 
 OK
+Se restauró el montador anterior tras el fallo de actualización/conexión.
 Versión anterior restaurada; datos y aprobaciones intactos.
 
 Cuenta: account

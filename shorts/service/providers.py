@@ -2,6 +2,9 @@
 import base64
 import json
 import re
+import io
+import wave
+from shorts.core.pricing import INPUT_LIMIT, TEXT_OUTPUT_LIMIT, IMAGE_OUTPUT_LIMIT, usage_estimate
 from shorts.core.contracts import require, ContractError
 
 class UnknownSubmission(ContractError):
@@ -27,22 +30,40 @@ def veo_payload(c,shot,image_uri,output_uri):
 def tts_payload(c,u,voice):
     require(bool(re.search('[\u3040-\u30ff\u3400-\u9fff]',u.get('japanese',''))),'JAPANESE','Falta texto japonés aprobado')
     require(voice.get('languageCode','ja-JP')=='ja-JP','JAPANESE','La voz de Cortos debe ser japonesa')
-    return {'input':{'text':u['japanese'],'prompt':voice.get('direction','')+' '+u.get('acting','')},'voice':{'languageCode':'ja-JP','name':voice['name'],'modelName':c['models']['tts']['model']},'audioConfig':{'audioEncoding':'LINEAR16','sampleRateHertz':24000}}
+    prompt=voice.get('direction','')+' '+u.get('acting','')
+    require(len(u['japanese'].encode())<=4000 and len(prompt.encode())<=4000,'TTS_LENGTH','Texto o dirección supera 4000 bytes; divide la intervención antes de generar')
+    return {'input':{'text':u['japanese'],'prompt':prompt},'voice':{'languageCode':'ja-JP','name':voice['name'],'modelName':c['models']['tts']['model']},'audioConfig':{'audioEncoding':'LINEAR16','sampleRateHertz':24000}}
 
 class Providers:
-    def __init__(self,c,session):self.c,self.session=c,session
-    def post(self,url,payload):
+    def __init__(self,c,session,meter=None):self.c,self.session,self.meter=c,session,meter
+    def post(self,url,payload,kind=None):
+        call=self.meter.begin_call(kind,url,payload) if self.meter and kind else None
         try:r=self.session.post(url,json=payload,timeout=180)
         except Exception as e:raise UnknownSubmission() from e
         if r.status_code>=500:raise UnknownSubmission()
         if not r.ok:
+            if call:self.meter.end_call(call,'rejected',0,'provider_rejection')
             code={400:'PROVIDER_INPUT',401:'PROVIDER_AUTH',403:'PROVIDER_PERMISSION',404:'MODEL_UNAVAILABLE',429:'PROVIDER_QUOTA'}.get(r.status_code,'PROVIDER_ERROR')
             raise ContractError(code,f'Google rechazó la solicitud ({r.status_code}). No se cambió modelo ni se reenvió.',r.status_code)
-        return r.json()
+        data=r.json()
+        if call:
+            seconds=None
+            if kind=='tts':
+                try:
+                    with wave.open(io.BytesIO(base64.b64decode(data['audioContent'])),'rb') as w:seconds=w.getnframes()/w.getframerate()
+                except (KeyError,ValueError,wave.Error):pass
+            cost,basis=usage_estimate(kind,data.get('usageMetadata'),seconds)
+            self.meter.end_call(call,'completed',cost,basis)
+        return data
+    def check_input(self,kind,contents):
+        # countTokens is a free preflight. It cannot trigger a generation.
+        data=self.post(vertex(self.c,kind,'countTokens'),{'contents':contents})
+        require(type(data.get('totalTokens')) is int and data['totalTokens']<=INPUT_LIMIT,'INPUT_TOKENS','Entrada supera el límite presupuestado; reduce el alcance antes de generar')
     def text(self,prompt,parts=None,analysis=False):
         kind='analysis' if analysis else 'text'
-        body={'contents':[{'role':'user','parts':[{'text':prompt},*(parts or [])]}],'generationConfig':{'responseMimeType':'application/json','temperature':.7,'maxOutputTokens':32768}}
-        data=self.post(vertex(self.c,kind),body)
+        body={'contents':[{'role':'user','parts':[{'text':prompt},*(parts or [])]}],'generationConfig':{'responseMimeType':'application/json','temperature':.7,'maxOutputTokens':TEXT_OUTPUT_LIMIT}}
+        self.check_input(kind,body['contents'])
+        data=self.post(vertex(self.c,kind),body,kind)
         try:return json.loads(''.join(x.get('text','') for x in data['candidates'][0]['content']['parts']))
         except (KeyError,IndexError,ValueError) as e:raise ContractError('MODEL_SCHEMA','Respuesta incompleta; no se creó una candidata válida') from e
     def image(self,prompt,references,aspect):
@@ -50,25 +71,33 @@ class Providers:
         for a in references:
             require(a['approvalState']=='approved','REFERENCE','Referencia no aprobada')
             parts.append({'fileData':{'fileUri':a['uri'],'mimeType':a['mimeType']}})
-        data=self.post(vertex(self.c,'image'),{'contents':[{'role':'user','parts':parts}],'generationConfig':{'responseModalities':['TEXT','IMAGE'],'imageConfig':{'aspectRatio':aspect}}})
+        contents=[{'role':'user','parts':parts}]
+        self.check_input('image',contents)
+        data=self.post(vertex(self.c,'image'),{'contents':contents,'generationConfig':{'maxOutputTokens':IMAGE_OUTPUT_LIMIT,'responseModalities':['TEXT','IMAGE'],'imageConfig':{'aspectRatio':aspect,'imageSize':'1K'}}},'image')
         for p in data.get('candidates',[{}])[0].get('content',{}).get('parts',[]):
             if p.get('inlineData',{}).get('mimeType','').startswith('image/'):
                 return base64.b64decode(p['inlineData']['data']),p['inlineData']['mimeType']
         raise ContractError('IMAGE_MISSING','No se recibió imagen; no hay candidata válida')
-    def veo(self,shot,image_uri,output_uri):return self.post(vertex(self.c,'veo','predictLongRunning'),veo_payload(self.c,shot,image_uri,output_uri))
+    def veo(self,shot,image_uri,output_uri):return self.post(vertex(self.c,'veo','predictLongRunning'),veo_payload(self.c,shot,image_uri,output_uri),'veo')
     def poll_veo(self,name):
         prefix=f'projects/{self.c["project"]}/locations/{self.c["models"]["veo"]["region"]}/publishers/google/models/{self.c["models"]["veo"]["model"]}/operations/'
         require(name.startswith(prefix),'OPERATION','Operación ajena')
         return self.post(vertex(self.c,'veo','fetchPredictOperation'),{'operationName':name})
+    def poll_speech(self,name):
+        require(isinstance(name,str) and re.fullmatch(r'[0-9]{1,40}',name),'OPERATION','Operación Speech inválida')
+        try:response=self.session.get('https://speech.googleapis.com/v1/operations/'+name,timeout=30)
+        except Exception as e:raise ContractError('SPEECH_PENDING','No se pudo consultar la operación conocida',503) from e
+        require(response.ok,'SPEECH_PENDING','Consulta Speech pendiente; no se reenvía audio',503)
+        return response.json()
     def tts(self,u,voice):
         r=self.c['models']['tts']['region'];require(r in ('global','us','eu','northamerica-northeast1'),'TTS_REGION','Región TTS no verificada')
         host=('' if r=='global' else r+'-')+'texttospeech.googleapis.com'
-        result=self.post('https://'+host+'/v1/text:synthesize',tts_payload(self.c,u,voice))
+        result=self.post('https://'+host+'/v1/text:synthesize',tts_payload(self.c,u,voice),'tts')
         return base64.b64decode(result['audioContent'])
     def music(self,prompt,seconds):
         require(self.c['models']['music']=={'model':'lyria-3-pro-preview','region':'global'},'MUSIC_MODEL','Configuración Lyria pendiente de verificar')
         require(0<seconds<=184,'MUSIC_DURATION','Una pieza Lyria no puede cubrir 300 segundos')
-        result=self.post(f'https://aiplatform.googleapis.com/v1beta1/projects/{self.c["project"]}/locations/global/interactions',{'model':self.c['models']['music']['model'],'input':[{'type':'text','text':f'Instrumental music only. No vocals, lyrics or speech. Requested duration {seconds} seconds. '+prompt}]})
+        result=self.post(f'https://aiplatform.googleapis.com/v1beta1/projects/{self.c["project"]}/locations/global/interactions',{'model':self.c['models']['music']['model'],'input':[{'type':'text','text':f'Instrumental music only. No vocals, lyrics or speech. Requested duration {seconds} seconds. '+prompt}]},'music')
         require(result.get('status')=='completed','MUSIC_PENDING','Lyria no devolvió una pieza completada')
         aud=next((x for x in result.get('outputs',[]) if x.get('type')=='audio'),None)
         require(aud and aud.get('mime_type')=='audio/mpeg','MUSIC_FORMAT','Salida Lyria inesperada')
