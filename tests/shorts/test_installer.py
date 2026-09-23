@@ -9,6 +9,23 @@ from unittest.mock import patch
 spec=importlib.util.spec_from_file_location('shorts_install',Path(__file__).resolve().parents[2]/'infra/shorts/install.py');install=importlib.util.module_from_spec(spec);spec.loader.exec_module(install)
 ROOT=Path(__file__).resolve().parents[2]
 class InstallerTests(unittest.TestCase):
+    def test_A092_storage_failure_keeps_google_reason_without_retry(self):
+        reason='ERROR: Service account new@fixture.iam.gserviceaccount.com does not exist.'
+        result=subprocess.CompletedProcess([],1,'not a diagnostic',reason)
+        with patch.object(install.subprocess,'run',return_value=result) as run:
+            with self.assertRaises(RuntimeError) as error:
+                install.command(['gcloud','storage','buckets','add-iam-policy-binding','gs://fixture'])
+        self.assertIn('storage buckets add-iam-policy-binding',str(error.exception))
+        self.assertIn(reason,str(error.exception));self.assertNotIn('not a diagnostic',str(error.exception))
+        self.assertEqual(run.call_count,1)
+
+    def test_A092_google_diagnostic_redacts_credentials(self):
+        raw='PERMISSION_DENIED\nAuthorization: Bearer secret-token\naccess_token="another-secret"\nrefresh_token=refresh-secret\nya29.google-secret\n-----BEGIN PRIVATE KEY-----\\nprivate-material\\n-----END PRIVATE KEY-----'
+        safe=install.google_error(raw)
+        self.assertIn('PERMISSION_DENIED',safe)
+        for secret in ('secret-token','another-secret','refresh-secret','google-secret','private-material'):
+            self.assertNotIn(secret,safe)
+
     def test_A092_resource_check_cannot_wait_for_hidden_input(self):
         result=subprocess.CompletedProcess([],1,'','ERROR: NOT_FOUND: resource does not exist')
         with patch.object(install.subprocess,'run',return_value=result) as run,patch('sys.stdout',new_callable=io.StringIO) as output:

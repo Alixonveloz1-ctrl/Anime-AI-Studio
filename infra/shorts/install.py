@@ -32,6 +32,16 @@ def report_wait(done):
     while not done.wait(15):
         print('Esperando respuesta de Google…',flush=True)
 
+def google_error(stderr):
+    """Keep Google's diagnostic, never stdout or credential material."""
+    message=stderr or ''
+    message=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]','',message)
+    message=re.sub(r'-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)','[clave omitida]',message,flags=re.S)
+    message=re.sub(r'(?i)(bearer\s+)[^\s\"\']+',r'\1[omitido]',message)
+    message=re.sub(r'ya29\.[A-Za-z0-9._~-]+','[token omitido]',message)
+    message=re.sub(r'(?i)([\"\']?(?:access_token|refresh_token|id_token|private_key|client_secret)[\"\']?\s*[:=]\s*)(\"[^\"]*\"|\'[^\']*\'|[^\s,}]+)',r'\1[omitido]',message)
+    return message.strip()[:3000] or 'Google no devolvió detalles del error.'
+
 def command(args, capture=True, check=True, cwd=None):
     # OAuth clients such as Vercel login remain interactive. Only gcloud is
     # non-interactive; infrastructure consent is handled by our visible menu.
@@ -46,6 +56,9 @@ def command(args, capture=True, check=True, cwd=None):
     finally:
         done.set()
     if check and result.returncode:
+        if google and capture:
+            operation=' '.join(args[:4])
+            raise RuntimeError(f'Falló {operation} (código {result.returncode}).\nDetalle de Google:\n{google_error(result.stderr)}')
         raise RuntimeError(f'Falló {args[0]} {args[1] if len(args)>1 else ""}. Código {result.returncode}. Revisa permisos/configuración; la versión activa no se sustituye.')
     return result.stdout.strip() if capture else result.returncode
 
@@ -83,7 +96,7 @@ def exists(*args):
     # A permission/API/network error is not proof that a resource is absent.
     error=result.stderr or ''
     if re.search(r'\bNOT_FOUND\b|\b404\b|\bnot found\b|\bdoes not exist\b|matched no objects|cannot find (?:service|job)\b',error,re.I):return False
-    raise RuntimeError('No se pudo comprobar '+label+' (código '+str(result.returncode)+'). Revisa autorización y disponibilidad del servicio de Google; no se asumió que el recurso está vacío.')
+    raise RuntimeError('No se pudo comprobar '+label+' (código '+str(result.returncode)+'). No se asumió que el recurso está vacío.\nDetalle de Google:\n'+google_error(error))
 
 def state_load(bucket):
     path=f'gs://{bucket}/installation/active.json'
