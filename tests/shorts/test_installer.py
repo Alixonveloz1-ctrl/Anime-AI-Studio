@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -8,6 +9,55 @@ from unittest.mock import patch
 spec=importlib.util.spec_from_file_location('shorts_install',Path(__file__).resolve().parents[2]/'infra/shorts/install.py');install=importlib.util.module_from_spec(spec);spec.loader.exec_module(install)
 ROOT=Path(__file__).resolve().parents[2]
 class InstallerTests(unittest.TestCase):
+    def test_A092_resource_check_cannot_wait_for_hidden_input(self):
+        result=subprocess.CompletedProcess([],1,'','ERROR: NOT_FOUND: resource does not exist')
+        with patch.object(install.subprocess,'run',return_value=result) as run,patch('sys.stdout',new_callable=io.StringIO) as output:
+            self.assertFalse(install.exists('firestore','databases','describe','fixture'))
+            self.assertIn('Comprobando: base de datos',output.getvalue())
+        self.assertIn('--quiet',run.call_args.args[0])
+        self.assertEqual(run.call_args.kwargs['stdin'],subprocess.DEVNULL)
+        self.assertEqual(run.call_args.kwargs['timeout'],90)
+
+    def test_A092_permission_failure_is_not_an_absent_resource(self):
+        result=subprocess.CompletedProcess([],1,'','PERMISSION_DENIED: caller cannot inspect resource')
+        with patch.object(install.subprocess,'run',return_value=result):
+            with self.assertRaisesRegex(RuntimeError,'No se pudo comprobar'):
+                install.exists('run','services','describe','fixture')
+
+    def test_A092_read_timeout_stops_namespace_checks(self):
+        with patch.object(install.subprocess,'run',side_effect=subprocess.TimeoutExpired(['gcloud'],90)) as run:
+            with self.assertRaisesRegex(RuntimeError,'Google no respondió'):
+                install.check_fresh_namespace('fixture','us-central1')
+        self.assertEqual(run.call_count,1)
+
+    def test_A092_google_noninteractive_preserves_vercel_browser_login(self):
+        result=subprocess.CompletedProcess([],0,'{}','')
+        with patch.object(install.subprocess,'run',return_value=result) as run:
+            install.command(['gcloud','services','enable','example.googleapis.com'])
+            self.assertEqual(run.call_args.kwargs['stdin'],subprocess.DEVNULL)
+            self.assertIn('--quiet',run.call_args.args[0])
+            install.command(['npx','vercel','login'],capture=False)
+            self.assertIsNone(run.call_args.kwargs['stdin'])
+            self.assertNotIn('--quiet',run.call_args.args[0])
+
+    def test_A092_google_timeout_does_not_repeat_uncertain_change(self):
+        with patch.object(install.subprocess,'run',side_effect=subprocess.TimeoutExpired(['gcloud'],300)) as run:
+            with self.assertRaisesRegex(RuntimeError,'no se repetirá automáticamente'):
+                install.command(['gcloud','services','enable','example.googleapis.com'])
+        self.assertEqual(run.call_count,1)
+
+    def test_A092_authorized_api_enable_precedes_namespace_queries(self):
+        events=[]
+        def g(*args,**kwargs):
+            events.append(args)
+            return '{"billingEnabled":true}' if args[:2]==('billing','projects') else ''
+        def namespace(*args):
+            self.assertIn(('services','enable','firestore.googleapis.com','--project','fixture','--quiet'),events)
+            raise RuntimeError('fixture stop before resource creation')
+        with patch.object(install,'current_release',return_value='a'*40),patch.object(install,'g',side_effect=g),patch.object(install,'check_owned',return_value=False),patch.object(install,'pick',return_value='Autorizar instalación/actualización'),patch.object(install,'command'),patch.object(install,'check_fresh_namespace',side_effect=namespace):
+            with self.assertRaisesRegex(RuntimeError,'fixture stop'):
+                install.install('account','fixture','us-central1','fixture-bucket')
+
     def test_A087_launcher(self):
         r=subprocess.run(['bash','c','--help'],cwd=ROOT,capture_output=True,text=True)
         self.assertEqual(r.returncode,0);self.assertIn('./c',r.stdout)

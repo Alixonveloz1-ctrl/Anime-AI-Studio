@@ -1566,12 +1566,18 @@
       "infra/shorts/connect.py"
     ],
     "tests": [
-      "tests/shorts/test_installer.py:test_A092_partial_environment_not_ready"
+      "tests/shorts/test_installer.py:test_A092_partial_environment_not_ready",
+      "tests/shorts/test_installer.py:test_A092_resource_check_cannot_wait_for_hidden_input",
+      "tests/shorts/test_installer.py:test_A092_permission_failure_is_not_an_absent_resource",
+      "tests/shorts/test_installer.py:test_A092_read_timeout_stops_namespace_checks",
+      "tests/shorts/test_installer.py:test_A092_google_noninteractive_preserves_vercel_browser_login",
+      "tests/shorts/test_installer.py:test_A092_google_timeout_does_not_repeat_uncertain_change",
+      "tests/shorts/test_installer.py:test_A092_authorized_api_enable_precedes_namespace_queries"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Errores/configuración parcial se informan; falta permisos insuficientes reales."
+    "remaining": "Primer intento real detenido tras consentimiento; defecto de preguntas ocultas corregido con pruebas locales. Falta repetir instalación y autorizaciones cloud desde iPhone."
   },
   {
     "id": "A093",

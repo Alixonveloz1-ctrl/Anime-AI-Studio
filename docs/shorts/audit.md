@@ -102,3 +102,11 @@ Se retiran botón Ajustes, panel de instalación, manejador asociado y estilos; 
 La comparación byte a byte de los componentes heredados sigue formando parte de las pruebas. Se añaden casos para detener checkout desactualizado antes de infraestructura, variables exclusivamente SHORTS_ de producción, rama Vercel incorrecta, alias y dominios existentes, y rechazo de cruce de entornos en gateway. El caso anterior de aislamiento preview se conserva con selección explícita del entorno. CI ahora se ejecuta también para pushes a main.
 
 Verificación antes de publicar: 103 tests Python correctos en 116,839 s, sin skips; 7 tests gateway/checksum y 5 recorridos DOM correctos. Contratos estáticos, comparación heredada, sintaxis de launchers/JS, matriz de 100 filas y diff sin errores correctos. El log incluye salidas del instalador simulado: no representan despliegues GCP reales.
+
+## Corrección del instalador durante el primer intento en Cloud Shell
+
+El usuario abrió main `aac7b24428620261d2db3ac1e72ab03b3b595364`, seleccionó su proyecto y autorizó la instalación. Reportó una pantalla sin avance después de confirmar. La inspección encontró que `exists()` descartaba stdout/stderr, heredaba stdin y no tenía timeout. Una consulta podía esperar una confirmación invisible para habilitar una API. No se accedió al proceso remoto para afirmar que esa fuera su espera exacta.
+
+Se activan los servicios declarados después del permiso y de los tests locales, antes de consultar recursos. Las órdenes gcloud usan `--quiet` y stdin cerrado; la autorización interactiva de Vercel se conserva. Se muestran los pasos y un aviso cada 15 segundos durante operaciones capturadas. Las consultas tienen límite de 90 segundos y las operaciones capturadas de Google de 300 segundos, sin reenvío automático de cambios inciertos. Un error de permiso/red no se interpreta como recurso ausente. No se cambió Animes ni se ejecutaron acciones GCP desde esta sesión de desarrollo.
+
+Verificación: 23 tests de instalador/conector correctos, incluidos seis casos nuevos del bloqueo, timeout, permisos y orden de activación. Comparación heredada y matriz completas. `installer-fixtures.log` contiene esta prueba focalizada; `fixtures.log` conserva la suite anterior. Repetición real del instalador desde el iPhone pendiente.

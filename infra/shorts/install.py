@@ -2,10 +2,12 @@
 """Mobile installer. No key creation, destructive checkout or legacy mutations."""
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
 import urllib.request
 
 ROOT=Path(__file__).resolve().parents[2]
@@ -14,6 +16,8 @@ PREFIX='anime-shorts-preview'
 BRANCH='main'
 REPOSITORY='https://github.com/Alixonveloz1-ctrl/Anime-AI-Studio.git'
 BUILD_MACHINE='E2_STANDARD_2'
+CHECK_TIMEOUT=90
+RESOURCE_NAMES={'run':'ensamblador','firestore':'base de datos','tasks':'cola de trabajos','artifacts':'archivos del ensamblador','iam':'permisos','storage':'almacenamiento','services':'servicios de Google','cloudbuild':'construcción','builds':'construcción','billing':'facturación','auth':'cuenta de Google','projects':'proyectos'}
 
 def check_fresh_namespace(project,region):
     checks=[('run','services','describe',PREFIX,'--region',region,'--project',project),
@@ -24,13 +28,30 @@ def check_fresh_namespace(project,region):
     for args in checks:
         if exists(*args):raise RuntimeError('Existe un recurso Cortos sin registro de propiedad del instalador. No se adoptó ni modificó: '+args[0])
 
+def report_wait(done):
+    while not done.wait(15):
+        print('Esperando respuesta de Google…',flush=True)
+
 def command(args, capture=True, check=True, cwd=None):
-    result=subprocess.run(args,cwd=cwd,text=True,stdout=subprocess.PIPE if capture else None,stderr=subprocess.PIPE if capture else None)
+    # OAuth clients such as Vercel login remain interactive. Only gcloud is
+    # non-interactive; infrastructure consent is handled by our visible menu.
+    google=args[0]=='gcloud'
+    if google and '--quiet' not in args:args=[*args,'--quiet']
+    done=threading.Event()
+    if google and capture:threading.Thread(target=report_wait,args=(done,),daemon=True).start()
+    try:
+        result=subprocess.run(args,cwd=cwd,text=True,stdin=subprocess.DEVNULL if google else None,stdout=subprocess.PIPE if capture else None,stderr=subprocess.PIPE if capture else None,timeout=300 if google and capture else None)
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError('Google tardó demasiado en responder. La operación puede seguir en Google; no se repetirá automáticamente. Revisa el estado antes de reinstalar.') from e
+    finally:
+        done.set()
     if check and result.returncode:
         raise RuntimeError(f'Falló {args[0]} {args[1] if len(args)>1 else ""}. Código {result.returncode}. Revisa permisos/configuración; la versión activa no se sustituye.')
     return result.stdout.strip() if capture else result.returncode
 
-def g(*args,**kw):return command(['gcloud',*args],**kw)
+def g(*args,**kw):
+    print('Procesando: '+RESOURCE_NAMES.get(args[0],args[0])+'…',flush=True)
+    return command(['gcloud',*args],**kw)
 def pick(title,choices):
     if not choices:raise RuntimeError('No hay opciones disponibles: '+title)
     print('\n'+title)
@@ -52,7 +73,17 @@ def account_project():
     return account[0],projects[labels.index(label)]['projectId']
 
 def exists(*args):
-    return subprocess.run(['gcloud',*args],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0
+    label=RESOURCE_NAMES.get(args[0],args[0])
+    print('Comprobando: '+label+'…',flush=True)
+    try:
+        result=subprocess.run(['gcloud',*args,'--quiet'],stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=CHECK_TIMEOUT)
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError('Google no respondió al comprobar '+label+'. La comprobación se detuvo; no inicies otra instalación a la vez.') from e
+    if result.returncode==0:return True
+    # A permission/API/network error is not proof that a resource is absent.
+    error=result.stderr or ''
+    if re.search(r'\bNOT_FOUND\b|\b404\b|\bnot found\b|\bdoes not exist\b|matched no objects|cannot find (?:service|job)\b',error,re.I):return False
+    raise RuntimeError('No se pudo comprobar '+label+' (código '+str(result.returncode)+'). Revisa autorización y disponibilidad del servicio de Google; no se asumió que el recurso está vacío.')
 
 def state_load(bucket):
     path=f'gs://{bucket}/installation/active.json'
@@ -114,15 +145,19 @@ def install(account,project,region,bucket):
     print(f'\nCuenta: {account}\nProyecto: {project}\nDestino: Cortos en tu página habitual\nRegión de infraestructura: {region}\nCommit: {sha}')
     print('Recursos aislados: bucket privado, base Firestore, cola, servicio, Job y cuentas de servicio de ejecución/build con sus permisos. Cloud Build, almacenamiento y render pueden generar cargos. No se pagarán modelos durante instalación.')
     if pick('¿Autorizar estos cambios de infraestructura?', ['Cancelar','Autorizar instalación/actualización'])=='Cancelar':return
-    if not owned:check_fresh_namespace(project,region)
     with tempfile.TemporaryDirectory(prefix='anime-shorts-install-') as tmp:
         work=Path(tmp)/'source';work.mkdir()
         archive=Path(tmp)/'source.tar'
         command(['git','archive','--format=tar','-o',str(archive),sha],cwd=ROOT)
         command(['tar','-xf',str(archive),'-C',str(work)])
         command(['python3','-m','unittest','discover','-s','tests/shorts','-p','test_contracts.py'],cwd=work,capture=False)
+        # Enable the declared APIs only after consent, before querying resources.
+        # Otherwise a describe command can ask to enable an API on hidden stderr.
+        print('Preparando los servicios de Google. Verás cada paso a continuación.',flush=True)
         for api in ['run','cloudbuild','artifactregistry','storage','firestore','cloudtasks','iam','iamcredentials','logging','aiplatform','texttospeech','speech','identitytoolkit','firebase']:
+            print('Activando: '+api+'…',flush=True)
             g('services','enable',api+'.googleapis.com','--project',project,'--quiet')
+        if not owned:check_fresh_namespace(project,region)
         sa=f'{PREFIX}@{project}.iam.gserviceaccount.com'
         if not check_owned(bucket,project):
             g('storage','buckets','create','gs://'+bucket,'--project',project,'--location',region,'--uniform-bucket-level-access')
