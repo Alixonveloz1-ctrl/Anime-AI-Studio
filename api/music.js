@@ -16,7 +16,7 @@ const { cfg, auth, vertexUrl, begin, fail } = require('./_lib/gcp');
 const BASE_NEGATIVE = 'vocals, singing, voice, lyrics, spoken word, rap, choir';
 
 module.exports = async function handler(req, res) {
-  if (begin(req, res)) return;
+  if (await begin(req, res)) return;
 
   try {
     const { prompt, negativePrompt, seed, sampleCount } = req.body || {};

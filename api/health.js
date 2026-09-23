@@ -20,7 +20,8 @@ function maskEmail(email) {
 }
 
 module.exports = async function handler(req, res) {
-  if (begin(req, res, ['GET', 'POST'])) return;
+  if (await require('./_lib/access').handleSession(req, res)) return;
+  if (await begin(req, res, ['GET', 'POST'])) return;
 
   const out = {
     serviceAccount: { configured: false },

@@ -70,7 +70,7 @@ const RITMO = {
 };
 
 module.exports = async function handler(req, res) {
-  if (begin(req, res)) return;
+  if (await begin(req, res)) return;
 
   try {
     const { text, speed, emotion, intensidad, tono, ritmo, indicacion, pitch, volumen } = req.body || {};

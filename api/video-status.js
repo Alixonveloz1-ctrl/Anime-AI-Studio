@@ -9,7 +9,7 @@
 const { cfg, loadServiceAccount, getAccessToken, vertexUrl, signedUrl, asegurarCors, begin, fail } = require('./_lib/gcp');
 
 module.exports = async function handler(req, res) {
-  if (begin(req, res)) return;
+  if (await begin(req, res)) return;
 
   try {
     const { operationName, projectId, model } = req.body || {};

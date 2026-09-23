@@ -1318,16 +1318,28 @@
     "files": [
       "shorts/service/cloud.py",
       "shorts/service/app.py",
-      "shorts/core/jobs.py"
+      "shorts/core/jobs.py",
+      "api/_lib/access.js",
+      "api/_lib/gcp.js",
+      "api/health.js",
+      "middleware.js",
+      "auth/gate.mjs",
+      "auth/client.mjs",
+      "login/index.html",
+      "infra/shorts/connect.py"
     ],
     "tests": [
       "tests/shorts/test_api.py:test_A078_auth_required",
-      "tests/shorts/test_api.py:test_A078_internal_no_fake_queue_header"
+      "tests/shorts/test_api.py:test_A078_internal_no_fake_queue_header",
+      "tests/access/owner.test.cjs",
+      "tests/shorts/test_installer.py:test_U005_mismatching_cloud_owner_cannot_change_site_access"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Auth y suplantación interna rechazadas con fixtures; falta auditoría IAM/URLs en cloud."
+    "remaining": "Fixtures RSA reales: propietario, otras cuentas, firma falsa, revocación, CSRF, 12 APIs y puerta de ambas páginas. Acceso real Google del propietario pendiente de resolver Firebase 403; no se ha generado contenido pagado.",
+    "effectiveRequirement": "Privacidad global (U005): solo el propietario autorizado genera o accede por Animes y Cortos; comprobación en servidor, sesión compartida y fallo cerrado.",
+    "override": "U005"
   },
   {
     "id": "A079",
@@ -1433,12 +1445,13 @@
       "worker/montage-shorts/render.py"
     ],
     "tests": [
-      "tests/shorts/legacy-regression.cjs"
+      "tests/shorts/legacy-regression.cjs",
+      "tests/access/owner.test.cjs"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Worker/contrato heredados intactos; exportación real de Animes pendiente."
+    "remaining": "Worker/contrato heredados intactos; exportación real de Animes pendiente. U005: solo preámbulos de autenticación compartidos; regresión compara cuerpos de APIs y motor/instalador byte a byte, más resultados con proveedor simulado."
   },
   {
     "id": "A086",

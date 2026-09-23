@@ -1,6 +1,7 @@
 """Browser consent and numeric selection; no pasted tokens, keys or JSON.
 
-Called by the authorized installer. Only SHORTS_* variables may be changed.
+Called by the authorized installer. Only SHORTS_* and STUDIO_ALLOWED_EMAILS
+may be changed. The latter protects both sections (user decision U005).
 """
 import json
 from pathlib import Path
@@ -125,7 +126,7 @@ def find_project(command, pick):
 
 
 def branch_vars(command, project_id, team, values, target='production', branch=BRANCH):
-    if any(not k.startswith('SHORTS_') for k in values):
+    if any(not k.startswith('SHORTS_') and k != 'STUDIO_ALLOWED_EMAILS' for k in values):
         raise RuntimeError('El instalador no puede editar configuración de Animes')
     if target not in ('preview', 'production') or (target == 'production' and branch != BRANCH):
         raise RuntimeError('El sitio habitual solo se conecta desde main')
@@ -145,7 +146,7 @@ def deployment_payload(project, state):
 
 
 def connection_release(command, worker_commit):
-    """A connector/docs/test fix does not change the installed runtime contract."""
+    """Web/access changes do not rebuild an unchanged Cloud Run worker."""
     remote = command(['git', 'ls-remote', f'https://github.com/{OWNER}/{REPO}.git', 'refs/heads/' + BRANCH]).split()
     if not remote or not re.fullmatch(r'[0-9a-f]{40}', worker_commit):
         raise RuntimeError('No se pudo verificar la versión instalada. Elige 6 y después Diagnóstico.')
@@ -161,7 +162,9 @@ def connection_release(command, worker_commit):
         changed = command(['git', '-C', str(ROOT), 'diff', '--name-only', worker_commit, current, '--']).splitlines()
     except RuntimeError as e:
         raise RuntimeError(message) from e
-    if any(path != 'infra/shorts/connect.py' and not path.startswith(('docs/shorts/', 'tests/shorts/')) for path in changed):
+    web_files = {'infra/shorts/connect.py', 'index.html', 'middleware.js', '.github/workflows/shorts.yml'}
+    web_folders = ('docs/shorts/', 'tests/shorts/', 'tests/access/', 'auth/', 'login/', 'cortos/', 'api/')
+    if any(path not in web_files and not path.startswith(web_folders) for path in changed):
         raise RuntimeError(message)
     print('Conector actualizado; se conserva el ensamblador instalado.', flush=True)
     return current
@@ -176,7 +179,16 @@ def connect(command, g, pick, state, save):
     if pick('Conectar Cortos a tu página habitual (puede consumir build/almacenamiento)', ['Cancelar', 'Autorizar conexión']) == 'Cancelar':
         return state
     cfg = firebase(g, pick, state['project'])
-    values = {'SHORTS_ENABLED': 'true', 'SHORTS_ENVIRONMENT': 'production', 'SHORTS_PRODUCTION_URL': state['url'], 'SHORTS_FIREBASE_WEB_CONFIG': json.dumps(cfg)}
+    owner = g('auth', 'list', '--filter=status:ACTIVE', '--format=value(account)').strip().lower()
+    if not re.fullmatch(r'[^\s,@]+@[^\s,@]+\.[^\s,@]+', owner) or owner.endswith('.gserviceaccount.com'):
+        raise RuntimeError('No se pudo identificar tu cuenta personal. No se abrió el acceso a la aplicación.')
+    runtime = json.loads(g('run', 'revisions', 'describe', state['revision'], '--region', state['region'], '--project', state['project'], '--format=json'))
+    allowed = [entry.get('value', '') for container in runtime.get('spec', {}).get('containers', [])
+               for entry in container.get('env', []) if entry.get('name') == 'SHORTS_ALLOWED_EMAILS']
+    if len(allowed) != 1 or [email.strip().lower() for email in allowed[0].split(',')] != [owner]:
+        raise RuntimeError('La cuenta actual no coincide con la cuenta privada del ensamblador. Vuelve con el correo que usaste al instalar. No se cambió el acceso.')
+    print('Acceso privado a Animes y Cortos: ' + owner, flush=True)
+    values = {'SHORTS_ENABLED': 'true', 'SHORTS_ENVIRONMENT': 'production', 'SHORTS_PRODUCTION_URL': state['url'], 'SHORTS_FIREBASE_WEB_CONFIG': json.dumps(cfg), 'STUDIO_ALLOWED_EMAILS': owner}
     branch_vars(command, project['id'], team, values)
     query = '?' + urllib.parse.urlencode({'teamId': team}) if team else ''
     deployment = vercel(command, '/v13/deployments' + query, 'POST', payload)

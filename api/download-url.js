@@ -7,7 +7,7 @@
 const { cfg, loadServiceAccount, signedUrl, begin, fail } = require('./_lib/gcp');
 
 module.exports = async function handler(req, res) {
-  if (begin(req, res)) return;
+  if (await begin(req, res)) return;
 
   try {
     // `descarga: false` pide el enlace para VER, no para bajar. Un enlace

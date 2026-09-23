@@ -1,9 +1,11 @@
 import { handleShortsRequest } from './shorts/gateway.mjs';
+import { pageGate } from './auth/gate.mjs';
 
-// Scoped to the new gateway; Animes bypasses this middleware entirely.
-export const config = { matcher: '/api/shorts', runtime: 'edge' };
+// Both sections share a private entrance. APIs independently verify the owner.
+export const config = { matcher: ['/', '/index', '/index.html', '/cortos', '/cortos/', '/cortos/index', '/cortos/index.html', '/api/shorts'], runtime: 'edge' };
 
 export default function middleware(request) {
+  if (new URL(request.url).pathname !== '/api/shorts') return pageGate(request);
   return handleShortsRequest(request, {
     SHORTS_ENABLED: process.env.SHORTS_ENABLED,
     SHORTS_PRODUCTION_URL: process.env.SHORTS_PRODUCTION_URL,

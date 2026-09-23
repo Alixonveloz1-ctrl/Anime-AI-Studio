@@ -237,7 +237,7 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
 
 // ─────────────────────────────────────────────
 module.exports = async function handler(req, res) {
-  if (begin(req, res)) return;
+  if (await begin(req, res)) return;
   try {
     const body = req.body || {};
     const { prompt, model: forceModel, isEcchi } = body;

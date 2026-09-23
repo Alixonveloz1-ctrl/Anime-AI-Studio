@@ -348,21 +348,19 @@ function vertexUrl(projectId, location, model, method) {
 
 const CORS = {
   'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Cache-Control': 'private, no-store',
 };
 
-// Shared preamble: CORS, preflight, method guard. Returns true when the
+// Shared preamble: private access, preflight, method guard. Returns true when the
 // caller should stop (the response is already finished).
-function begin(req, res, methods = ['POST']) {
+async function begin(req, res, methods = ['POST']) {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
   if (req.method === 'OPTIONS') { res.status(200).end(); return true; }
   if (!methods.includes(req.method)) {
     res.status(405).json({ error: 'Method not allowed' });
     return true;
   }
-  return false;
+  return require('./access').requireOwner(req, res);
 }
 
 // Config errors are the user's to fix in Vercel, so they get a 500 with a

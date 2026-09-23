@@ -73,3 +73,12 @@ En Producción, **Recuperar pendiente** reencola trabajo no despachado o consult
 En **Movimiento y capas**, genera solo la variante que necesitas (por ejemplo, boca abierta conservando el encuadre), apruébala y selecciona la región. Ajusta sus límites en porcentaje y su intervalo en fotogramas. Puedes vincularla a la actividad medida de una voz aprobada para alternar apertura/cierre. No es sincronía fonética y debes revisar sus bordes, expresión y ritmo en **Preview de toma**. Un cambio de voz exige revisar esa vinculación. **Preview de escena** reúne las tomas de la misma unidad dramática, con mezcla muxada.
 
 Las pausas se editan en Guion y biblias: acción inicial/final y pausa antes/después de cada voz. El planner usa la duración PCM real y solo los márgenes aprobados. Si no cabe, pide revisar la toma; no acelera el diálogo ni repite clips.
+
+
+## Entrada privada para Animes y Cortos (U005)
+
+La misma cuenta de Google abre ambas secciones. Otra cuenta no puede generar aunque conozca la dirección de la página. Salir cierra la sesión de toda la herramienta. No se cambian tus proyectos, bucket de Animes ni credenciales de los generadores.
+
+Mientras Firebase esté pendiente, la página mostrará que falta conectar el acceso privado y bloqueará las generaciones. Después de resolver la activación/permisos de Firebase, recupera la carpeta existente de Cloud Shell, escribe `./c`, elige **6** para actualizar y **5** para conectar/recuperar Vercel. Confirma tu misma cuenta y proyecto habituales. El instalador escribe la configuración automáticamente; no copies JSON ni claves. Una actualización de acceso/web compatible conserva el ensamblador ya instalado.
+
+Verifica desde tu iPhone que puedes entrar a Animes y Cortos con tu cuenta, salir y que una ventana privada no permite generar. No ejecutes una generación solo para comprobar el inicio de sesión. La opción de diagnóstico y las pruebas de acceso no generan medios pagados.

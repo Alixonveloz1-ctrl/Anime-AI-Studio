@@ -32,6 +32,14 @@ El usuario rechaza expresamente cualquier botón de Cloud Shell o panel de insta
 
 A087 y A093 se interpretan usando ese enlace de la conversación para abrir o recuperar Cloud Shell. Se conservan el comando real `./c` (respaldo `bash c`), el menú numérico, actualización, diagnóstico, rollback y estado en nube. Esta simplificación no elimina el instalador ni exige copiar scripts, claves o JSON.
 
+## U005 — acceso privado a toda la aplicación
+
+El usuario requiere que solo su cuenta pueda usar la aplicación completa: proteger únicamente Cortos deja las APIs de Animes capaces de gastar los mismos créditos. Se añade una entrada común con Google y comprobación del propietario en las doce APIs de Animes, además de la comprobación ya existente en Cloud Run para Cortos. Un inicio de sesión Google válido de otra persona no basta. Firebase/Firestore se conservan por decisión explícita del usuario.
+
+Este cambio autoriza modificar el preámbulo de acceso de Animes; no sus modelos, peticiones a proveedores, proyectos, preferencias, montaje ni instalador. `STUDIO_ALLOWED_EMAILS` es la única variable compartida nueva que puede escribir el conector, usando la cuenta activa confirmada y cotejándola con la revisión instalada de Cortos. No modifica `GCP_SERVICE_ACCOUNT` ni `GCS_OUTPUT_BUCKET`.
+
+La configuración incompleta bloquea generaciones en ambas secciones. No se habilita una excepción pública para conservar el acceso mientras falta Firebase. Resolver la activación/permisos de Firebase y comprobar el acceso real del propietario sigue pendiente. Cambiar solo web/autenticación no exige recompilar el worker instalado; se conserva su commit para diagnóstico y rollback.
+
 ## Evidencia y límites
 
 La matriz conserva A001–A100 y añade `effectiveRequirement`/`override` en las filas afectadas. El comprobador sigue cotejando literalmente los cien requisitos originales. Las pruebas de interfaz usan un transporte sintético explícito separado de la aplicación real; no prueban Firebase, modelos ni calidad de medios. Las pruebas FFmpeg sí generan/decodifican medios sintéticos. La aceptación con servicios reales y Safari/iPhone sigue pendiente.

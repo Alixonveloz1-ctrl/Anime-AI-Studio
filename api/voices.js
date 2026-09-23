@@ -26,7 +26,7 @@ const VOCES_GEMINI = [
 ];
 
 module.exports = async function handler(req, res) {
-  if (begin(req, res, ['GET', 'POST'])) return;
+  if (await begin(req, res, ['GET', 'POST'])) return;
 
   try {
     const { token } = await auth();

@@ -190,14 +190,14 @@ class ConnectorTests(unittest.TestCase):
         self.assertEqual(api.call_args_list[-1].args[1],'identitytoolkit.googleapis.com')
 
     def test_A093_connector_update_reuses_worker_only_for_allowed_changes(self):
-        changed='infra/shorts/connect.py\ntests/shorts/test_installer.py\ndocs/shorts/audit.md'
+        changed='infra/shorts/connect.py\ntests/shorts/test_installer.py\ndocs/shorts/audit.md\napi/_lib/access.js\napi/image.js\nauth/client.mjs\nlogin/index.html\nindex.html\nmiddleware.js\ncortos/app.js'
         command=Mock(side_effect=['b'*40+'\trefs/heads/main','b'*40,'',changed])
         self.assertEqual(self.c.connection_release(command,'a'*40),'b'*40)
         self.assertTrue(all(call.args[0][0]=='git' for call in command.call_args_list))
         self.assertIn('--is-ancestor',command.call_args_list[2].args[0])
 
-    def test_A093_worker_or_site_changes_still_require_installation(self):
-        for changed in ('shorts/service/app.py','worker/montage-shorts/Dockerfile','infra/shorts/install.py','cortos/app.js','middleware.js','api/generate.js'):
+    def test_A093_worker_or_runtime_changes_still_require_installation(self):
+        for changed in ('shorts/service/app.py','worker/montage-shorts/Dockerfile','infra/shorts/install.py','shorts/core/timing.py','shorts/gateway.mjs','vercel.json'):
             with self.subTest(changed=changed):
                 command=Mock(side_effect=['b'*40+'\trefs/heads/main','b'*40,'',changed])
                 with self.assertRaisesRegex(RuntimeError,'después 1'):
@@ -241,13 +241,15 @@ class ConnectorTests(unittest.TestCase):
 
     def test_U003_connect_targets_main_and_existing_production_alias(self):
         project={'id':'p','name':'site','link':{'productionBranch':'main','repoId':1}}
-        state={'project':'gcp','bucket':'own-bucket','url':'https://service.run.app','commit':'a'*40}
+        state={'project':'gcp','bucket':'own-bucket','url':'https://service.run.app','commit':'a'*40,'revision':'installed-revision','region':'us-central1'}
         deployment={'id':'d','url':'unique.vercel.app','readyState':'READY','alias':['site.vercel.app','site-git-main-owner.vercel.app']}
         calls=[];cors=[];google_calls=[]
         def api(command,path,method='GET',data=None):
             calls.append((path,method,data))
             return deployment if path.startswith('/v13/deployments') else {}
         def g(*args):
+            if args[:2]==('auth','list'):return 'owner@example.com'
+            if args[:3]==('run','revisions','describe'):return json.dumps({'spec':{'containers':[{'env':[{'name':'SHORTS_ALLOWED_EMAILS','value':'owner@example.com'}]}]}})
             if '--cors-file' in args:cors.append(json.loads(Path(args[-1]).read_text()))
             return '{"cors":[]}'
         def google(g,host,path,method='GET',data=None,*,project):
@@ -258,7 +260,8 @@ class ConnectorTests(unittest.TestCase):
         create=next(data for path,method,data in calls if path.startswith('/v13/deployments') and method=='POST')
         self.assertEqual(create['target'],'production');self.assertEqual(create['gitSource']['ref'],'main');self.assertEqual(create['gitSource']['sha'],'a'*40)
         env=next(data for path,method,data in calls if path.startswith('/v10/projects'))
-        self.assertTrue(all(row['key'].startswith('SHORTS_') and row['target']==['production'] for row in env))
+        self.assertTrue(all((row['key'].startswith('SHORTS_') or row['key']=='STUDIO_ALLOWED_EMAILS') and row['target']==['production'] for row in env))
+        self.assertEqual(next(row['value'] for row in env if row['key']=='STUDIO_ALLOWED_EMAILS'),'owner@example.com')
         self.assertEqual(result['siteUrl'],'https://site.vercel.app');self.assertEqual(result['vercel'],'production_ready')
         domains=next(data['authorizedDomains'] for method,data in google_calls if method=='PATCH')
         self.assertIn('existing.example',domains);self.assertIn('site.vercel.app',domains)
@@ -279,3 +282,21 @@ class ConnectorTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'Elige 6'):
                 self.c.connect(lambda *_:'b'*40+'\trefs/heads/main',None,None,{'commit':'a'*40},None)
             firebase.assert_not_called();api.assert_not_called()
+
+    def test_U005_private_owner_is_only_new_shared_environment_setting(self):
+        with patch.object(self.c,'vercel',return_value={}) as api:
+            self.c.branch_vars(None,'project','team',{'STUDIO_ALLOWED_EMAILS':'owner@example.com'})
+            self.assertEqual(api.call_args.args[-1][0]['key'],'STUDIO_ALLOWED_EMAILS')
+            for key in ('STUDIO_DISABLE_AUTH','GCS_OUTPUT_BUCKET','GCP_SERVICE_ACCOUNT'):
+                with self.assertRaises(RuntimeError):self.c.branch_vars(None,'project','team',{key:'value'})
+
+    def test_U005_mismatching_cloud_owner_cannot_change_site_access(self):
+        project={'id':'p','name':'site','link':{'productionBranch':'main','repoId':1}}
+        state={'project':'gcp','bucket':'b','url':'https://service.run.app','commit':'a'*40,'revision':'r','region':'us-central1'}
+        def g(*args):
+            if args[:2]==('auth','list'):return 'other@example.com'
+            return json.dumps({'spec':{'containers':[{'env':[{'name':'SHORTS_ALLOWED_EMAILS','value':'owner@example.com'}]}]}})
+        with patch.object(self.c,'find_project',return_value=(project,'team')),patch.object(self.c,'connection_release',return_value='a'*40),patch.object(self.c,'firebase',return_value={'projectId':'gcp'}),patch.object(self.c,'vercel') as api:
+            with self.assertRaisesRegex(RuntimeError,'no coincide'):
+                self.c.connect(None,g,lambda *_:'Autorizar conexión',state,None)
+            api.assert_not_called()
