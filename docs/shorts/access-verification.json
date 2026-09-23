@@ -1,0 +1,136 @@
+{
+  "date": "2026-09-23",
+  "codeCommit": "ae0aaa3895dc411bc501a3b9067a8ecb7c8f7348",
+  "deploymentId": "dpl_JBQuCp6MVS2GZZF6Ly2d4oLezMob",
+  "deploymentState": "READY",
+  "site": "https://anime-ai-studio-umber.vercel.app",
+  "localFixtures": {
+    "ownerAccess": 11,
+    "gatewayAndHash": 7,
+    "installer": 34,
+    "cortosUI": 5,
+    "legacyRegression": "passed",
+    "staticValidation": "passed",
+    "acceptanceMatrixRows": 100
+  },
+  "deployedAnonymousReads": [
+    {
+      "url": "https://anime-ai-studio-umber.vercel.app/",
+      "status": 303,
+      "redirect": "/login/",
+      "cache": "private, no-store"
+    },
+    {
+      "url": "https://anime-ai-studio-umber.vercel.app/cortos/",
+      "status": 303,
+      "redirect": "/login/",
+      "cache": "private, no-store"
+    },
+    {
+      "url": "https://anime-ai-studio-umber.vercel.app/login/",
+      "status": 200,
+      "redirect": "",
+      "cache": "public, max-age=0, must-revalidate"
+    },
+    {
+      "url": "https://anime-ai-studio-umber.vercel.app/api/health?studioAuth=config",
+      "status": 503,
+      "redirect": "",
+      "cache": "private, no-store",
+      "code": "ACCESS_UNAVAILABLE"
+    },
+    {
+      "url": "https://anime-ai-studio-umber.vercel.app/api/health",
+      "status": 503,
+      "redirect": "",
+      "cache": "private, no-store",
+      "code": "ACCESS_UNAVAILABLE"
+    },
+    {
+      "url": "https://anime-ai-studio-jw0wef2vt-alixonveloz1-3809s-projects.vercel.app/api/health",
+      "status": 302,
+      "redirect": "https://vercel.com/sso-api",
+      "cache": "no-store, max-age=0"
+    },
+    {
+      "url": "https://anime-ai-studio-3uii2oqt5-alixonveloz1-3809s-projects.vercel.app/api/health",
+      "status": 302,
+      "redirect": "https://vercel.com/sso-api",
+      "cache": "no-store, max-age=0"
+    }
+  ],
+  "deployedUnauthenticatedEmptyPosts": [
+    {
+      "api": "assemble",
+      "status": 503,
+      "code": "ACCESS_UNAVAILABLE"
+    },
+    {
+      "api": "audio",
+      "status": 503,
+      "code": "ACCESS_UNAVAILABLE"
+    },
+    {
+      "api": "download-url",
+      "status": 503,
+      "code": "ACCESS_UNAVAILABLE"
+    },
+    {
+      "api": "health",
+      "status": 503,
+      "code": "ACCESS_UNAVAILABLE"
+    },
+    {
+      "api": "image",
+      "status": 503,
+      "code": "ACCESS_UNAVAILABLE"
+    },
+    {
+      "api": "music",
+      "status": 503,
+      "code": "ACCESS_UNAVAILABLE"
+    },
+    {
+      "api": "script",
+      "status": 503,
+      "code": "ACCESS_UNAVAILABLE"
+    },
+    {
+      "api": "transcribe",
+      "status": 503,
+      "code": "ACCESS_UNAVAILABLE"
+    },
+    {
+      "api": "upload-url",
+      "status": 503,
+      "code": "ACCESS_UNAVAILABLE"
+    },
+    {
+      "api": "video-start",
+      "status": 503,
+      "code": "ACCESS_UNAVAILABLE"
+    },
+    {
+      "api": "video-status",
+      "status": 503,
+      "code": "ACCESS_UNAVAILABLE"
+    },
+    {
+      "api": "voices",
+      "status": 503,
+      "code": "ACCESS_UNAVAILABLE"
+    }
+  ],
+  "browser": "Chrome: root and /cortos/ redirect to the same login; setup-pending message and disabled sign-in visible. No Google sign-in attempted.",
+  "historicalDeploymentProtection": {
+    "enabled": true,
+    "deploymentType": "all_except_custom_domains",
+    "verifiedSamples": 2
+  },
+  "paidModelCalls": 0,
+  "gcpInfrastructureChangedByAgent": false,
+  "ownerGoogleLogin": "pending: Firebase addFirebase 403 must be resolved by owner",
+  "iphoneSafari": "pending",
+  "workerReinstallation": "not needed for this web/access change; installed worker commit is preserved",
+  "signedMediaLimitation": "Already-issued signed GCS URLs remain usable until their expiry."
+}
