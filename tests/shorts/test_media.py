@@ -10,7 +10,7 @@ import unittest
 import wave
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'worker/montage-shorts'))
 from media import ff, pcm, waveform, silent_video, probe, checksum, extract_frames, inspect
-from render import render, local_asset, mix
+from render import render, local_asset, mix, visual_clip
 from shorts.core.contracts import ContractError,compile_timeline
 
 @unittest.skipUnless(shutil.which('ffmpeg'),'FFmpeg required')
@@ -42,6 +42,19 @@ class MediaTests(unittest.TestCase):
         self.assertEqual(original,compile_timeline(manifest)['manifestHash'])
         manifest['cues'][0]['gainDb']=-9
         self.assertNotEqual(original,compile_timeline(manifest)['manifestHash'])
+    def test_A027_localized_region_and_interval(self):
+        variant=self.root/'variant.png';clip=self.root/'localized.mp4'
+        ff(['-f','lavfi','-i','color=white:s=160x90','-frames:v',1,'-threads',1,variant])
+        shot={'id':'s','frames':48,'assetRevision':'base','treatment':'localized','layers':[{'assetRevision':'variant','approved':True,'mask':{'x':.25,'y':.25,'width':.5,'height':.5},'startFrame':12,'endFrame':24}]}
+        visual_clip(shot,{'base':self.image,'variant':variant},clip,160,90,0,48)
+        raw=ff(['-i',clip,'-vf','select=eq(n\\,18)','-frames:v',1,'-f','rawvideo','-pix_fmt','gray','pipe:1'])
+        self.assertGreater(raw[45*160+80],240);self.assertLess(raw[5*160+5],10)
+        raw=ff(['-i',clip,'-vf','select=eq(n\\,30)','-frames:v',1,'-f','rawvideo','-pix_fmt','gray','pipe:1'])
+        self.assertLess(raw[45*160+80],10)
+        shot['layers'][0]['intervals']=[[12,16],[20,24]]
+        visual_clip(shot,{'base':self.image,'variant':variant},clip,160,90,0,48)
+        raw=ff(['-i',clip,'-vf','select=eq(n\\,18)','-frames:v',1,'-f','rawvideo','-pix_fmt','gray','pipe:1'])
+        self.assertLess(raw[45*160+80],10)
     def test_A033_strip_and_inspect(self):
         self.assertTrue(any(s['codec_type']=='audio' for s in probe(self.raw)['streams']))
         self.assertFalse(any(s['codec_type']=='audio' for s in probe(self.silent)['streams']))
@@ -86,6 +99,8 @@ class MediaTests(unittest.TestCase):
         preview=self.root/'saved-preview.mp4';shutil.copyfile(self.root/'preview.mp4',preview)
         r=render(self.manifest,self.root,0,7200,True,width=160)
         self.assertEqual(r['frames'],7200)
+        self.assertEqual(r['decodedAudioSamples']-r['codecPaddingSamples'],14400000)
+        self.assertLessEqual(r['codecPaddingSamples'],1024)
         with wave.open(str(self.root/'mix.wav'),'rb') as w:self.assertEqual(w.getnframes(),14400000)
         def decode(path,start=0,duration=5):
             raw=ff(['-i',path,'-ss',start,'-t',duration,'-map','0:a:0','-ac',1,'-ar',48000,'-f','f32le','pipe:1']);a=array.array('f');a.frombytes(raw);return a

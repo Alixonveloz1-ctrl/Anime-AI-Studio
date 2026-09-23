@@ -66,7 +66,8 @@ def waveform(path, bins=1600):
         if energies[i]>max(.015,baseline*3) and (not attacks or i*hop-attacks[-1]>RATE//10): attacks.append(i*hop)
     width=max(1,math.ceil(len(samples)/bins))
     peaks=[max(abs(x) for x in samples[i:i+width]) for i in range(0,len(samples),width)]
-    return {'sampleRate':RATE,'samples':len(samples),'binSamples':width,'peaks':peaks,'attackCandidates':attacks[:100],'clipping':max(peaks)>=.999,'status':'needs_review'}
+    from shorts.core.mouth import activity_intervals
+    return {'sampleRate':RATE,'samples':len(samples),'binSamples':width,'peaks':peaks,'attackCandidates':attacks[:100],'voiceActivity':activity_intervals(energies),'activityMethod':'energy; not phoneme alignment','clipping':max(peaks)>=.999,'status':'needs_review'}
 
 def extract_frames(source, out, start=0, count=48):
     require(type(start)is int and type(count)is int and 0<=start<14400 and 1<=count<=120,'FRAME_RANGE','Intervalo de frames inválido')

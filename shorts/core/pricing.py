@@ -21,7 +21,7 @@ MODELS={'text':('gemini-3.1-pro-preview','global'), 'analysis':('gemini-3.1-pro-
         'tts':('gemini-2.5-pro-tts','global'), 'music':('lyria-3-pro-preview','global')}
 CALLS={'ideas':{'text':2},'develop':{'text':2},'revise':{'text':1},'image':{'image':1},
        'veo':{'veo':1},'tts':{'tts':1},'music':{'music':1},'analyze':{'analysis':2},
-       'review':{'analysis':1},'transcribe':{'transcribe':1},'media':{},'frames':{},'preview':{},'render':{}}
+       'review':{'analysis':1},'transcribe':{'transcribe':1},'media':{},'frames':{},'preview':{},'render':{},'import':{}}
 SOURCES=['https://cloud.google.com/vertex-ai/generative-ai/pricing',
          'https://cloud.google.com/text-to-speech/pricing',
          'https://cloud.google.com/text-to-speech/docs/gemini-tts',
@@ -73,7 +73,7 @@ def reconcile(job, now):
     require(all(c['state'] in ('completed','rejected') for c in calls),'UNSETTLED_CALL','Hay una petición sin resultado confirmado',409)
     model=sum(c.get('estimatedMicros',c['ceilingMicros']) for c in calls)
     elapsed=max(60,math.ceil(now-job.get('started',now)))
-    compute=min(WORKER_SECONDS,elapsed)*WORKER_MICROS_PER_SECOND
+    compute=job.get('workerMicrosAccrued',0)+min(WORKER_SECONDS,elapsed)*WORKER_MICROS_PER_SECOND
     total=model+compute
     # Preserve actual observed overrun and stop the budget; never hide excess.
     return {'generationMicros':model,'workerMicros':compute,'totalMicros':total,

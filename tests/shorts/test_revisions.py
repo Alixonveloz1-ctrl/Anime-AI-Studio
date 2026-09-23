@@ -1,7 +1,7 @@
 import copy
 import unittest
 from shorts.core.contracts import ContractError
-from shorts.core.revisions import apply_edits,changes,impact
+from shorts.core.revisions import apply_edits,changes,impact,replace_scope
 from shorts.core.dependencies import fingerprint
 
 class RevisionTests(unittest.TestCase):
@@ -24,3 +24,10 @@ class RevisionTests(unittest.TestCase):
     def test_A009_actual_diff_does_not_trust_reported_ids(self):
         new=copy.deepcopy(self.d);new['utterances'][0]['acting']='angry'
         self.assertEqual(changes(self.d,new)[0]['path'],['utterances',0,'acting'])
+
+    def test_A009_AI_scope_cannot_replace_unrelated_bible(self):
+        replacement={**self.d['utterances'][0],'acting':'whisper','bible':{'evil':'ignored outside target'}}
+        result=replace_scope(self.d,{'group':'utterances','entityId':'u'},replacement)
+        self.assertEqual(result['bible'],self.d['bible'])
+        self.assertEqual(result['utterances'][0]['acting'],'whisper')
+        with self.assertRaises(ContractError):replace_scope(self.d,{'group':'utterances','entityId':'u'},{'id':'other'})

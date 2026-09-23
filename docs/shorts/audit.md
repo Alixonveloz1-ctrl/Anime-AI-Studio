@@ -35,7 +35,7 @@ Ninguna generación pagada ni cambio GCP/producción realizado. No se ha constru
 
 ## Trabajo aún abierto (sin reducir el contrato)
 
-La [matriz A001–A100](acceptance.md) mantiene todos los requisitos abiertos hasta su aceptación. Los gaps de implementación incluyen: importación explícita entre proyectos; editor de capas/máscaras; selección explícita de ocurrencias múltiples; alcance estricto de corrección IA; generación en lote con omisión de válidos; planificación completa de pausas/actuación. Costes, concurrencia, recuperación, edición manual, subtítulos, gates, omisiones y caché ahora tienen código y pruebas parciales, pero necesitan integración cloud y recorrido móvil.
+La [matriz A001–A100](acceptance.md) mantiene todos los requisitos abiertos hasta su aceptación. Las áreas añadidas en esta revisión incluyen importación explícita, cámara y máscaras rectangulares, actividad de boca limitada, elección de contacto, alcance estricto de correcciones, lote de pendientes y planificación de pausas. Tienen código integrado y cobertura parcial con fixtures. No se consideran aceptadas sin recorrido cloud/móvil y comprobación con material real. Debe revisarse la experiencia completa y resolverse lo que revelen esas pruebas; no se reduce el contrato.
 
 También faltan build/instalación/rollback en GCP, pruebas IAM/Firestore/cargas desde iPhone, exportación de proyecto Animes representativo y las dos producciones reales autorizadas de géneros diferentes. Las pruebas sintéticas no cubren la calidad emocional ni continuidad visual o vocal de los modelos. Esta rama no debe fusionarse ni activarse en producción todavía.
 
@@ -48,3 +48,13 @@ La rama fue publicada y se abrió la PR #20. El primer deployment de preview `dp
 72 tests Python correctos (86,685 s) y SHA-256 incremental contrastado con Node crypto en límites de bloque y archivos grandes. Nuevas pruebas cubren conciliación conservadora, cuotas de llamadas, concurrencia de workers, cambios manuales, subtítulos y hash de preview. El instalador conserva/restaura la revisión anterior también si falla la conexión posterior a activarla; el diagnóstico compara commit real. Un self-test cloud escribe/lee/borra un registro y objeto de diagnóstico con la identidad del worker, sin llamar a modelos; todavía no ejecutado en GCP.
 
 Preview anterior `6ec4150` confirmó READY en Vercel. Cortos cargó su HTML/JS y mostró honestamente la falta de servicio configurado. El enlace a Animes en el navegador de prueba encontró la protección de Vercel; no se desactivó. CI de Animes y Cortos pasó para ese commit.
+
+## Tercer cierre de integración
+
+El nuevo bloque añade recuperación de cargas vencidas, lotes conservadores, importación con copia, variantes regionales, boca por actividad vocal, selección del segundo contacto, pausas explícitas, recuperación de aprobados y lectura paginada de recursos. Las correcciones de ideas se fusionan únicamente en el campo elegido; las de guion solo en la entidad seleccionada. La inspección del render valida también muestras decodificadas y padding AAC. El compilador pasa a 2.2.0 para separar la caché.
+
+Referencias consultadas para reanudación: https://docs.cloud.google.com/storage/docs/resumable-uploads y https://docs.cloud.google.com/storage/docs/performing-resumable-uploads . Sesiones 404/410 se renuevan; un estado incierto no dispara otra sesión. Firebase usa popup para evitar depender del redirect entre dominios bloqueado por Safari: https://firebase.google.com/docs/auth/web/redirect-best-practices .
+
+No se ejecutó Docker/GCP ni producción pagada. Las decisiones de cuenta/proyecto y autorización de costes siguen siendo necesarias para probar la instalación real. La aceptación A097/A098 requiere dos producciones revisadas, no videos sintéticos.
+
+Suite consolidada de este bloque: **90 pruebas Python correctas en 91,029 s**, sin skips (`fixtures.log`). Cinco pruebas Node (gateway/checksum), regresión original y comparación byte a byte de Animes también pasan.

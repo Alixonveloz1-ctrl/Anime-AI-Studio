@@ -14,7 +14,7 @@ def main():
         import subprocess
         # Container fixtures exercise the shipped media/service code. Repository
         # history/installer checks run in CI's full checkout, outside this image.
-        for pattern in ('test_contracts.py','test_dependencies.py','test_media.py','test_api.py','test_pricing.py','test_revisions.py','test_subtitles.py','test_dispatch.py'):
+        for pattern in ('test_contracts.py','test_dependencies.py','test_media.py','test_api.py','test_pricing.py','test_revisions.py','test_subtitles.py','test_dispatch.py','test_workflow.py'):
             subprocess.run([sys.executable,'-m','unittest','discover','-s','tests/shorts','-p',pattern],check=True)
         return
     if os.environ.get('SHORTS_CLOUD_SELF_TEST')=='1':

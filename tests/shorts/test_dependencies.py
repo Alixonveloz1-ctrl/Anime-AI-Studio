@@ -43,3 +43,12 @@ class DependencyTests(unittest.TestCase):
     def test_A017_translation_change_does_not_regenerate_japanese_voice(self):
         voice=self.asset('voice','u','pcm');d=copy.deepcopy(self.d);d['utterances'][0]['spanish']='Este es un libro.'
         self.assertIn(('u','pcm'),select_assets([voice],d,'new'))
+
+    def test_A009_select_previous_approved_without_mutating_history(self):
+        old=self.asset('old','c','image');new=self.asset('new','c','image',time=2)
+        shot=self.asset('shot','s','image',[old]);original=copy.deepcopy([old,new,shot])
+        selected=select_assets([old,new,shot],self.d,'dev',{'c|image':'old'})
+        self.assertEqual(selected[('c','image')]['id'],'old');self.assertEqual(selected[('s','image')]['id'],'shot')
+        self.assertEqual([old,new,shot],original)
+        changed=copy.deepcopy(self.d);changed['bible']['characters'][0]['referencePrompt']='different'
+        self.assertNotIn(('c','image'),select_assets([old,new,shot],changed,'dev',{'c|image':'old'}))

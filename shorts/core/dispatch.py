@@ -5,7 +5,7 @@ from .jobs import PAID
 
 
 def resource_class(operation):
-    if operation in ('media','preview','render','frames'):return 'media'
+    if operation in ('media','preview','render','frames','import'):return 'media'
     if operation in ('ideas','develop','revise','analyze','review','transcribe'):return 'text-analysis'
     return operation
 

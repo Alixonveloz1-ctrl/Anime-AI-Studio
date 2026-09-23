@@ -38,14 +38,15 @@ def fingerprint(development, entity_id, kind):
     return digest(value) if value is not None else None
 
 
-def select_assets(assets, development, development_id):
+def select_assets(assets, development, development_id, selections=None):
     """Select current approved inputs first, then derivatives referencing those IDs.
 
     No mutation of historic records, no blanket invalidation on development ID.
     External uploads are associated with an explicit sound request separately.
     """
     selected = {}
-    candidates = sorted((a for a in assets if a.get('approvalState') == 'approved'),
+    selections=selections or {}
+    candidates = sorted((a for a in assets if a.get('approvalState') == 'approved' and selections.get(str(a.get('entityId'))+'|'+a['kind'],a['id'])==a['id']),
                         key=lambda a: (a.get('approvedAt', a.get('created', 0)), a['id']))
     remaining = candidates[:]
     for _ in range(len(candidates) + 1):

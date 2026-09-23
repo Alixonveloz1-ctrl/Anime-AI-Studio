@@ -21,7 +21,7 @@ Entra con Google. Crea una historia con género principal, subgéneros y concept
 
 Genera/aprueba primero referencias de identidad, lugares y objetos; después los planos y voces japonesas. Cada generación conserva la versión anterior. Veo exige `generateAudio:false`; el worker inspecciona la respuesta y solo expone su derivado silencioso. No hay sustitución automática de modelo/proveedor.
 
-En Sonido, cada solicitud tiene prompt, duración, perspectiva, preparación, cola y su entrada **Subir efecto**. Elige un MP3 desde Archivos. El original se conserva y el worker crea un PCM canónico con su onda y candidatos de ataque. Tras una interrupción, vuelve a seleccionar el mismo archivo para recuperar la sesión de carga. La reanudación real desde iPhone y la expiración de sesiones aún deben verificarse.
+En Sonido, cada solicitud tiene prompt, duración, perspectiva, preparación, cola y su entrada **Subir efecto**. Elige un MP3 desde Archivos. El original se conserva y el worker crea un PCM canónico con su onda y candidatos de ataque. Tras una interrupción, vuelve a seleccionar el mismo archivo para recuperar la sesión de carga. Si la sesión venció, se recupera el mismo destino y se reinicia únicamente la transferencia; no se duplican el recurso ni la solicitud. Esto requiere ensayo real desde iPhone.
 
 ## Corregir un sonido
 
@@ -32,7 +32,7 @@ En Sonido, cada solicitud tiene prompt, duración, perspectiva, preparación, co
 5. Pulsa **Probar ajuste**. Se obtiene un MP4 muxado; no se arrancan dos reproductores separados. **Comparar anterior/candidata** alterna archivos; **Deshacer** recupera el ajuste previo.
 6. Escucha y pulsa **Aprobar y fijar**. El análisis automático no puede sobrescribirlo. Una dependencia cambiada obliga a revisar su uso; conserva el material y aprobación históricos.
 
-La extracción usa el mismo compositor para Veo, ilustración y cámara. Cambiar la edición visual exige revisar su ancla. Falta completar el editor de capas, la elección explícita de ocurrencias múltiples y los recorridos móviles indicados en la matriz. El botón de IA tiene intentos limitados; no sustituye al ajuste manual.
+La extracción usa el mismo compositor para Veo, ilustración y cámara. Cambiar la edición visual exige revisar su ancla. Si hay varios contactos, elige el número y descripción correctos antes del análisis fino. En Tomas → Movimiento y capas puedes editar la cámara o aplicar variantes aprobadas dentro de una región rectangular. Los recorridos móviles siguen pendientes de verificación. El botón de IA tiene intentos limitados; no sustituye al ajuste manual.
 
 ## Preview, exportación y recuperación
 
@@ -47,3 +47,15 @@ Si un envío queda **desconocido**, no repitas a ciegas: el proveedor puede habe
 En Guion y biblias, pulsa **Editar manualmente**, cambia los campos, **Revisar cambios** y **Guardar candidata**. Verás los recursos afectados antes de guardar; aprueba después la candidata. En **Subtítulos** puedes cambiar español, dividir bloques y marcar inicio/fin mientras escuchas la voz definitiva. Las advertencias de lectura requieren corregir el bloque o justificar una excepción. Cambiar la voz conserva la corrección anterior y solicita revisión.
 
 En Producción, **Recuperar pendiente** reencola trabajo no despachado o consulta una operación conocida; **Diagnosticar ejecución** consulta Cloud Run sin generar. Un envío incierto nunca se repite con ese botón.
+
+## Lotes, versiones e importación
+
+**Generar pendientes / continuar lote** muestra cantidad y reserva máxima. Conserva aprobados y candidatas; se detiene cuando debes revisar una referencia. Al volver, consulta el mismo lote. Detener o perder el lease impide nuevos despachos; lo ya aceptado puede terminar. Una tarea desconocida exige diagnóstico, sin reenvío automático.
+
+**Usar esta versión aprobada** recupera un archivo anterior sin borrar el nuevo. **Importar referencia o música de otra historia** requiere elegir origen, recurso y destino; crea una copia propia con procedencia, nunca un enlace compartido implícito. Revisa la candidata de biblia y el archivo antes de activarlos.
+
+## Variantes y boca limitada
+
+En **Movimiento y capas**, genera solo la variante que necesitas (por ejemplo, boca abierta conservando el encuadre), apruébala y selecciona la región. Ajusta sus límites en porcentaje y su intervalo en fotogramas. Puedes vincularla a la actividad medida de una voz aprobada para alternar apertura/cierre. No es sincronía fonética y debes revisar sus bordes, expresión y ritmo en **Preview de toma**. Un cambio de voz exige revisar esa vinculación. **Preview de escena** reúne las tomas de la misma unidad dramática, con mezcla muxada.
+
+Las pausas se editan en Guion y biblias: acción inicial/final y pausa antes/después de cada voz. El planner usa la duración PCM real y solo los márgenes aprobados. Si no cabe, pide revisar la toma; no acelera el diálogo ni repite clips.

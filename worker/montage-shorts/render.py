@@ -113,10 +113,25 @@ def visual_clip(s, files, target, w, h, offset, length):
         graph=f'[0:v]{",".join(vf)}[base]';previous='base'
         for li,layer in enumerate(layers,1):
             require(layer['assetRevision'] in files,'LAYER_ASSET','Capa ausente')
-            for field in ('x','y','width','height','startFrame','endFrame'):require(type(layer[field])is int and 0<=layer[field]<=max(7200,w,h),'LAYER','Capa inválida')
             require(layer.get('approved') is True,'LAYER_APPROVAL','Máscara/capa sin aprobar')
             args+=['-loop','1','-i',files[layer['assetRevision']]]
-            graph+=f';[{li}:v]scale={layer["width"]}:{layer["height"]}[l{li}];[{previous}][l{li}]overlay={layer["x"]}:{layer["y"]}:enable=between(n\\,{layer["startFrame"]-offset}\\,{layer["endFrame"]-offset-1})[b{li}]';previous=f'b{li}'
+            require(type(layer['startFrame'])is int and type(layer['endFrame'])is int and 0<=layer['startFrame']<layer['endFrame']<=s['frames'],'LAYER','Intervalo de capa inválido')
+            mask=layer.get('mask')
+            if mask:
+                require(set(mask)=={'x','y','width','height'} and all(type(v) in (int,float) and math.isfinite(v) for v in mask.values()),'MASK','Máscara inválida')
+                x,y,mw,mh=[mask[k] for k in ('x','y','width','height')]
+                require(0<=x<1 and 0<=y<1 and 0<mw<=1-x and 0<mh<=1-y,'MASK','Máscara fuera del frame')
+                lw,lh=max(2,round(w*mw/2)*2),max(2,round(h*mh/2)*2);lx,ly=round(w*x),round(h*y)
+                crop=f'crop=iw*{mw}:ih*{mh}:iw*{x}:ih*{y},'
+            else:
+                for field in ('x','y','width','height'):require(type(layer[field])is int and 0<=layer[field]<=max(w,h),'LAYER','Capa inválida')
+                lx,ly,lw,lh=[layer[k] for k in ('x','y','width','height')];crop=''
+            intervals=layer.get('intervals',[[layer['startFrame'],layer['endFrame']]])
+            require(isinstance(intervals,list) and len(intervals)<=500,'LAYER_INTERVALS','Intervalos inválidos')
+            for first,last in intervals:require(type(first)is int and type(last)is int and 0<=first<last<=s['frames'],'LAYER_INTERVALS','Intervalo fuera de toma')
+            enabled='+'.join(f'between(n\\,{first-offset}\\,{last-offset-1})' for first,last in intervals) or '0'
+            graph+=f';[{li}:v]{crop}scale={lw}:{lh}[l{li}];[{previous}][l{li}]overlay={lx}:{ly}:enable={enabled}[b{li}]';previous=f'b{li}'
+
         opts=['-filter_complex_threads','1','-filter_complex',graph,'-map',f'[{previous}]']
     else:opts=['-vf',','.join(vf),'-map','0:v:0']
     ff([*args,*opts,'-an','-frames:v',length,'-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p',target])
@@ -147,6 +162,16 @@ def render(manifest, root, start=0, end=7200, final=False, width=None):
     ff(['-i',root/'clean.mp4','-vf',f"setpts=PTS+{start/24}/TB,ass='{root/'subtitles.ass'}',setpts=PTS-STARTPTS",'-map','0:v:0','-map','0:a:0','-c:v','libx264','-preset','fast','-pix_fmt','yuv420p','-c:a','copy','-movflags','+faststart',output])
     info=probe(output);v=next(s for s in info['streams'] if s['codec_type']=='video')
     require(int(v['nb_frames'])==end-start,'OUTPUT_FRAMES','Salida perdió fotogramas')
-    result={'manifestHash':plan['manifestHash'],'startFrame':start,'endFrame':end,'frames':end-start,'programSamples':(end-start)*2000,'sha256':checksum(output),'file':output.name,'compilerVersion':plan['compilerVersion']}
+    audio=[s for s in info['streams'] if s['codec_type']=='audio']
+    require(len(audio)==1 and int(audio[0]['sample_rate'])==RATE,'OUTPUT_AUDIO','Salida debe tener una mezcla a 48 kHz')
+    expected_samples=(end-start)*2000
+    raw=ff(['-i',output,'-map','0:a:0','-ac',1,'-ar',RATE,'-f','s16le','pipe:1'])
+    decoded_samples=len(raw)//2;padding=decoded_samples-expected_samples
+    require(0<=padding<=1024,'OUTPUT_PADDING','Longitud AAC decodificada incompatible con el programa')
+    from fractions import Fraction
+    duration=Fraction(str(audio[0]['duration_ts']))*Fraction(audio[0]['time_base'])*RATE
+    require(abs(duration-expected_samples)<=1,'OUTPUT_AUDIO_DURATION','Duración audible distinta del programa')
+    require(abs(float(audio[0].get('start_time',0)))<=1/RATE,'OUTPUT_AUDIO_START','Desplazamiento inicial inesperado en la mezcla')
+    result={'manifestHash':plan['manifestHash'],'startFrame':start,'endFrame':end,'frames':end-start,'programSamples':expected_samples,'decodedAudioSamples':decoded_samples,'codecPaddingSamples':padding,'sha256':checksum(output),'file':output.name,'compilerVersion':plan['compilerVersion']}
     (root/'result.json').write_text(json.dumps(result,indent=2));(root/'compiled.json').write_text(json.dumps(plan,ensure_ascii=False,indent=2))
     return result

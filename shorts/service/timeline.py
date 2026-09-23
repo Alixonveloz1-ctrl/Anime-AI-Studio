@@ -1,6 +1,7 @@
 from shorts.core.contracts import require, RATE, FPS, FRAMES, plan_beats
 from shorts.core.dependencies import select_assets
 from shorts.core.subtitles import subtitle_segments,validate_segments
+from shorts.core.timing import voice_layout,shot_bounds
 
 def approved_assets(cloud,pid):
     assets=[x.to_dict() for x in cloud.project_ref(pid).collection('assets').stream()]
@@ -9,7 +10,7 @@ def approved_assets(cloud,pid):
 def assemble_plan(cloud,p,cue_overrides=None):
     pid=p['id'];dev=cloud.entity(pid,'developments',p['activeDevelopment'])
     require(dev['approvalState']=='approved','SCRIPT_APPROVAL','Guion sin aprobar')
-    d=dev['data'];available=approved_assets(cloud,pid);by=select_assets(available,d,dev['id'])
+    d=dev['data'];available=approved_assets(cloud,pid);by=select_assets(available,d,dev['id'],p.get('assetSelections'))
     assets={};shots=[];cues=[];subtitles=[];elastic=[];voice_by_shot={};issues=[]
     for u in d['utterances']:
         a=by.get((u['id'],'pcm'))
@@ -17,10 +18,9 @@ def assemble_plan(cloud,p,cue_overrides=None):
             issues.append('Falta voz aprobada: '+u['id']);continue
         voice_by_shot.setdefault(u['shotId'],[]).append((u,a))
     for s in d['shots']:
-        speech=sum(a['samples'] for _,a in voice_by_shot.get(s['id'],[]));minimum=(speech+1999)//2000
+        speech=sum(a['samples'] for _,a in voice_by_shot.get(s['id'],[]));_,minimum=voice_layout(s,voice_by_shot.get(s['id'],[]))
         # Only pauses explicitly approved with development can absorb time.
-        lo=max(minimum,s.get('minFrames',s['frames']));hi=s.get('maxFrames',s['frames'])
-        require(lo<=hi,'SCRIPT_REVIEW','La voz excede la pausa/acción autorizada en '+s['id']+'; revisa el guion')
+        lo,hi=shot_bounds(s,minimum)
         elastic.append({'id':s['id'],'minFrames':lo,'preferredFrames':max(lo,min(hi,s['frames'])),'maxFrames':hi,'timingEvidence':'measured_audio' if speech else 'approved_action'})
     planned=plan_beats(elastic)
     for s,t in zip(d['shots'],planned):
@@ -32,8 +32,29 @@ def assemble_plan(cloud,p,cue_overrides=None):
         else:assets[a['id']]=a
         shot={**s,'startFrame':t['startFrame'],'frames':t['frames'],'assetRevision':a['id'],'trimSeconds':s.get('trimSeconds',0),'speed':s.get('speed',1)}
         if a['id'].startswith('missing_'):shot.update(treatment='black',approvedBlack=True,draftPlaceholder=True)
-        shots.append(shot);cursor=t['startFrame']*2000
-        for u,audio in voice_by_shot.get(s['id'],[]):
+        if shot['treatment']=='localized':
+            layers=[]
+            for layer in s.get('layers',[]):
+                variant=next((x for x in available if x['id']==layer['assetRevision']),None)
+                if not variant or variant.get('parentAssetId')!=a['id']:
+                    issues.append('Revisar variante/máscara de '+s['id']);continue
+                if layer['endFrame']>t['frames']:
+                    issues.append('Revisar salida de capa tras cambiar duración: '+s['id']);continue
+                if layer.get('voiceBinding'):
+                    from shorts.core.mouth import mouth_frames
+                    binding=layer['voiceBinding'];placements,_=voice_layout(s,voice_by_shot.get(s['id'],[]))
+                    row=next((x for x in placements if x['utterance']['id']==binding['utteranceId']),None)
+                    if not row or row['audio']['id']!=binding['audioRevision'] or row['audio']['sha256']!=binding['audioHash']:
+                        issues.append('Revisar boca tras cambiar voz: '+s['id']);continue
+                    layer={**layer,'intervals':mouth_frames(row['audio'],row['offsetSample'],t['frames'],layer['startFrame'],layer['endFrame'])}
+                assets[variant['id']]=variant;layers.append(layer)
+            shot['layers']=layers
+            if not layers:
+                issues.append('Faltan capas aprobadas: '+s['id']);shot.update(treatment='hold',draftPlaceholder=True)
+        shots.append(shot)
+        placements,_=voice_layout(s,voice_by_shot.get(s['id'],[]))
+        for placement in placements:
+            u,audio=placement['utterance'],placement['audio'];cursor=t['startFrame']*2000+placement['offsetSample']
             assets[audio['id']]=audio
             cues.append({'id':'voice_'+u['id'],'track':u['type'],'audioRevision':audio['id'],'anchorSample':cursor,'sourceSyncSample':0,'trimOutSample':audio['samples'],'approvalState':'approved'})
             sub=next((x for x in d['subtitles'] if x['utteranceId']==u['id']),None)
@@ -45,7 +66,6 @@ def assemble_plan(cloud,p,cue_overrides=None):
             approved=p.get('subtitleApproval',{}).get('developmentId')==dev['id'] and p.get('subtitleApproval',{}).get('audioHashes',{}).get(audio['id'])==audio['sha256'] and not stale
             for segment in segments:
                 subtitles.append({**segment,'startSample':cursor+segment['startSample'],'endSample':cursor+segment['endSample'],'audioRevision':audio['id'],'approvalState':'approved' if approved else 'needs_review','utteranceId':u['id']})
-            cursor+=audio['samples']
     all_cues=[x.to_dict() for x in cloud.project_ref(pid).collection('cues').stream()]
     selections={**p.get('cueSelections',{}),**(cue_overrides or {})}
     stored=[]
@@ -79,8 +99,9 @@ def assemble_plan(cloud,p,cue_overrides=None):
             issues.append('Falta música aprobada: '+r['id']);continue
         assets[a['id']]=a
         duration=(r['endFrame']-r['startFrame'])*2000
-        require(duration<=a['samples'],'MUSIC_COVERAGE','La música no cubre el intervalo; ajusta la edición sin inventar extensión')
-        cues.append({'id':'music_'+r['id'],'track':'music','audioRevision':a['id'],'anchorSample':r['startFrame']*2000,'sourceSyncSample':0,'trimOutSample':duration,'gainDb':r.get('gainDb',-18),'approvalState':'approved'})
+        source=r.get('sourceInSample',0)
+        require(source+duration<=a['samples'],'MUSIC_COVERAGE','La música no cubre el intervalo; ajusta la edición sin inventar extensión')
+        cues.append({'id':'music_'+r['id'],'track':'music','audioRevision':a['id'],'anchorSample':r['startFrame']*2000,'sourceSyncSample':source,'trimInSample':source,'trimOutSample':source+duration,'gainDb':r.get('gainDb',-18),'fadeInSamples':r.get('fadeInSamples',0),'fadeOutSamples':r.get('fadeOutSamples',0),'approvalState':'approved'})
     events={x.id:x.to_dict() for x in cloud.project_ref(pid).collection('events').stream()}
     used_events={c['eventId'] for c in cues if c.get('eventId')}
     return {'schemaVersion':2,'projectId':pid,'format':p['format'],'fps':FPS,'sampleRate':RATE,'frames':FRAMES,'assets':assets,'shots':shots,'cues':cues,'events':{k:v for k,v in events.items() if k in used_events},'subtitles':subtitles,'developmentId':dev['id'],'globalGainDb':0,'draftIssues':issues,'cueOverrides':cue_overrides or {},'mixPolicy':p.get('mixPolicy',{})}

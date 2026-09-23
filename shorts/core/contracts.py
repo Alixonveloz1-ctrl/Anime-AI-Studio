@@ -174,7 +174,7 @@ def compile_timeline(manifest, final=False):
         require(0<=sub['startSample']<sub['endSample']<=SAMPLES,'SUBTITLE_TIME','Subtítulo fuera de programa')
         require(sub.get('audioRevision') in assets,'SUBTITLE_AUDIO','Subtítulo sin audio vinculado')
         require(not final or sub.get('approvalState')=='approved','SUBTITLE_REVIEW','Subtítulo pendiente')
-    out={**copy.deepcopy(manifest),'cues':resolved,'compilerVersion':'2.1.0','samples':SAMPLES}
+    out={**copy.deepcopy(manifest),'cues':resolved,'compilerVersion':'2.2.0','samples':SAMPLES}
     canonical=copy.deepcopy(out)
     for asset in canonical['assets'].values():asset.pop('local',None)
     out['manifestHash']=digest(canonical)

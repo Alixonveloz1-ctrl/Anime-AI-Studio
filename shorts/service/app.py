@@ -25,7 +25,12 @@ def uid():
     except Exception:raise ContractError('AUTH','Sesión inválida o vencida',401)
     require(claims.get('email_verified') and claims.get('email') in config()['allowedEmails'],'ACCESS','Cuenta no autorizada',403)
     return claims['uid']
-def body():return request.get_json(silent=False) or {}
+def body():
+    value=request.get_json(silent=False)
+    require(isinstance(value,dict),'JSON_OBJECT','Se requiere un objeto JSON',400)
+    try:json.dumps(value,allow_nan=False)
+    except (ValueError,TypeError):raise ContractError('JSON_NUMBER','Números no finitos no admitidos',422)
+    return value
 def expected():
     v=request.headers.get('If-Match','').strip('"')
     require(v.isdigit(),'IF_MATCH','Falta revisión esperada',409);return int(v)
@@ -39,6 +44,7 @@ def submit(pid,operation,payload,key_override=None,pin=True):
     if pin and operation in ('image','veo','tts','music','transcribe','review','frames','analyze','media'):
         payload={**payload,'developmentId':p.get('activeDevelopment')}
         payload['approvedAssetIds']=[x.id for x in cloud().project_ref(pid).collection('assets').stream() if x.to_dict().get('approvalState')=='approved']
+        payload['assetSelections']=p.get('assetSelections',{})
     job=cloud().submit(p,operation,payload,key_override or request.headers.get('Idempotency-Key',''),expected(),d.get('budgetId',''),d.get('session',''))
     return jsonify(jobId=job['id'],state=job['state']),202
 
@@ -67,15 +73,29 @@ def projects():
 def project_route(pid):
     p=owned(pid)
     if request.method=='GET':
-        result={**p}
+        result={**p,'entityCursors':{}}
         for k in ('ideas','developments','assets','cues','events','timelines','previews'):
-            result[k]=[x.to_dict() for x in cloud().project_ref(pid).collection(k).limit(300).stream()]
-            if k=='developments':
-                for item in result[k]:item['dataHash']=digest(item['data'])
+            page=entity_page(pid,k);result[k]=page['items']
+            if page['next']:result['entityCursors'][k]=page['next']
         return jsonify(result)
     d=body();require(set(d)<={'title','archived'},'FIELDS','Edita el contenido como una nueva revisión')
     def patch(tx,current):current.update(d)
     _,p=cloud().mutate(pid,expected(),patch);return jsonify(p)
+
+def entity_page(pid,kind,cursor=None):
+    require(kind in ('ideas','developments','assets','cues','events','timelines','previews'),'ENTITY','Lista inválida')
+    query=cloud().project_ref(pid).collection(kind).order_by('__name__').limit(51)
+    if cursor:
+        snapshot=cloud().entity_ref(pid,kind,ident(cursor)).get();require(snapshot.exists,'CURSOR','Página inexistente');query=query.start_after(snapshot)
+    docs=list(query.stream());items=[x.to_dict() for x in docs[:50]]
+    for row in items:
+        if kind=='developments':row['dataHash']=digest(row['data'])
+        if kind=='assets':row.pop('waveform',None) # retrieved on demand by its dedicated route
+    return {'items':items,'next':docs[49].id if len(docs)>50 else None}
+
+@app.get('/projects/<pid>/entities/<kind>/after/<cursor>')
+def entities_after(pid,kind,cursor):
+    owned(pid);return jsonify(entity_page(pid,kind,cursor))
 
 @app.post('/projects/<pid>/duplicate')
 def duplicate(pid):
@@ -98,13 +118,27 @@ def budget(pid):
     p=owned(pid);d=body();require(expected()==p['revision'],'REVISION_CONFLICT','Revisión cambió',409)
     from shorts.core.contracts import integer
     amount=integer(d.get('limitMicros'),'presupuesto',1,10**10)
-    allowed={'ideas','develop','revise','image','veo','tts','music','analyze','review','transcribe','media','preview','render','frames'}
+    allowed={'ideas','develop','revise','image','veo','tts','music','analyze','review','transcribe','media','preview','render','frames','import'}
     require(isinstance(d.get('operations'),list) and set(d['operations'])<=allowed,'OPERATIONS','Operaciones inválidas')
     b={'id':new_id(),'projectId':pid,'owner':p['owner'],'limit':amount,'spent':0,'reserved':0,'operations':d['operations'],'expires':time.time()+86400,'created':time.time()}
     cloud().db.collection('animeShortsBudgetAuthorizations').document(b['id']).create(b);return jsonify(b),201
 
 @app.post('/projects/<pid>/ideas:generate')
 def ideas(pid):return submit(pid,'ideas',{})
+
+@app.post('/projects/<pid>/budgets/<bid>:extend')
+def extend_budget(pid,bid):
+    p=owned(pid);d=body()
+    from shorts.core.contracts import integer
+    limit=integer(d.get('limitMicros'),'límite total',1,10**10)
+    ref=cloud().db.collection('animeShortsBudgetAuthorizations').document(ident(bid))
+    def extend(tx,current):
+        b=ref.get(transaction=tx).to_dict()
+        require(b and b['projectId']==pid and b['owner']==p['owner'],'BUDGET_AUTH','Autorización ajena',403)
+        require(limit>=b['reserved']+b['spent'],'BUDGET_LIMIT','El nuevo límite no cubre el uso ya comprometido')
+        require(b.get('operations'),'BUDGET_REVIEW','Revisa el exceso detectado antes de renovar esta autorización')
+        b.update(limit=limit,expires=time.time()+86400,renewed=time.time());tx.set(ref,b);return b
+    b,_=cloud().mutate(pid,expected(),extend);return jsonify(b)
 @app.post('/projects/<pid>/ideas/<iid>:select')
 def select(pid,iid):
     owned(pid);idea=cloud().entity(pid,'ideas',iid)
@@ -116,7 +150,14 @@ def develop(pid):
 @app.post('/projects/<pid>/revisions/<kind>/<eid>:revise')
 def revise(pid,kind,eid):
     owned(pid);cloud().entity(pid,kind,eid);d=body();require(isinstance(d.get('instruction'),str) and 0<len(d['instruction'])<=3000,'INSTRUCTION','Describe la corrección')
-    return submit(pid,'revise',{'kind':kind,'entityId':eid,'instruction':d['instruction']})
+    require(kind in ('ideas','developments'),'REVISION_KIND','Solo ideas o guion se corrigen en esta ruta')
+    if kind=='developments':
+        from shorts.core.revisions import scoped_value
+        scoped_value(cloud().entity(pid,kind,eid)['data'],d.get('scope'))
+    else:
+        from shorts.core.revisions import idea_scope
+        idea_scope(cloud().entity(pid,kind,eid)['data'],d.get('scope'))
+    return submit(pid,'revise',{'kind':kind,'entityId':eid,'instruction':d['instruction'],'scope':d.get('scope')})
 @app.post('/projects/<pid>/developments/<eid>/edits:preview')
 @app.post('/projects/<pid>/developments/<eid>/edits:save')
 def development_edit(pid,eid):
@@ -144,7 +185,13 @@ def approve(pid,kind,eid):
     ref=cloud().entity_ref(pid,kind,eid)
     def change(tx,current):
         entity=ref.get(transaction=tx).to_dict();require(entity and entity.get('approvalState') not in ('stale','quarantined'),'STALE','Recurso desactualizado')
-        if entity.get('approvalState')=='approved':return entity
+        if entity.get('approvalState')=='approved':
+            if kind=='assets':
+                current.setdefault('assetSelections',{})[entity['entityId']+'|'+entity['kind']]=eid
+                current['timelineStale']=True
+            if kind=='developments':current.update(activeDevelopment=eid,stage='tomas',timelineStale=True)
+            tx.create(cloud().entity_ref(pid,'approvals',new_id()),{'kind':kind,'entity':eid,'action':'select_existing_approval','author':p['owner'],'at':time.time()})
+            return entity
         if kind=='assets':
             checks=body().get('checks',{})
             needed={'image':{'visualContinuity'},'veo_silent_validated':{'visualContinuity','mouthCoverage'},'pcm':{'contentHeard','contentMatchesRequest'}}.get(entity['kind'],set())
@@ -156,7 +203,9 @@ def approve(pid,kind,eid):
         entity.update(approvalState='approved',approvedBy=p['owner'],approvedAt=time.time())
         tx.set(ref,entity);tx.create(cloud().entity_ref(pid,'approvals',new_id()),{'entity':eid,'kind':kind,'hash':digest(entity),'author':p['owner'],'at':time.time()})
         if kind=='developments':current['activeDevelopment']=eid;current['stage']='tomas';current['timelineStale']=True
-        if kind=='assets':current['timelineStale']=True
+        if kind=='assets':
+            current['timelineStale']=True
+            current.setdefault('assetSelections',{})[entity['entityId']+'|'+entity['kind']]=eid
         if kind=='timelines':current['activeTimeline']=eid
         return entity
     entity,_=cloud().mutate(pid,expected(),change);return jsonify(entity)
@@ -165,7 +214,88 @@ def approve(pid,kind,eid):
 def generate(pid):
     p=owned(pid);d=body();require(d.get('operation') in ('image','veo','tts','music','transcribe','review'),'OPERATION','Motor inválido')
     require(p.get('activeDevelopment'),'DEVELOPMENT','Aprueba guion y biblias primero')
-    return submit(pid,d['operation'],{k:d[k] for k in ('entityId','assetId','referenceIds','seconds') if k in d})
+    from shorts.core.generation import generation_inputs
+    dev=cloud().entity(pid,'developments',p['activeDevelopment'])
+    assets=[x.to_dict() for x in cloud().project_ref(pid).collection('assets').stream()]
+    generation_inputs(dev['data'],dev['id'],assets,p.get('assetSelections'),d['operation'],d.get('entityId'),bool(d.get('variantPrompt')))
+    if d['operation']=='tts':
+        from shorts.service.providers import tts_payload
+        u=next(x for x in dev['data']['utterances'] if x['id']==d['entityId'])
+        speaker=next(x for x in dev['data']['bible']['characters'] if x['id']==u['speakerId'])
+        tts_payload(config(),u,speaker['voice'])
+    if d['operation']=='review':require(any(a['id']==d.get('assetId') for a in assets),'ASSET','Material a revisar inexistente')
+    return submit(pid,d['operation'],{k:d[k] for k in ('entityId','assetId','referenceIds','seconds','variantPrompt') if k in d})
+
+def batch_plan(p):
+    from shorts.core.batches import pending_plan
+    from google.cloud.firestore_v1.base_query import FieldFilter
+    require(p.get('activeDevelopment'),'DEVELOPMENT','Aprueba guion y biblias')
+    dev=cloud().entity(p['id'],'developments',p['activeDevelopment'])
+    assets=sorted([x.to_dict() for x in cloud().project_ref(p['id']).collection('assets').stream()],key=lambda x:x.get('created',0))
+    jobs=[x.to_dict() for x in cloud().db.collection('animeShortsJobs').where(filter=FieldFilter('projectId','==',p['id'])).stream()]
+    return pending_plan(dev['data'],dev['id'],assets,jobs),assets
+
+@app.route('/projects/<pid>/batches',methods=['GET','POST'])
+def batches(pid):
+    p=owned(pid);nodes,_=batch_plan(p)
+    if request.method=='GET':
+        rates=catalog(config());maximum=sum(rates[n['operation']]['maxMicros'] for n in nodes if n['state']=='ready')
+        return jsonify(nodes=nodes,planHash=digest(nodes),maxMicros=maximum,batches=[x.to_dict() for x in cloud().project_ref(pid).collection('batches').stream()])
+    d=body();require(d.get('acceptPlanHash')==digest(nodes),'BATCH_CHANGED','Revisa el plan actualizado',409)
+    batch={'id':new_id(),'revision':1,'created':time.time(),'state':'active','developmentId':p['activeDevelopment'],'budgetId':ident(d['budgetId']),'session':ident(d['session']),'authorizedKeys':[n['key'] for n in nodes if n['state']=='ready']}
+    def save(tx,current):
+        require(current.get('activeDevelopment')==batch['developmentId'],'BATCH_CHANGED','Cambió el guion',409)
+        if current.get('activeBatch'):
+            prior=cloud().entity_ref(pid,'batches',current['activeBatch']).get(transaction=tx).to_dict()
+            if prior and prior['developmentId']==batch['developmentId'] and prior['budgetId']==batch['budgetId']:
+                prior.update(authorizedKeys=batch['authorizedKeys'],session=batch['session'],revision=prior['revision']+1)
+                tx.set(cloud().entity_ref(pid,'batches',prior['id']),prior);return prior
+        tx.create(cloud().entity_ref(pid,'batches',batch['id']),batch)
+        current['activeBatch']=batch['id'];return batch
+    result,_=cloud().mutate(pid,expected(),save)
+    return jsonify(result),201
+
+@app.post('/projects/<pid>/batches/<bid>:next')
+def batch_next(pid,bid):
+    from shorts.core.batches import batch_key
+    p=owned(pid);d=body();b=cloud().entity(pid,'batches',bid)
+    require(p.get('activeBatch')==bid,'BATCH_REPLACED','Este lote fue sustituido; abre el vigente',409)
+    require(b['developmentId']==p.get('activeDevelopment'),'BATCH_CHANGED','Cambió el guion; revisa un nuevo lote')
+    require(d.get('session')==p.get('lease',{}).get('session') and p['lease']['expires']>time.time(),'LEASE','Continúa la sesión antes de despachar',409)
+    nodes,assets=batch_plan(p);node=next((n for n in nodes if n['state']=='ready' and n['key'] in b['authorizedKeys']),None)
+    if not node:return jsonify(state='awaiting_review' if any(n['state']!='approved' for n in nodes) else 'completed',nodes=nodes)
+    payload={'entityId':node['entityId'],'developmentId':b['developmentId'],'approvedAssetIds':[a['id'] for a in assets if a.get('approvalState')=='approved'],'assetSelections':p.get('assetSelections',{})}
+    if node['operation']=='veo':payload['seconds']=8
+    # Keep the original payload when an HTTP response was lost. Do not derive a
+    # different fingerprint from later approvals for an existing idempotency key.
+    key=batch_key(b,node);jid=digest([pid,key]);old=cloud().db.collection('animeShortsJobs').document(jid).get().to_dict()
+    if old:return jsonify(jobId=jid,state=old['state'],nodes=nodes)
+    job=cloud().submit(p,node['operation'],payload,key,expected(),b['budgetId'],d['session'])
+    return jsonify(jobId=job['id'],state=job['state'],nodes=nodes),202
+
+@app.post('/projects/<pid>/shots/<sid>/visual:propose')
+def visual_propose(pid,sid):
+    p=owned(pid);d=body();old=cloud().entity(pid,'developments',p['activeDevelopment'])
+    from shorts.core.visual import validate_visual
+    from shorts.core.revisions import impact
+    candidate=copy.deepcopy(old['data']);shot=next((s for s in candidate['shots'] if s['id']==sid),None)
+    require(shot,'SHOT','Toma inexistente')
+    require(set(d)<={'treatment','camera','layers'},'VISUAL_FIELDS','Campos no admitidos')
+    available=[x.to_dict() for x in cloud().project_ref(pid).collection('assets').stream()]
+    shot.update(d);validate_visual(shot,{a['id']:a for a in available})
+    report=impact(old['data'],candidate,available,old['id'])
+    record={'id':new_id(),'revision':1,'created':time.time(),'approvalState':'candidate','data':candidate,'previousId':old['id'],'ideaId':old.get('ideaId'),'impact':report,'source':'manual_visual'}
+    def save(tx,current):tx.create(cloud().entity_ref(pid,'developments',record['id']),record)
+    cloud().mutate(pid,expected(),save)
+    return jsonify(record),201
+
+@app.post('/projects/<pid>/imports')
+def import_asset(pid):
+    p=owned(pid);d=body();source_project=cloud().project(d['sourceProjectId'],p['owner'])
+    require(source_project['id']!=pid and p.get('activeDevelopment'),'IMPORT_PROJECT','Selecciona otra historia y aprueba el guion de destino')
+    source=cloud().entity(source_project['id'],'assets',d['sourceAssetId'])
+    require(source.get('approvalState')=='approved','IMPORT_APPROVAL','Recurso de origen sin aprobar')
+    return submit(pid,'import',{'sourceProjectId':source_project['id'],'sourceAssetId':source['id'],'sourceHash':digest(source),'targetId':ident(d['targetId']),'developmentId':p['activeDevelopment']},pin=False)
 
 @app.post('/projects/<pid>/sound-requests/<sid>/upload-session')
 def upload(pid,sid):
@@ -178,11 +308,29 @@ def upload(pid,sid):
     aid=digest([pid,sid,file_key]);ref=cloud().entity_ref(pid,'uploads',aid);existing=ref.get().to_dict()
     if existing:
         require(existing['size']==d['size'] and existing['mimeType']==d['mime'],'UPLOAD_CONFLICT','Archivo distinto',409)
+        if d.get('renew'):
+            blob=cloud().blob(pid,existing['object'])
+            if blob.exists():return jsonify(assetId=aid,complete=True,resumed=True),200
+            status=cloud().http.put(existing['uploadUrl'],headers={'Content-Range':f'bytes */{existing["size"]}','Content-Length':'0'},data=b'',timeout=15,allow_redirects=False)
+            if status.status_code in (404,410):
+                url=blob.create_resumable_upload_session(content_type=existing['mimeType'],size=existing['size'],origin=request.headers.get('X-Shorts-Origin'),if_generation_match=0)
+                from google.cloud import firestore
+                @firestore.transactional
+                def renew(tx):
+                    latest=ref.get(transaction=tx).to_dict()
+                    if latest['uploadUrl']==existing['uploadUrl']:
+                        latest.update(uploadUrl=url,revision=latest['revision']+1,renewed=time.time());tx.set(ref,latest)
+                    return latest['uploadUrl']
+                return jsonify(assetId=aid,uploadUrl=renew(cloud().db.transaction()),resumed=True,restarted=True),200
+            require(status.status_code in (200,201,308),'UPLOAD_STATUS','No se confirmó el estado de la carga; no se abrió otra sesión',503)
         return jsonify(assetId=aid,uploadUrl=existing['uploadUrl'],resumed=True),200
     name=cloud().object_name(pid,aid,'original');blob=cloud().blob(pid,name)
     url=blob.create_resumable_upload_session(content_type=d['mime'],size=d['size'],origin=request.headers.get('X-Shorts-Origin'),if_generation_match=0)
     record={'id':aid,'requestId':sid,'developmentId':p['activeDevelopment'],'sha256':file_key,'object':name,'size':d['size'],'mimeType':d['mime'],'state':'uploading','revision':1,'uploadUrl':url,'created':time.time()}
-    cloud().put_entity(pid,'uploads',record)
+    from google.api_core.exceptions import AlreadyExists
+    try:cloud().put_entity(pid,'uploads',record)
+    except AlreadyExists:
+        winner=ref.get().to_dict();return jsonify(assetId=aid,uploadUrl=winner['uploadUrl'],resumed=True),200
     return jsonify(assetId=aid,uploadUrl=url),201
 @app.post('/projects/<pid>/sound-requests/<sid>/complete')
 def upload_complete(pid,sid):
@@ -226,7 +374,11 @@ def cue_approve(pid,cid):
 @app.post('/projects/<pid>/cues/<cid>:correct')
 def analyze(pid,cid):
     owned(pid);cue=cloud().entity(pid,'cues',cid);require(cue.get('analysisAttempts',0)<2,'ANALYSIS_LIMIT','Usa ajuste manual o autoriza una revisión nueva')
-    return submit(pid,'analyze',{'cueId':cid,'reason':body().get('reason','Localizar contacto')})
+    d=body()
+    if d.get('occurrenceIndex') is not None:
+        from shorts.core.events import choose_contact
+        choose_contact(cue.get('analysisScan',{}).get('options',[]),d['occurrenceIndex'])
+    return submit(pid,'analyze',{'cueId':cid,'reason':d.get('reason','Localizar contacto'),'occurrenceIndex':d.get('occurrenceIndex')})
 @app.post('/projects/<pid>/corrections/<correction>:undo')
 def undo(pid,correction):
     owned(pid);c=cloud().entity(pid,'corrections',correction);ref=cloud().entity_ref(pid,'cues',c['before']['id'])
@@ -322,6 +474,13 @@ def job_action(jid,action):
         response=cloud().http.get('https://run.googleapis.com/v2/'+path,timeout=30)
         require(response.ok,'INSPECT_PENDING','No se pudo consultar Cloud Run',503)
         result=response.json()
+        if path==j.get('workerOperation') and result.get('done') and not result.get('error'):
+            execution=result.get('response',{}).get('name')
+            prefix=f'projects/{cloud().c["project"]}/locations/{cloud().c["region"]}/jobs/{cloud().c["job"]}/executions/'
+            require(isinstance(execution,str) and execution.startswith(prefix) and '/' not in execution[len(prefix):],'INSPECT_PENDING','El arranque terminó pero aún no se confirmó el estado del worker; conserva su reserva.',409)
+            response=cloud().http.get('https://run.googleapis.com/v2/'+execution,timeout=30)
+            require(response.ok,'INSPECT_PENDING','No se confirmó el estado de la ejecución',503)
+            result=response.json()
         ended=bool(result.get('completionTime') or result.get('done'))
         if not ended:return jsonify(state=j['state'],message='La ejecución sigue activa; no se envió otra generación.')
         if j.get('providerOperation') and j['operation'] in ('veo','transcribe'):
@@ -340,6 +499,12 @@ def job_action(jid,action):
         if action=='resume':
             require((v['state']=='queued' and not v.get('started') and not v.get('settled') and not v.get('dispatchState')) or (v['state']=='waiting_provider' and v.get('providerOperation') and v.get('errorCode') in ('VEO_PENDING','SPEECH_PENDING')),'UNKNOWN','Un envío incierto no se reenvía. Solo se recuperan operaciones conocidas o pendientes sin despachar.',409)
             require(not v.get('dispatchUnknown'),'DISPATCH_UNKNOWN','El arranque no se confirmó. Diagnostica antes de reenviar.',409)
+            if v.get('started'):
+                from shorts.core.recovery import reserve_poll_worker
+                br=cloud().db.collection('animeShortsBudgetAuthorizations').document(v['budgetId'])
+                budget=br.get(transaction=tx).to_dict()
+                v,budget=reserve_poll_worker(v,budget,time.time())
+                tx.set(br,budget)
             v.update(state='queued',session=body()['session'],dispatchState=None,dispatchAttempt=v.get('dispatchAttempt',0)+1)
         else:
             require(not v.get('settled') and v['state'] in ('queued','running','waiting_provider','cancel_requested'),'JOB_FINISHED','Este trabajo no admite cancelación',409)
@@ -471,5 +636,5 @@ def budgets_get(pid):
 def project_jobs(pid):
     owned(pid)
     from google.cloud.firestore_v1.base_query import FieldFilter
-    jobs=cloud().db.collection('animeShortsJobs').where(filter=FieldFilter('projectId','==',pid)).limit(100).stream()
+    jobs=cloud().db.collection('animeShortsJobs').where(filter=FieldFilter('projectId','==',pid)).stream()
     return jsonify(jobs=[{k:v for k,v in x.to_dict().items() if k not in ('payload','session')} for x in jobs])

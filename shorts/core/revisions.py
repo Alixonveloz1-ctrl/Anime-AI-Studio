@@ -4,6 +4,15 @@ from .contracts import require, digest
 from .dependencies import select_assets
 
 ROOTS={'title','bible','beats','shots','utterances','soundRequests','musicRequests','subtitles'}
+IDEA_FIELDS={'title','premise','characters','initialSituation','objective','obstacle','emotionalProgression','climax','ending','visualComplexity'}
+
+def idea_scope(idea,scope,replacement=None):
+    require(isinstance(scope,dict) and scope.get('field') in IDEA_FIELDS,'REVISION_SCOPE','Elige el campo de la idea que quieres corregir')
+    field=scope['field'];require(field in idea,'IDEA_SCHEMA','Campo inexistente')
+    if replacement is None:return {'id':idea['id'],field:copy.deepcopy(idea[field])}
+    require(replacement.get('id')==idea['id'] and field in replacement,'IDEA_SCHEMA','Corrección incompleta')
+    require(type(replacement[field]) is type(idea[field]),'IDEA_SCHEMA','El tipo del campo cambió')
+    return {**copy.deepcopy(idea),field:copy.deepcopy(replacement[field])}
 
 def apply_edits(original, patches):
     require(isinstance(patches,list) and 0<len(patches)<=500,'EDITS','Selecciona al menos un cambio')
@@ -37,9 +46,30 @@ def changes(old,new,path=()):
         return [c for i,(a,b) in enumerate(zip(old,new)) for c in changes(a,b,path+(i,))]
     return [{'path':list(path),'before':old,'after':new}]
 
-def impact(old,new,assets,old_id):
-    before=select_assets(assets,old,old_id);after=select_assets(assets,new,'candidate')
+def impact(old,new,assets,old_id,selections=None):
+    before=select_assets(assets,old,old_id,selections);after=select_assets(assets,new,'candidate',selections)
     affected=[{'assetId':a['id'],'entityId':a['entityId'],'kind':a['kind']} for key,a in before.items() if after.get(key,{}).get('id')!=a['id']]
     return {'changes':changes(old,new),'assetsNeedingReview':affected,
             'retainedApprovedAssetIds':[a['id'] for a in after.values()],
             'timelineNeedsReview':old!=new,'paidCalls':0}
+
+
+def scoped_value(development,scope):
+    require(isinstance(scope,dict),'REVISION_SCOPE','Elige el alcance de la corrección')
+    group=scope.get('group');eid=scope.get('entityId')
+    require(group in ('shots','utterances','soundRequests','musicRequests','characters','locations','props','whole'),'REVISION_SCOPE','Alcance inválido')
+    if group=='whole':return development
+    rows=development['bible'][group] if group in ('characters','locations','props') else development[group]
+    target=next((x for x in rows if x['id']==eid),None)
+    require(target,'REVISION_SCOPE','Entidad inexistente');return target
+
+
+def replace_scope(development,scope,replacement):
+    target=scoped_value(development,scope)
+    require(isinstance(replacement,dict),'REVISION_SCHEMA','Corrección incompleta')
+    if scope['group']=='whole':return copy.deepcopy(replacement)
+    require(replacement.get('id')==target['id'],'REVISION_ID','La corrección no puede cambiar el identificador')
+    result=copy.deepcopy(development);group=scope['group']
+    rows=result['bible'][group] if group in ('characters','locations','props') else result[group]
+    rows[next(i for i,x in enumerate(rows) if x['id']==target['id'])]=copy.deepcopy(replacement)
+    return result

@@ -124,6 +124,7 @@
     "id": "A009",
     "requirement": "Versiones previas. Regenerar crea candidata y conserva el archivo/aprobación anterior.",
     "files": [
+      "shorts/core/dependencies.py",
       "shorts/core/revisions.py",
       "shorts/service/app.py",
       "cortos/app.js"
@@ -132,26 +133,31 @@
       "tests/shorts/test_dependencies.py:test_A009_A040_new_voice_preserves_visual_approvals",
       "tests/shorts/test_dependencies.py:test_A009_unapproved_replacement_keeps_approved_parent",
       "tests/shorts/test_revisions.py:test_A009_manual_keeps_original_approval_and_voice",
-      "tests/shorts/test_revisions.py:test_A009_actual_diff_does_not_trust_reported_ids"
+      "tests/shorts/test_revisions.py:test_A009_actual_diff_does_not_trust_reported_ids",
+      "tests/shorts/test_dependencies.py:test_A009_select_previous_approved_without_mutating_history",
+      "tests/shorts/test_revisions.py:test_A009_AI_scope_cannot_replace_unrelated_bible"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Editor manual con candidata, diff e impacto implementado. Falta recorrido completo de aprobación en nube."
+    "remaining": "Selección explícita de versiones aprobadas y revisiones acotadas. Falta integración cloud con dos sesiones."
   },
   {
     "id": "A010",
     "requirement": "Importación explícita. Referencias de otro proyecto se rechazan salvo importación autorizada con procedencia.",
     "files": [
-      "shorts/gateway.mjs",
-      "cortos/index.html",
-      "tests/shorts/legacy-regression.cjs"
+      "shorts/core/imports.py",
+      "shorts/service/production.py",
+      "shorts/service/app.py",
+      "cortos/app.js"
     ],
-    "tests": [],
-    "fixture": "not_covered",
+    "tests": [
+      "tests/shorts/test_workflow.py:test_A010_import_copies_definition_and_provenance_only_explicitly"
+    ],
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Se rechazan recursos cruzados; importación con copia/procedencia aún pendiente."
+    "remaining": "Copia explícita de referencias/música con procedencia y candidata independiente. Falta copia real GCS y revisión móvil."
   },
   {
     "id": "A011",
@@ -213,15 +219,17 @@
     "id": "A015",
     "requirement": "Ajuste localizado. Corregir una propuesta mantiene intactas las partes no solicitadas.",
     "files": [
-      "shorts/service/director.py",
+      "shorts/core/revisions.py",
       "shorts/service/production.py",
       "cortos/app.js"
     ],
-    "tests": [],
-    "fixture": "not_covered",
+    "tests": [
+      "tests/shorts/test_workflow.py:test_A015_idea_fix_cannot_rewrite_other_fields"
+    ],
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Candidata conserva anterior; falta selector de alcance y diff manual antes de aceptar cambios."
+    "remaining": "Corrección IA limitada al campo elegido; no puede reescribir los otros campos de una idea. Falta prueba con modelo autorizado."
   },
   {
     "id": "A016",
@@ -285,17 +293,19 @@
     "id": "A020",
     "requirement": "Duración planeada. El planner llega a 300 s con audio real y pausas autorizadas, sin relleno arbitrario.",
     "files": [
-      "shorts/core/dependencies.py",
-      "shorts/service/timeline.py",
-      "shorts/service/director.py"
+      "shorts/core/timing.py",
+      "shorts/service/director.py",
+      "shorts/service/timeline.py"
     ],
     "tests": [
-      "tests/shorts/test_contracts.py:test_A020_planner_measured"
+      "tests/shorts/test_contracts.py:test_A020_planner_measured",
+      "tests/shorts/test_workflow.py:test_A020_measured_voice_and_explicit_pauses",
+      "tests/shorts/test_workflow.py:test_A020_validate_plan_no_unrenderable_veo"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Planner medido con límites aprobados; falta guion/audio real de 300 s."
+    "remaining": "Voz medida, pausas antes/después y acción inicial/final; intervalos de elasticidad y bloqueo de tomas Veo imposibles. Falta producir guion dramático real."
   },
   {
     "id": "A021",
@@ -347,8 +357,10 @@
       "shorts/service/timeline.py",
       "shorts/service/director.py"
     ],
-    "tests": [],
-    "fixture": "not_covered",
+    "tests": [
+      "tests/shorts/test_workflow.py:test_A024_missing_cast_reference_rejected"
+    ],
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
     "remaining": "Reparto presente/fuera de campo modelado; sin secuencia real."
@@ -387,15 +399,18 @@
     "id": "A027",
     "requirement": "Sin cuota. Aprobar tomas de cuatro tratamientos sin porcentaje impuesto ni zoom obligatorio.",
     "files": [
-      "shorts/core/dependencies.py",
-      "shorts/service/timeline.py",
-      "shorts/service/director.py"
+      "shorts/core/visual.py",
+      "worker/montage-shorts/render.py",
+      "shorts/service/app.py",
+      "cortos/app.js"
     ],
-    "tests": [],
-    "fixture": "not_covered",
+    "tests": [
+      "tests/shorts/test_media.py:test_A027_localized_region_and_interval"
+    ],
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Render soporta cuatro tratamientos; editor de máscaras/capas todavía pendiente."
+    "remaining": "Editor de cámara y variantes por regiones rectangulares con intervalos aprobados. Sin cuotas. Falta revisión visual con recursos reales y Safari."
   },
   {
     "id": "A028",
@@ -415,17 +430,18 @@
     "id": "A029",
     "requirement": "Referencias faltantes. No se envía generación sin identidad al fallar la carga de una referencia requerida.",
     "files": [
+      "shorts/core/generation.py",
       "shorts/core/dependencies.py",
-      "shorts/service/timeline.py",
-      "shorts/service/director.py"
+      "shorts/service/production.py"
     ],
     "tests": [
-      "tests/shorts/test_dependencies.py:test_A029_new_master_invalidates_only_old_reference_uses"
+      "tests/shorts/test_dependencies.py:test_A029_new_master_invalidates_only_old_reference_uses",
+      "tests/shorts/test_workflow.py:test_A029_missing_reference_blocks_before_dispatch"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Referencias obligatorias y dependencia versionada; falta fallo real de GCS."
+    "remaining": "Preflight bloquea referencias faltantes antes de despacho. Falta confirmar error de acceso GCS con credenciales reales."
   },
   {
     "id": "A030",
@@ -552,15 +568,20 @@
     "id": "A038",
     "requirement": "Boca visible. Toma hablando fuera de sincronía no se aprueba sin corregir o decidir cobertura alternativa.",
     "files": [
-      "shorts/service/providers.py",
-      "shorts/service/production.py",
-      "worker/montage-shorts/media.py"
+      "shorts/core/mouth.py",
+      "shorts/core/visual.py",
+      "shorts/service/timeline.py",
+      "worker/montage-shorts/media.py",
+      "worker/montage-shorts/render.py",
+      "cortos/app.js"
     ],
-    "tests": [],
-    "fixture": "not_covered",
+    "tests": [
+      "tests/shorts/test_workflow.py:test_A038_mouth_activity_is_local_and_audio_bound"
+    ],
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Falta gate específico de boca/cobertura en aprobación de toma."
+    "remaining": "Gate humano de boca/cobertura y variantes por actividad vocal implementados; no es sincronía fonética. Cambio de voz exige revisión. Falta prueba audiovisual real."
   },
   {
     "id": "A039",
@@ -659,17 +680,20 @@
     "id": "A045",
     "requirement": "Transferencia reanudable. Interrumpir carga permite continuar sin duplicar asset o cambiar solicitud.",
     "files": [
-      "cortos/hash.mjs",
       "shorts/service/app.py",
-      "shorts/service/production.py"
+      "cortos/app.js",
+      "cortos/hash.mjs"
     ],
     "tests": [
-      "tests/shorts/hash.test.mjs"
+      "tests/shorts/hash.test.mjs",
+      "tests/shorts/test_workflow.py:test_A045_completed_object_no_second_upload",
+      "tests/shorts/test_workflow.py:test_A045_expired_session_renews_same_object",
+      "tests/shorts/test_workflow.py:test_A045_uncertain_status_does_not_restart"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "SHA-256 del archivo completo en chunks y finalización idempotente implementados. Pendiente interrupción/carga real desde iPhone."
+    "remaining": "SHA completo; sesión vencida se renueva sobre el mismo objeto solo tras 404/410 confirmado; carga terminada no se duplica. Falta ensayo iPhone/GCS."
   },
   {
     "id": "A046",
@@ -800,24 +824,27 @@
     "id": "A054",
     "requirement": "Múltiples contactos. Elegir el segundo golpe no alinea por error el primero.",
     "files": [
-      "shorts/service/app.py",
+      "shorts/core/events.py",
       "shorts/service/production.py",
-      "cortos/app.js",
-      "shorts/core/contracts.py"
+      "shorts/service/app.py",
+      "cortos/app.js"
     ],
-    "tests": [],
-    "fixture": "not_covered",
+    "tests": [
+      "tests/shorts/test_workflow.py:test_A054_second_contact_never_defaults_to_first"
+    ],
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Análisis conserva ocurrencias; falta selector explícito de segundo contacto."
+    "remaining": "Detección ambigua exige elegir contacto; segundo paso afina la ocurrencia elegida. Dos intentos limitados. Falta análisis de video real."
   },
   {
     "id": "A055",
     "requirement": "Manual sin IA. Con servicio de análisis caído, abrir editor, fijar frame y ataque y producir preview.",
     "files": [
-      "worker/montage-shorts/render.py",
       "shorts/service/production.py",
-      "shorts/core/contracts.py"
+      "shorts/service/app.py",
+      "worker/montage-shorts/render.py",
+      "cortos/app.js"
     ],
     "tests": [
       "tests/shorts/test_subtitles.py:test_A055_manual_camera_frame_uses_compositor_time",
@@ -826,15 +853,15 @@
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Frames del mismo compositor para Veo, hold y cámara; falta validar editor completo en Safari y preparar capas aprobadas."
+    "remaining": "Frames del compositor y ajuste manual disponibles sin Gemini de análisis. Falta recorrido autenticado en Safari."
   },
   {
     "id": "A056",
     "requirement": "Precisión visual móvil. Botones frame anterior/siguiente muestran frames indexados reales en Safari.",
     "files": [
-      "worker/montage-shorts/render.py",
       "shorts/service/production.py",
-      "shorts/core/contracts.py"
+      "worker/montage-shorts/media.py",
+      "cortos/app.js"
     ],
     "tests": [
       "tests/shorts/test_media.py:test_A056_indexed_contact"
@@ -842,7 +869,7 @@
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Frames del mismo compositor para Veo, hold y cámara; falta validar editor completo en Safari y preparar capas aprobadas."
+    "remaining": "Frames indexados reales de los cuatro tratamientos. Falta validar botones y selección en iPhone."
   },
   {
     "id": "A057",
@@ -999,7 +1026,7 @@
     "tests": [
       "tests/shorts/test_media.py:test_A066_cache_hash_independent_of_worker_staging_path"
     ],
-    "fixture": "not_covered",
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
     "remaining": "Reutilización de preview por hash/intervalo y estado desactualizado implementados. Falta comprobar caché en GCS/Firestore reales."
@@ -1043,8 +1070,7 @@
     "requirement": "Duración y codec. 7.200 frames y 14.400.000 muestras de programa; verificar salida decodificada y padding.",
     "files": [
       "worker/montage-shorts/render.py",
-      "worker/montage-shorts/media.py",
-      "shorts/core/contracts.py"
+      "tests/shorts/test_media.py"
     ],
     "tests": [
       "tests/shorts/test_media.py:test_A061_A063_A064_A069_render_and_decode"
@@ -1052,7 +1078,7 @@
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Fixture final 7.200 frames y PCM 14.400.000 muestras; padding AAC exacto aún no reportado."
+    "remaining": "Salida FFmpeg verificada por frames, PCM, inicio/duración de pista y audio AAC decodificado; padding hasta un frame AAC identificado. Falta salida con recursos de producción."
   },
   {
     "id": "A070",
@@ -1103,15 +1129,18 @@
     "id": "A073",
     "requirement": "Reanudación. Continuar omite tareas válidas terminadas y recursos aprobados.",
     "files": [
-      "shorts/service/cloud.py",
+      "shorts/core/batches.py",
+      "shorts/core/recovery.py",
       "shorts/service/app.py",
-      "worker/montage-shorts/runner.py"
+      "cortos/app.js"
     ],
-    "tests": [],
-    "fixture": "not_covered",
+    "tests": [
+      "tests/shorts/test_workflow.py:test_A073_pending_skips_candidates_and_approvals"
+    ],
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Recuperación de operaciones conocidas y diagnóstico del worker implementados. Arranques sin ID y cobros inciertos conservan reserva; falta ensayo de fallos cloud."
+    "remaining": "Lote persistido omite aprobados/candidatas válidas, espera referencias y no reintenta envíos inciertos. Falta interrupción de sesión y cola real."
   },
   {
     "id": "A074",
@@ -1123,7 +1152,8 @@
     ],
     "tests": [
       "tests/shorts/test_contracts.py:test_A074_duplicate",
-      "tests/shorts/test_dispatch.py:test_A074_duplicate_queue_message_never_starts_second_worker"
+      "tests/shorts/test_dispatch.py:test_A074_duplicate_queue_message_never_starts_second_worker",
+      "tests/shorts/test_workflow.py:test_A074_batch_unknown_not_retried"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
@@ -1172,9 +1202,9 @@
     "requirement": "Presupuesto. Sin saldo autorizado se detienen nuevos despachos; no se afirman cancelados cobros en curso.",
     "files": [
       "shorts/core/pricing.py",
-      "shorts/core/dispatch.py",
+      "shorts/core/recovery.py",
       "shorts/service/cloud.py",
-      "shorts/service/providers.py"
+      "shorts/service/app.py"
     ],
     "tests": [
       "tests/shorts/test_contracts.py:test_A077_reservation",
@@ -1182,12 +1212,13 @@
       "tests/shorts/test_pricing.py:test_A077_model_change_and_expired_tariff_block",
       "tests/shorts/test_pricing.py:test_A077_token_preflight_rejects_before_paid_call",
       "tests/shorts/test_pricing.py:test_A077_usage_refunds_unused_reservation",
-      "tests/shorts/test_dispatch.py:test_A077_capacity_held_across_long_provider_operation"
+      "tests/shorts/test_dispatch.py:test_A077_capacity_held_across_long_provider_operation",
+      "tests/shorts/test_workflow.py:test_A077_known_operation_resume_reserves_compute_not_generation"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Tarifas fechadas, topes de tokens/llamadas, journal y conciliación conservadora implementados. No equivalen a factura; falta verificación API de acceso y consumo real."
+    "remaining": "Reanudación de operación conocida reserva otro worker; autorización renovable por límite explícito. Falta contraste de facturación real."
   },
   {
     "id": "A078",
@@ -1219,7 +1250,8 @@
       "tests/shorts/test_media.py:test_A079_path_and_checksum",
       "tests/shorts/test_media.py:test_A079_playlist_disguised_as_audio",
       "tests/shorts/test_media.py:test_A079_shell_manifest_rejected",
-      "tests/shorts/gateway.test.cjs"
+      "tests/shorts/gateway.test.cjs",
+      "tests/shorts/test_workflow.py:test_A079_json_arrays_and_null_rejected"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",

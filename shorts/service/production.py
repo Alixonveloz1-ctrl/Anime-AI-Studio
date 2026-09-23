@@ -20,6 +20,7 @@ def ident_new():return uuid.uuid4().hex
 def run_job(cloud,j,p):
     pid=p['id'];op=j['operation'];data=j['payload'];provider=Providers(cloud.c,cloud.http,JobMeter(cloud,j['id']))
     if data.get('developmentId'):p={**p,'activeDevelopment':data['developmentId']}
+    if 'assetSelections' in data:p={**p,'assetSelections':data['assetSelections']}
     def entity(kind,value):
         record={'id':ident_new(),'revision':1,'approvalState':'candidate','created':time.time(),'jobId':j['id'],**value}
         cloud.put_entity(pid,kind,record);return record
@@ -34,7 +35,7 @@ def run_job(cloud,j,p):
     def selected(eid,kind):
         available=approved_assets(cloud,pid)
         if 'approvedAssetIds' in data:available=[a for a in available if a['id'] in data['approvedAssetIds']]
-        a=select_assets(available,development()['data'],p.get('activeDevelopment')).get((eid,kind))
+        a=select_assets(available,development()['data'],p.get('activeDevelopment'),p.get('assetSelections')).get((eid,kind))
         require(a,'ASSET_MISSING','Falta recurso aprobado: '+eid);return a
     def uri(a):return 'gs://'+cloud.c['bucket']+'/'+a['object']
     if op=='ideas':
@@ -51,19 +52,53 @@ def run_job(cloud,j,p):
         review=provider.text(RULES+'\nRevisa guion: intención japonés/español, continuidad espacial y emoción específica al género. Devuelve {issues:[],coverage:[],nativeQualityGuaranteed:false}. No inventes revisión audiovisual.\n'+json.dumps(d,ensure_ascii=False))
         return {'developmentId':entity('developments',{'data':d,'review':review,'ideaId':idea['id']})['id']}
     if op=='revise':
+        from shorts.core.revisions import scoped_value,replace_scope,idea_scope,impact,changes
         old=cloud.entity(pid,data['kind'],data['entityId'])
-        revised=provider.text(RULES+'\nAplica SOLO la corrección. Devuelve {data: objeto editado, affectedIds:[], changeSummary:[]}. Conserva todo lo demás.\n'+json.dumps({'original':old['data'],'correction':data['instruction']},ensure_ascii=False))
-        require('data' in revised and 'affectedIds' in revised,'REVISION_SCHEMA','Corrección incompleta')
-        if data['kind']=='developments':validate_development(revised['data'])
-        return {'candidateId':entity(data['kind'],{**revised,'previousId':old['id']})['id'],'affectedIds':revised['affectedIds']}
+        original=old['data'];scope=data.get('scope')
+        target=scoped_value(original,scope) if data['kind']=='developments' else idea_scope(original,scope)
+        revised=provider.text(RULES+'\nCorrige únicamente el objeto target. Devuelve {replacement:objeto editado,changeSummary:[]}. Conserva su id. El contexto solo sirve para continuidad, no lo reescribas.\n'+json.dumps({'target':target,'context':original.get('bible',original) if scope and scope.get('group')!='whole' else None,'correction':data['instruction']},ensure_ascii=False))
+        require(isinstance(revised.get('replacement'),dict),'REVISION_SCHEMA','Corrección incompleta')
+        if data['kind']=='developments':
+            candidate=validate_development(replace_scope(original,scope,revised['replacement']))
+            available=[x.to_dict() for x in cloud.project_ref(pid).collection('assets').stream()]
+            report=impact(original,candidate,available,old['id'],p.get('assetSelections'))
+        else:
+            candidate=idea_scope(original,scope,revised['replacement'])
+            # Validate an individual candidate without inventing a new idea batch.
+            require(set(original)<=set(candidate) and all(candidate.get(k) for k in original),'IDEA_SCHEMA','Idea corregida incompleta')
+            report={'changes':changes(original,candidate),'assetsNeedingReview':[],'paidCalls':1}
+        return {'candidateId':entity(data['kind'],{'data':candidate,'impact':report,'scope':scope,'previousId':old['id'],'batchId':old.get('batchId'),'ideaId':old.get('ideaId')})['id']}
     with tempfile.TemporaryDirectory(prefix='shorts-') as temp:
         root=Path(temp)
+        if op=='import':
+            from shorts.core.imports import import_candidate
+            from shorts.core.revisions import impact
+            source_project=cloud.project(data['sourceProjectId'],p['owner'])
+            source=cloud.entity(source_project['id'],'assets',data['sourceAssetId'])
+            require(digest(source)==data['sourceHash'],'IMPORT_CHANGED','Cambió la versión de origen; vuelve a revisarla')
+            source_dev=cloud.entity(source_project['id'],'developments',source['developmentId'])
+            old=development();candidate,metadata=import_candidate(source,source_dev['data'],old['data'],data['targetId'])
+            validate_development(candidate)
+            if candidate!=old['data']:
+                available=[x.to_dict() for x in cloud.project_ref(pid).collection('assets').stream()]
+                dev=entity('developments',{'data':candidate,'previousId':old['id'],'ideaId':old.get('ideaId'),'source':'import','impact':impact(old['data'],candidate,available,old['id'],p.get('assetSelections')),'provenance':metadata['provenance']})
+                p={**p,'activeDevelopment':dev['id']}
+            source_path=root/('import.png' if source['mimeType']=='image/png' else 'import.jpg' if source['kind']=='image' else 'import.wav')
+            cloud.download(source_project['id'],source['object'],source_path)
+            require(checksum(source_path)==source['sha256'],'IMPORT_CHECKSUM','El original no coincide con su registro')
+            metadata.update({k:source[k] for k in ('samples','sampleRate','channels','waveform','model') if k in source})
+            a=asset(source_path,source['kind'],data['targetId'],metadata)
+            return {'assetId':a['id'],'developmentId':p['activeDevelopment'],'imported':True}
         if op in ('image','veo','tts','music','transcribe','review'):
             dev=development();d=dev['data'];eid=data['entityId']
         if op=='image':
             shot=next((s for s in d['shots'] if s['id']==eid),None)
             refs=[]
-            if shot:
+            if shot and data.get('variantPrompt'):
+                base=selected(eid,'image');refs=[{**base,'uri':uri(base)}]
+                require(isinstance(data['variantPrompt'],str) and 0<len(data['variantPrompt'])<=3000,'VARIANT_PROMPT','Describe el movimiento localizado')
+                prompt=RULES+'\nMantén encuadre, identidad y fondo del frame de referencia. Cambia únicamente esta región/acción: '+data['variantPrompt']
+            elif shot:
                 for rid in shot['referenceEntityIds']:
                     a=selected(rid,'image');refs.append({**a,'uri':uri(a)})
                 prompt=RULES+'\nProduce un frame narrativo anime 2D, sin texto ni subtítulos. Estados, participantes y distribución: '+json.dumps(shot,ensure_ascii=False)
@@ -71,7 +106,7 @@ def run_job(cloud,j,p):
                 e=next((e for k in ('characters','locations','props') for e in d['bible'][k] if e['id']==eid),None)
                 require(e,'ENTITY','Referencia inexistente');prompt=RULES+'\nReferencia maestra limpia: '+json.dumps(e,ensure_ascii=False)
             raw,mime=provider.image(prompt,refs,p['format']);path=root/('image.png' if mime=='image/png' else 'image.jpg');path.write_bytes(raw);inspect(path,'video')
-            return {'assetId':asset(path,'image',eid,{'references':[a['id'] for a in refs],'dependencies':dependency_records(refs),'model':cloud.c['models']['image'],'prompt':prompt})['id']}
+            return {'assetId':asset(path,'image',('layer_'+ident_new()) if data.get('variantPrompt') else eid,{'variantOf':eid if data.get('variantPrompt') else None,'parentAssetId':refs[0]['id'] if data.get('variantPrompt') else None,'references':[a['id'] for a in refs],'dependencies':dependency_records(refs),'model':cloud.c['models']['image'],'prompt':prompt})['id']}
         if op=='veo':
             shot=next(s for s in d['shots'] if s['id']==eid);image=selected(eid,'image')
             raw_id=ident_new();output=j.get('providerOutput') or f'gs://{cloud.c["bucket"]}/{cloud.c["prefix"]}/projects/{pid}/assets/{raw_id}/'
@@ -125,16 +160,26 @@ def run_job(cloud,j,p):
                 tx.update(ref,{'analysisAttempts':cue.get('analysisAttempts',0)+1})
                 return cue
             cue=start_attempt(cloud.db.transaction());a=selected(cue['shotId'],'veo_silent_validated');path=root/'silent.mp4';cloud.download(pid,a['object'],path)
-            result=provider.text(RULES+'\nExamina el video real. Evento: '+cue['eventDescription']+'. Devuelve {visible:boolean,approxSeconds:number|null,occurrences:[],evidence:string,confidence:number}. No inventes contacto si no está visible.',[{'fileData':{'fileUri':uri(a),'mimeType':'video/mp4'}}],True)
-            require(result.get('visible') is True and isinstance(result.get('approxSeconds'),(int,float)),'EVENT_UNCERTAIN','No se identificó el contacto; usa ajuste manual')
-            start=max(0,int(result['approxSeconds']*24)-12);frames=extract_frames(path,root/'frames',start,24)
+            from shorts.core.events import contact_options,choose_contact
+            scan=cue.get('analysisScan') if data.get('occurrenceIndex') is not None else None
+            if scan:
+                require(scan['videoRevision']==a['id'] and scan['eventDescription']==cue['eventDescription'],'EVENT_SCAN_STALE','Cambió el video o el evento; revisa con fotogramas manuales')
+                options=scan['options'];result={'confidence':scan.get('confidence')}
+            else:
+                result=provider.text(RULES+'\nExamina el video real. Evento: '+cue['eventDescription']+'. Corrección solicitada: '+data.get('reason','Localizar contacto')+'. Devuelve {visible:boolean,approxSeconds:number|null,occurrences:[{seconds:number,description:string}],evidence:string,confidence:number}. Incluye CADA contacto visible separado y no inventes contacto.',[{'fileData':{'fileUri':uri(a),'mimeType':'video/mp4'}}],True)
+                options=contact_options(result,float(probe(path)['format']['duration']))
+                scan={'videoRevision':a['id'],'eventDescription':cue['eventDescription'],'options':options,'confidence':result.get('confidence')}
+                cloud.entity_ref(pid,'cues',cue['id']).update({'analysisScan':scan})
+            choice=choose_contact(options,data.get('occurrenceIndex'))
+            if choice is None:return {'cueId':cue['id'],'state':'awaiting_occurrence_selection','error':'Hay varios contactos. Elige el que corresponde al sonido antes de afinarlo.'}
+            start=max(0,int(choice['seconds']*24)-12);frames=extract_frames(path,root/'frames',start,24)
             import base64
             parts=[{'text':f'Frame {f["index"]}' } for f in []]
             for f in frames:
                 parts.extend([{'text':f'Frame {f["index"]}'},{'inlineData':{'mimeType':'image/jpeg','data':base64.b64encode((root/'frames'/f['file']).read_bytes()).decode()}}])
             fine=provider.text(RULES+'\nElige fotograma de contacto, solo con evidencia. Devuelve {visible:boolean,frameIndex:number|null,evidence:string}. Evento: '+cue['eventDescription'],parts,True)
             require(fine.get('visible') and any(f['index']==fine.get('frameIndex') for f in frames),'EVENT_UNCERTAIN','Contacto no concluyente; usa ajuste manual')
-            proposal=entity('events',{'shotId':cue['shotId'],'videoRevision':a['id'],'pts':fine['frameIndex'],'timebase':24,'visible':True,'evidence':fine['evidence'],'source':'analysis','occurrence':result.get('occurrences',[]),'confidence':result.get('confidence')})
+            proposal=entity('events',{'shotId':cue['shotId'],'videoRevision':a['id'],'pts':fine['frameIndex'],'timebase':24,'visible':True,'evidence':fine['evidence'],'source':'analysis','occurrence':choice,'occurrenceIndex':data.get('occurrenceIndex',0),'confidence':result.get('confidence')})
             # An automatic pass proposes; it never overwrites a manually locked cue.
             from google.cloud import firestore
             @firestore.transactional
