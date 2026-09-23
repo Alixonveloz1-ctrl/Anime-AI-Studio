@@ -9,7 +9,6 @@ from google.oauth2 import id_token
 from google.auth.transport.requests import Request
 from shorts.core.contracts import ContractError, require, ident, project, revision, edit_cue, compile_timeline, digest
 from shorts.service.config import config
-from shorts.core.pricing import catalog
 from shorts.service.cloud import Cloud
 
 app=Flask(__name__);app.config['MAX_CONTENT_LENGTH']=1000000
@@ -45,7 +44,7 @@ def submit(pid,operation,payload,key_override=None,pin=True):
         payload={**payload,'developmentId':p.get('activeDevelopment')}
         payload['approvedAssetIds']=[x.id for x in cloud().project_ref(pid).collection('assets').stream() if x.to_dict().get('approvalState')=='approved']
         payload['assetSelections']=p.get('assetSelections',{})
-    job=cloud().submit(p,operation,payload,key_override or request.headers.get('Idempotency-Key',''),expected(),d.get('budgetId',''),d.get('session',''))
+    job=cloud().submit(p,operation,payload,key_override or request.headers.get('Idempotency-Key',''),expected(),d.get('session',''))
     return jsonify(jobId=job['id'],state=job['state']),202
 
 @app.errorhandler(ContractError)
@@ -113,32 +112,9 @@ def lease(pid):
         p['lease']={'device':device,'session':session,'expires':time.time()+(30 if d.get('active',True) else 0)}
     _,p=cloud().mutate(pid,expected(),update);return jsonify(p)
 
-@app.post('/projects/<pid>/budgets')
-def budget(pid):
-    p=owned(pid);d=body();require(expected()==p['revision'],'REVISION_CONFLICT','Revisión cambió',409)
-    from shorts.core.contracts import integer
-    amount=integer(d.get('limitMicros'),'presupuesto',1,10**10)
-    allowed={'ideas','develop','revise','image','veo','tts','music','analyze','review','transcribe','media','preview','render','frames','import'}
-    require(isinstance(d.get('operations'),list) and set(d['operations'])<=allowed,'OPERATIONS','Operaciones inválidas')
-    b={'id':new_id(),'projectId':pid,'owner':p['owner'],'limit':amount,'spent':0,'reserved':0,'operations':d['operations'],'expires':time.time()+86400,'created':time.time()}
-    cloud().db.collection('animeShortsBudgetAuthorizations').document(b['id']).create(b);return jsonify(b),201
-
 @app.post('/projects/<pid>/ideas:generate')
 def ideas(pid):return submit(pid,'ideas',{})
 
-@app.post('/projects/<pid>/budgets/<bid>:extend')
-def extend_budget(pid,bid):
-    p=owned(pid);d=body()
-    from shorts.core.contracts import integer
-    limit=integer(d.get('limitMicros'),'límite total',1,10**10)
-    ref=cloud().db.collection('animeShortsBudgetAuthorizations').document(ident(bid))
-    def extend(tx,current):
-        b=ref.get(transaction=tx).to_dict()
-        require(b and b['projectId']==pid and b['owner']==p['owner'],'BUDGET_AUTH','Autorización ajena',403)
-        require(limit>=b['reserved']+b['spent'],'BUDGET_LIMIT','El nuevo límite no cubre el uso ya comprometido')
-        require(b.get('operations'),'BUDGET_REVIEW','Revisa el exceso detectado antes de renovar esta autorización')
-        b.update(limit=limit,expires=time.time()+86400,renewed=time.time());tx.set(ref,b);return b
-    b,_=cloud().mutate(pid,expected(),extend);return jsonify(b)
 @app.post('/projects/<pid>/ideas/<iid>:select')
 def select(pid,iid):
     owned(pid);idea=cloud().entity(pid,'ideas',iid)
@@ -193,10 +169,9 @@ def approve(pid,kind,eid):
             tx.create(cloud().entity_ref(pid,'approvals',new_id()),{'kind':kind,'entity':eid,'action':'select_existing_approval','author':p['owner'],'at':time.time()})
             return entity
         if kind=='assets':
-            checks=body().get('checks',{})
-            needed={'image':{'visualContinuity'},'veo_silent_validated':{'visualContinuity','mouthCoverage'},'pcm':{'contentHeard','contentMatchesRequest'}}.get(entity['kind'],set())
-            require(needed and all(checks.get(k) is True for k in needed),'ASSET_REVIEW','Revisa el contenido y marca las comprobaciones antes de aprobar')
-            entity['humanReview']={'checks':checks,'at':time.time(),'by':p['owner']}
+            require(body().get('reviewed') is True,'ASSET_REVIEW','Abre el recurso y aprueba su contenido')
+            require(entity['kind'] in ('image','veo_silent_validated','pcm'),'ASSET_REVIEW','Tipo de recurso no aprobable')
+            entity['humanReview']={'reviewed':True,'at':time.time(),'by':p['owner']}
         if kind=='timelines':
             compile_timeline(entity['data'],True)
             require(not current.get('timelineStale') and current.get('candidateTimeline')==eid,'TIMELINE_STALE','Compila el montaje actual antes de aprobar',409)
@@ -233,21 +208,20 @@ def batch_plan(p):
     dev=cloud().entity(p['id'],'developments',p['activeDevelopment'])
     assets=sorted([x.to_dict() for x in cloud().project_ref(p['id']).collection('assets').stream()],key=lambda x:x.get('created',0))
     jobs=[x.to_dict() for x in cloud().db.collection('animeShortsJobs').where(filter=FieldFilter('projectId','==',p['id'])).stream()]
-    return pending_plan(dev['data'],dev['id'],assets,jobs),assets
+    return pending_plan(dev['data'],dev['id'],assets,jobs,p.get('assetSelections')),assets
 
 @app.route('/projects/<pid>/batches',methods=['GET','POST'])
 def batches(pid):
     p=owned(pid);nodes,_=batch_plan(p)
     if request.method=='GET':
-        rates=catalog(config());maximum=sum(rates[n['operation']]['maxMicros'] for n in nodes if n['state']=='ready')
-        return jsonify(nodes=nodes,planHash=digest(nodes),maxMicros=maximum,batches=[x.to_dict() for x in cloud().project_ref(pid).collection('batches').stream()])
+        return jsonify(nodes=nodes,planHash=digest(nodes),batches=[x.to_dict() for x in cloud().project_ref(pid).collection('batches').stream()])
     d=body();require(d.get('acceptPlanHash')==digest(nodes),'BATCH_CHANGED','Revisa el plan actualizado',409)
-    batch={'id':new_id(),'revision':1,'created':time.time(),'state':'active','developmentId':p['activeDevelopment'],'budgetId':ident(d['budgetId']),'session':ident(d['session']),'authorizedKeys':[n['key'] for n in nodes if n['state']=='ready']}
+    batch={'id':new_id(),'revision':1,'created':time.time(),'state':'active','developmentId':p['activeDevelopment'],'session':ident(d['session']),'authorizedKeys':[n['key'] for n in nodes if n['state']=='ready']}
     def save(tx,current):
         require(current.get('activeDevelopment')==batch['developmentId'],'BATCH_CHANGED','Cambió el guion',409)
         if current.get('activeBatch'):
             prior=cloud().entity_ref(pid,'batches',current['activeBatch']).get(transaction=tx).to_dict()
-            if prior and prior['developmentId']==batch['developmentId'] and prior['budgetId']==batch['budgetId']:
+            if prior and prior['developmentId']==batch['developmentId']:
                 prior.update(authorizedKeys=batch['authorizedKeys'],session=batch['session'],revision=prior['revision']+1)
                 tx.set(cloud().entity_ref(pid,'batches',prior['id']),prior);return prior
         tx.create(cloud().entity_ref(pid,'batches',batch['id']),batch)
@@ -270,7 +244,7 @@ def batch_next(pid,bid):
     # different fingerprint from later approvals for an existing idempotency key.
     key=batch_key(b,node);jid=digest([pid,key]);old=cloud().db.collection('animeShortsJobs').document(jid).get().to_dict()
     if old:return jsonify(jobId=jid,state=old['state'],nodes=nodes)
-    job=cloud().submit(p,node['operation'],payload,key,expected(),b['budgetId'],d['session'])
+    job=cloud().submit(p,node['operation'],payload,key,expected(),d['session'])
     return jsonify(jobId=job['id'],state=job['state'],nodes=nodes),202
 
 @app.post('/projects/<pid>/shots/<sid>/visual:propose')
@@ -473,16 +447,16 @@ def job_action(jid,action):
     owner=uid();ref=cloud().db.collection('animeShortsJobs').document(ident(jid));j=ref.get().to_dict();require(j and j['owner']==owner,'JOB','Trabajo no disponible',404)
     if action=='inspect':
         revision(j,expected())
-        if j.get('settled'):return jsonify(state=j['state'],message='Trabajo conciliado; no se repitió.')
+        if j.get('settled'):return jsonify(state=j['state'],message='Trabajo cerrado; no se repitió.')
         path=j.get('workerExecution') or j.get('workerOperation')
-        require(path and path.startswith('projects/') and '..' not in path and '://' not in path,'INSPECT_PENDING','No existe identificador de ejecución confirmado; conserva la reserva y consulta diagnóstico.',409)
+        require(path and path.startswith('projects/') and '..' not in path and '://' not in path,'INSPECT_PENDING','No existe identificador de ejecución confirmado; consulta su estado antes de continuar.',409)
         response=cloud().http.get('https://run.googleapis.com/v2/'+path,timeout=30)
         require(response.ok,'INSPECT_PENDING','No se pudo consultar Cloud Run',503)
         result=response.json()
         if path==j.get('workerOperation') and result.get('done') and not result.get('error'):
             execution=result.get('response',{}).get('name')
             prefix=f'projects/{cloud().c["project"]}/locations/{cloud().c["region"]}/jobs/{cloud().c["job"]}/executions/'
-            require(isinstance(execution,str) and execution.startswith(prefix) and '/' not in execution[len(prefix):],'INSPECT_PENDING','El arranque terminó pero aún no se confirmó el estado del worker; conserva su reserva.',409)
+            require(isinstance(execution,str) and execution.startswith(prefix) and '/' not in execution[len(prefix):],'INSPECT_PENDING','El arranque terminó pero aún no se confirmó el estado del worker; no se enviará otra tarea.',409)
             response=cloud().http.get('https://run.googleapis.com/v2/'+execution,timeout=30)
             require(response.ok,'INSPECT_PENDING','No se confirmó el estado de la ejecución',503)
             result=response.json()
@@ -493,9 +467,9 @@ def job_action(jid,action):
             return jsonify(state=state,message='Operación conocida recuperable. Continuar consultará el mismo identificador.')
         if any(c['state']=='submitted_unknown' for c in j.get('providerCalls',[])):
             update_job_review(ref,j['revision'],{'state':'submitted_unknown','errorCode':'WORKER_STOPPED_UNKNOWN'})
-            return jsonify(state='submitted_unknown',message='Worker detenido con envío incierto. Reserva conservada; no se repetirá automáticamente.')
-        cloud().finish(jid,'failed',{'code':'WORKER_STOPPED','error':'El worker terminó sin publicar resultado. Recursos ya guardados y gasto estimado conservados.'})
-        return jsonify(state='failed',message='Trabajo conciliado sin repetir llamadas. Revisa los recursos conservados.')
+            return jsonify(state='submitted_unknown',message='Worker detenido con envío incierto. No se repetirá automáticamente.')
+        cloud().finish(jid,'failed',{'code':'WORKER_STOPPED','error':'El worker terminó sin publicar resultado. Se conservan los recursos ya guardados.'})
+        return jsonify(state='failed',message='Trabajo cerrado sin repetir llamadas. Revisa los recursos conservados.')
     require(action in ('pause','cancel','resume'),'ACTION','Acción inválida')
     from google.cloud import firestore
     @firestore.transactional
@@ -505,11 +479,8 @@ def job_action(jid,action):
             require((v['state']=='queued' and not v.get('started') and not v.get('settled') and not v.get('dispatchState')) or (v['state']=='waiting_provider' and v.get('providerOperation') and v.get('errorCode') in ('VEO_PENDING','SPEECH_PENDING')),'UNKNOWN','Un envío incierto no se reenvía. Solo se recuperan operaciones conocidas o pendientes sin despachar.',409)
             require(not v.get('dispatchUnknown'),'DISPATCH_UNKNOWN','El arranque no se confirmó. Diagnostica antes de reenviar.',409)
             if v.get('started'):
-                from shorts.core.recovery import reserve_poll_worker
-                br=cloud().db.collection('animeShortsBudgetAuthorizations').document(v['budgetId'])
-                budget=br.get(transaction=tx).to_dict()
-                v,budget=reserve_poll_worker(v,budget,time.time())
-                tx.set(br,budget)
+                from shorts.core.recovery import resume_known
+                v=resume_known(v)
             v.update(state='queued',session=body()['session'],dispatchState=None,dispatchAttempt=v.get('dispatchAttempt',0)+1)
         else:
             require(not v.get('settled') and v['state'] in ('queued','running','waiting_provider','cancel_requested'),'JOB_FINISHED','Este trabajo no admite cancelación',409)
@@ -518,7 +489,7 @@ def job_action(jid,action):
     j=apply(cloud().db.transaction())
     if action=='resume':cloud().enqueue(j)
     elif j['state']=='cancelled':cloud().finish(jid,'cancelled',{'reason':'Cancelado antes de despachar'})
-    return jsonify(state=j['state'],message='Las operaciones aceptadas por Google pueden terminar y facturarse.')
+    return jsonify(state=j['state'],message='Los trabajos ya iniciados pueden terminar; no se iniciarán otros con esta cancelación.')
 
 def internal_identity():
     c=config();token=request.headers.get('Authorization','').removeprefix('Bearer ')
@@ -586,7 +557,7 @@ def subtitle_editor(pid):
     from shorts.core.dependencies import select_assets
     from shorts.core.subtitles import subtitle_segments,validate_segments
     dev=cloud().entity(pid,'developments',p['activeDevelopment']);d=dev['data']
-    by=select_assets(approved_assets(cloud(),pid),d,dev['id']);rows=[]
+    by=select_assets(approved_assets(cloud(),pid),d,dev['id'],p.get('assetSelections'));rows=[]
     for u in d['utterances']:
         audio=by.get((u['id'],'pcm'))
         if not audio:continue
@@ -602,7 +573,7 @@ def subtitle_save(pid,utterance):
     from shorts.core.dependencies import select_assets
     from shorts.service.timeline import approved_assets
     dev=cloud().entity(pid,'developments',p['activeDevelopment'])
-    by=select_assets(approved_assets(cloud(),pid),dev['data'],dev['id']);a=by.get((utterance,'pcm'))
+    by=select_assets(approved_assets(cloud(),pid),dev['data'],dev['id'],p.get('assetSelections'));a=by.get((utterance,'pcm'))
     require(a and d.get('audioRevision')==a['id'] and d.get('audioHash')==a['sha256'],'SUBTITLE_AUDIO','Cambió la voz; revisa sus tiempos antes de guardar',409)
     warnings=validate_segments(d.get('segments'),a['samples'])
     record={'utteranceId':utterance,'audioRevision':a['id'],'audioHash':a['sha256'],'segments':d['segments'],'source':'manual','author':p['owner'],'at':time.time()}
@@ -641,12 +612,6 @@ def subtitles_approve(pid):
         current['subtitleApproval']={'developmentId':dev['id'],'audioHashes':d['audioHashes'],'author':p['owner'],'at':time.time()};current['timelineStale']=True
     _,p=cloud().mutate(pid,expected(),change);return jsonify(p)
 
-@app.get('/projects/<pid>/budgets')
-def budgets_get(pid):
-    p=owned(pid)
-    from google.cloud.firestore_v1.base_query import FieldFilter
-    docs=cloud().db.collection('animeShortsBudgetAuthorizations').where(filter=FieldFilter('projectId','==',pid)).stream()
-    return jsonify(budgets=[x.to_dict() for x in docs if x.to_dict()['owner']==p['owner']],rates=catalog(config()))
 @app.get('/projects/<pid>/jobs')
 def project_jobs(pid):
     owned(pid)

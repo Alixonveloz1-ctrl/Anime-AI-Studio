@@ -100,16 +100,14 @@ class EditorialIntegrationTests(unittest.TestCase):
         audio={'samples':48000,'waveform':{'voiceActivity':intervals}}
         self.assertEqual(mouth_frames(audio,48000,72),[[28,34],[38,44]])
         self.assertEqual(mouth_frames(audio,48000,72,30,40),[[30,34],[38,40]])
-    def test_A077_known_operation_resume_reserves_compute_not_generation(self):
-        from shorts.core.recovery import reserve_poll_worker
-        from shorts.core.pricing import reconcile
-        job={'state':'waiting_provider','providerOperation':'known','operation':'veo','reservation':2000000,'started':100,'providerCalls':[]}
-        budget={'limit':3000000,'spent':0,'reserved':2000000,'expires':200,'operations':['veo']}
-        new,b=reserve_poll_worker(job,budget,150)
-        self.assertEqual(new['reservation'],2158400);self.assertEqual(b['reserved'],2158400)
-        self.assertEqual(reconcile({**new,'started':150},160)['workerMicros'],161040)
-        self.assertEqual(job['reservation'],2000000)
-        with self.assertRaises(ContractError):reserve_poll_worker(job,{**budget,'limit':2000000},150)
+    def test_A077_known_operation_resume_without_financial_gate(self):
+        from shorts.core.recovery import resume_known
+        job={'state':'waiting_provider','providerOperation':'known','operation':'veo','started':100,'providerCalls':[]}
+        new=resume_known(job)
+        self.assertEqual(new['providerOperation'],'known');self.assertEqual(new['pollAttempts'],1)
+        self.assertNotIn('pollAttempts',job)
+        with self.assertRaises(ContractError):resume_known({**job,'providerOperation':None})
+        with self.assertRaises(ContractError):resume_known({**job,'state':'submitted_unknown'})
 
 class InputBoundaryTests(unittest.TestCase):
     def test_A015_idea_fix_cannot_rewrite_other_fields(self):

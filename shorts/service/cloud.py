@@ -8,8 +8,8 @@ from google.auth import default
 from google.auth.transport.requests import AuthorizedSession, Request
 from google.oauth2 import id_token
 from shorts.core.contracts import require, ident, revision, digest
-from shorts.core.jobs import reserve, claim, settle
-from shorts.core.pricing import catalog, CALLS, call_limit, reconcile
+from shorts.core.jobs import create_job, claim, settle
+from shorts.core.requests import check_call_scope, verify_models
 from shorts.core.dispatch import resource_class, acquire
 
 class Cloud:
@@ -54,19 +54,14 @@ class Cloud:
         return obj
     def download(self,p,name,path):
         b=self.blob(p,name);b.reload();require(b.size<=250*1024*1024,'SIZE','Recurso supera 250 MB');b.download_to_filename(str(path))
-    def submit(self,p,operation,payload,key,expected,budget_id,session):
-        b_ref=self.db.collection('animeShortsBudgetAuthorizations').document(ident(budget_id))
+    def submit(self,p,operation,payload,key,expected,session):
         j_id=digest([p['id'],key]);j_ref=self.db.collection('animeShortsJobs').document(j_id)
         @firestore.transactional
         def save(tx):
-            current=self.project_ref(p['id']).get(transaction=tx).to_dict();b=b_ref.get(transaction=tx).to_dict();old=j_ref.get(transaction=tx).to_dict()
-            require(b and b['owner']==p['owner'] and b['projectId']==p['id'],'BUDGET_AUTH','Autorización ajena',403)
-            rate=catalog(self.c).get(operation)
-            require(rate,'OPERATION','Operación no presupuestable')
-            job,new_budget,created=reserve(current,b,{j_id:old} if old else {},operation,payload,key,expected,rate['maxMicros'],time.time(),session)
-            if created:
-                job['priceEstimate']=rate;job['providerCalls']=[]
-                tx.set(j_ref,job);tx.set(b_ref,new_budget)
+            current=self.project_ref(p['id']).get(transaction=tx).to_dict();old=j_ref.get(transaction=tx).to_dict()
+            require(current and current['owner']==p['owner'],'PROJECT_ACCESS','Historia no disponible',404)
+            job,created=create_job(current,{j_id:old} if old else {},operation,payload,key,expected,time.time(),session)
+            if created:tx.set(j_ref,job)
             return job
         job=save(self.db.transaction())
         if job['state']=='queued':self.enqueue(job)
@@ -96,10 +91,7 @@ class Cloud:
         def apply(tx):
             j=ref.get(transaction=tx).to_dict();require(j,'JOB','Trabajo inexistente',404)
             p=self.project_ref(j['projectId']).get(transaction=tx).to_dict()
-            b=self.db.collection('animeShortsBudgetAuthorizations').document(j['budgetId']).get(transaction=tx).to_dict()
-            if j['state']=='queued' and (b.get('expires',0)<=time.time() or j['operation'] not in b.get('operations',[])):
-                out={**j,'state':'cancelled','reason':'Autorización vencida'};dispatch=False
-            else:out,dispatch=claim(j,p,time.time())
+            out,dispatch=claim(j,p,time.time())
             if dispatch:
                 import os
                 execution=os.environ.get('CLOUD_RUN_EXECUTION','')
@@ -111,16 +103,15 @@ class Cloud:
         ref=self.db.collection('animeShortsJobs').document(jid)
         @firestore.transactional
         def apply(tx):
-            j=ref.get(transaction=tx).to_dict();br=self.db.collection('animeShortsBudgetAuthorizations').document(j['budgetId']);b=br.get(transaction=tx).to_dict()
+            j=ref.get(transaction=tx).to_dict()
             sr=self.db.collection('animeShortsCapacity').document(resource_class(j['operation']));slot=sr.get(transaction=tx).to_dict()
-            if not j.get('settled') and j.get('started'):j['cost']=reconcile(j,time.time())
-            j,b=settle(j,b,state,result);tx.set(ref,j);tx.set(br,b)
+            j=settle(j,state,result);tx.set(ref,j)
             if slot and slot.get('jobId')==jid:tx.set(sr,{'jobId':None})
         apply(self.db.transaction())
 
 
-class JobMeter:
-    """Journal every paid request before transport, with an independent lease check."""
+class RequestJournal:
+    """Journal every generation request before transport, with an independent lease check."""
     def __init__(self,cloud,jid):self.cloud,self.jid=cloud,jid
     def begin_call(self,kind,url,payload):
         @firestore.transactional
@@ -130,21 +121,19 @@ class JobMeter:
             p=self.cloud.project_ref(job['projectId']).get(transaction=tx).to_dict()
             require(job['state'] not in ('cancel_requested','cancelled'),'CANCELLED','Se detuvieron nuevas llamadas',409)
             require(p.get('lease',{}).get('session')==job['session'] and p['lease']['expires']>time.time(),'LEASE','Sesión pausada antes de llamar al proveedor',409)
-            budget=self.cloud.db.collection('animeShortsBudgetAuthorizations').document(job['budgetId']).get(transaction=tx).to_dict()
-            require(budget.get('expires',0)>time.time() and job['operation'] in budget.get('operations',[]),'BUDGET_AUTH','Autorización vencida o pausada',403)
-            catalog(self.cloud.c)
+            verify_models(self.cloud.c)
             calls=job.get('providerCalls',[])
-            require(sum(c['kind']==kind for c in calls)<CALLS[job['operation']].get(kind,0),'CALL_LIMIT','Límite de llamadas del encargo agotado')
-            call={'id':uuid.uuid4().hex,'kind':kind,'state':'submitted_unknown','requestHash':digest([url,payload]),'started':time.time(),'ceilingMicros':call_limit(kind)}
+            check_call_scope(job['operation'],calls,kind)
+            call={'id':uuid.uuid4().hex,'kind':kind,'state':'submitted_unknown','requestHash':digest([url,payload]),'started':time.time()}
             tx.update(ref,{'providerCalls':calls+[call]})
             return call['id']
         return apply(self.cloud.db.transaction())
-    def end_call(self,cid,state,cost,basis):
+    def end_call(self,cid,state):
         @firestore.transactional
         def apply(tx):
             ref=self.cloud.db.collection('animeShortsJobs').document(self.jid)
             job=ref.get(transaction=tx).to_dict();calls=job['providerCalls']
             row=next(c for c in calls if c['id']==cid)
-            row.update(state=state,estimatedMicros=cost,basis=basis,finished=time.time())
+            row.update(state=state,finished=time.time())
             tx.update(ref,{'providerCalls':calls})
         apply(self.cloud.db.transaction())

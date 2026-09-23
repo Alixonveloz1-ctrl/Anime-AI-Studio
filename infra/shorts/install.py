@@ -12,14 +12,6 @@ ROOT=Path(__file__).resolve().parents[2]
 PREFIX='anime-shorts-preview'
 BUILD_MACHINE='E2_STANDARD_2'
 
-def show_costs():
-    print('Estimación USD, tarifas consultadas 2026-09-23, us-central1; sin descontar créditos:')
-    print('Construcción e2-standard-2: 0,006/min; timeout 30 min → hasta 0,18 de cómputo por intento.')
-    print('Autoprueba Job 2 CPU/4 GiB: 0,000044/s; timeout 1 h → hasta 0,1584 de cómputo por intento.')
-    print('Se añaden servicio web, Firestore, cola, imágenes Docker, almacenamiento y transferencia según uso. No es un límite total de facturación; los datos e imágenes conservados siguen ocupando espacio.')
-    print('Modelos durante instalación: 0 solicitudes. La generación posterior exige su propia reserva/autorización.')
-    print('Tarifas: https://cloud.google.com/build/pricing y https://cloud.google.com/run/pricing')
-
 def check_fresh_namespace(project,region):
     checks=[('run','services','describe',PREFIX,'--region',region,'--project',project),
         ('firestore','databases','describe','--database',PREFIX,'--project',project),
@@ -110,7 +102,6 @@ def install(account,project,region,bucket):
     old=state_load(bucket) if owned else None
     print(f'\nCuenta: {account}\nProyecto: {project}\nEntorno: preview\nRegión de infraestructura: {region}\nCommit: {sha}')
     print('Recursos aislados: bucket privado, base Firestore, cola, servicio, Job y cuentas de servicio de ejecución/build con sus permisos. Cloud Build, almacenamiento y render pueden generar cargos. No se pagarán modelos durante instalación.')
-    show_costs()
     if pick('¿Autorizar estos cambios de infraestructura?', ['Cancelar','Autorizar instalación/actualización'])=='Cancelar':return
     if not owned:check_fresh_namespace(project,region)
     with tempfile.TemporaryDirectory(prefix='anime-shorts-install-') as tmp:
@@ -166,7 +157,7 @@ def install(account,project,region,bucket):
         from connect import connect
         activate(project,region,bucket,candidate,old,tmp,
             lambda state,save:connect(command,g,pick,state,save))
-        print('Worker instalado; tarifas incluidas y generación pendiente de autorización. Configuración recuperable en nube.')
+        print('Worker instalado. Abre la preview para producir; configuración recuperable en nube.')
 
 def prepare_builder(project,region,bucket):
     name=PREFIX+'-build';sa=f'{name}@{project}.iam.gserviceaccount.com'

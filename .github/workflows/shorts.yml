@@ -23,6 +23,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           pip install -r worker/montage-shorts/requirements.txt
+          npm ci --prefix tests/shorts/ui --ignore-scripts
       - name: Original contracts
         run: |
           node tests/static-check.mjs
@@ -34,6 +35,9 @@ jobs:
         run: |
           python -m unittest discover -s tests/shorts -p 'test_*.py' -v
           node --test tests/shorts/gateway.test.cjs tests/shorts/hash.test.mjs
+          node --test tests/shorts/ui/studio.test.mjs
           node --check cortos/app.js
+          node --check cortos/studio.mjs
+          node --check cortos/presentation.mjs
       - name: Acceptance matrix completeness
         run: python tests/shorts/check_matrix.py

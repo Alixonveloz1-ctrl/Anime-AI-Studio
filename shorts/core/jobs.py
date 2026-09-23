@@ -1,42 +1,35 @@
-"""Transactional state transitions, shared by Firestore and deterministic fixtures."""
+"""Transactional job transitions. User actions, not money, authorize a task."""
 import copy
-from .contracts import require, digest, integer, revision
+from .contracts import require, digest, revision
+from .requests import CALLS
 
-PAID={'ideas','develop','revise','image','veo','tts','music','analyze','transcribe','review'}
+GENERATION_OPERATIONS={k for k,v in CALLS.items() if v}
 
-def reserve(project, budget, jobs, operation, payload, key, expected, estimate, now, session):
+def create_job(project,jobs,operation,payload,key,expected,now,session):
+    require(operation in CALLS,'OPERATION','Acción desconocida')
     require(isinstance(key,str) and 8<=len(key)<=128,'IDEMPOTENCY_KEY','Falta clave idempotente',400)
-    job_id=digest([project['id'],key])
-    fingerprint=digest([operation,payload])
+    job_id=digest([project['id'],key]);fingerprint=digest([operation,payload])
     if job_id in jobs:
         require(jobs[job_id]['fingerprint']==fingerprint,'IDEMPOTENCY_CONFLICT','Clave reutilizada con otro encargo',409)
-        return copy.deepcopy(jobs[job_id]),copy.deepcopy(budget),False
+        return copy.deepcopy(jobs[job_id]),False
     revision(project,expected)
-    integer(estimate,'reserva',1,10**12)
-    require(budget.get('expires',0)>now and operation in budget.get('operations',[]),'BUDGET_AUTH','Falta autorización vigente',403)
-    require(budget.get('reserved',0)+budget.get('spent',0)+estimate<=budget['limit'],'BUDGET_LIMIT','Saldo autorizado insuficiente',403)
-    if operation in PAID:
-        require(project.get('lease',{}).get('session')==session and project['lease']['expires']>now,'LEASE','Lote pausado: continúa desde esta sesión',409)
-    out=copy.deepcopy(budget);out['reserved']=out.get('reserved',0)+estimate
-    job={'id':job_id,'projectId':project['id'],'owner':project['owner'],'operation':operation,'payload':payload,'inputRevision':expected,'fingerprint':fingerprint,'state':'queued','reservation':estimate,'budgetId':budget['id'],'session':session,'created':now,'dispatchAttempt':0,'revision':1}
-    return job,out,True
+    require(project.get('lease',{}).get('session')==session and project['lease']['expires']>now,'LEASE','La sesión cambió; vuelve a solicitar la acción',409)
+    return {'id':job_id,'projectId':project['id'],'owner':project['owner'],'operation':operation,'payload':payload,
+        'inputRevision':expected,'fingerprint':fingerprint,'state':'queued','session':session,'created':now,
+        'dispatchAttempt':0,'revision':1,'providerCalls':[]},True
 
-def claim(job, project, now):
+def claim(job,project,now):
     if job['state']!='queued':return job,False
     out=copy.deepcopy(job)
-    if job['operation'] in PAID and (project.get('lease',{}).get('session')!=job['session'] or project['lease']['expires']<=now):
-        out['state']='cancelled';out['reason']='Permiso de despacho vencido';return out,False
-    # Persist BEFORE request; a crash never authorizes a second provider request.
+    if job['operation'] in GENERATION_OPERATIONS and (project.get('lease',{}).get('session')!=job['session'] or project['lease']['expires']<=now):
+        out['state']='cancelled';out['reason']='La sesión de producción se pausó';return out,False
+    # A crash after this write never authorizes another provider submission.
     out.update(state='running',submissionMayHaveSucceeded=True,dispatchAttempt=out['dispatchAttempt']+1,started=now)
     return out,True
 
-def settle(job,budget,state,result=None):
+def settle(job,state,result=None):
     require(state in ('succeeded','failed','cancelled','awaiting_review'),'JOB_STATE','Estado inválido')
-    if job.get('settled'):return job,budget
-    j=copy.deepcopy(job); b=copy.deepcopy(budget)
-    b['reserved']-=j['reservation']
-    amount=j.get('cost',{}).get('totalMicros',j['reservation'] if state!='cancelled' else 0)
-    b['spent']=b.get('spent',0)+amount
-    if j.get('cost',{}).get('overReservation'):b['operations']=[];b['reason']='Revisar exceso de la estimación antes de nuevos despachos'
-    j.update(state=state,result=result,settled=True,revision=j['revision']+1)
-    return j,b
+    if job.get('settled'):return job
+    require(not any(c['state']=='submitted_unknown' for c in job.get('providerCalls',[])),'UNSETTLED_CALL','Hay un envío sin resultado confirmado',409)
+    j=copy.deepcopy(job);j.update(state=state,result=result,settled=True,revision=j['revision']+1)
+    return j

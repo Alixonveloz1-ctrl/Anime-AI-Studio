@@ -1,7 +1,7 @@
 import copy
 import unittest
 from shorts.core.contracts import *
-from shorts.core.jobs import reserve,claim,settle
+from shorts.core.jobs import create_job,claim,settle
 from shorts.service.providers import veo_payload,tts_payload,Providers,UnknownSubmission
 from shorts.service.config import config
 
@@ -64,22 +64,23 @@ class TimelineTests(unittest.TestCase):
 class JobTests(unittest.TestCase):
     def setUp(self):
         self.p={'id':'p','owner':'u','revision':1,'lease':{'session':'s','expires':130}}
-        self.b={'id':'b','expires':200,'limit':100,'reserved':0,'spent':0,'operations':['veo']}
-    def reserve(self,key='key12345',jobs=None):return reserve(self.p,self.b,jobs or {},'veo',{'shot':'s'},key,1,25,100,'s')
+    def create(self,key='key12345',jobs=None):return create_job(self.p,jobs or {},'veo',{'shot':'s'},key,1,100,'s')
     def test_A074_duplicate(self):
-        j,b,created=self.reserve();self.b=b
-        duplicate,after,created=self.reserve(jobs={j['id']:j});self.assertFalse(created);self.assertEqual(after['reserved'],25)
+        j,created=self.create();duplicate,created=self.create(jobs={j['id']:j})
+        self.assertFalse(created);self.assertEqual(duplicate,j)
+        with self.assertRaises(ContractError):create_job(self.p,{j['id']:j},'veo',{'shot':'other'},'key12345',1,100,'s')
     def test_A075_unknown_never_resubmitted(self):
-        j,_,_=self.reserve();j,send=claim(j,self.p,110);self.assertTrue(send);self.assertEqual(j['state'],'running');self.assertTrue(j['submissionMayHaveSucceeded'])
+        j,_=self.create();j,send=claim(j,self.p,110);self.assertTrue(send);self.assertEqual(j['state'],'running');self.assertTrue(j['submissionMayHaveSucceeded'])
         again,send=claim(j,self.p,111);self.assertFalse(send)
     def test_A072_expired_lease(self):
-        j,_,_=self.reserve();j,send=claim(j,self.p,131);self.assertFalse(send);self.assertEqual(j['state'],'cancelled')
-    def test_A077_reservation(self):
-        self.b['spent']=80
-        with self.assertRaisesRegex(ContractError,'Saldo'):self.reserve()
+        j,_=self.create();j,send=claim(j,self.p,131);self.assertFalse(send);self.assertEqual(j['state'],'cancelled')
+    def test_A077_user_action_without_financial_fields(self):
+        j,created=self.create();self.assertTrue(created)
+        self.assertFalse(set(j)&{'cost','budgetId','reservation','priceEstimate'})
+        with self.assertRaises(ContractError):create_job(self.p,{},'veo',{},'key12345',1,131,'s')
     def test_settlement_once(self):
-        j,b,_=self.reserve();j,b=settle(j,b,'succeeded');self.assertEqual(b['spent'],25)
-        j,b=settle(j,b,'succeeded');self.assertEqual(b['spent'],25);self.assertEqual(b['reserved'],0)
+        j,_=self.create();done=settle(j,'succeeded',{'assetId':'a'})
+        self.assertEqual(settle(done,'failed'),done);self.assertEqual(done['result']['assetId'],'a')
 
 class ProviderTests(unittest.TestCase):
     def test_A031_payload_immutable_no_audio(self):

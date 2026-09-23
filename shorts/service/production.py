@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from shorts.core.contracts import require, digest, validate_ideas, ContractError
 from shorts.service.providers import Providers, UnknownSubmission
-from shorts.service.cloud import JobMeter
+from shorts.service.cloud import RequestJournal
 from shorts.service.director import RULES, ideas_prompt, develop_prompt, validate_development
 from shorts.service.timeline import approved_assets
 from shorts.core.dependencies import fingerprint, select_assets, dependency_records
@@ -18,7 +18,7 @@ from render import render, visual_clip
 def ident_new():return uuid.uuid4().hex
 
 def run_job(cloud,j,p):
-    pid=p['id'];op=j['operation'];data=j['payload'];provider=Providers(cloud.c,cloud.http,JobMeter(cloud,j['id']))
+    pid=p['id'];op=j['operation'];data=j['payload'];provider=Providers(cloud.c,cloud.http,RequestJournal(cloud,j['id']))
     if data.get('developmentId'):p={**p,'activeDevelopment':data['developmentId']}
     if 'assetSelections' in data:p={**p,'assetSelections':data['assetSelections']}
     if 'approvedAssetIds' in data:p={**p,'approvedAssetIds':data['approvedAssetIds']}
@@ -149,7 +149,7 @@ def run_job(cloud,j,p):
             auto_job=None
             try:
                 current=cloud.project(pid,p['owner'])
-                if not ambience:auto_job=cloud.submit(current,'analyze',{'cueId':cue['id'],'reason':'Sincronización tras carga','developmentId':p['activeDevelopment'],'approvedAssetIds':data.get('approvedAssetIds',[])},j['id']+'-analysis',current['revision'],j['budgetId'],j['session'])['id']
+                if not ambience:auto_job=cloud.submit(current,'analyze',{'cueId':cue['id'],'reason':'Sincronización tras carga','developmentId':p['activeDevelopment'],'approvedAssetIds':data.get('approvedAssetIds',[])},j['id']+'-analysis',current['revision'],j['session'])['id']
             except ContractError:pass
             return {'analysisJobId':auto_job,'assetId':a['id'],'cueId':cue['id'],'requiresVisualAnchor':True,'requestedSeconds':req['seconds'],'receivedSeconds':meta['samples']/48000}
         if op=='analyze':

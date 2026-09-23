@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="es">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101411"><title>Cortos de anime · Anime AI Studio</title><link rel="stylesheet" href="/cortos/style.css"></head>
+<head><meta charset="utf-8"><meta name="robots" content="noindex"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101411"><title>Cortos de anime · Anime AI Studio</title><link rel="stylesheet" href="/cortos/style.css"></head>
 <body>
 <header class="app-header"><a href="/" id="back" aria-label="Volver a Animes">← Animes</a><span class="wordmark">ANIME AI STUDIO</span><div class="header-actions"><button id="settings-toggle" class="icon-button" aria-label="Abrir configuración">Ajustes</button><button id="account" class="icon-button" hidden>Salir</button></div></header>
 <main>
@@ -11,5 +11,10 @@
 <details id="setup-panel" class="setup disclosure"><summary>Configuración</summary><div class="setup-content"><h2>Conectar el ensamblador</h2><p>Abre el instalador y escribe <strong>./c</strong>. Las opciones del menú te guiarán para instalar, actualizar o comprobar la conexión.</p><a class="button" href="https://shell.cloud.google.com/?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2FAlixonveloz1-ctrl%2FAnime-AI-Studio&cloudshell_git_branch=feature%2Fcortos-anime-v2&cloudshell_working_dir=.">Abrir instalador en Cloud Shell</a><p class="muted">Si necesitas recuperar una versión anterior, el mismo menú ofrece restauración. Animes conserva su instalador.</p></div></details>
 </main>
 <dialog id="editor"><div class="dialog-header"><div><p class="eyebrow">REVISIÓN DE SONIDO</p><h2>Ajustar sincronización</h2></div><button id="close-editor" class="secondary">Cerrar</button></div><div id="editor-content"></div></dialog>
-<script type="module" src="/cortos/app.js"></script>
+<script type="module">
+import {mountStudio} from '/cortos/studio.mjs';
+import {createFixture} from './fixture.mjs';
+const note=document.createElement('div');note.textContent='PRUEBA VISUAL · DATOS SINTÉTICOS · SIN GENERACIONES';note.style.cssText='padding:12px;background:#493b16;color:#fff2bb;font:12px system-ui;text-align:center;';document.body.prepend(note);
+const fixture=createFixture();await mountStudio(fixture.identity,{transport:fixture.transport,projectId:'fixture'});
+</script>
 </body></html>

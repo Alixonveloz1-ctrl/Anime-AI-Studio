@@ -1,5 +1,7 @@
 # Línea base y decisiones
 
+Estado vigente: [decisiones posteriores del usuario](user-overrides.md). Los apartados anteriores al cierre de simplificación son un registro histórico; sus menciones a estimaciones ya no describen el código actual.
+
 HEAD inspeccionado: `958248ec2fe90fb4a2b0b5004d2a53642a274995`.
 Rama: `feature/cortos-anime-v2`. Checkout inicial limpio. Contrato completo leído: 31 secciones y A001–A100.
 
@@ -68,3 +70,15 @@ Se corrigió actAs de Cloud Tasks y se separó la cuenta de build. Antes de acti
 En preview 3de1942 se comprobó raíz → Cortos → raíz y el enlace de instalación con repo/rama. La interfaz Animes muestra sus modos originales; su autosave acusa GCS_OUTPUT_BUCKET ausente en ese entorno preview. No se copiaron variables ni recursos de producción. Esto no verifica exportación de Animes ni funcionamiento en Safari/iPhone.
 
 Suite consolidada tras esta revisión: **94 pruebas Python correctas en 108,650 s**, sin skips; cinco pruebas Node y regresión original correctas. `fixtures.log` contiene la salida completa; los tests de instalador se repitieron tras ajustar el orden de creación del bucket y la identidad (12 correctos).
+
+## Cierre de simplificación solicitado por el usuario
+
+Reanudación sobre HEAD real `b5844747fab306a01a8efe8c2b755fe5c2cdf019`, igual al remoto de la rama. Antes de editar: 94 tests Python correctos, contratos originales y comparación de Animes correctos. Se confirmó acceso autenticado al repositorio. El contrato se había leído íntegro; U001/U002 documentan las modificaciones posteriores del usuario.
+
+Se retiró el subsistema monetario, incluyendo sus rutas y condiciones de despacho. El diario de solicitudes mantiene controles de entrada, modelos/regiones, lease y no duplicación. La recuperación de una operación conocida no depende de dinero. Las pruebas antiguas de precios se sustituyeron por comprobaciones acordes a la eliminación solicitada; no se quitó ninguna prueba heredada de Animes.
+
+La UI se separó en bootstrap Firebase, estudio y funciones de presentación. Las cinco áreas muestran acciones contextuales y esconden historial/ajustes secundarios tras desplegables. Se mantienen aprobaciones ligadas al material, candidatos, edición de guion, importación, lotes, sincronización manual, subtítulos y exportación. Se corrigió además la selección explícita de versiones de voz en el editor de subtítulos.
+
+Verificación local: 98 tests Python correctos en 120,812 s, sin skips; cinco recorridos DOM de interfaz con transporte sintético explícito. El recorrido incluye tres ideas, elegir/desarrollar/aprobar, revisar candidata, ajuste manual sin IA y subtítulos → preview automática → exportar. Las páginas `tests/shorts/ui/preview.html` y `frame.html` están rotuladas como pruebas sintéticas y no aparecen en la navegación del producto. No se presentan como servicio funcional.
+
+Riesgos pendientes: build/rollback GCP e IAM reales, acceso a modelos, calidad de guion/continuidad, cargas y reproducción en Safari/iPhone, y exportación representativa de Animes. El contrato de 100 aceptaciones sigue trazado, con A034/A077 sustituidos por orden del usuario. La publicación/CI y revisión visual del nuevo commit se registran en la PR tras existir.

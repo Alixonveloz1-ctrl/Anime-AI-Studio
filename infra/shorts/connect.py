@@ -152,5 +152,5 @@ def connect(command, g, pick, state, save):
     state.update(vercel='preview_ready', previewUrl='https://' + deployment['url'], auth='configured_not_browser_tested')
     save(state)
     print('Preview: ' + state['previewUrl'] + '/cortos/')
-    print('Verifica Entrar con Google desde el iPhone. Acceso a modelos y tarifas requieren sus propias pruebas/autorizaciones. No se generó contenido.')
+    print('Verifica Entrar con Google desde el iPhone. Las pruebas con modelos requieren autorización. No se generó contenido.')
     return state

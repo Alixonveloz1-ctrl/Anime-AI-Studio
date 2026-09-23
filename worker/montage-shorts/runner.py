@@ -14,7 +14,7 @@ def main():
         import subprocess
         # Container fixtures exercise the shipped media/service code. Repository
         # history/installer checks run in CI's full checkout, outside this image.
-        for pattern in ('test_contracts.py','test_dependencies.py','test_media.py','test_api.py','test_pricing.py','test_revisions.py','test_subtitles.py','test_dispatch.py','test_workflow.py'):
+        for pattern in ('test_contracts.py','test_dependencies.py','test_media.py','test_api.py','test_requests.py','test_revisions.py','test_subtitles.py','test_dispatch.py','test_workflow.py'):
             subprocess.run([sys.executable,'-m','unittest','discover','-s','tests/shorts','-p',pattern],check=True)
         return
     if os.environ.get('SHORTS_CLOUD_SELF_TEST')=='1':
@@ -61,7 +61,7 @@ def main():
     try:
         result=run_job(cloud,job,project);cloud.finish(jid,'awaiting_review',result)
     except UnknownSubmission:
-        # Reservation retained; never submit again automatically.
+        # Keep the unknown state; never submit again automatically.
         cloud.db.collection('animeShortsJobs').document(jid).update({'state':'submitted_unknown','errorCode':'SUBMITTED_UNKNOWN'})
         raise SystemExit(2)
     except ContractError as e:

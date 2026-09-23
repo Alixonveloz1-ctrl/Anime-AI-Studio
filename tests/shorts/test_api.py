@@ -27,3 +27,32 @@ class ApiTests(unittest.TestCase):
     def test_A079_limit_metadata(self):
         r=self.client.post('/projects',data='x'*1000001,content_type='application/json')
         self.assertIn(r.status_code,(401,413))
+
+class SimplifiedApiTests(unittest.TestCase):
+    def setUp(self):
+        from shorts.service.app import app
+        self.client=app.test_client()
+    def test_A077_financial_routes_removed(self):
+        for method,path in [('get','/projects/p/budgets'),('post','/projects/p/budgets'),('post','/projects/p/budgets/b:extend')]:
+            self.assertEqual(getattr(self.client,method)(path,json={}).status_code,404)
+    def test_A077_ideas_require_session_but_no_budget(self):
+        with patch('shorts.service.app.owned',return_value={'id':'p','owner':'u','revision':3}),patch('shorts.service.app.cloud') as cloud:
+            cloud.return_value.submit.return_value={'id':'j','state':'queued'}
+            r=self.client.post('/projects/p/ideas:generate',json={'session':'active'},headers={'If-Match':'3','Idempotency-Key':'request-123'})
+            self.assertEqual(r.status_code,202)
+            args=cloud.return_value.submit.call_args.args
+            self.assertEqual(args[1:],('ideas',{},'request-123',3,'active'))
+    def test_A009_approval_records_one_explicit_review(self):
+        from unittest.mock import Mock
+        entity={'id':'asset','kind':'image','entityId':'shot','approvalState':'candidate'}
+        project={'id':'p','owner':'u','revision':1}
+        with patch('shorts.service.app.owned',return_value=project),patch('shorts.service.app.cloud') as cloud:
+            cloud.return_value.entity_ref.return_value.get.return_value.to_dict.side_effect=lambda:dict(entity)
+            def mutate(pid,expected,fn):
+                tx=Mock();result=fn(tx,dict(project));return result,project
+            cloud.return_value.mutate.side_effect=mutate
+            path='/projects/p/revisions/assets/asset:approve'
+            self.assertEqual(self.client.post(path,json={},headers={'If-Match':'1'}).status_code,422)
+            good=self.client.post(path,json={'reviewed':True},headers={'If-Match':'1'})
+            self.assertEqual(good.status_code,200);self.assertTrue(good.json['humanReview']['reviewed'])
+            self.assertNotIn('checks',good.json['humanReview'])

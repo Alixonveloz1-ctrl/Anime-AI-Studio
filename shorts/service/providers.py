@@ -4,7 +4,7 @@ import json
 import re
 import io
 import wave
-from shorts.core.pricing import INPUT_LIMIT, TEXT_OUTPUT_LIMIT, IMAGE_OUTPUT_LIMIT, usage_estimate
+from shorts.core.requests import INPUT_LIMIT, TEXT_OUTPUT_LIMIT, IMAGE_OUTPUT_LIMIT, verify_models
 from shorts.core.contracts import require, ContractError
 
 class UnknownSubmission(ContractError):
@@ -35,30 +35,24 @@ def tts_payload(c,u,voice):
     return {'input':{'text':u['japanese'],'prompt':prompt},'voice':{'languageCode':'ja-JP','name':voice['name'],'modelName':c['models']['tts']['model']},'audioConfig':{'audioEncoding':'LINEAR16','sampleRateHertz':24000}}
 
 class Providers:
-    def __init__(self,c,session,meter=None):self.c,self.session,self.meter=c,session,meter
+    def __init__(self,c,session,meter=None):
+        verify_models(c);self.c,self.session,self.meter=c,session,meter
     def post(self,url,payload,kind=None):
         call=self.meter.begin_call(kind,url,payload) if self.meter and kind else None
         try:r=self.session.post(url,json=payload,timeout=180)
         except Exception as e:raise UnknownSubmission() from e
         if r.status_code>=500:raise UnknownSubmission()
         if not r.ok:
-            if call:self.meter.end_call(call,'rejected',0,'provider_rejection')
+            if call:self.meter.end_call(call,'rejected')
             code={400:'PROVIDER_INPUT',401:'PROVIDER_AUTH',403:'PROVIDER_PERMISSION',404:'MODEL_UNAVAILABLE',429:'PROVIDER_QUOTA'}.get(r.status_code,'PROVIDER_ERROR')
             raise ContractError(code,f'Google rechazó la solicitud ({r.status_code}). No se cambió modelo ni se reenvió.',r.status_code)
         data=r.json()
-        if call:
-            seconds=None
-            if kind=='tts':
-                try:
-                    with wave.open(io.BytesIO(base64.b64decode(data['audioContent'])),'rb') as w:seconds=w.getnframes()/w.getframerate()
-                except (KeyError,ValueError,wave.Error):pass
-            cost,basis=usage_estimate(kind,data.get('usageMetadata'),seconds)
-            self.meter.end_call(call,'completed',cost,basis)
+        if call:self.meter.end_call(call,'completed')
         return data
     def check_input(self,kind,contents):
         # countTokens is a free preflight. It cannot trigger a generation.
         data=self.post(vertex(self.c,kind,'countTokens'),{'contents':contents})
-        require(type(data.get('totalTokens')) is int and data['totalTokens']<=INPUT_LIMIT,'INPUT_TOKENS','Entrada supera el límite presupuestado; reduce el alcance antes de generar')
+        require(type(data.get('totalTokens')) is int and data['totalTokens']<=INPUT_LIMIT,'INPUT_TOKENS','Entrada supera el límite admitido por esta operación; reduce el alcance antes de generar')
     def text(self,prompt,parts=None,analysis=False):
         kind='analysis' if analysis else 'text'
         body={'contents':[{'role':'user','parts':[{'text':prompt},*(parts or [])]}],'generationConfig':{'responseMimeType':'application/json','temperature':.7,'maxOutputTokens':TEXT_OUTPUT_LIMIT}}
