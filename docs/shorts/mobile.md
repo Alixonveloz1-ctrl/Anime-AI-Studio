@@ -15,7 +15,9 @@ La sección está en `/cortos/`, dentro del mismo repositorio y proyecto Vercel.
 
 Las dos variables existentes de Animes (cuenta de servicio y bucket) se conservan. El bucket propio de Cortos se configura en Cloud Run. No debes añadir manualmente una tercera variable de bucket en Vercel: el conector configura allí automáticamente la URL del servicio, el inicio de sesión y la activación de Cortos. Puedes elegir el mismo proyecto Google Cloud que ya usas para Animes.
 
-Si todavía no instalaste Cortos, usa la opción 1. Si ya instalaste una versión anterior de Cortos, usa **6 Buscar actualización de la rama** y después **1 Instalar/actualizar**. Este bloque cambió también el servicio/worker: actualizar solamente la web no basta. **No reinstales el ensamblador de Animes**; `i` y `setup.sh` se conservan.
+Si todavía no instalaste Cortos, usa la opción 1. Para actualizar el ensamblador usa **6 Buscar actualización de la rama** y después **1 Instalar/actualizar**. Si el ensamblador ya pasó su prueba y solo falta conectar Vercel/Firebase, usa **5 Conectar/recuperar Vercel**. Cuando recibas una corrección del conector, elige **6** y después **5**: se comprueba que los cambios sean exclusivamente del conector, pruebas o documentación antes de reutilizar el ensamblador. Si cambió el código de producción, el menú pedirá actualizarlo con la opción 1. **No reinstales el ensamblador de Animes**; `i` y `setup.sh` se conservan.
+
+Si Google rechaza la conexión, envía una captura de **Detalle de Google**. No es necesario escribir permisos, claves ni comandos largos. La conexión usa el proyecto que seleccionaste en el menú; no se amplían permisos automáticamente para sortear un rechazo.
 
 El instalador completo aún requiere ensayo real autorizado en Cloud Shell/iPhone. Un despliegue `READY` acredita el build de Vercel; la conexión a Google se verifica por separado. La autenticación, cargas, permisos y modelos se verifican por separado. La aplicación no tiene pantalla de costes, estimadores, saldos ni reservas; consulta tu facturación directamente en Google Cloud.
 

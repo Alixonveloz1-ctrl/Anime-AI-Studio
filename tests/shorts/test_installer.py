@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import subprocess
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 spec=importlib.util.spec_from_file_location('shorts_install',Path(__file__).resolve().parents[2]/'infra/shorts/install.py');install=importlib.util.module_from_spec(spec);spec.loader.exec_module(install)
 ROOT=Path(__file__).resolve().parents[2]
@@ -138,6 +138,81 @@ class ConnectorTests(unittest.TestCase):
     def setUp(self):
         spec=importlib.util.spec_from_file_location('shorts_connect',ROOT/'infra/shorts/connect.py')
         self.c=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.c)
+
+    def test_A092_google_rejection_retains_reason_and_selected_quota_project(self):
+        token='private-oauth-value'
+        body={'error':{'status':'PERMISSION_DENIED','message':'Quota project required. Bearer '+token,
+                       'details':[{'reason':'USER_PROJECT_DENIED','metadata':{'access_token':'metadata-secret'}}]},
+              'config':{'apiKey':'config-secret'}}
+        error=self.c.urllib.error.HTTPError('https://firebase.googleapis.com',403,'Forbidden',{},io.BytesIO(json.dumps(body).encode()))
+        with patch.object(self.c.urllib.request,'urlopen',side_effect=error) as request:
+            with self.assertRaises(RuntimeError) as caught:
+                self.c.google(lambda *_:token,'firebase.googleapis.com','/v1beta1/projects/selected:addFirebase','POST',{},project='selected')
+        message=str(caught.exception)
+        self.assertIn('POST firebase.googleapis.com',message)
+        self.assertIn('USER_PROJECT_DENIED',message);self.assertIn('Quota project required',message)
+        for secret in (token,'metadata-secret','config-secret'):self.assertNotIn(secret,message)
+        self.assertEqual(request.call_count,1)
+        self.assertEqual(request.call_args.args[0].get_header('X-goog-user-project'),'selected')
+
+    def test_A092_missing_flag_only_accepts_google_404(self):
+        for status in (404,403,500):
+            with self.subTest(status=status):
+                error=self.c.urllib.error.HTTPError('https://firebase.googleapis.com',status,'error',{},io.BytesIO(b'{}'))
+                with patch.object(self.c.urllib.request,'urlopen',side_effect=error):
+                    if status==404:
+                        self.assertIsNone(self.c.google(lambda *_:'token','firebase.googleapis.com','/v1beta1/projects/p',missing=True,project='p'))
+                    else:
+                        with self.assertRaises(RuntimeError):
+                            self.c.google(lambda *_:'token','firebase.googleapis.com','/v1beta1/projects/p',missing=True,project='p')
+
+    def test_A092_google_error_redacts_credentials_and_handles_non_json(self):
+        detail=self.c.google_detail({'message':'Bearer secret ya29.access AIzaFirebaseKey refresh_token="refresh-secret" apiKey="api-secret" -----BEGIN PRIVATE KEY-----key-material-----END PRIVATE KEY-----'})
+        for secret in ('Bearer secret','ya29.access','AIzaFirebaseKey','refresh-secret','api-secret','key-material'):
+            self.assertNotIn(secret,detail)
+        error=self.c.urllib.error.HTTPError('https://firebase.googleapis.com',403,'error',{},io.BytesIO(b'<html>private server response</html>'))
+        with patch.object(self.c.urllib.request,'urlopen',side_effect=error):
+            with self.assertRaisesRegex(RuntimeError,'no devolvió un diagnóstico legible'):
+                self.c.google(lambda *_:'token','firebase.googleapis.com','/v1beta1/projects/p',project='p')
+
+    def test_A091_firebase_setup_keeps_project_through_operations_and_identity(self):
+        responses=[None,{'name':'operations/firebase-add'}, {'done':True,'response':{}},
+                   {'apps':[]},{'name':'operations/web-add'},
+                   {'done':True,'response':{'name':'projects/chosen/webApps/app'}},
+                   {'apiKey':'public-config','authDomain':'chosen.firebaseapp.com','projectId':'chosen','appId':'app'},
+                   {'enabled':True}]
+        with patch.object(self.c,'google',side_effect=responses) as api,patch.object(self.c.time,'sleep'):
+            result=self.c.firebase(None,None,'chosen')
+        self.assertEqual(result['projectId'],'chosen')
+        self.assertEqual(len(api.call_args_list),8)
+        for call in api.call_args_list:self.assertEqual(call.kwargs['project'],'chosen')
+        self.assertEqual(api.call_args_list[2].args[2],'/v1beta1/operations/firebase-add')
+        self.assertEqual(api.call_args_list[-1].args[1],'identitytoolkit.googleapis.com')
+
+    def test_A093_connector_update_reuses_worker_only_for_allowed_changes(self):
+        changed='infra/shorts/connect.py\ntests/shorts/test_installer.py\ndocs/shorts/audit.md'
+        command=Mock(side_effect=['b'*40+'\trefs/heads/main','b'*40,'',changed])
+        self.assertEqual(self.c.connection_release(command,'a'*40),'b'*40)
+        self.assertTrue(all(call.args[0][0]=='git' for call in command.call_args_list))
+        self.assertIn('--is-ancestor',command.call_args_list[2].args[0])
+
+    def test_A093_worker_or_site_changes_still_require_installation(self):
+        for changed in ('shorts/service/app.py','worker/montage-shorts/Dockerfile','infra/shorts/install.py','cortos/app.js','middleware.js','api/generate.js'):
+            with self.subTest(changed=changed):
+                command=Mock(side_effect=['b'*40+'\trefs/heads/main','b'*40,'',changed])
+                with self.assertRaisesRegex(RuntimeError,'después 1'):
+                    self.c.connection_release(command,'a'*40)
+        command=Mock(side_effect=['b'*40+'\trefs/heads/main','b'*40,RuntimeError('not ancestor')])
+        with self.assertRaisesRegex(RuntimeError,'después 1'):
+            self.c.connection_release(command,'a'*40)
+
+    def test_A092_firebase_rejection_cannot_change_vercel_environment(self):
+        project={'id':'p','name':'site','link':{'productionBranch':'main','repoId':1}}
+        state={'project':'gcp','commit':'a'*40}
+        with patch.object(self.c,'find_project',return_value=(project,'team')),patch.object(self.c,'firebase',side_effect=RuntimeError('403 Firebase')),patch.object(self.c,'vercel') as api:
+            with self.assertRaisesRegex(RuntimeError,'403 Firebase'):
+                self.c.connect(lambda *_:'a'*40+'\trefs/heads/main',None,lambda *_:'Autorizar conexión',state,None)
+            api.assert_not_called()
     def test_A086_environment_is_branch_preview_only(self):
         with patch.object(self.c,'vercel',return_value={}) as api:
             self.c.branch_vars(None,'project','team',{'SHORTS_ENABLED':'true'},target='preview',branch='feature/cortos-anime-v2')
@@ -175,7 +250,8 @@ class ConnectorTests(unittest.TestCase):
         def g(*args):
             if '--cors-file' in args:cors.append(json.loads(Path(args[-1]).read_text()))
             return '{"cors":[]}'
-        def google(g,host,path,method='GET',data=None):
+        def google(g,host,path,method='GET',data=None,*,project):
+            self.assertEqual(project,'gcp')
             google_calls.append((method,data));return {'authorizedDomains':['existing.example']}
         with patch.object(self.c,'find_project',return_value=(project,'team')),patch.object(self.c,'firebase',return_value={'projectId':'gcp'}),patch.object(self.c,'vercel',side_effect=api),patch.object(self.c,'google',side_effect=google):
             result=self.c.connect(lambda *_:'a'*40+'\trefs/heads/main',g,lambda *_:'Autorizar conexión',state,lambda s:None)
@@ -187,6 +263,15 @@ class ConnectorTests(unittest.TestCase):
         domains=next(data['authorizedDomains'] for method,data in google_calls if method=='PATCH')
         self.assertIn('existing.example',domains);self.assertIn('site.vercel.app',domains)
         self.assertIn('https://site.vercel.app',cors[0][0]['origin'])
+
+        # A compatible connector update publishes current main but preserves the
+        # actual immutable worker commit for health checks and rollback.
+        calls.clear()
+        with patch.object(self.c,'find_project',return_value=(project,'team')),patch.object(self.c,'connection_release',return_value='b'*40),patch.object(self.c,'firebase',return_value={'projectId':'gcp'}),patch.object(self.c,'vercel',side_effect=api),patch.object(self.c,'google',side_effect=google):
+            result=self.c.connect(None,g,lambda *_:'Autorizar conexión',state,lambda s:None)
+        create=next(data for path,method,data in calls if path.startswith('/v13/deployments') and method=='POST')
+        self.assertEqual(create['gitSource']['sha'],'b'*40)
+        self.assertEqual(result['commit'],'a'*40);self.assertEqual(result['siteCommit'],'b'*40)
 
     def test_U003_reconnection_cannot_publish_an_outdated_worker_commit(self):
         project={'id':'p','name':'site','link':{'productionBranch':'main','repoId':1}}

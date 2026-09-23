@@ -4,6 +4,7 @@ Called by the authorized installer. Only SHORTS_* variables may be changed.
 """
 import json
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import time
@@ -15,51 +16,74 @@ CLI = ['npx', '--yes', 'vercel@59.25.4']
 BRANCH = 'main'
 OWNER = 'Alixonveloz1-ctrl'
 REPO = 'Anime-AI-Studio'
+ROOT = Path(__file__).resolve().parents[2]
 
 
-def google(g, host, path, method='GET', data=None, missing=False):
+def google_detail(error, token=''):
+    """Only diagnostic fields; never dump a response, OAuth token or config."""
+    parts = [str(error.get(k, '')) for k in ('status', 'message')]
+    parts += [str(d.get('reason', '')) for d in error.get('details', []) if isinstance(d, dict)]
+    message = '\n'.join(p for p in parts if p)
+    if token:
+        message = message.replace(token, '[token omitido]')
+    message = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', message)
+    message = re.sub(r'-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)', '[clave omitida]', message, flags=re.S)
+    message = re.sub(r'(?i)(bearer\s+)[^\s\"\']+', r'\1[omitido]', message)
+    message = re.sub(r'ya29\.[A-Za-z0-9._~-]+|AIza[A-Za-z0-9_-]+', '[credencial omitida]', message)
+    message = re.sub(r'(?i)([\"\']?(?:access_token|refresh_token|id_token|private_key|client_secret|apiKey)[\"\']?\s*[:=]\s*)(\"[^\"]*\"|\'[^\']*\'|[^\s,}]+)', r'\1[omitido]', message)
+    return message.strip()[:3000] or 'Google no devolvió un diagnóstico legible.'
+
+
+def google(g, host, path, method='GET', data=None, missing=False, *, project):
     if host not in ('firebase.googleapis.com', 'identitytoolkit.googleapis.com'):
         raise RuntimeError('Host de configuración no permitido')
+    if not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,62}', project):
+        raise RuntimeError('Proyecto de configuración no válido')
     token = g('auth', 'print-access-token')
     request = urllib.request.Request('https://' + host + path, method=method,
         data=None if data is None else json.dumps(data).encode(),
-        headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
+        headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json',
+                 'x-goog-user-project': project})
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.load(response)
     except urllib.error.HTTPError as e:
         if missing and e.code == 404:
             return None
-        # Provider errors may echo tokens or config: don't print response bodies.
-        raise RuntimeError(f'Configuración Google rechazada ({e.code}); comprueba permisos en el proyecto elegido.') from e
+        try:
+            error = json.loads(e.read(65536)).get('error', {})
+            detail = google_detail(error if isinstance(error, dict) else {}, token)
+        except (ValueError, AttributeError, TypeError):
+            detail = 'Google no devolvió un diagnóstico legible.'
+        raise RuntimeError(f'Configuración Google rechazada ({e.code}): {method} {host}{path}\nDetalle de Google:\n{detail}') from e
 
 
-def operation(g, value):
+def operation(g, value, project):
     for _ in range(90):
         if value.get('done'):
             if value.get('error'):
-                raise RuntimeError('Google no completó la configuración Firebase. Instalación parcial conservada.')
+                raise RuntimeError('Google no completó la configuración Firebase.\nDetalle de Google:\n' + google_detail(value['error']))
             return value.get('response', {})
         time.sleep(2)
-        value = google(g, 'firebase.googleapis.com', '/v1beta1/' + value['name'])
+        value = google(g, 'firebase.googleapis.com', '/v1beta1/' + value['name'], project=project)
     raise RuntimeError('Configuración Firebase pendiente. Repite el menú de conexión para recuperar el estado.')
 
 
 def firebase(g, pick, project):
     host = 'firebase.googleapis.com'
     base = '/v1beta1/projects/' + project
-    existing = google(g, host, base, missing=True)
+    existing = google(g, host, base, missing=True, project=project)
     if existing is None:
-        operation(g, google(g, host, base + ':addFirebase', 'POST', {}))
-    apps = google(g, host, base + '/webApps').get('apps', [])
+        operation(g, google(g, host, base + ':addFirebase', 'POST', {}, project=project), project)
+    apps = google(g, host, base + '/webApps', project=project).get('apps', [])
     app = next((x for x in apps if x.get('displayName') in ('Anime Cortos', 'Anime Cortos preview')), None)
     if not app:
-        app = operation(g, google(g, host, base + '/webApps', 'POST', {'displayName': 'Anime Cortos'}))
-    cfg = google(g, host, '/v1beta1/' + app['name'] + '/config')
+        app = operation(g, google(g, host, base + '/webApps', 'POST', {'displayName': 'Anime Cortos'}, project=project), project)
+    cfg = google(g, host, '/v1beta1/' + app['name'] + '/config', project=project)
     # Firebase creates/manages the OAuth client from its Google sign-in screen.
     # Enabling an arbitrary client with invented credentials is never attempted.
     while True:
-        idp = google(g, 'identitytoolkit.googleapis.com', '/admin/v2/projects/' + project + '/defaultSupportedIdpConfigs/google.com', missing=True)
+        idp = google(g, 'identitytoolkit.googleapis.com', '/admin/v2/projects/' + project + '/defaultSupportedIdpConfigs/google.com', missing=True, project=project)
         if idp and idp.get('enabled'):
             return {k: cfg[k] for k in ('apiKey', 'authDomain', 'projectId', 'appId') if k in cfg}
         print('\nAbre este enlace, activa Google en Authentication y selecciona el correo de soporte:')
@@ -120,12 +144,34 @@ def deployment_payload(project, state):
     return {'name': project['name'], 'project': project['id'], 'gitSource': source, 'target': 'production'}
 
 
+def connection_release(command, worker_commit):
+    """A connector/docs/test fix does not change the installed runtime contract."""
+    remote = command(['git', 'ls-remote', f'https://github.com/{OWNER}/{REPO}.git', 'refs/heads/' + BRANCH]).split()
+    if not remote or not re.fullmatch(r'[0-9a-f]{40}', worker_commit):
+        raise RuntimeError('No se pudo verificar la versión instalada. Elige 6 y después Diagnóstico.')
+    current = remote[0]
+    if current == worker_commit:
+        return current
+    message = 'El ensamblador instalado no corresponde al main actual. Elige 6 y después 1 para actualizar antes de conectar.'
+    head = command(['git', '-C', str(ROOT), 'rev-parse', 'HEAD']).strip()
+    if head != current:
+        raise RuntimeError('Actualiza el conector antes de continuar. Elige 6 y después 5.')
+    try:
+        command(['git', '-C', str(ROOT), 'merge-base', '--is-ancestor', worker_commit, current])
+        changed = command(['git', '-C', str(ROOT), 'diff', '--name-only', worker_commit, current, '--']).splitlines()
+    except RuntimeError as e:
+        raise RuntimeError(message) from e
+    if any(path != 'infra/shorts/connect.py' and not path.startswith(('docs/shorts/', 'tests/shorts/')) for path in changed):
+        raise RuntimeError(message)
+    print('Conector actualizado; se conserva el ensamblador instalado.', flush=True)
+    return current
+
+
 def connect(command, g, pick, state, save):
     project, team = find_project(command, pick)
     payload = deployment_payload(project, state)
-    remote = command(['git', 'ls-remote', f'https://github.com/{OWNER}/{REPO}.git', 'refs/heads/' + BRANCH]).split()
-    if not remote or remote[0] != state['commit']:
-        raise RuntimeError('El ensamblador instalado no corresponde al main actual. Elige 6 y después 1 para actualizar antes de conectar.')
+    site_commit = connection_release(command, state['commit'])
+    payload['gitSource']['sha'] = site_commit
     print(f'\nGCP: {state["project"]}\nVercel: {project["name"]}\nRama: {BRANCH}\nDestino: tu página habitual')
     if pick('Conectar Cortos a tu página habitual (puede consumir build/almacenamiento)', ['Cancelar', 'Autorizar conexión']) == 'Cancelar':
         return state
@@ -134,7 +180,7 @@ def connect(command, g, pick, state, save):
     branch_vars(command, project['id'], team, values)
     query = '?' + urllib.parse.urlencode({'teamId': team}) if team else ''
     deployment = vercel(command, '/v13/deployments' + query, 'POST', payload)
-    state.update(vercelProjectId=project['id'], vercelTeamId=team, deploymentId=deployment['id'], auth='configured', vercel='building')
+    state.update(siteCommit=site_commit, vercelProjectId=project['id'], vercelTeamId=team, deploymentId=deployment['id'], auth='configured', vercel='building')
     save(state)
     for _ in range(120):
         deployment = vercel(command, '/v13/deployments/' + state['deploymentId'] + query)
@@ -148,9 +194,9 @@ def connect(command, g, pick, state, save):
     domains = sorted(set([deployment['url'], *deployment.get('alias', [])]))
     # Include the production aliases; preserve existing Firebase domains.
     identity = '/admin/v2/projects/' + state['project'] + '/config'
-    old = google(g, 'identitytoolkit.googleapis.com', identity)
+    old = google(g, 'identitytoolkit.googleapis.com', identity, project=state['project'])
     allowed = sorted(set(old.get('authorizedDomains', []) + domains))
-    google(g, 'identitytoolkit.googleapis.com', identity + '?updateMask=authorizedDomains', 'PATCH', {'name': 'projects/' + state['project'] + '/config', 'authorizedDomains': allowed})
+    google(g, 'identitytoolkit.googleapis.com', identity + '?updateMask=authorizedDomains', 'PATCH', {'name': 'projects/' + state['project'] + '/config', 'authorizedDomains': allowed}, project=state['project'])
     prior=json.loads(g('storage','buckets','describe','gs://'+state['bucket'],'--format=json'))
     previous_origins=[origin for rule in prior.get('cors',[]) for origin in rule.get('origin',[]) if origin.startswith('https://') and origin.endswith('.vercel.app')]
     origins=sorted(set(previous_origins+['https://'+d for d in domains]))
