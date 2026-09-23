@@ -1,0 +1,15 @@
+# Estado de entrega — integración en main autorizada
+
+Base Animes inspeccionada y aún vigente al comenzar esta integración: `958248ec2fe90fb4a2b0b5004d2a53642a274995`. HEAD de Cortos antes de estos cambios: `7eb2d0d4778fbd0f338ecdb5fc4a61e4313630ee`. La [PR 20](https://github.com/Alixonveloz1-ctrl/Anime-AI-Studio/pull/20) registra el commit y estado de publicación después de existir. No se atribuye aquí un resultado futuro.
+
+Por instrucción expresa del usuario, se prepara la integración en `main` y publicación en el mismo proyecto Vercel, cuya dirección habitual es https://anime-ai-studio-umber.vercel.app . Las instrucciones anteriores de mantener la entrega solo en preview quedan sustituidas por U003. U004 retira por completo el botón/panel de Cloud Shell: la instalación se abre mediante un enlace entregado en la conversación, con el correo que indique el usuario.
+
+Se mantienen U001 (eliminación completa del subsistema monetario) y U002 (cinco áreas funcionales). Animes conserva sus APIs, código, `i`, `setup.sh` y montador; Cortos tiene servicio/worker aislados. La configuración de producción del nuevo instalador solo escribe variables `SHORTS_*`. Una preview no puede dirigir Cortos a producción, y producción rechaza un servicio configurado como preview.
+
+Verificación local de esta integración: **103 tests Python correctos en 116,839 s**, sin skips; **12 tests Node correctos** (7 gateway/checksum y 5 recorridos DOM). La evidencia está en `fixtures.log` y `ui-fixtures.log`. Los recorridos DOM usan transporte sintético explícito; FFmpeg sí produce y decodifica medios sintéticos de 300 segundos/7.200 frames/14.400.000 muestras y compara previews con el final. Se comprueban por separado gateway, checksum, contratos originales y regresión de Animes. La matriz conserva los cien requisitos y sus excepciones autorizadas; no equivale a cien aceptaciones aprobadas.
+
+**Servicios Google de Cortos todavía pendientes de instalar/conectar.** Publicar la web no completa Firebase, permisos, cargas ni acceso a modelos. No se hicieron generaciones pagadas ni cambios GCP. Siguen pendientes la instalación/rollback cloud, Safari/iPhone, exportación representativa de Animes y las dos producciones reales contractuales.
+
+Para instalar, sigue [la guía móvil](mobile.md): enlace de la conversación → `./c` → **1 Instalar/actualizar**. Si conservas un checkout anterior, primero **6 Buscar actualización** y después **1**. El instalador comprueba el commit de `main`; el menú muestra cuenta y proyecto antes de crear recursos. No reinstales Animes. Si ya instalaste un worker de Cortos anterior, también debes actualizarlo: la web sola no incorpora cambios de backend.
+
+Lecturas no generativas del despliegue anterior de Animes confirmaron bucket accesible y montador configurado (`anime-studio-montage`, `us-central1`). Esa consulta no demuestra que su contenedor instalado haya exportado un proyecto real durante esta revisión. Los modelos declarados por Animes y los de Cortos se han inspeccionado separadamente; no se reemplazan silenciosamente los originales.

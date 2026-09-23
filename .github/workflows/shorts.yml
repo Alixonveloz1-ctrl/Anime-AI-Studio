@@ -1,0 +1,43 @@
+name: Cortos fixtures and isolation
+on:
+  push:
+    branches: ['main', 'feature/cortos-anime-v2']
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned service dependencies and fixture tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          pip install -r worker/montage-shorts/requirements.txt
+          npm ci --prefix tests/shorts/ui --ignore-scripts
+      - name: Original contracts
+        run: |
+          node tests/static-check.mjs
+          node tests/shorts/legacy-regression.cjs
+          bash -n i setup.sh c setup-shorts.sh worker/montage/runner.sh
+      - name: Media and service fixtures — no model calls
+        env:
+          PYTHONPATH: '.:worker/montage-shorts'
+        run: |
+          python -m unittest discover -s tests/shorts -p 'test_*.py' -v
+          node --test tests/shorts/gateway.test.cjs tests/shorts/hash.test.mjs
+          node --test tests/shorts/ui/studio.test.mjs
+          node --check cortos/app.js
+          node --check cortos/studio.mjs
+          node --check cortos/presentation.mjs
+      - name: Acceptance matrix completeness
+        run: python tests/shorts/check_matrix.py

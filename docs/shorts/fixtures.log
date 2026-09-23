@@ -1,0 +1,124 @@
+test_A076_missing_revision (test_api.ApiTests.test_A076_missing_revision) ... ok
+test_A078_auth_required (test_api.ApiTests.test_A078_auth_required) ... ok
+test_A078_internal_no_fake_queue_header (test_api.ApiTests.test_A078_internal_no_fake_queue_header) ... ok
+test_A079_limit_metadata (test_api.ApiTests.test_A079_limit_metadata) ... ok
+test_A094_health_no_provider (test_api.ApiTests.test_A094_health_no_provider) ... ok
+test_A009_approval_records_one_explicit_review (test_api.SimplifiedApiTests.test_A009_approval_records_one_explicit_review) ... ok
+test_A077_financial_routes_removed (test_api.SimplifiedApiTests.test_A077_financial_routes_removed) ... ok
+test_A077_ideas_require_session_but_no_budget (test_api.SimplifiedApiTests.test_A077_ideas_require_session_but_no_budget) ... ok
+test_A072_expired_lease (test_contracts.JobTests.test_A072_expired_lease) ... ok
+test_A074_duplicate (test_contracts.JobTests.test_A074_duplicate) ... ok
+test_A075_unknown_never_resubmitted (test_contracts.JobTests.test_A075_unknown_never_resubmitted) ... ok
+test_A077_user_action_without_financial_fields (test_contracts.JobTests.test_A077_user_action_without_financial_fields) ... ok
+test_settlement_once (test_contracts.JobTests.test_settlement_once) ... ok
+test_A031_payload_immutable_no_audio (test_contracts.ProviderTests.test_A031_payload_immutable_no_audio) ... ok
+test_A032_no_incompatible_fallback (test_contracts.ProviderTests.test_A032_no_incompatible_fallback) ... ok
+test_A035_tts_separate_japanese_acting (test_contracts.ProviderTests.test_A035_tts_separate_japanese_acting) ... ok
+test_A075_network_timeout_single_request (test_contracts.ProviderTests.test_A075_network_timeout_single_request) ... ok
+test_A020_planner_measured (test_contracts.TimelineTests.test_A020_planner_measured) ... ok
+test_A052_exact_fixture (test_contracts.TimelineTests.test_A052_exact_fixture) ... ok
+test_A057_one_frame (test_contracts.TimelineTests.test_A057_one_frame) ... ok
+test_A059_analysis_metadata_does_not_invalidate_manual_approval (test_contracts.TimelineTests.test_A059_analysis_metadata_does_not_invalidate_manual_approval) ... ok
+test_A059_manual_lock (test_contracts.TimelineTests.test_A059_manual_lock) ... ok
+test_A060_missing_event (test_contracts.TimelineTests.test_A060_missing_event) ... ok
+test_A067_move_shot (test_contracts.TimelineTests.test_A067_move_shot) ... ok
+test_A068_manual_follows_move_not_changed_content (test_contracts.TimelineTests.test_A068_manual_follows_move_not_changed_content) ... ok
+test_A068_retime_and_trim (test_contracts.TimelineTests.test_A068_retime_and_trim) ... ok
+test_A076_conflict (test_contracts.TimelineTests.test_A076_conflict) ... ok
+test_cannot_trim_attack (test_contracts.TimelineTests.test_cannot_trim_attack) ... ok
+test_ids (test_contracts.TimelineTests.test_ids) ... ok
+test_negative_not_clamped (test_contracts.TimelineTests.test_negative_not_clamped) ... ok
+test_A009_A040_new_voice_preserves_visual_approvals (test_dependencies.DependencyTests.test_A009_A040_new_voice_preserves_visual_approvals) ... ok
+test_A009_select_previous_approved_without_mutating_history (test_dependencies.DependencyTests.test_A009_select_previous_approved_without_mutating_history) ... ok
+test_A009_unapproved_replacement_keeps_approved_parent (test_dependencies.DependencyTests.test_A009_unapproved_replacement_keeps_approved_parent) ... ok
+test_A017_translation_change_does_not_regenerate_japanese_voice (test_dependencies.DependencyTests.test_A017_translation_change_does_not_regenerate_japanese_voice) ... ok
+test_A025_costume_only_invalidates_dependents (test_dependencies.DependencyTests.test_A025_costume_only_invalidates_dependents) ... ok
+test_A029_new_master_invalidates_only_old_reference_uses (test_dependencies.DependencyTests.test_A029_new_master_invalidates_only_old_reference_uses) ... ok
+test_A067_move_does_not_invalidate_image (test_dependencies.DependencyTests.test_A067_move_does_not_invalidate_image) ... ok
+test_A055_media_not_blocked_by_analysis_capacity (test_dispatch.DispatchTests.test_A055_media_not_blocked_by_analysis_capacity) ... ok
+test_A072_expired_lease_stops_dispatch (test_dispatch.DispatchTests.test_A072_expired_lease_stops_dispatch) ... ok
+test_A074_duplicate_queue_message_never_starts_second_worker (test_dispatch.DispatchTests.test_A074_duplicate_queue_message_never_starts_second_worker) ... ok
+test_A077_capacity_held_across_long_provider_operation (test_dispatch.DispatchTests.test_A077_capacity_held_across_long_provider_operation) ... ok
+test_A086_environment_is_branch_preview_only (test_installer.ConnectorTests.test_A086_environment_is_branch_preview_only) ... ok
+test_A090_cannot_overwrite_legacy_environment (test_installer.ConnectorTests.test_A090_cannot_overwrite_legacy_environment) ... ok
+test_A092_partial_environment_not_ready (test_installer.ConnectorTests.test_A092_partial_environment_not_ready) ... ok
+test_U003_connect_targets_main_and_existing_production_alias (test_installer.ConnectorTests.test_U003_connect_targets_main_and_existing_production_alias) ... ok
+test_U003_production_variables_do_not_use_preview_branch_scope (test_installer.ConnectorTests.test_U003_production_variables_do_not_use_preview_branch_scope) ... ok
+test_U003_reconnection_cannot_publish_an_outdated_worker_commit (test_installer.ConnectorTests.test_U003_reconnection_cannot_publish_an_outdated_worker_commit) ... ok
+test_U003_wrong_production_branch_stops_before_configuration (test_installer.ConnectorTests.test_U003_wrong_production_branch_stops_before_configuration) ... ok
+test_A082_builder_isolated_from_runtime_identity (test_installer.InstallerTests.test_A082_builder_isolated_from_runtime_identity) ... ok
+test_A087_launcher (test_installer.InstallerTests.test_A087_launcher) ... ok
+test_A089_connection_failure_restores_old_worker (test_installer.InstallerTests.test_A089_connection_failure_restores_old_worker) ... ok
+test_A089_failed_health_cannot_rollback (test_installer.InstallerTests.test_A089_failed_health_cannot_rollback) ... ok
+test_A089_rollback_restores_old_revision_pointer (test_installer.InstallerTests.test_A089_rollback_restores_old_revision_pointer) ... ok
+test_A090_old_installers_unchanged (test_installer.InstallerTests.test_A090_old_installers_unchanged) ... ok
+test_A090_refuses_foreign_bucket (test_installer.InstallerTests.test_A090_refuses_foreign_bucket) ... ok
+test_A090_refuses_unowned_namespace (test_installer.InstallerTests.test_A090_refuses_unowned_namespace) ... ok
+test_A094_cancel_before_infrastructure (test_installer.InstallerTests.test_A094_cancel_before_infrastructure) ... ok
+test_U003_outdated_checkout_stops_before_cloud_changes (test_installer.InstallerTests.test_U003_outdated_checkout_stops_before_cloud_changes) ... ok
+test_A027_localized_region_and_interval (test_media.MediaTests.test_A027_localized_region_and_interval) ... ok
+test_A033_strip_and_inspect (test_media.MediaTests.test_A033_strip_and_inspect) ... ok
+test_A044_A047_mp3_same_pcm_attack (test_media.MediaTests.test_A044_A047_mp3_same_pcm_attack) ... ok
+test_A048_A049_one_file_continues_across_cuts_and_keeps_tail (test_media.MediaTests.test_A048_A049_one_file_continues_across_cuts_and_keeps_tail) ... ok
+test_A056_indexed_contact (test_media.MediaTests.test_A056_indexed_contact) ... ok
+test_A061_A063_A064_A069_render_and_decode (test_media.MediaTests.test_A061_A063_A064_A069_render_and_decode) ... ok
+test_A065_full_program_ducking_and_silence (test_media.MediaTests.test_A065_full_program_ducking_and_silence) ... ok
+test_A066_cache_hash_independent_of_worker_staging_path (test_media.MediaTests.test_A066_cache_hash_independent_of_worker_staging_path) ... ok
+test_A079_path_and_checksum (test_media.MediaTests.test_A079_path_and_checksum) ... ok
+test_A079_playlist_disguised_as_audio (test_media.MediaTests.test_A079_playlist_disguised_as_audio) ... ok
+test_A079_shell_manifest_rejected (test_media.MediaTests.test_A079_shell_manifest_rejected) ... ok
+test_A080_block_stale_and_raw (test_media.MediaTests.test_A080_block_stale_and_raw) ... ok
+test_A032_model_change_still_requires_verification (test_requests.RequestTests.test_A032_model_change_still_requires_verification) ... ok
+test_A035_tts_byte_limit_before_transport (test_requests.RequestTests.test_A035_tts_byte_limit_before_transport) ... ok
+test_A075_failure_after_submit_is_not_retried (test_requests.RequestTests.test_A075_failure_after_submit_is_not_retried) ... ok
+test_A075_unknown_submission_cannot_be_closed_or_repeated (test_requests.RequestTests.test_A075_unknown_submission_cannot_be_closed_or_repeated) ... ok
+test_A077_action_scope_limits_provider_calls (test_requests.RequestTests.test_A077_action_scope_limits_provider_calls) ... ok
+test_A077_provider_journal_records_result_without_price (test_requests.RequestTests.test_A077_provider_journal_records_result_without_price) ... ok
+test_A077_token_preflight_rejects_before_paid_call (test_requests.RequestTests.test_A077_token_preflight_rejects_before_paid_call) ... ok
+test_A077_verified_models_have_no_calendar_price_gate (test_requests.RequestTests.test_A077_verified_models_have_no_calendar_price_gate) ... ok
+test_A009_AI_scope_cannot_replace_unrelated_bible (test_revisions.RevisionTests.test_A009_AI_scope_cannot_replace_unrelated_bible) ... ok
+test_A009_actual_diff_does_not_trust_reported_ids (test_revisions.RevisionTests.test_A009_actual_diff_does_not_trust_reported_ids) ... ok
+test_A009_manual_keeps_original_approval_and_voice (test_revisions.RevisionTests.test_A009_manual_keeps_original_approval_and_voice) ... ok
+test_A040_japanese_change_only_invalidates_voice (test_revisions.RevisionTests.test_A040_japanese_change_only_invalidates_voice) ... ok
+test_A076_protect_ids_types_and_paths (test_revisions.RevisionTests.test_A076_protect_ids_types_and_paths) ... ok
+test_A055_manual_camera_frame_uses_compositor_time (test_subtitles.CompositeFrameTests.test_A055_manual_camera_frame_uses_compositor_time) ... ok
+test_A039_gaps_and_meaning_units_kept (test_subtitles.SubtitleTests.test_A039_gaps_and_meaning_units_kept) ... ok
+test_A039_outside_audio_or_overlap_rejected (test_subtitles.SubtitleTests.test_A039_outside_audio_or_overlap_rejected) ... ok
+test_A039_readability_requires_explicit_exception (test_subtitles.SubtitleTests.test_A039_readability_requires_explicit_exception) ... ok
+test_A040_changed_voice_preserves_manual_edit_but_flags_review (test_subtitles.SubtitleTests.test_A040_changed_voice_preserves_manual_edit_but_flags_review) ... ok
+test_A010_import_copies_definition_and_provenance_only_explicitly (test_workflow.EditorialIntegrationTests.test_A010_import_copies_definition_and_provenance_only_explicitly) ... ok
+test_A038_mouth_activity_is_local_and_audio_bound (test_workflow.EditorialIntegrationTests.test_A038_mouth_activity_is_local_and_audio_bound) ... ok
+test_A077_known_operation_resume_without_financial_gate (test_workflow.EditorialIntegrationTests.test_A077_known_operation_resume_without_financial_gate) ... ok
+test_A015_idea_fix_cannot_rewrite_other_fields (test_workflow.InputBoundaryTests.test_A015_idea_fix_cannot_rewrite_other_fields) ... ok
+test_A029_missing_reference_blocks_before_dispatch (test_workflow.InputBoundaryTests.test_A029_missing_reference_blocks_before_dispatch) ... ok
+test_A079_json_arrays_and_null_rejected (test_workflow.InputBoundaryTests.test_A079_json_arrays_and_null_rejected) ... ok
+test_A045_completed_object_no_second_upload (test_workflow.UploadTests.test_A045_completed_object_no_second_upload) ... ok
+test_A045_expired_session_renews_same_object (test_workflow.UploadTests.test_A045_expired_session_renews_same_object) ... ok
+test_A045_uncertain_status_does_not_restart (test_workflow.UploadTests.test_A045_uncertain_status_does_not_restart) ... ok
+test_A020_measured_voice_and_explicit_pauses (test_workflow.WorkflowTests.test_A020_measured_voice_and_explicit_pauses) ... ok
+test_A020_validate_plan_no_unrenderable_veo (test_workflow.WorkflowTests.test_A020_validate_plan_no_unrenderable_veo) ... ok
+test_A024_missing_cast_reference_rejected (test_workflow.WorkflowTests.test_A024_missing_cast_reference_rejected) ... ok
+test_A054_second_contact_never_defaults_to_first (test_workflow.WorkflowTests.test_A054_second_contact_never_defaults_to_first) ... ok
+test_A073_pending_skips_candidates_and_approvals (test_workflow.WorkflowTests.test_A073_pending_skips_candidates_and_approvals) ... ok
+test_A074_batch_unknown_not_retried (test_workflow.WorkflowTests.test_A074_batch_unknown_not_retried) ... ok
+
+----------------------------------------------------------------------
+Ran 103 tests in 116.839s
+
+OK
+
+GCP: gcp
+Vercel: site
+Rama: main
+Destino: tu página habitual
+Cortos en tu página: https://site.vercel.app/cortos/
+Verifica Entrar con Google desde el iPhone. Las pruebas con modelos requieren autorización. No se generó contenido.
+Se restauró el montador anterior tras el fallo de actualización/conexión.
+Versión anterior restaurada; datos y aprobaciones intactos.
+
+Cuenta: account
+Proyecto: project
+Destino: Cortos en tu página habitual
+Región de infraestructura: us-central1
+Commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+Recursos aislados: bucket privado, base Firestore, cola, servicio, Job y cuentas de servicio de ejecución/build con sus permisos. Cloud Build, almacenamiento y render pueden generar cargos. No se pagarán modelos durante instalación.

@@ -1,0 +1,3 @@
+# Dependencias y licencias
+Python: PSF License. Flask: BSD-3-Clause. Gunicorn: MIT. Google Cloud Python/Firebase Admin/google-auth: Apache-2.0. Requests: Apache-2.0. FFmpeg de Debian con libx264: GPL; revisar avisos de distribución del paquete. DejaVu fonts: licencia Bitstream Vera / DejaVu; avisos en /usr/share/doc/fonts-dejavu-core/copyright. El contenedor conserva esos avisos. No se incluyen voces, imágenes ni música de terceros de muestra.
+La distribución pública de imágenes de contenedor debe conservar las licencias y cumplir obligaciones de fuente correspondientes a los paquetes FFmpeg/GPL. Los paquetes y sus fuentes quedan identificados por el snapshot Debian fijado.

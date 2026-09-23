@@ -1,0 +1,11 @@
+const fs=require('node:fs'),assert=require('node:assert/strict'),{execFileSync}=require('node:child_process');
+const base='958248ec2fe90fb4a2b0b5004d2a53642a274995';
+const old=f=>execFileSync('git',['show',`${base}:${f}`],{encoding:'utf8'});
+for(const name of fs.readdirSync('api').filter(x=>x.endsWith('.js')&&x!=='shorts.js'))assert.equal(fs.readFileSync('api/'+name,'utf8'),old('api/'+name),`Legacy API changed: ${name}`);
+const current=fs.readFileSync('index.html','utf8'),original=old('index.html');
+const scripts=s=>[...s.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(x=>x[1]);
+assert.deepEqual(scripts(current),scripts(original),'Animes inline logic changed');
+assert.equal(fs.readFileSync('tests/static-check.mjs','utf8'),old('tests/static-check.mjs'));
+const config=JSON.parse(fs.readFileSync('vercel.json')),previous=JSON.parse(old('vercel.json'));
+for(const [route,value] of Object.entries(previous.functions))assert.deepEqual(config.functions[route],value);
+console.log('A003/A006/A008/A085: legacy scripts, API payload-producing code and routes unchanged. Real legacy project export remains pending.');

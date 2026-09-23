@@ -1,0 +1,1709 @@
+[
+  {
+    "id": "A001",
+    "requirement": "Abrir ambas secciones. La raíz conserva Animes y /cortos abre la sección nueva; regreso sin perder preferencias.",
+    "files": [
+      "shorts/gateway.mjs",
+      "cortos/index.html",
+      "tests/shorts/legacy-regression.cjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Recorrido raíz → Cortos → raíz comprobado en navegador Chrome sobre preview 3de1942; falta iPhone/Safari y preferencias con proyecto real."
+  },
+  {
+    "id": "A002",
+    "requirement": "Proyectos antiguos. Abrir y exportar una copia representativa anterior sin migrarla ni exigir nuevos campos.",
+    "files": [
+      "shorts/gateway.mjs",
+      "cortos/index.html",
+      "tests/shorts/legacy-regression.cjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Código legado intacto; health y configuración de montaje leídos en el despliegue anterior. Falta abrir/exportar una copia de proyecto antiguo con autorización; la disponibilidad configurada no acredita la ejecución del contenedor."
+  },
+  {
+    "id": "A003",
+    "requirement": "Contratos previos. Comparar payloads y configuración de endpoints de Animes antes/después.",
+    "files": [
+      "shorts/gateway.mjs",
+      "cortos/index.html",
+      "tests/shorts/legacy-regression.cjs"
+    ],
+    "tests": [
+      "tests/shorts/legacy-regression.cjs"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Código productor de payloads sin cambios; no se ejecutaron APIs antiguas."
+  },
+  {
+    "id": "A004",
+    "requirement": "Datos aislados. Crear Cortos no añade sus proyectos, cachés o medios al listado antiguo.",
+    "files": [
+      "shorts/gateway.mjs",
+      "cortos/index.html",
+      "tests/shorts/legacy-regression.cjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Colecciones y configuración nuevas; falta probar dos dispositivos con datos reales."
+  },
+  {
+    "id": "A005",
+    "requirement": "Fallo aislado. Desactivar Cortos o fallar su API no impide usar Animes.",
+    "files": [
+      "shorts/gateway.mjs",
+      "cortos/index.html",
+      "tests/shorts/legacy-regression.cjs"
+    ],
+    "tests": [
+      "tests/shorts/gateway.test.cjs"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Fallo del gateway aislado probado; falta recorrido real de Animes."
+  },
+  {
+    "id": "A006",
+    "requirement": "Pruebas heredadas. Se conservan pruebas antiguas; prohibiciones del flujo legado no bloquean la sección nueva.",
+    "files": [
+      "shorts/gateway.mjs",
+      "cortos/index.html",
+      "tests/shorts/legacy-regression.cjs"
+    ],
+    "tests": [
+      "tests/shorts/legacy-regression.cjs"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Prueba heredada intacta; no se eliminó ninguna prohibición de su módulo."
+  },
+  {
+    "id": "A007",
+    "requirement": "Build y rutas. Build no borra assets/rutas antiguas y Vercel sirve ambos módulos.",
+    "files": [
+      "shorts/gateway.mjs",
+      "cortos/index.html",
+      "tests/shorts/legacy-regression.cjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Preview 6ec4150 READY, Cortos visible en navegador. Producción intacta. Falta recorrido autenticado y móvil de ambas rutas."
+  },
+  {
+    "id": "A008",
+    "requirement": "Configuración por sección. Cambiar japonés/modelo/video sin audio en Cortos no altera Animes.",
+    "files": [
+      "shorts/gateway.mjs",
+      "cortos/index.html",
+      "tests/shorts/legacy-regression.cjs"
+    ],
+    "tests": [
+      "tests/shorts/gateway.test.cjs",
+      "tests/shorts/legacy-regression.cjs"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Separación de código/configuración verificada; falta prueba cloud."
+  },
+  {
+    "id": "A009",
+    "requirement": "Versiones previas. Regenerar crea candidata y conserva el archivo/aprobación anterior.",
+    "files": [
+      "shorts/core/dependencies.py",
+      "shorts/core/revisions.py",
+      "shorts/service/app.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_dependencies.py:test_A009_A040_new_voice_preserves_visual_approvals",
+      "tests/shorts/test_dependencies.py:test_A009_unapproved_replacement_keeps_approved_parent",
+      "tests/shorts/test_revisions.py:test_A009_manual_keeps_original_approval_and_voice",
+      "tests/shorts/test_revisions.py:test_A009_actual_diff_does_not_trust_reported_ids",
+      "tests/shorts/test_dependencies.py:test_A009_select_previous_approved_without_mutating_history",
+      "tests/shorts/test_revisions.py:test_A009_AI_scope_cannot_replace_unrelated_bible"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Selección explícita de versiones aprobadas y revisiones acotadas. Falta integración cloud con dos sesiones."
+  },
+  {
+    "id": "A010",
+    "requirement": "Importación explícita. Referencias de otro proyecto se rechazan salvo importación autorizada con procedencia.",
+    "files": [
+      "shorts/core/imports.py",
+      "shorts/service/production.py",
+      "shorts/service/app.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_workflow.py:test_A010_import_copies_definition_and_provenance_only_explicitly"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Copia explícita de referencias/música con procedencia y candidata independiente. Falta copia real GCS y revisión móvil."
+  },
+  {
+    "id": "A011",
+    "requirement": "Sin concepto. Género y subgéneros producen exactamente tres ideas distintas con el campo concepto vacío.",
+    "files": [
+      "shorts/service/director.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/ui/studio.test.mjs"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Validación exacta de tres; generación real pendiente."
+  },
+  {
+    "id": "A012",
+    "requirement": "Con concepto. Las tres propuestas respetan condiciones explícitas y no añaden elementos contradictorios.",
+    "files": [
+      "shorts/service/director.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Prompts y revisión secundaria; fidelidad necesita revisión humana con generación autorizada."
+  },
+  {
+    "id": "A013",
+    "requirement": "Diversidad real. Revisión de comedia, romance y psicológico sin una plantilla universal de poder/recompensa.",
+    "files": [
+      "shorts/service/director.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Faltan producciones de géneros contrastantes."
+  },
+  {
+    "id": "A014",
+    "requirement": "Elección exclusiva. Desarrollar una idea no incorpora personajes ni acontecimientos de las otras.",
+    "files": [
+      "shorts/service/director.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/ui/studio.test.mjs"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "ID/hash de idea elegida; falta contrato cloud extremo a extremo."
+  },
+  {
+    "id": "A015",
+    "requirement": "Ajuste localizado. Corregir una propuesta mantiene intactas las partes no solicitadas.",
+    "files": [
+      "shorts/core/revisions.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_workflow.py:test_A015_idea_fix_cannot_rewrite_other_fields"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Corrección IA limitada al campo elegido; no puede reescribir los otros campos de una idea. Falta prueba con modelo autorizado."
+  },
+  {
+    "id": "A016",
+    "requirement": "Guion audiovisual. Se distinguen acciones, pensamientos, narración, diálogo, silencio y actuación.",
+    "files": [
+      "shorts/service/director.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Tipos de intervención/acción modelados; falta revisión de guion generado."
+  },
+  {
+    "id": "A017",
+    "requirement": "Idiomas vinculados. Japonés pronunciado y subtítulo español conservan intención y orden de revelación.",
+    "files": [
+      "shorts/service/director.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_dependencies.py:test_A017_translation_change_does_not_regenerate_japanese_voice"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Audio/traducción vinculados; falta edición manual granular y revisión lingüística."
+  },
+  {
+    "id": "A018",
+    "requirement": "Biblia de identidad. Personajes tienen IDs, referencias, vestuario, lectura y voz asignada.",
+    "files": [
+      "shorts/service/director.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Biblia, voz y lecturas editables por personaje; falta comprobar pronunciación y consistencia en voces reales."
+  },
+  {
+    "id": "A019",
+    "requirement": "Biblia espacial. Lugar y objetos tienen distribución, estados y referencias para los ángulos necesarios.",
+    "files": [
+      "shorts/service/director.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Distribución y estados en contrato; falta evidencia visual generada."
+  },
+  {
+    "id": "A020",
+    "requirement": "Duración planeada. El planner llega a 300 s con audio real y pausas autorizadas, sin relleno arbitrario.",
+    "files": [
+      "shorts/core/timing.py",
+      "shorts/service/director.py",
+      "shorts/service/timeline.py"
+    ],
+    "tests": [
+      "tests/shorts/test_contracts.py:test_A020_planner_measured",
+      "tests/shorts/test_workflow.py:test_A020_measured_voice_and_explicit_pauses",
+      "tests/shorts/test_workflow.py:test_A020_validate_plan_no_unrenderable_veo"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Voz medida, pausas antes/después y acción inicial/final; intervalos de elasticidad y bloqueo de tomas Veo imposibles. Falta producir guion dramático real."
+  },
+  {
+    "id": "A021",
+    "requirement": "Identidad. Aprobar secuencia de prueba con un mismo personaje en varios encuadres/estados.",
+    "files": [
+      "shorts/core/dependencies.py",
+      "shorts/service/timeline.py",
+      "shorts/service/director.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Sin prueba visual real."
+  },
+  {
+    "id": "A022",
+    "requirement": "Geografía. Una puerta, mesa y ventanas conservan ubicación al cambiar de ángulo.",
+    "files": [
+      "shorts/core/dependencies.py",
+      "shorts/service/timeline.py",
+      "shorts/service/director.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Sin prueba visual real."
+  },
+  {
+    "id": "A023",
+    "requirement": "Plano detalle. Insert intermedio no elimina la memoria de la habitación en el plano general siguiente.",
+    "files": [
+      "shorts/core/dependencies.py",
+      "shorts/service/timeline.py",
+      "shorts/service/director.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Sin prueba visual real."
+  },
+  {
+    "id": "A024",
+    "requirement": "Participantes. Reunión mantiene personas/asientos relevantes y distingue fuera de cuadro de ausente.",
+    "files": [
+      "shorts/core/dependencies.py",
+      "shorts/service/timeline.py",
+      "shorts/service/director.py"
+    ],
+    "tests": [
+      "tests/shorts/test_workflow.py:test_A024_missing_cast_reference_rejected"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Reparto presente/fuera de campo modelado; sin secuencia real."
+  },
+  {
+    "id": "A025",
+    "requirement": "Vestuario. Cambio justificado de ropa conserva identidad y se propaga solo a los planos pertinentes.",
+    "files": [
+      "shorts/core/dependencies.py",
+      "shorts/service/timeline.py",
+      "shorts/service/director.py"
+    ],
+    "tests": [
+      "tests/shorts/test_dependencies.py:test_A025_costume_only_invalidates_dependents"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Invalidación localizada probada por firmas; falta producción visual."
+  },
+  {
+    "id": "A026",
+    "requirement": "Estado acumulado. Objeto recogido y puerta abierta permanecen así hasta una acción que lo cambie.",
+    "files": [
+      "shorts/core/dependencies.py",
+      "shorts/service/timeline.py",
+      "shorts/service/director.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Estados antes/después incluidos; falta verificación visual."
+  },
+  {
+    "id": "A027",
+    "requirement": "Sin cuota. Aprobar tomas de cuatro tratamientos sin porcentaje impuesto ni zoom obligatorio.",
+    "files": [
+      "shorts/core/visual.py",
+      "worker/montage-shorts/render.py",
+      "shorts/service/app.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_media.py:test_A027_localized_region_and_interval"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Editor de cámara y variantes por regiones rectangulares con intervalos aprobados. Sin cuotas. Falta revisión visual con recursos reales y Safari."
+  },
+  {
+    "id": "A028",
+    "requirement": "Corte frente a interpolación. Contraplano normal no se convierte en una transformación continua.",
+    "files": [
+      "shorts/core/dependencies.py",
+      "shorts/service/timeline.py",
+      "shorts/service/director.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "El adaptador permite lastFrame solo con acción continua explícita; el flujo normal no lo envía entre cortes. Falta prueba visual con Veo real."
+  },
+  {
+    "id": "A029",
+    "requirement": "Referencias faltantes. No se envía generación sin identidad al fallar la carga de una referencia requerida.",
+    "files": [
+      "shorts/core/generation.py",
+      "shorts/core/dependencies.py",
+      "shorts/service/production.py"
+    ],
+    "tests": [
+      "tests/shorts/test_dependencies.py:test_A029_new_master_invalidates_only_old_reference_uses",
+      "tests/shorts/test_workflow.py:test_A029_missing_reference_blocks_before_dispatch"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Preflight bloquea referencias faltantes antes de despacho. Falta confirmar error de acceso GCS con credenciales reales."
+  },
+  {
+    "id": "A030",
+    "requirement": "Revisión honesta. Informe dice cobertura observada; puntuación automática no se presenta como garantía.",
+    "files": [
+      "shorts/core/dependencies.py",
+      "shorts/service/timeline.py",
+      "shorts/service/director.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Cobertura/incertidumbre devueltas; falta informe de material real."
+  },
+  {
+    "id": "A031",
+    "requirement": "Payload sin audio. Capturar petición real/mock: generateAudio=false presente y no reemplazable por frontend.",
+    "files": [
+      "shorts/service/providers.py",
+      "shorts/service/production.py",
+      "worker/montage-shorts/media.py"
+    ],
+    "tests": [
+      "tests/shorts/test_contracts.py:test_A031_payload_immutable_no_audio"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Payload capturado con transporte fixture; ninguna llamada Veo real."
+  },
+  {
+    "id": "A032",
+    "requirement": "Sin fallback sonoro. Modelo/configuración incompatible se bloquea; no se omite campo ni se usa true.",
+    "files": [
+      "shorts/service/providers.py",
+      "shorts/service/production.py",
+      "worker/montage-shorts/media.py"
+    ],
+    "tests": [
+      "tests/shorts/test_contracts.py:test_A032_no_incompatible_fallback"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Modelo/región no verificados se bloquean; pendiente API real."
+  },
+  {
+    "id": "A033",
+    "requirement": "Salida inesperada. Veo con audio inesperado se aísla; todo recurso reproducible/renderizado carece de esa pista.",
+    "files": [
+      "shorts/service/providers.py",
+      "shorts/service/production.py",
+      "worker/montage-shorts/media.py"
+    ],
+    "tests": [
+      "tests/shorts/test_media.py:test_A033_strip_and_inspect"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Video sintético con audio aislado y derivado inspeccionado con FFprobe."
+  },
+  {
+    "id": "A034",
+    "requirement": "Tarifa correcta. Estimador usa modalidad verificada de video sin audio y registra fecha; sin ahorro ficticio.",
+    "files": [
+      "shorts/core/requests.py",
+      "shorts/service/app.py",
+      "cortos/studio.mjs",
+      "docs/shorts/user-overrides.md"
+    ],
+    "tests": [
+      "tests/shorts/test_api.py:test_A077_financial_routes_removed",
+      "tests/shorts/ui/studio.test.mjs"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Eliminación comprobada con fixtures de rutas/UI; falta recorrido cloud conectado. No requiere contrastar estimaciones ni factura.",
+    "override": "U001 — decisión explícita posterior del usuario",
+    "effectiveRequirement": "No mostrar ni calcular precios, estimaciones, reservas monetarias o facturación por recurso."
+  },
+  {
+    "id": "A035",
+    "requirement": "Japonés y acotaciones. Audio dice el texto japonés aprobado, no instrucciones ni palabras en otro idioma.",
+    "files": [
+      "shorts/service/providers.py",
+      "shorts/service/production.py",
+      "worker/montage-shorts/media.py"
+    ],
+    "tests": [
+      "tests/shorts/test_contracts.py:test_A035_tts_separate_japanese_acting",
+      "tests/shorts/test_requests.py:test_A035_tts_byte_limit_before_transport"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Campo hablado separado de actuación; falta escuchar TTS real."
+  },
+  {
+    "id": "A036",
+    "requirement": "Continuidad vocal. Escuchar al mismo personaje en tres estados emocionales y corregir deriva detectada.",
+    "files": [
+      "shorts/service/providers.py",
+      "shorts/service/production.py",
+      "worker/montage-shorts/media.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Falta prueba auditiva en tres emociones."
+  },
+  {
+    "id": "A037",
+    "requirement": "Pensamientos. La voz mental corresponde al personaje y no se mezcla con narrador/sistema.",
+    "files": [
+      "shorts/service/providers.py",
+      "shorts/service/production.py",
+      "worker/montage-shorts/media.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Pista thought y speaker ID; falta prueba auditiva."
+  },
+  {
+    "id": "A038",
+    "requirement": "Boca visible. Toma hablando fuera de sincronía no se aprueba sin corregir o decidir cobertura alternativa.",
+    "files": [
+      "shorts/core/mouth.py",
+      "shorts/core/visual.py",
+      "shorts/service/timeline.py",
+      "worker/montage-shorts/media.py",
+      "worker/montage-shorts/render.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_workflow.py:test_A038_mouth_activity_is_local_and_audio_bound"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Gate humano de boca/cobertura y variantes por actividad vocal implementados; no es sincronía fonética. Cambio de voz exige revisión. Falta prueba audiovisual real."
+  },
+  {
+    "id": "A039",
+    "requirement": "Subtítulos. Tiempos siguen unidades del audio real; legibles en iPhone y dentro de los 300 s.",
+    "files": [
+      "shorts/core/subtitles.py",
+      "shorts/service/timeline.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_subtitles.py:test_A039_gaps_and_meaning_units_kept",
+      "tests/shorts/test_subtitles.py:test_A039_readability_requires_explicit_exception",
+      "tests/shorts/test_subtitles.py:test_A039_outside_audio_or_overlap_rejected"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Editor de bloques sobre audio definitivo y legibilidad implementado; falta validar reconocimiento japonés real y Safari."
+  },
+  {
+    "id": "A040",
+    "requirement": "Cambiar voz. Audio nuevo invalida tiempos/boca dependientes, no todo el material visual sin motivo.",
+    "files": [
+      "shorts/core/subtitles.py",
+      "shorts/core/dependencies.py"
+    ],
+    "tests": [
+      "tests/shorts/test_dependencies.py:test_A009_A040_new_voice_preserves_visual_approvals",
+      "tests/shorts/test_revisions.py:test_A040_japanese_change_only_invalidates_voice",
+      "tests/shorts/test_subtitles.py:test_A040_changed_voice_preserves_manual_edit_but_flags_review"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Cambio de voz preserva edición manual histórica y exige revisión de nuevos tiempos; falta prueba cloud."
+  },
+  {
+    "id": "A041",
+    "requirement": "Música continua. La misma pieza aprobada atraviesa al menos tres cortes sin reiniciarse.",
+    "files": [
+      "shorts/service/timeline.py",
+      "worker/montage-shorts/render.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Cue continuo implementado; falta pieza Lyria real sobre tres cortes."
+  },
+  {
+    "id": "A042",
+    "requirement": "Lyria instrumental. Pista con habla/letra inesperada requiere revisión; no se promete continuación idéntica entre llamadas.",
+    "files": [
+      "shorts/service/timeline.py",
+      "worker/montage-shorts/render.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Revisión auditiva específica exigida antes de aprobar música. Pendiente audición de Lyria real; el prompt no garantiza ausencia de voz."
+  },
+  {
+    "id": "A043",
+    "requirement": "Solicitudes útiles. Tarjeta muestra prompt, duración, preparación/cola y botón vinculado al efecto correcto.",
+    "files": [
+      "shorts/service/app.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "shorts/core/contracts.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Tarjetas con requisitos; falta recorrido real en iPhone."
+  },
+  {
+    "id": "A044",
+    "requirement": "MP3 obligatorio. Carga desde Archivos del iPhone; formato se decodifica y conserva el original.",
+    "files": [
+      "shorts/service/app.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "shorts/core/contracts.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_media.py:test_A044_A047_mp3_same_pcm_attack"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "MP3 real sintetizado/decodificado en fixture; falta carga desde Archivos a GCS."
+  },
+  {
+    "id": "A045",
+    "requirement": "Transferencia reanudable. Interrumpir carga permite continuar sin duplicar asset o cambiar solicitud.",
+    "files": [
+      "shorts/service/app.py",
+      "cortos/app.js",
+      "cortos/hash.mjs",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/hash.test.mjs",
+      "tests/shorts/test_workflow.py:test_A045_completed_object_no_second_upload",
+      "tests/shorts/test_workflow.py:test_A045_expired_session_renews_same_object",
+      "tests/shorts/test_workflow.py:test_A045_uncertain_status_does_not_restart"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "SHA completo; sesión vencida se renueva sobre el mismo objeto solo tras 404/410 confirmado; carga terminada no se duplica. Falta ensayo iPhone/GCS."
+  },
+  {
+    "id": "A046",
+    "requirement": "Duración incorrecta. Mostrar duración pedida/recibida; no estirar silenciosamente golpe o música.",
+    "files": [
+      "shorts/service/app.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "shorts/core/contracts.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Tarjeta muestra duración solicitada y recibida de forma persistente. Falta recorrido con MP3 real desde iPhone."
+  },
+  {
+    "id": "A047",
+    "requirement": "Punto interno. Detectar/seleccionar ataque en PCM después de decodificar MP3, no por inicio de archivo.",
+    "files": [
+      "shorts/service/app.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "shorts/core/contracts.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_media.py:test_A044_A047_mp3_same_pcm_attack"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Ataque sobre PCM y onda; falta probar segundo transitorio con editor."
+  },
+  {
+    "id": "A048",
+    "requirement": "Ambiente entre cortes. Un archivo continuo cruza cuatro tomas con el mismo cursor y perspectiva prevista.",
+    "files": [
+      "shorts/service/app.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "shorts/core/contracts.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_media.py:test_A048_A049_one_file_continues_across_cuts_and_keeps_tail"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Fixture verifica PCM continuo del mismo archivo a través de cuatro cortes, sin reiniciar cursor. Falta escucha del material real."
+  },
+  {
+    "id": "A049",
+    "requirement": "Cola. Resonancia autorizada cruza el corte sin truncarse ni borrarse por un fade genérico.",
+    "files": [
+      "shorts/service/app.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "shorts/core/contracts.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_media.py:test_A048_A049_one_file_continues_across_cuts_and_keeps_tail"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Fixture verifica muestras de una cola que cruza un corte sin truncarla. Falta escucha y comparación con video real."
+  },
+  {
+    "id": "A050",
+    "requirement": "Reemplazo. Archivo nuevo conserva solicitud, pero recalcula ancla sonora y revalida usos aprobados.",
+    "files": [
+      "cortos/hash.mjs",
+      "shorts/service/app.py",
+      "shorts/service/production.py"
+    ],
+    "tests": [
+      "tests/shorts/hash.test.mjs"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "SHA-256 del archivo completo en chunks y finalización idempotente implementados. Pendiente interrupción/carga real desde iPhone."
+  },
+  {
+    "id": "A051",
+    "requirement": "Colocación automática. Subir efecto basta para proponer su colocación; no exige arrastrarlo a una timeline.",
+    "files": [
+      "shorts/service/app.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "shorts/core/contracts.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "La IA analiza el video de la composición efectiva (Veo, cámara o capas) y propone el contacto. Falta API real y validación perceptiva; manual independiente disponible."
+  },
+  {
+    "id": "A052",
+    "requirement": "Fixture exacto. Contacto en 102,500 s y ataque interno 0,200 s: inicio 102,300 s.",
+    "files": [
+      "shorts/service/app.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "shorts/core/contracts.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_contracts.py:test_A052_exact_fixture"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Fórmula exacta: 4.910.400 muestras de inicio."
+  },
+  {
+    "id": "A053",
+    "requirement": "Corrección IA localizada. “Suena después” reanaliza solo el evento/efecto; no regenera Veo/TTS.",
+    "files": [
+      "shorts/service/app.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "shorts/core/contracts.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Corrección IA con motivo localizado y hasta dos intentos; solo analiza composición/audio existente. Falta recorrido con proveedores reales."
+  },
+  {
+    "id": "A054",
+    "requirement": "Múltiples contactos. Elegir el segundo golpe no alinea por error el primero.",
+    "files": [
+      "shorts/core/events.py",
+      "shorts/service/production.py",
+      "shorts/service/app.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_workflow.py:test_A054_second_contact_never_defaults_to_first"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Detección ambigua exige elegir contacto; segundo paso afina la ocurrencia elegida. Dos intentos limitados. Falta análisis de video real."
+  },
+  {
+    "id": "A055",
+    "requirement": "Manual sin IA. Con servicio de análisis caído, abrir editor, fijar frame y ataque y producir preview.",
+    "files": [
+      "shorts/service/production.py",
+      "shorts/service/app.py",
+      "worker/montage-shorts/render.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_subtitles.py:test_A055_manual_camera_frame_uses_compositor_time",
+      "tests/shorts/test_dispatch.py:test_A055_media_not_blocked_by_analysis_capacity",
+      "tests/shorts/ui/studio.test.mjs"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Frames del compositor y ajuste manual disponibles sin Gemini de análisis. Falta recorrido autenticado en Safari."
+  },
+  {
+    "id": "A056",
+    "requirement": "Precisión visual móvil. Botones frame anterior/siguiente muestran frames indexados reales en Safari.",
+    "files": [
+      "shorts/service/production.py",
+      "worker/montage-shorts/media.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_media.py:test_A056_indexed_contact",
+      "tests/shorts/ui/studio.test.mjs"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Frames indexados reales de los cuatro tratamientos. Falta validar botones y selección en iPhone."
+  },
+  {
+    "id": "A057",
+    "requirement": "Ajuste por fotograma. Adelantar/retrasar un frame mueve el cue exactamente 2.000 muestras a 24 FPS.",
+    "files": [
+      "shorts/service/app.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "shorts/core/contracts.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_contracts.py:test_A057_one_frame",
+      "tests/shorts/ui/studio.test.mjs"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Un frame sonoro son exactamente 2.000 muestras."
+  },
+  {
+    "id": "A058",
+    "requirement": "Comparar y deshacer. Alternar anterior/candidata y recuperar ajuste previo sin perder archivos.",
+    "files": [
+      "shorts/service/app.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "shorts/core/contracts.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Comparación muxada/deshacer implementados; falta prueba de historial completa."
+  },
+  {
+    "id": "A059",
+    "requirement": "Aprobación manual. “Aprobar y fijar” impide que nuevo análisis sobrescriba ese cue automáticamente.",
+    "files": [
+      "shorts/service/app.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "shorts/core/contracts.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_contracts.py:test_A059_manual_lock",
+      "tests/shorts/test_contracts.py:test_A059_analysis_metadata_does_not_invalidate_manual_approval",
+      "tests/shorts/ui/studio.test.mjs"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Fixture prueba bloqueo manual y que metadatos de reanálisis no invaliden la aprobación. Falta verificar concurrencia real Firestore/worker."
+  },
+  {
+    "id": "A060",
+    "requirement": "Evento inexistente. No inventar ancla: incidencia visual o decisión editorial explícita.",
+    "files": [
+      "shorts/service/app.py",
+      "shorts/service/production.py",
+      "cortos/app.js",
+      "shorts/core/contracts.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_contracts.py:test_A060_missing_event"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Evento incierto se rechaza; falta decisión editorial de omisión localizada en UI."
+  },
+  {
+    "id": "A061",
+    "requirement": "Preview local. Renderizar fragmento del efecto sin exigir render de cinco minutos de video.",
+    "files": [
+      "worker/montage-shorts/render.py",
+      "worker/montage-shorts/media.py",
+      "shorts/core/contracts.py"
+    ],
+    "tests": [
+      "tests/shorts/test_media.py:test_A061_A063_A064_A069_render_and_decode"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Fixture produce cinco segundos de video con mezcla completa."
+  },
+  {
+    "id": "A062",
+    "requirement": "Escena y corto. Niveles escena/corto muestran voz, música, ambientes y efectos disponibles.",
+    "files": [
+      "worker/montage-shorts/render.py",
+      "worker/montage-shorts/media.py",
+      "shorts/core/contracts.py"
+    ],
+    "tests": [
+      "tests/shorts/ui/studio.test.mjs"
+    ],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Selector de preview de escena agrupa tomas de una unidad dramática; comparte compilador y mezcla. Falta recorrido cloud y escucha."
+  },
+  {
+    "id": "A063",
+    "requirement": "Reproducción unida. Revisión usa archivo audiovisual muxado, no elementos independientes arrancados en JS.",
+    "files": [
+      "worker/montage-shorts/render.py",
+      "worker/montage-shorts/media.py",
+      "shorts/core/contracts.py"
+    ],
+    "tests": [
+      "tests/shorts/test_media.py:test_A061_A063_A064_A069_render_and_decode"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Preview usa un MP4 muxado; fixture real decodificado."
+  },
+  {
+    "id": "A064",
+    "requirement": "Paridad con final. Extraer intervalo final y comparar contacto/ataque con preview del mismo manifiesto.",
+    "files": [
+      "worker/montage-shorts/render.py",
+      "worker/montage-shorts/media.py",
+      "shorts/core/contracts.py"
+    ],
+    "tests": [
+      "tests/shorts/test_media.py:test_A061_A063_A064_A069_render_and_decode"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Contacto y ataque comparados entre preview/final del mismo manifiesto."
+  },
+  {
+    "id": "A065",
+    "requirement": "Contexto de filtros. Normalización, sidechain y colas no cambian por renderizar una ventana corta.",
+    "files": [
+      "worker/montage-shorts/render.py",
+      "worker/montage-shorts/media.py",
+      "shorts/core/contracts.py"
+    ],
+    "tests": [
+      "tests/shorts/test_media.py:test_A065_full_program_ducking_and_silence"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Ducking y normalización de programa probados con mezcla PCM repetida idéntica. Falta paridad preview/final con todos los filtros y colas reales."
+  },
+  {
+    "id": "A066",
+    "requirement": "Caché válida. Reproducir no recalcula; modificar dependencia marca preview vieja como desactualizada.",
+    "files": [
+      "shorts/service/app.py",
+      "shorts/core/contracts.py",
+      "shorts/service/production.py"
+    ],
+    "tests": [
+      "tests/shorts/test_media.py:test_A066_cache_hash_independent_of_worker_staging_path"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Reutilización de preview por hash/intervalo y estado desactualizado implementados. Falta comprobar caché en GCS/Firestore reales."
+  },
+  {
+    "id": "A067",
+    "requirement": "Toma desplazada. Mover toma dos segundos mueve cue 96.000 muestras sin regenerar el efecto.",
+    "files": [
+      "worker/montage-shorts/render.py",
+      "worker/montage-shorts/media.py",
+      "shorts/core/contracts.py"
+    ],
+    "tests": [
+      "tests/shorts/test_contracts.py:test_A067_move_shot",
+      "tests/shorts/test_dependencies.py:test_A067_move_does_not_invalidate_image"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Desplazamiento conserva fuente y suma 96.000 muestras."
+  },
+  {
+    "id": "A068",
+    "requirement": "Retime o recorte. Recalcular mapa y pedir revalidar sincronía tras cambio relevante del video.",
+    "files": [
+      "worker/montage-shorts/render.py",
+      "worker/montage-shorts/media.py",
+      "shorts/core/contracts.py"
+    ],
+    "tests": [
+      "tests/shorts/test_contracts.py:test_A068_retime_and_trim",
+      "tests/shorts/test_contracts.py:test_A068_manual_follows_move_not_changed_content"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Mapa y stale probados; falta edición móvil de retime/recorte de video."
+  },
+  {
+    "id": "A069",
+    "requirement": "Duración y codec. 7.200 frames y 14.400.000 muestras de programa; verificar salida decodificada y padding.",
+    "files": [
+      "worker/montage-shorts/render.py",
+      "tests/shorts/test_media.py"
+    ],
+    "tests": [
+      "tests/shorts/test_media.py:test_A061_A063_A064_A069_render_and_decode"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Salida FFmpeg verificada por frames, PCM, inicio/duración de pista y audio AAC decodificado; padding hasta un frame AAC identificado. Falta salida con recursos de producción."
+  },
+  {
+    "id": "A070",
+    "requirement": "Render determinista. Dos renders conservan tiempos/mezcla del manifiesto, aunque bytes/metadatos difieran.",
+    "files": [
+      "worker/montage-shorts/render.py",
+      "worker/montage-shorts/media.py",
+      "shorts/core/contracts.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Determinismo temporal diseñado; falta repetir render completo y comparar todos los stems."
+  },
+  {
+    "id": "A071",
+    "requirement": "Restauración desde nube. Borrar caché y abrir en otro dispositivo recupera proyecto y aprobaciones.",
+    "files": [
+      "shorts/service/cloud.py",
+      "shorts/service/app.py",
+      "shorts/core/jobs.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Firestore/GCS implementados; pendiente dos dispositivos y borrado de caché."
+  },
+  {
+    "id": "A072",
+    "requirement": "Recarga y pausa. Recargar frena nuevos despachos según lease; conserva recursos ya completados.",
+    "files": [
+      "shorts/service/cloud.py",
+      "shorts/service/app.py",
+      "shorts/core/jobs.py"
+    ],
+    "tests": [
+      "tests/shorts/test_contracts.py:test_A072_expired_lease",
+      "tests/shorts/test_dispatch.py:test_A072_expired_lease_stops_dispatch"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Lease con vencimiento probado en núcleo; falta pérdida real de conexión."
+  },
+  {
+    "id": "A073",
+    "requirement": "Reanudación. Continuar omite tareas válidas terminadas y recursos aprobados.",
+    "files": [
+      "shorts/core/batches.py",
+      "shorts/core/recovery.py",
+      "shorts/service/app.py",
+      "cortos/app.js",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [
+      "tests/shorts/test_workflow.py:test_A073_pending_skips_candidates_and_approvals"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Lote persistido omite aprobados/candidatas válidas, espera referencias y no reintenta envíos inciertos. Falta interrupción de sesión y cola real."
+  },
+  {
+    "id": "A074",
+    "requirement": "Idempotencia. Entrega duplicada de trabajo conocido no inicia dos generaciones.",
+    "files": [
+      "shorts/service/cloud.py",
+      "shorts/service/app.py",
+      "shorts/core/jobs.py"
+    ],
+    "tests": [
+      "tests/shorts/test_contracts.py:test_A074_duplicate",
+      "tests/shorts/test_dispatch.py:test_A074_duplicate_queue_message_never_starts_second_worker",
+      "tests/shorts/test_workflow.py:test_A074_batch_unknown_not_retried"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Idempotencia y capacidad transaccionales; fixture del núcleo, falta entrega duplicada real Cloud Tasks."
+  },
+  {
+    "id": "A075",
+    "requirement": "Estado desconocido. Timeout tras envío sin operationId no autoriza reenvío ciego con doble cobro.",
+    "files": [
+      "shorts/service/cloud.py",
+      "shorts/service/app.py",
+      "worker/montage-shorts/runner.py"
+    ],
+    "tests": [
+      "tests/shorts/test_contracts.py:test_A075_unknown_never_resubmitted",
+      "tests/shorts/test_contracts.py:test_A075_network_timeout_single_request",
+      "tests/shorts/test_requests.py:test_A075_failure_after_submit_is_not_retried",
+      "tests/shorts/test_requests.py:test_A075_unknown_submission_cannot_be_closed_or_repeated"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Recuperación de operaciones conocidas y diagnóstico implementados. Un envío incierto conserva su registro y no se repite; falta ensayo de fallos cloud."
+  },
+  {
+    "id": "A076",
+    "requirement": "Concurrencia editorial. Dos sesiones reciben 409 al intentar sobrescribir una revisión ya cambiada.",
+    "files": [
+      "shorts/service/cloud.py",
+      "shorts/service/app.py",
+      "shorts/core/jobs.py"
+    ],
+    "tests": [
+      "tests/shorts/test_api.py:test_A076_missing_revision",
+      "tests/shorts/test_contracts.py:test_A076_conflict",
+      "tests/shorts/test_revisions.py:test_A076_protect_ids_types_and_paths"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Revisión/409 probadas; falta edición simultánea real."
+  },
+  {
+    "id": "A077",
+    "requirement": "Presupuesto. Sin saldo autorizado se detienen nuevos despachos; no se afirman cancelados cobros en curso.",
+    "files": [
+      "shorts/core/requests.py",
+      "shorts/core/jobs.py",
+      "shorts/core/recovery.py",
+      "shorts/service/cloud.py",
+      "shorts/service/app.py",
+      "docs/shorts/user-overrides.md"
+    ],
+    "tests": [
+      "tests/shorts/test_contracts.py:test_A077_user_action_without_financial_fields",
+      "tests/shorts/test_requests.py:test_A077_verified_models_have_no_calendar_price_gate",
+      "tests/shorts/test_requests.py:test_A032_model_change_still_requires_verification",
+      "tests/shorts/test_requests.py:test_A077_token_preflight_rejects_before_paid_call",
+      "tests/shorts/test_requests.py:test_A077_action_scope_limits_provider_calls",
+      "tests/shorts/test_requests.py:test_A077_provider_journal_records_result_without_price",
+      "tests/shorts/test_dispatch.py:test_A077_capacity_held_across_long_provider_operation",
+      "tests/shorts/test_workflow.py:test_A077_known_operation_resume_without_financial_gate",
+      "tests/shorts/test_api.py:test_A077_ideas_require_session_but_no_budget",
+      "tests/shorts/ui/studio.test.mjs"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Despacho sin campos financieros y recuperación conocidos probados con fixtures. Falta ejecución en GCP; no se pide autorizar un saldo en la aplicación.",
+    "override": "U001 — decisión explícita posterior del usuario",
+    "effectiveRequirement": "La generación/recuperación no depende de presupuesto, saldo, reserva ni vigencia de tarifas. Conservar controles de autenticación, alcance, duplicados y cancelación."
+  },
+  {
+    "id": "A078",
+    "requirement": "Privacidad. Usuario no autorizado no genera ni lee objetos; URLs temporales no aparecen en logs.",
+    "files": [
+      "shorts/service/cloud.py",
+      "shorts/service/app.py",
+      "shorts/core/jobs.py"
+    ],
+    "tests": [
+      "tests/shorts/test_api.py:test_A078_auth_required",
+      "tests/shorts/test_api.py:test_A078_internal_no_fake_queue_header"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Auth y suplantación interna rechazadas con fixtures; falta auditoría IAM/URLs en cloud."
+  },
+  {
+    "id": "A079",
+    "requirement": "Archivos y shell. Rechazar MIME engañoso, traversal y manifiesto con shell arbitrario.",
+    "files": [
+      "shorts/service/cloud.py",
+      "shorts/service/app.py",
+      "shorts/core/jobs.py"
+    ],
+    "tests": [
+      "tests/shorts/test_api.py:test_A079_limit_metadata",
+      "tests/shorts/test_media.py:test_A079_path_and_checksum",
+      "tests/shorts/test_media.py:test_A079_playlist_disguised_as_audio",
+      "tests/shorts/test_media.py:test_A079_shell_manifest_rejected",
+      "tests/shorts/gateway.test.cjs",
+      "tests/shorts/test_workflow.py:test_A079_json_arrays_and_null_rejected"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Traversal/checksum/playlist disfrazada/shell rechazados; falta límite de recursos bajo carga real."
+  },
+  {
+    "id": "A080",
+    "requirement": "Ausencias e incertidumbre. Final bloquea recursos obligatorios faltantes/stale salvo omisión autorizada.",
+    "files": [
+      "shorts/service/cloud.py",
+      "shorts/service/app.py",
+      "shorts/core/jobs.py"
+    ],
+    "tests": [
+      "tests/shorts/test_media.py:test_A080_block_stale_and_raw"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Final bloquea draft/stale; omisión editorial explícita aún pendiente."
+  },
+  {
+    "id": "A081",
+    "requirement": "Código completo. Checkout limpio incluye montador, Dockerfile, dependencias, compiler, runner y pruebas.",
+    "files": [
+      "worker/montage-shorts/Dockerfile",
+      "worker/montage-shorts/runner.py",
+      "worker/montage-shorts/render.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Fuentes y lock incluidos; Docker build no ejecutado localmente (sin daemon)."
+  },
+  {
+    "id": "A082",
+    "requirement": "Reconstrucción aislada. Build del nuevo montador no reemplaza automáticamente el Job de Animes.",
+    "files": [
+      "worker/montage-shorts/Dockerfile",
+      "worker/montage-shorts/runner.py",
+      "worker/montage-shorts/render.py"
+    ],
+    "tests": [
+      "tests/shorts/test_installer.py:test_A082_builder_isolated_from_runtime_identity"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Worker aislado, builder dedicado y permisos acotados implementados; fixture valida identidad/configuración. Pendiente construcción y despliegue GCP autorizados."
+  },
+  {
+    "id": "A083",
+    "requirement": "Error de render. Fallo conserva último render válido y muestra razón localizada.",
+    "files": [
+      "worker/montage-shorts/Dockerfile",
+      "worker/montage-shorts/runner.py",
+      "worker/montage-shorts/render.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Publicación ocurre al terminar; falta inyección de fallo cloud conservando render anterior."
+  },
+  {
+    "id": "A084",
+    "requirement": "Salida y paquetes. MP4 con/sin subtítulos, SRT/ASS y stems pertenecen a la misma revisión.",
+    "files": [
+      "worker/montage-shorts/Dockerfile",
+      "worker/montage-shorts/runner.py",
+      "worker/montage-shorts/render.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Paquete incluye MP4 limpio/ASS/SRT/stems; falta ZIP opcional y prueba descarga iPhone."
+  },
+  {
+    "id": "A085",
+    "requirement": "Compatibilidad anterior. Modificación compartida pasa fixture de montaje de Animes con contrato previo.",
+    "files": [
+      "worker/montage-shorts/Dockerfile",
+      "worker/montage-shorts/runner.py",
+      "worker/montage-shorts/render.py"
+    ],
+    "tests": [
+      "tests/shorts/legacy-regression.cjs"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Worker/contrato heredados intactos; exportación real de Animes pendiente."
+  },
+  {
+    "id": "A086",
+    "requirement": "Preview Vercel. PR sirve ambas secciones y no escribe por defecto en recursos de producción.",
+    "files": [
+      "vercel.json",
+      "shorts/gateway.mjs",
+      "infra/shorts/connect.py",
+      "infra/shorts/install.py",
+      "docs/shorts/user-overrides.md"
+    ],
+    "tests": [
+      "tests/shorts/test_installer.py:test_A086_environment_is_branch_preview_only",
+      "tests/shorts/gateway.test.cjs",
+      "tests/shorts/test_installer.py:test_U003_production_variables_do_not_use_preview_branch_scope",
+      "tests/shorts/test_installer.py:test_U003_wrong_production_branch_stops_before_configuration",
+      "tests/shorts/test_installer.py:test_U003_connect_targets_main_and_existing_production_alias",
+      "tests/shorts/test_installer.py:test_U003_outdated_checkout_stops_before_cloud_changes",
+      "tests/shorts/test_installer.py:test_U003_reconnection_cannot_publish_an_outdated_worker_commit"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Payloads/aislamiento probados con fixtures. Commit, CI y despliegue efectivos se registran en PR 20. Servicios Google y recorrido completo todavía pendientes.",
+    "override": "U003 — autorización posterior de main y producción",
+    "effectiveRequirement": "Integrar ambas secciones en main y publicar el proyecto Vercel existente; preservar Animes y mantener aisladas las previews."
+  },
+  {
+    "id": "A087",
+    "requirement": "Comando corto. Desde botón Cloud Shell, ./c abre instalación sin pegar scripts ni crear alias.",
+    "files": [
+      "c",
+      "setup-shorts.sh",
+      "infra/shorts/install.py",
+      "infra/shorts/connect.py",
+      "docs/shorts/user-overrides.md",
+      "docs/shorts/mobile.md",
+      "cortos/index.html",
+      "cortos/app.js"
+    ],
+    "tests": [
+      "tests/shorts/test_installer.py:test_A087_launcher",
+      "tests/shorts/ui/studio.test.mjs"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Lanzador y ausencia de controles de instalación comprobados localmente. Falta instalación/recuperación real desde Cloud Shell/iPhone con la cuenta indicada por el usuario.",
+    "override": "U004 — instalación fuera de la interfaz",
+    "effectiveRequirement": "Desde un enlace entregado en la conversación, ./c abre instalación de main sin pegar scripts ni crear alias. No hay botón/panel Cloud Shell en la aplicación."
+  },
+  {
+    "id": "A088",
+    "requirement": "Idempotencia instalador. Segunda ejecución no duplica recursos/keys ni migra proyectos antiguos.",
+    "files": [
+      "c",
+      "setup-shorts.sh",
+      "infra/shorts/install.py",
+      "infra/shorts/connect.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Idempotencia por nombres/estado nube diseñada; falta segunda instalación real."
+  },
+  {
+    "id": "A089",
+    "requirement": "Fallo de actualización. Build/health fallido mantiene montador anterior y rollback probado por menú.",
+    "files": [
+      "infra/shorts/install.py"
+    ],
+    "tests": [
+      "tests/shorts/test_installer.py:test_A089_failed_health_cannot_rollback",
+      "tests/shorts/test_installer.py:test_A089_rollback_restores_old_revision_pointer",
+      "tests/shorts/test_installer.py:test_A089_connection_failure_restores_old_worker"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Rollback después de fallo de conexión probado con fixture; commit/revisión verificables en health. Falta instalación y restauración real autorizada."
+  },
+  {
+    "id": "A090",
+    "requirement": "Sin cambios destructivos. Instalador conserva i/setup.sh, checkout con cambios y recursos ajenos.",
+    "files": [
+      "c",
+      "setup-shorts.sh",
+      "infra/shorts/install.py",
+      "infra/shorts/connect.py"
+    ],
+    "tests": [
+      "tests/shorts/test_installer.py:test_A090_old_installers_unchanged",
+      "tests/shorts/test_installer.py:test_A090_refuses_foreign_bucket",
+      "tests/shorts/test_installer.py:test_A090_cannot_overwrite_legacy_environment",
+      "tests/shorts/test_installer.py:test_A090_refuses_unowned_namespace"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Legacy intacto; fixtures rechazan bucket ajeno, recursos sin propiedad y variables Animes. Falta instalación/recuperación real."
+  },
+  {
+    "id": "A091",
+    "requirement": "Instalación completa móvil. Probar cuenta/proyecto, autorizaciones y despliegue sin escribir JSON ni IDs largos.",
+    "files": [
+      "c",
+      "setup-shorts.sh",
+      "infra/shorts/install.py",
+      "infra/shorts/connect.py"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Menú conecta Firebase/Vercel por autorización del navegador; falta ejecutar de principio a fin en iPhone."
+  },
+  {
+    "id": "A092",
+    "requirement": "Autorización externa. Falta de permisos GCP/Vercel se informa; no se presenta configuración parcial como lista.",
+    "files": [
+      "c",
+      "setup-shorts.sh",
+      "infra/shorts/install.py",
+      "infra/shorts/connect.py"
+    ],
+    "tests": [
+      "tests/shorts/test_installer.py:test_A092_partial_environment_not_ready"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Errores/configuración parcial se informan; falta permisos insuficientes reales."
+  },
+  {
+    "id": "A093",
+    "requirement": "Actualización reanudable. Sesión Cloud Shell perdida se recupera con botón y comando; reconoce recursos instalados.",
+    "files": [
+      "c",
+      "setup-shorts.sh",
+      "infra/shorts/install.py",
+      "infra/shorts/connect.py",
+      "docs/shorts/user-overrides.md",
+      "docs/shorts/mobile.md",
+      "cortos/index.html",
+      "cortos/app.js"
+    ],
+    "tests": [
+      "tests/shorts/ui/studio.test.mjs"
+    ],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Lanzador y ausencia de controles de instalación comprobados localmente. Falta instalación/recuperación real desde Cloud Shell/iPhone con la cuenta indicada por el usuario.",
+    "override": "U004 — instalación fuera de la interfaz",
+    "effectiveRequirement": "Sesión Cloud Shell perdida se recupera con el enlace de la conversación y ./c; reconoce recursos instalados y conserva estado cloud."
+  },
+  {
+    "id": "A094",
+    "requirement": "Sin generaciones ocultas. Instalador/health/CI no pagan llamadas de modelo sin autorización explícita.",
+    "files": [
+      "c",
+      "setup-shorts.sh",
+      "infra/shorts/install.py",
+      "infra/shorts/connect.py"
+    ],
+    "tests": [
+      "tests/shorts/test_api.py:test_A094_health_no_provider",
+      "tests/shorts/test_installer.py:test_A094_cancel_before_infrastructure"
+    ],
+    "fixture": "passed_local_partial",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Cancelar no cambia infraestructura; instalación muestra cuenta/proyecto/recursos y costes antes de confirmar. Autoprueba cloud verifica persistencia, URLs y cola sin modelos; ejecución real pendiente."
+  },
+  {
+    "id": "A095",
+    "requirement": "UI móvil. Recorrido a 390 px sin desplazamiento horizontal, controles táctiles y un reproductor activo.",
+    "files": [
+      "cortos/app.js",
+      "cortos/style.css",
+      "shorts/service/director.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "CSS móvil y único reproductor; navegador local bloqueado, revisión visual pendiente."
+  },
+  {
+    "id": "A096",
+    "requirement": "Trabajo sin recargas. Actualizaciones de estado no reinician página ni cambian posición de lectura.",
+    "files": [
+      "cortos/app.js",
+      "cortos/style.css",
+      "shorts/service/director.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Actualizaciones sin location.reload; falta recorrido real de lectura y estado."
+  },
+  {
+    "id": "A097",
+    "requirement": "Corto de prueba dramático. Aprobar producción autorizada de 300 s con pensamiento, silencio y evento sincronizado.",
+    "files": [
+      "cortos/app.js",
+      "cortos/style.css",
+      "shorts/service/director.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Pendiente autorización y producción real dramática."
+  },
+  {
+    "id": "A098",
+    "requirement": "Otro género. Aprobar prueba contrastante de comedia o romance que no recicle el mismo arco.",
+    "files": [
+      "cortos/app.js",
+      "cortos/style.css",
+      "shorts/service/director.py",
+      "cortos/studio.mjs",
+      "cortos/presentation.mjs"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Pendiente autorización y producción real contrastante."
+  },
+  {
+    "id": "A099",
+    "requirement": "Informe verificable. Matriz distingue implementado, probado con fixtures, probado con API y pendiente real.",
+    "files": [
+      "docs/shorts/acceptance.md",
+      "docs/shorts/mobile.md",
+      "docs/shorts/audit.md"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "100 filas sin equiparar fixture con aceptación; contador validado por CI."
+  },
+  {
+    "id": "A100",
+    "requirement": "Handoff. Entregar commit/PR, instalación móvil, limitaciones comprobadas y guía de corrección manual.",
+    "files": [
+      "docs/shorts/acceptance.md",
+      "docs/shorts/mobile.md",
+      "docs/shorts/audit.md"
+    ],
+    "tests": [],
+    "fixture": "not_covered",
+    "api": "not_run",
+    "acceptance": "pending",
+    "remaining": "Documentación móvil en repositorio; commit/PR/preview se registran solo al existir."
+  }
+]

@@ -4,3 +4,10 @@ anime-studio-cloud.env
 *.pem
 *-service-account.json
 GCP_SERVICE_ACCOUNT-one-line.txt
+
+# Cortos runtime / local verification
+__pycache__/
+*.pyc
+.env.shorts
+.short-cloud/
+shorts-installation.json

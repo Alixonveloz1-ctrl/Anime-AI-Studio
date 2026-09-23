@@ -1,0 +1,47 @@
+# Contratos de proveedores y configuración
+
+Revisión documental: 2026-09-23. No se hicieron llamadas de generación ni se verificó acceso de una cuenta concreta. Un test con transporte simulado solo prueba el contrato que envía nuestro código.
+
+| Función | Modelo configurado | Endpoint / región | Estado |
+|---|---|---|---|
+| Dirección y análisis | `gemini-3.1-pro-preview` | Vertex `v1 … :generateContent`, `global` | Documentado; acceso/API pendiente |
+| Imagen | `gemini-3.1-flash-image` | Vertex `v1 … :generateContent`, `global` | Documentado; API pendiente |
+| Video | `veo-3.1-generate-001` | Vertex `v1 … :predictLongRunning` / `:fetchPredictOperation`, `us-central1` | Payload fixture, sin llamada real |
+| Voz | `gemini-2.5-pro-tts` | Cloud TTS `v1/text:synthesize`, `global` | Texto japonés separado de prompt, fixture |
+| Música | `lyria-3-pro-preview` | Vertex `v1beta1/projects/…/locations/global/interactions` | Contrato documental; API pendiente |
+| Transcripción | Cloud Speech `speech:longrunningrecognize` | URI GCS, `ja-JP` | Envío/polling y propuesta de marcas implementados; API real pendiente |
+
+Veo usa imagen aprobada, 4/6/8 segundos, un resultado, 720p y `generateAudio:false` fijado en servidor. El original permanece inaccesible a previews/finales; un derivado normalizado pasa FFprobe y se vuelve a comprobar antes del montaje. No se admite cambiar esa opción para resolver un error del proveedor.
+
+Lyria devuelve una pieza independiente. El prompt instrumental requiere escucha; no garantiza ausencia de letra. La documentación del modelo limita una pieza a 184 segundos. El montaje puede reutilizar un archivo a través de cortes y exige cobertura real; no inventa una extensión idéntica para llegar a 300 segundos.
+
+El servidor conserva el registro del envío al producirse un timeout o error de resultado desconocido; no lo repite automáticamente. No cambia modelo, región o proveedor automáticamente. Los fallos recuperables con `operationName` se distinguen de los envíos inciertos sin identificador.
+
+## Fuentes oficiales consultadas
+
+- [Gemini 3.1 Pro](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-1-pro)
+- [Gemini 3.1 Flash Image](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-1-flash-image)
+- [Veo 3.1](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/veo/3-1-generate)
+- [Gemini TTS](https://docs.cloud.google.com/text-to-speech/docs/gemini-tts)
+- [Lyria 3](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/lyria/lyria-3)
+- [Firebase Management: configuración](https://firebase.google.com/docs/projects/api/workflow_set-up-and-manage-project)
+- [Vercel: variables por entorno](https://vercel.com/docs/rest-api/projects/create-one-or-more-environment-variables)
+- [Vercel: creación de despliegues](https://vercel.com/docs/rest-api/deployments/create-a-new-deployment)
+
+## Alcance de solicitudes
+
+Por instrucción explícita del usuario, no hay tarifas, estimaciones ni reservas monetarias. `shorts/core/requests.py` fija modelos/regiones verificados y el número de llamadas propio de cada acción. Se comprueba la entrada antes del transporte y se registra cada envío; un resultado desconocido bloquea su reenvío. No existe un vencimiento de precios que pueda impedir producir.
+
+Health y CI no verifican acceso efectivo a los modelos. Los tests de contrato prueban el payload con un transporte simulado; las llamadas reales requieren autorización y un proyecto conectado.
+
+Speech v1 convierte copia de trabajo a mono PCM16, guarda el ID y consulta GET /v1/operations/{name}; conserva marcas como propuesta y no sobrescribe subtítulos manuales. Referencia: https://docs.cloud.google.com/speech-to-text/docs/v1/async-time-offsets . Sin prueba API pagada todavía.
+
+## Instalador y permisos verificados documentalmente
+
+El build fija `E2_STANDARD_2`, timeout de 1.800 segundos y cuenta de servicio dedicada. El instalador muestra cuenta/proyecto/recursos y solicita permiso antes de cambiarlos. No muestra precios ni calcula un presupuesto.
+
+Fuentes oficiales: https://docs.cloud.google.com/build/docs/api/reference/rest/v1/projects.builds#machinetype ; https://docs.cloud.google.com/build/docs/securing-builds/configure-user-specified-service-accounts ; https://docs.cloud.google.com/tasks/docs/creating-http-target-tasks . Cloud Tasks exige actAs además de la firma; el instalador concede ServiceAccountUser solo sobre la identidad propia y verifica una entrega OIDC de diagnóstico. El builder puede escribir el repositorio Docker propio, leer objetos build-source y emitir logs; no usa la identidad del runtime.
+
+## Enlace de instalación por cuenta
+
+El enlace se entrega por conversación, no dentro de la aplicación. `authuser` selecciona el correo que indique el usuario, siempre que ya haya iniciado sesión con él; de lo contrario Google puede usar la cuenta predeterminada. El instalador vuelve a mostrar la cuenta activa antes de autorizar recursos. Repo y rama se fijan con `cloudshell_git_repo` y `cloudshell_git_branch=main`; `cloudshell_workspace=.` abre la terminal en la raíz. Google documenta que los repositorios externos se abren en una sesión temporal sin heredar credenciales: la autorización efectiva debe comprobarse en la instalación real, que sigue pendiente. No se eluden estas restricciones. Fuentes oficiales: https://docs.cloud.google.com/shell/docs/configuring-cloud-shell y https://docs.cloud.google.com/shell/docs/open-in-cloud-shell .
