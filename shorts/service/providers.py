@@ -53,12 +53,16 @@ class Providers:
         # countTokens is a free preflight. It cannot trigger a generation.
         data=self.post(vertex(self.c,kind,'countTokens'),{'contents':contents})
         require(type(data.get('totalTokens')) is int and data['totalTokens']<=INPUT_LIMIT,'INPUT_TOKENS','Entrada supera el límite admitido por esta operación; reduce el alcance antes de generar')
-    def text(self,prompt,parts=None,analysis=False):
+    def text(self,prompt,parts=None,analysis=False,max_output_tokens=TEXT_OUTPUT_LIMIT):
         kind='analysis' if analysis else 'text'
-        body={'contents':[{'role':'user','parts':[{'text':prompt},*(parts or [])]}],'generationConfig':{'responseMimeType':'application/json','temperature':.7,'maxOutputTokens':TEXT_OUTPUT_LIMIT}}
+        require(type(max_output_tokens) is int and 1<=max_output_tokens<=TEXT_OUTPUT_LIMIT,'OUTPUT_LIMIT','Límite de salida inválido')
+        body={'contents':[{'role':'user','parts':[{'text':prompt},*(parts or [])]}],'generationConfig':{'responseMimeType':'application/json','temperature':.7,'maxOutputTokens':max_output_tokens}}
         self.check_input(kind,body['contents'])
         data=self.post(vertex(self.c,kind),body,kind)
-        try:return json.loads(''.join(x.get('text','') for x in data['candidates'][0]['content']['parts']))
+        candidate=(data.get('candidates') or [{}])[0]
+        require(candidate.get('finishReason')!='MAX_TOKENS','MODEL_TRUNCATED','Google alcanzó el límite de respuesta; no se creó una candidata ni se repitió la generación')
+        require(candidate.get('finishReason') not in ('SAFETY','BLOCKLIST','PROHIBITED_CONTENT') and not data.get('promptFeedback',{}).get('blockReason'),'MODEL_BLOCKED','Google bloqueó la propuesta. Revisa el concepto; no se repitió la generación')
+        try:return json.loads(''.join(x.get('text','') for x in data['candidates'][0]['content']['parts'] if not x.get('thought')))
         except (KeyError,IndexError,ValueError) as e:raise ContractError('MODEL_SCHEMA','Respuesta incompleta; no se creó una candidata válida') from e
     def image(self,prompt,references,aspect):
         parts=[{'text':prompt}]

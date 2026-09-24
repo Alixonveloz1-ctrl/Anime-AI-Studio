@@ -7,6 +7,7 @@ import time
 import uuid
 from pathlib import Path
 from shorts.core.contracts import require, digest, validate_ideas, ContractError
+from shorts.core.requests import IDEAS_OUTPUT_LIMIT
 from shorts.service.providers import Providers, UnknownSubmission
 from shorts.service.cloud import RequestJournal
 from shorts.service.director import RULES, ideas_prompt, develop_prompt, validate_development
@@ -40,11 +41,9 @@ def run_job(cloud,j,p):
         require(a,'ASSET_MISSING','Falta recurso aprobado: '+eid);return a
     def uri(a):return 'gs://'+cloud.c['bucket']+'/'+a['object']
     if op=='ideas':
-        ideas=validate_ideas(provider.text(ideas_prompt(p)))
-        review=provider.text(RULES+'\nRevisa diversidad real y fidelidad al género/concepto. Devuelve {distinct:boolean,faithful:boolean,issues:[]}; no reescribas.\n'+json.dumps({'project':p,'ideas':ideas},ensure_ascii=False))
-        require(review.get('distinct') is True and review.get('faithful') is True,'IDEA_REVIEW','Las propuestas necesitan revisión; no se regeneraron automáticamente')
+        ideas=validate_ideas(provider.text(ideas_prompt(p),max_output_tokens=IDEAS_OUTPUT_LIMIT))
         result=[]
-        for idea in ideas:result.append(entity('ideas',{'data':idea,'review':review,'batchId':j['id']}))
+        for idea in ideas:result.append(entity('ideas',{'data':idea,'batchId':j['id']}))
         return {'ideas':[i['id'] for i in result]}
     if op=='develop':
         idea=cloud.entity(pid,'ideas',data['ideaId'])

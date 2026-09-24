@@ -27,3 +27,5 @@ dialog{background:linear-gradient(180deg,var(--bg-card),var(--bg-deep));color:va
 @media(hover:hover){.secondary:hover{background:rgba(255,255,255,.08);border-color:rgba(224,64,251,.3)}.scene-card:hover{border-color:rgba(0,229,255,.2)}}
 @media(max-width:540px){.section-heading{display:block}.section-heading>.actions{margin-top:12px}.cols{grid-template-columns:1fr}.activity-row p{display:block}.activity-row .muted{display:block;margin-top:4px}.brand h1{font-size:21px}.scene-visuals .actions>button{font-size:12px;padding:8px}.project-row{gap:4px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}#screen>*{animation:none}}
+/* Keep status and recovery controls readable on an iPhone. */
+.activity-banner{flex-wrap:wrap;align-items:flex-start}.activity-banner>div:first-child{flex:1 1 240px;min-width:0}.activity-banner p{margin:6px 0 0;overflow-wrap:anywhere}.activity-banner>.actions{margin:0;flex:1 1 220px}.activity-banner>.actions button{flex:1 1 110px}

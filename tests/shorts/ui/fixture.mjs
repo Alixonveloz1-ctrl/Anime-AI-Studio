@@ -47,5 +47,5 @@ export function createFixture({empty=false}={}){
   if(method!=='GET')p.revision++;if(key)keys.set(key,clone(result));
   return new Response(JSON.stringify(clone(result)),{status:200,headers:{'Content-Type':'application/json'}});
  }
- return {project:p,calls,transport,identity:{getIdToken:async()=> 'fixture-only-no-real-account'}};
+ return {project:p,calls,jobs,transport,identity:{getIdToken:async()=> 'fixture-only-no-real-account'}};
 }

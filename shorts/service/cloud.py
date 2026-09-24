@@ -7,7 +7,7 @@ from google.cloud import firestore, storage, tasks_v2
 from google.auth import default
 from google.auth.transport.requests import AuthorizedSession, Request
 from google.oauth2 import id_token
-from shorts.core.contracts import require, ident, revision, digest
+from shorts.core.contracts import require, ident, revision, digest, ContractError
 from shorts.core.jobs import create_job, claim, settle
 from shorts.core.requests import check_call_scope, verify_models
 from shorts.core.dispatch import resource_class, acquire
@@ -70,8 +70,14 @@ class Cloud:
         client=tasks_v2.CloudTasksClient();parent=client.queue_path(self.c['project'],self.c['region'],self.c['queue'])
         from google.api_core.exceptions import AlreadyExists
         task={'name':parent+'/tasks/'+j['id']+'-'+str(j.get('dispatchAttempt',0)), 'http_request':{'http_method':tasks_v2.HttpMethod.POST,'url':self.c['service']+'/internal/dispatch','headers':{'Content-Type':'application/json'},'body':json.dumps({'jobId':j['id']}).encode(),'oidc_token':{'service_account_email':self.c['serviceAccount'],'audience':self.c['service']}}}
+        ref=self.db.collection('animeShortsJobs').document(j['id'])
         try:client.create_task(parent=parent,task=task)
-        except AlreadyExists:pass
+        except AlreadyExists:pass # Same task name: never submit a second copy.
+        except Exception as error:
+            ref.update({'queueError':{'code':type(error).__name__,'message':'No se confirmó la entrega a la cola. Comprueba el estado antes de continuar.','at':time.time()}})
+            return False
+        ref.update({'queueSubmitted':time.time(),'queueError':None})
+        return True
     def acquire_dispatch(self,jid):
         ref=self.db.collection('animeShortsJobs').document(ident(jid))
         @firestore.transactional
@@ -80,7 +86,21 @@ class Cloud:
             p=self.project_ref(j['projectId']).get(transaction=tx).to_dict()
             sr=self.db.collection('animeShortsCapacity').document(resource_class(j['operation']))
             slot=sr.get(transaction=tx).to_dict()
-            out,slot,dispatch=acquire(j,p,slot,time.time())
+            # A closed job cannot keep a capacity slot forever. Never release
+            # a running or uncertain submission based only on its age.
+            if slot and slot.get('jobId') and slot['jobId']!=j['id']:
+                previous=self.db.collection('animeShortsJobs').document(slot['jobId']).get(transaction=tx).to_dict()
+                if previous and previous.get('settled'):slot=None
+            try:out,slot,dispatch=acquire(j,p,slot,time.time())
+            except ContractError as error:
+                if error.code not in ('CAPACITY_BUSY','LEASE'):raise
+                out={**j,'dispatchError':{'code':error.code,'message':str(error),'at':time.time()}}
+                if error.code=='CAPACITY_BUSY':out['dispatchError']['blockingJobId']=slot.get('jobId')
+                tx.set(ref,out)
+                # A known pre-dispatch pause is resumable by the owner. Do not
+                # silently exhaust Cloud Tasks' three retries and abandon it.
+                return out,False
+            if dispatch:out.update(dispatchError=None,queueError=None)
             if dispatch:tx.set(ref,out);tx.set(sr,slot)
             return out,dispatch
         return apply(self.db.transaction())

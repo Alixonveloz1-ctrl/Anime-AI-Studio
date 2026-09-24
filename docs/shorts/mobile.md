@@ -8,7 +8,7 @@ La sección está en `/cortos/`, dentro del mismo repositorio y proyecto Vercel.
 2. En la terminal escribe solamente `./c`. Si el sistema no permite ejecutarlo directamente, escribe `bash c`.
 3. El menú ofrece **1 Instalar/actualizar**, **2 Diagnóstico**, **3 Restaurar versión anterior**, **4 Salir**, **5 Conectar/recuperar Vercel** y **6 Buscar actualización de la rama**.
 4. Comprueba la cuenta activa que muestra Cloud Shell y selecciona el proyecto por número. Antes de crear recursos verás la cuenta, proyecto, región, commit y recursos que se crearán o actualizarán. Cancelar conserva la configuración existente.
-5. El instalador construye una imagen del commit, ejecuta fixtures dentro de ella y prepara el servicio y Job aislados. No llama a modelos. Después comprueba escritura/lectura cloud, descarga firmada y entrega de cola autenticada. Una candidata que falla el build, diagnóstico cloud o health no sustituye la versión activa anterior.
+5. El instalador construye una imagen del commit, ejecuta fixtures dentro de ella y prepara el servicio y Job aislados. No llama a modelos. Después comprueba escritura/lectura cloud, descarga firmada y el arranque completo de un worker de prueba desde la cola autenticada. Esta prueba no genera contenido y muestra avances mientras espera. Una candidata que falla el build, diagnóstico cloud o health no sustituye la versión activa anterior.
 6. Para conectar Vercel, autoriza su cliente oficial desde el enlace del navegador y elige el equipo/proyecto por número. Se exige el proyecto ya conectado a este repositorio. Se escriben variables `SHORTS_*` de producción y `STUDIO_ALLOWED_EMAILS` para proteger ambas secciones (U005). Se vuelve a desplegar `main` en tu página habitual para aplicar la conexión; las credenciales y el bucket de Animes se conservan.
 7. Si Google aún no está activado en Firebase, el menú ofrece el enlace a su pantalla oficial. Allí selecciona Google y el correo de soporte; vuelve y elige **Comprobar de nuevo**. No debes copiar una clave, JSON ni un ID largo.
 8. El resultado se guarda en nube. Si se pierde Cloud Shell, vuelve al enlace de la conversación, escribe `./c` y usa Diagnóstico o Conectar/recuperar. La opción 6 abre la actualización en otro checkout y conserva tus archivos locales.
@@ -64,7 +64,9 @@ Si un envío queda **desconocido**, no repitas a ciegas: el proveedor puede habe
 
 En Guion y biblias, pulsa **Editar manualmente**, cambia los campos, **Revisar cambios** y **Guardar candidata**. Verás los recursos afectados antes de guardar; aprueba después la candidata. En **Subtítulos** puedes cambiar español, dividir bloques y marcar inicio/fin mientras escuchas la voz definitiva. Las advertencias de lectura requieren corregir el bloque o justificar una excepción. Cambiar la voz conserva la corrección anterior y solicita revisión.
 
-En Escenas → Actividad, **Continuar** reencola trabajo no despachado o consulta una operación conocida; **Comprobar estado** consulta Cloud Run sin generar. Un envío incierto nunca se repite con ese botón.
+El trabajo pendiente y sus errores aparecen arriba también en Historia. La consulta del mismo trabajo se mantiene hasta doce minutos; si aún falta resultado, **Comprobar estado** vuelve a leerlo sin generar otro. Si había terminado mientras la pantalla estaba abierta, recargar el mismo proyecto recupera las propuestas guardadas.
+
+En el aviso del trabajo o en Escenas → Actividad, **Continuar** reencola trabajo no despachado o consulta una operación conocida; **Comprobar estado** consulta Cloud Run sin generar. Un envío incierto nunca se repite con ese botón.
 
 ## Lotes, versiones e importación
 

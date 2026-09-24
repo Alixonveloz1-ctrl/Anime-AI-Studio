@@ -74,3 +74,11 @@ Cortos adopta la navegación inferior Historia, Personajes, Escenas y Exportar. 
 Las tres tarjetas observadas coinciden con tres altas de proyectos (201) seguidas de fallos de apertura (412). No son historias precargadas por la aplicación. Los registros existentes no se borran ni archivan automáticamente. Los títulos vacíos se identifican como «Corto sin título». Una creación confirmada conserva su ID y un reintento abre ese registro; una respuesta desconocida exige revisar la lista antes de crear otro. Abrir una pantalla solo lee recursos, nunca genera modelos.
 
 La adaptación modifica únicamente los archivos de Cortos, sus pruebas y documentación. `index.html`, APIs de Animes, proveedores y worker instalado conservan exactamente el contenido anterior a esta corrección. Evidencia: [animes-interface-adaptation.md](animes-interface-adaptation.md). La reparación del proyecto antiguo sigue siendo un requisito independiente y pendiente de verificar con sus escenas reales.
+
+## U011 — Tres ideas breves y seguimiento visible (2026-09-24)
+
+El usuario aclara que cada una de las tres ideas contiene únicamente un título y un concepto breve. No quiere desarrollar las tres historias para elegir. El guion audiovisual y las biblias se desarrollan solo después de seleccionar una. Se mantiene exactamente tres propuestas distintas, género y subgéneros, concepto opcional y el desarrollo posterior completo de 300 segundos.
+
+El servicio de Cortos hace una sola generación de texto para las tres ideas, con salida limitada a 4096 tokens y contratos `{id,title,premise}`. La interfaz muestra título/concepto incluso para las propuestas antiguas más extensas; no borra los datos anteriores. La llamada de desarrollo sigue usando el límite anterior y solo la idea seleccionada. No cambia ningún proveedor, modelo o región.
+
+La captura «Ideas · En espera» corresponde a un trabajo cuyo arranque ocurrió después del límite de consulta de la web. Se amplía la consulta del mismo ID a doce minutos, se recupera el estado al abrir el proyecto y se muestran errores/cuotas, comprobación, cancelación y recuperación en Historia. No se repiten generaciones automáticamente ni se ofrecen nuevas ideas mientras exista una solicitud de ideas incierta o pendiente. Evidencia y límites: [ideas-and-job-followup.md](ideas-and-job-followup.md).

@@ -1,11 +1,12 @@
 import {fileHash} from './hash.mjs';
-import {steps,label as titleFor,terminal,versions,taskActions,entityName,fieldLabel} from './presentation.mjs';
+import {steps,label as titleFor,terminal,unresolved,jobMessage,versions,taskActions,entityName,fieldLabel} from './presentation.mjs';
 import {genres,subgenres,storyChoice} from './catalog.mjs';
 const $=s=>document.querySelector(s), screen=$('#screen'), notice=$('#notice');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let batchRunning=false;
 let user,p,stage='Historia',productionTab='tomas',reviewTab='corto',active=false,busy=false,heartbeatBusy=false,needsRedraw=false;
 let mediaLoads=[];
+let knownJobs=[],watchVersion=0;
 const projectTitle=item=>item.title?.trim()||'Corto sin título';
 let transport=fetch;
 const session=crypto.randomUUID(),device=localStorage.getItem('animeShorts:v2:device')||crypto.randomUUID();localStorage.setItem('animeShorts:v2:device',device);
@@ -19,7 +20,11 @@ async function api(path,method='GET',data,headers={},signal){
   // before our gateway and can replace a valid read with an empty 412 response.
   const revision=h['X-Shorts-Revision']??h['If-Match']??(p?String(p.revision):undefined);delete h['If-Match'];
   if(method!=='GET'&&revision!==undefined)h['X-Shorts-Revision']=String(revision);
-  const r=await transport('/api/shorts?path='+encodeURIComponent(path),{method,headers:h,cache:'no-store',signal,body:data?JSON.stringify(data):undefined});
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000);
+  let r;
+  try{r=await transport('/api/shorts?path='+encodeURIComponent(path),{method,headers:h,cache:'no-store',signal:signal||controller.signal,body:data?JSON.stringify(data):undefined});}
+  catch(error){if(controller.signal.aborted)throw new Error('El servicio no respondió en 30 segundos. La solicitud no se repetirá automáticamente.');throw error;}
+  finally{clearTimeout(timeout);}
   let j;try{j=await r.json();}catch{
     const error=new Error(`No se pudo leer la respuesta del servicio (${r.status}). La solicitud no se repetirá automáticamente.`);error.status=r.status;throw error;
   }
@@ -43,32 +48,61 @@ async function go(next,part){stage=next;if(part&&next==='Escenas')productionTab=
 function tabs(parent,options,selected,onSelect){const nav=document.createElement('nav');nav.className='tabs';nav.setAttribute('aria-label','Contenido de esta etapa');for(const [id,name] of options){const b=action(name,()=>onSelect(id),true);b.setAttribute('aria-pressed',String(id===selected));nav.append(b);}parent.append(nav);}
 function describeIssue(text){const d=development();if(!d)return text;let value=String(text);const ids=[...d.shots,...d.utterances,...d.soundRequests,...d.musicRequests,...d.bible.characters,...d.bible.locations,...d.bible.props].sort((a,b)=>b.id.length-a.id.length);for(const row of ids)value=value.replaceAll(row.id,entityName(d,row.id));return value;}
 async function runTask(operation,path,data={}){
+ if(['ideas','develop'].includes(operation)){
+  const {jobs}=await api(route('/jobs'));knownJobs=jobs;
+  const existing=jobs.find(j=>j.operation===operation&&unresolved(j));
+  if(existing){say('Ya existe una solicitud pendiente. Comprobamos esa misma solicitud.');await watch(existing.id);needsRedraw=true;return existing.id;}
+ }
  if(!active)await lease(true);
  await refresh();const projectId=p.id,currentStage=stage;
  const bytes=new TextEncoder().encode(JSON.stringify([projectId,operation,path,data]));
  const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');
  const storageKey='animeShorts:request:'+hash,key=localStorage.getItem(storageKey)||crypto.randomUUID();localStorage.setItem(storageKey,key);
  let job;try{job=await api(path,'POST',{...data,session},{'Idempotency-Key':key});}catch(e){if(e.status&&e.status<500)localStorage.removeItem(storageKey);throw e;}
- say(titleFor(operation)+' en marcha. Puedes continuar revisando tu historia.');
+ say('Solicitud guardada. Comprobando su estado…');
  const result=await watch(job.jobId,projectId);
  if(result&&terminal(result.state)&&result.state!=='submitted_unknown')localStorage.removeItem(storageKey);
  if(p?.id===projectId&&stage===currentStage)needsRedraw=true;
  return job.jobId;
 }
+function showJob(job){
+ const panel=$('#activity');panel.hidden=false;panel.replaceChildren();
+ const text=document.createElement('div'),heading=document.createElement('strong'),message=document.createElement('p');
+ heading.textContent=titleFor(job.operation)+' · '+titleFor(job.state);message.textContent=describeIssue(jobMessage(job));text.append(heading,message);panel.append(text);
+ const controls=[],available=taskActions(job);
+ if(unresolved(job))controls.push(['Comprobar estado',async()=>{
+  const latest=await api('/jobs/'+job.id);
+  if(taskActions(latest).inspect){const result=await api('/jobs/'+job.id+':inspect','POST',{}, {'If-Match':String(latest.revision)});say(result.message);}
+  await watch(job.id);await draw();
+ },true]);
+ if(available.recover)controls.push(['Continuar',async()=>{
+  if(!active)await lease(true);const latest=await api('/jobs/'+job.id);
+  await api('/jobs/'+job.id+':resume','POST',{session},{'If-Match':String(latest.revision)});
+  await watch(job.id);await draw();
+ },true]);
+ if(available.cancel)controls.push(['Cancelar',async()=>{
+  const latest=await api('/jobs/'+job.id);await api('/jobs/'+job.id+':cancel','POST',{}, {'If-Match':String(latest.revision)});
+  ++watchVersion;await draw();say('Cancelación solicitada. Lo ya generado se conserva.');
+ },true]);
+ if(['awaiting_review','succeeded'].includes(job.state))controls.push(['Ver resultado',()=>go(['ideas','develop','revise'].includes(job.operation)?'Historia':'Escenas'),true]);
+ buttons(panel,controls);
+}
 async function watch(id,projectId=p?.id){
- const panel=$('#activity');panel.hidden=false;panel.replaceChildren();const status=document.createElement('span');panel.append(status);
- const stop=action('Cancelar',async()=>{const j=await api('/jobs/'+id);await api('/jobs/'+id+':cancel','POST',{}, {'If-Match':String(j.revision)});stop.disabled=true;say('Se detendrán las acciones pendientes.');},true);panel.append(stop);
- for(let n=0;n<60;n++){
-  const j=await api('/jobs/'+id);status.textContent=titleFor(j.operation)+' · '+titleFor(j.state);
-  if(terminal(j.state)||j.state==='waiting_provider'){
-   stop.remove();if(j.result?.error)say(describeIssue(j.result.error),true);
-   else say(j.state==='failed'?'No se completó. Puedes comprobar el trabajo en Escenas.':titleFor(j.state));
-   if(p?.id===projectId)await refresh();return j;
+ const version=++watchVersion;
+ // Cold Cloud Run jobs can start after the old three-minute window. Keep
+ // reading the same ID for twelve minutes; never turn a slow read into a POST.
+ for(let n=0;n<240;n++){
+  let j;try{j=await api('/jobs/'+id);}catch(error){say('No se pudo comprobar el trabajo. '+error.message,true);return;}
+  if(version!==watchVersion||p?.id!==projectId)return j;
+  knownJobs=[j,...knownJobs.filter(x=>x.id!==j.id)];showJob(j);
+  if(terminal(j.state)){
+   say(describeIssue(jobMessage(j)),['failed','submitted_unknown'].includes(j.state));
+   await refresh();return j;
   }
-  if(p?.id!==projectId)return j;
+  if(j.dispatchError||j.queueError){say(jobMessage(j),true);return j;}
+  if(n===239){say(j.state==='queued'?'Todavía no se confirmó el inicio. Puedes comprobar o cancelar este mismo trabajo.':'La consulta automática se pausó. Usa Comprobar estado para consultar este mismo trabajo.');return j;}
   await new Promise(r=>setTimeout(r,3000));
  }
- say('El trabajo continúa. Su resultado aparecerá en Escenas.');
 }
 function navigation(){
  const nav=$('#steps');nav.replaceChildren();
@@ -99,7 +133,13 @@ async function drawScreen(){
 async function renderStage(){
  if(!p)stage='Historia';
  if(p)await refresh();navigation();screen.replaceChildren();
- if(!p)return newProject();
+ if(!p){$('#activity').hidden=true;knownJobs=[];return newProject();}
+ try{
+  const {jobs}=await api(route('/jobs'));knownJobs=jobs;
+  const latest=[...jobs].sort((a,b)=>(b.created||0)-(a.created||0));
+  const current=latest.find(unresolved)||latest.find(j=>j.state==='failed');
+  if(current)showJob(current);else $('#activity').hidden=true;
+ }catch(error){say('No se pudo leer el estado de los trabajos. '+error.message,true);}
  if(stage==='Historia'){pageTitle('Tu historia');tabs(screen,[['ideas','Ideas'],['guion','Guion y biblias']],p.selectedIdea?'guion':'ideas',async part=>{screen.querySelector('.story-content')?.remove();const slot=document.createElement('div');slot.className='story-content';screen.append(slot);await (part==='ideas'?ideas:script)(slot);[...screen.querySelectorAll('.tabs button')].forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===(part==='ideas'?'Ideas':'Guion y biblias'))));});const slot=document.createElement('div');slot.className='story-content';screen.append(slot);return (p.selectedIdea?script:ideas)(slot);}
  if(stage==='Personajes')return references();
  if(stage==='Escenas')return production();
@@ -109,7 +149,7 @@ async function renderStage(){
 async function openProject(id){
  const next=await getProject(id);
  if(active)await lease(false);
- p=next;stage='Historia';location.hash=`/proyectos/${id}`;await draw();
+ ++watchVersion;knownJobs=[];p=next;stage='Historia';location.hash=`/proyectos/${id}`;await draw();
 }
 function openFailure(id,error){
  say('El proyecto está guardado, pero no se pudo abrir. '+error.message,true);
@@ -162,16 +202,19 @@ async function projectList(){
  }catch(error){content.textContent='No se pudo leer la lista: '+error.message;buttons(content,[['Reintentar',async()=>{dialog.close();dialog.remove();await projectList();},true]]);}
 }
 async function ideas(parent=screen){
- const c=card('El comienzo',`<p>${esc(p.genre)}${p.subgenres.length?' · '+esc(p.subgenres.join(', ')):''}</p><p class="muted">${esc(p.concept||'Partimos de tu género para proponer tres historias distintas.')}</p>`);buttons(c,[[p.ideas.length?'Generar otras tres ideas':'Generar tres ideas',()=>runTask('ideas',route('/ideas:generate'))]]);parent.append(c);
+ const c=card('El comienzo',`<p>${esc(p.genre)}${p.subgenres.length?' · '+esc(p.subgenres.join(', ')):''}</p><p class="muted">${esc(p.concept||'Partimos de tu género para proponer tres historias distintas.')}</p><p class="muted">Tres títulos con un concepto breve. Solo desarrollaremos la historia que elijas.</p>`);
+ const pending=knownJobs.some(j=>j.operation==='ideas'&&unresolved(j));
+ if(pending){const note=document.createElement('p');note.textContent='Ya hay una solicitud de ideas pendiente. Su estado aparece arriba.';c.append(note);}
+ else buttons(c,[[p.ideas.length?'Generar otras tres ideas':'Generar tres ideas',()=>runTask('ideas',route('/ideas:generate'))]]);parent.append(c);
  const batches=Object.values(Object.groupBy(p.ideas||[],x=>x.batchId)).reverse();
  for(const [index,batch] of batches.entries()){const target=index?fold(parent,'Propuestas anteriores'):parent,grid=document.createElement('div');grid.className='grid';target.append(grid);const latest=new Map();for(const idea of batch)latest.set(idea.data.id,idea);for(const idea of latest.values())candidates(grid,idea,idea.data,'ideas');const old=batch.filter(x=>latest.get(x.data.id)!==x);if(old.length){const h=fold(target,'Versiones anteriores de estas ideas');old.forEach(x=>candidates(h,x,x.data,'ideas'));}}
 }
-function candidates(parent,entity,d,kind){const selected=p.selectedIdea?.id===entity.id,c=card(d.title||'Propuesta',`<p>${esc(d.premise||'')}</p><p class="muted">${esc(d.initialSituation||'')}</p><p><strong>Conflicto.</strong> ${esc(d.obstacle||'')}</p><p><strong>Emoción.</strong> ${esc(d.emotionalProgression||'')}</p>`);const end=fold(c,'Ver desenlace');end.append(document.createTextNode(d.ending||''));buttons(c,[[selected?'Idea elegida':'Elegir esta historia',async()=>{await mutate(route(`/ideas/${entity.id}:select`),{});await go('Historia');}],['Ajustar idea',()=>revise(kind,entity),true]]);parent.append(c);}
+function candidates(parent,entity,d,kind){const selected=p.selectedIdea?.id===entity.id,c=card(d.title||'Propuesta',`<p>${esc(d.premise||'')}</p>`);buttons(c,[[selected?'Idea elegida':'Elegir esta historia',async()=>{await mutate(route(`/ideas/${entity.id}:select`),{});await go('Historia');}],['Ajustar idea',()=>revise(kind,entity),true]]);parent.append(c);}
 
 async function revise(kind,e){
  if(kind==='ideas'){
   const dialog=document.createElement('dialog');document.body.append(dialog);const label=document.createElement('label');label.textContent='Parte de la idea';const select=document.createElement('select');
-  for(const [field,title] of Object.entries({title:'Título',premise:'Premisa',characters:'Personajes',initialSituation:'Situación inicial',objective:'Objetivo',obstacle:'Obstáculo',emotionalProgression:'Progresión emocional',climax:'Clímax',ending:'Desenlace',visualComplexity:'Complejidad visual'})){const option=document.createElement('option');option.value=field;option.textContent=title;select.append(option);}label.append(select);dialog.append(label);
+  for(const [field,title] of Object.entries({title:'Título',premise:'Concepto'})){const option=document.createElement('option');option.value=field;option.textContent=title;select.append(option);}label.append(select);dialog.append(label);
   const instruction=document.createElement('textarea');instruction.placeholder='¿Qué debe cambiar en esa parte?';dialog.append(instruction);
   buttons(dialog,[['Crear candidata',async()=>{if(!instruction.value.trim())throw new Error('Describe el cambio.');const id=await runTask('revise',route(`/revisions/${kind}/${e.id}:revise`),{instruction:instruction.value,scope:{field:select.value}});if(id){dialog.close();dialog.remove();await draw();}}],['Cerrar',()=>{dialog.close();dialog.remove();},true]]);dialog.showModal();return;
  }
@@ -190,7 +233,8 @@ function readable(parent,value){
 async function script(parent=screen){
  if(!p.selectedIdea){const c=card('Elige una idea primero','<p>Las tres propuestas son el punto de partida de tu guion.</p>');buttons(c,[['Ver ideas',()=>ideas(parent)]]);parent.append(c);return;}
  const intro=card('Guion y biblias',`<p>${esc(p.ideas.find(i=>i.id===p.selectedIdea?.id)?.data.title||'Tu historia elegida')}</p>`);
- if(!p.developments.length)buttons(intro,[['Desarrollar esta historia',()=>runTask('develop',route('/develop'))]]);
+ if(knownJobs.some(j=>j.operation==='develop'&&unresolved(j))){const note=document.createElement('p');note.textContent='El desarrollo solicitado está pendiente. Su estado aparece arriba.';intro.append(note);}
+ else if(!p.developments.length)buttons(intro,[['Desarrollar esta historia',()=>runTask('develop',route('/develop'))]]);
  else{
   if(p.activeDevelopment)buttons(intro,[['Continuar a producción',()=>go('Escenas')]]);
   const more=fold(intro,'Crear una nueva versión');buttons(more,[['Crear otra versión del guion',()=>runTask('develop',route('/develop')),true]]);

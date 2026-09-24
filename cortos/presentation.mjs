@@ -3,6 +3,21 @@ export const steps=['Historia','Personajes','Escenas','Exportar'];
 const names={queued:'En espera',running:'Preparando',waiting_provider:'Procesando en Google',awaiting_review:'Listo para revisar',succeeded:'Terminado',failed:'No se completó',cancelled:'Cancelado',cancel_requested:'Cancelando',submitted_unknown:'Pendiente de comprobar',approved:'Aprobado',candidate:'Por revisar',stale:'Necesita revisión',needs_review:'Por revisar',quarantined:'Archivo no utilizable',image:'Imagen',veo:'Video',veo_silent_validated:'Video',pcm:'Audio',ideas:'Ideas',develop:'Guion y biblias',revise:'Corrección',tts:'Voz',music:'Música',analyze:'Sincronización',review:'Revisión',transcribe:'Tiempos de voz',media:'Preparación del sonido',preview:'Vista previa',render:'Exportación',frames:'Fotogramas',import:'Importación',hold:'Ilustración',camera2d:'Cámara 2D',localized:'Animación localizada',dialogue:'Diálogo',thought:'Pensamiento',narration:'Narración',system:'Voz del sistema'};
 export const label=value=>names[value]||String(value||'').replace(/([a-z])([A-Z])/g,'$1 $2').replace(/[_-]/g,' ');
 export const terminal=state=>['awaiting_review','succeeded','failed','cancelled','submitted_unknown'].includes(state);
+export const unresolved=job=>!job.settled&&(!terminal(job.state)||job.state==='submitted_unknown');
+export function jobMessage(job){
+ const code=job.result?.code||job.errorCode;
+ if(code==='PROVIDER_QUOTA')return 'Google rechazó la generación por cuota o límite de solicitudes (429). No se reintentó automáticamente.';
+ if(job.result?.error)return job.result.error;
+ if(job.dispatchError?.message)return job.dispatchError.message;
+ if(job.queueError?.message)return job.queueError.message;
+ if(job.state==='submitted_unknown'||job.dispatchUnknown)return 'No se confirmó el resultado del envío. Conservamos este trabajo y no repetimos la generación.';
+ if(job.state==='queued')return job.workerOperation?'Google aceptó el arranque, pero todavía no se confirmó que el trabajo haya comenzado.':'La solicitud está guardada, pero el servicio todavía no ha confirmado el arranque.';
+ if(job.state==='running')return job.providerCalls?.length?'Google está procesando la solicitud. Esperamos su resultado.':'El servicio arrancó y está preparando la solicitud.';
+ if(job.state==='waiting_provider')return 'Google tiene una operación pendiente. Se consultará ese mismo trabajo.';
+ if(job.state==='cancelled')return job.result?.reason||job.reason||'Trabajo cancelado. No se iniciarán nuevas generaciones de este trabajo.';
+ if(job.state==='cancel_requested')return 'Cancelación solicitada. Una llamada ya enviada puede terminar.';
+ return label(job.state);
+}
 export function versions(rows,selectedId){
  const sorted=[...rows].sort((a,b)=>(a.created||0)-(b.created||0));
  const current=sorted.find(x=>x.id===selectedId)||sorted.filter(x=>x.approvalState==='approved').at(-1);
@@ -14,7 +29,7 @@ export function versions(rows,selectedId){
 export function taskActions(job){
  if(['queued','running','waiting_provider','cancel_requested'].includes(job.state)){
   const recover=job.state==='queued'&&!job.dispatchState||job.state==='waiting_provider'&&['VEO_PENDING','SPEECH_PENDING'].includes(job.errorCode);
-  return {cancel:job.state!=='cancel_requested',recover:!!recover,inspect:!!job.dispatchUnknown};
+  return {cancel:job.state!=='cancel_requested',recover:!!recover&&!job.dispatchUnknown,inspect:!!(job.dispatchUnknown||job.workerOperation||job.workerExecution)};
  }
  return {cancel:false,recover:false,inspect:job.state==='submitted_unknown'};
 }

@@ -53,7 +53,19 @@ export async function handleShortsRequest(request, env = {}) {
     const upstream = await fetch(new URL(path, base), { method: request.method, headers, body: payload,
       redirect: 'error', signal: AbortSignal.timeout(25000) });
     if (!upstream.headers.get('content-type')?.includes('application/json')) return json(502, { error: 'Respuesta del servicio no válida.' });
-    return json(upstream.status, await upstream.json());
+    const result=await upstream.json();
+    // Diagnosis on authenticated status reads only. Never log stories, payloads,
+    // owner identities, credentials, signed URLs or provider response bodies.
+    if(request.method==='GET'&&upstream.ok&&headers.authorization&&(/^\/jobs\/[A-Za-z0-9_-]+$/.test(path)||/^\/projects\/[A-Za-z0-9_-]+\/jobs$/.test(path))){
+      const safe=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,100}$/.test(value)?value:undefined;
+      for(const job of (Array.isArray(result.jobs)?result.jobs:[result]).slice(0,50)){
+        if(!job?.id)continue;
+        console.info('shorts.job.status',JSON.stringify({id:safe(job.id),operation:safe(job.operation),state:safe(job.state),settled:job.settled===true,
+          dispatch:safe(job.dispatchState),dispatchUnknown:job.dispatchUnknown===true,workerAccepted:!!job.workerOperation,workerStarted:!!job.workerExecution,
+          error:safe(job.result?.code||job.errorCode||job.dispatchError?.code||job.queueError?.code),calls:(job.providerCalls||[]).map(c=>({kind:safe(c.kind),state:safe(c.state)}))}));
+      }
+    }
+    return json(upstream.status, result);
   } catch {
     return json(503, { code: 'SERVICE_UNAVAILABLE', error: 'No se confirmó la respuesta. Conserva la operación; no repitas una generación a ciegas.' });
   }

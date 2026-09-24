@@ -18,10 +18,13 @@ async function setup(options={}){
  if(options.failOpening&&path==='/projects/fixture'&&fixture.calls.some(c=>c.path==='/projects'&&c.method==='POST')){options.failOpening=false;return new Response(JSON.stringify({error:'Lectura temporalmente no disponible'}),{status:503});}
  if(options.failImage&&path==='/projects/fixture/assets/imgCandidate/url')return new Response('{}',{status:503});
  if(options.threeDrafts&&path==='/projects'&&(request.method||'GET')==='GET')return new Response(JSON.stringify({projects:[1,2,3].map(n=>({...fixture.project,id:'draft'+n,title:'',created:n}))}));
+ if(options.pendingAfterSubmit&&path.endsWith('/ideas:generate')){const r=await baseTransport(url,request);const job=fixture.jobs.at(-1);Object.assign(job,{state:'queued',settled:false});options.savedIdeas=fixture.project.ideas;fixture.project.ideas=[];return r;}
+ if(options.jobSequence&&path.startsWith('/jobs/')&&!path.includes(':')){const job=fixture.jobs.find(j=>j.id===path.split('/').at(-1));const next=options.jobSequence.shift();if(next)Object.assign(job,next);if(next?.state==='awaiting_review')fixture.project.ideas=options.savedIdeas;}
+ if(options.pendingJob&&path.endsWith('/jobs')&&!fixture.jobs.length)fixture.jobs.push(structuredClone(options.pendingJob));
  if(options.nonJsonError&&decodeURIComponent(url).endsWith('/ideas:generate')){options.errorRequests=(options.errorRequests||0)+1;return new Response('',{status:502});}if(new Headers(request.headers).has('If-Match'))return new Response('',{status:412});return baseTransport(url,request);};
  const dom=new JSDOM(html,{url:'https://fixture.invalid/cortos/',runScripts:'outside-only'}),w=dom.window;
- Object.assign(w,{...catalogue,steps:presentation.steps,titleFor:presentation.label,terminal:presentation.terminal,versions:presentation.versions,taskActions:presentation.taskActions,entityName:presentation.entityName,fieldLabel:presentation.fieldLabel,TextEncoder,structuredClone,fetch:fixture.transport,confirm:()=>{throw new Error('Unexpected confirmation')},prompt:()=>null});
- Object.defineProperty(w.crypto,'subtle',{value:webcrypto.subtle});w.setInterval=()=>0;
+ Object.assign(w,{...catalogue,steps:presentation.steps,titleFor:presentation.label,terminal:presentation.terminal,unresolved:presentation.unresolved,jobMessage:presentation.jobMessage,versions:presentation.versions,taskActions:presentation.taskActions,entityName:presentation.entityName,fieldLabel:presentation.fieldLabel,TextEncoder,structuredClone,fetch:fixture.transport,confirm:()=>{throw new Error('Unexpected confirmation')},prompt:()=>null});
+ Object.defineProperty(w.crypto,'subtle',{value:webcrypto.subtle});w.setInterval=()=>0;if(options.fastPoll){const timeout=w.setTimeout.bind(w);w.setTimeout=(fn,ms,...args)=>timeout(fn,ms===3000?0:ms,...args);}
  w.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','')};w.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open')};w.HTMLMediaElement.prototype.pause=function(){};
  w.HTMLCanvasElement.prototype.getContext=()=>({clearRect(){},beginPath(){},moveTo(){},lineTo(){},stroke(){}});
  w.eval(source+'\nwindow.testMount=mountStudio;');await Promise.all(Array.from({length:options.mounts||1},()=>w.testMount(fixture.identity,{transport:fixture.transport,...(options.projectList?{}:{projectId:'fixture'})})));
@@ -195,5 +198,59 @@ test('Only validated silent video is displayed; playback pauses other media',asy
   assert.equal(fixture.calls.some(c=>c.path.endsWith('/assets/raw/url')),false);
   let pauses=0;const voice=w.document.querySelector('audio');voice.pause=()=>pauses++;
   clip.dispatchEvent(new w.Event('play'));assert.equal(pauses,1);
+ }finally{dom.window.close();}
+});
+
+test('Ideas display only title and concept; selecting one does not automatically develop it',async()=>{
+ const {fixture,w,dom,click}=await setup({empty:true});
+ try{
+  await click('Generar tres ideas');
+  const cards=[...w.document.querySelectorAll('.story-content .grid>.card')];assert.equal(cards.length,3);
+  assert.doesNotMatch(cards.map(c=>c.textContent).join(' '),/Conflicto\.|Emoción\.|Ver desenlace|Una decisión cambia/);
+  await click('Elegir esta historia',cards[1]);
+  assert.equal(fixture.project.selectedIdea.id,'idea2');assert.equal(fixture.calls.some(c=>c.path.endsWith('/develop')),false);
+ }finally{dom.window.close();}
+});
+test('A queued idea remains accessible in Historia after reload, without another generation',async()=>{
+ const {fixture,w,dom}=await setup({empty:true,pendingJob:{id:'old',operation:'ideas',state:'queued',revision:1,created:1}});
+ try{
+  const panel=w.document.querySelector('#activity');assert.equal(panel.hidden,false);assert.match(panel.textContent,/todavía no ha confirmado el arranque/);
+  assert.ok([...panel.querySelectorAll('button')].some(b=>b.textContent==='Continuar'));
+  assert.equal([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Generar tres ideas'),false);
+  assert.equal(fixture.calls.some(c=>c.path.endsWith('/ideas:generate')),false);
+ }finally{dom.window.close();}
+});
+test('Polling timeout does not claim ongoing work, hide recovery, or resend ideas',async()=>{
+ const {fixture,w,dom}=await setup({empty:true,pendingAfterSubmit:true,fastPoll:true});
+ try{
+  await [...w.document.querySelectorAll('button')].find(b=>b.textContent==='Generar tres ideas').onclick();
+  assert.match(w.document.querySelector('#notice').textContent,/Todavía no se confirmó el inicio/);
+  assert.doesNotMatch(w.document.body.textContent,/El trabajo continúa|aparecerá en Escenas/);
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/ideas:generate')).length,1);
+  assert.equal(fixture.calls.filter(c=>c.path==='/jobs/job1').length,240);
+  assert.equal([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Generar tres ideas'),false);
+  assert.ok([...w.document.querySelectorAll('#activity button')].some(b=>b.textContent==='Comprobar estado'));
+ }finally{dom.window.close();}
+});
+test('429 from a provider is displayed in Historia with no automatic resubmission',async()=>{
+ const {fixture,w,dom}=await setup({empty:true,pendingAfterSubmit:true,jobSequence:[{state:'failed',settled:true,result:{code:'PROVIDER_QUOTA',error:'Google rejected 429'}}]});
+ try{
+  await [...w.document.querySelectorAll('button')].find(b=>b.textContent==='Generar tres ideas').onclick();
+  assert.match(w.document.querySelector('#activity').textContent,/cuota o límite de solicitudes \(429\)/);
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/ideas:generate')).length,1);
+ }finally{dom.window.close();}
+});
+test('Confirmed Cloud Run operation enables status inspection even while still queued',()=>{
+ assert.equal(presentation.taskActions({state:'queued',dispatchState:'submitted',workerOperation:'projects/p/locations/r/operations/o'}).inspect,true);
+ assert.equal(presentation.taskActions({state:'queued',dispatchUnknown:true}).recover,false);
+ assert.match(presentation.jobMessage({state:'queued',dispatchError:{message:'Sesión pausada'}}),/Sesión pausada/);
+});
+test('Cold worker starting after the former three-minute limit still paints its three saved ideas',async()=>{
+ const states=[...Array.from({length:70},()=>({state:'queued'})),{state:'running'},{state:'awaiting_review',settled:true,result:{ideas:['idea1','idea2','idea3']}}];
+ const {fixture,w,dom,click}=await setup({empty:true,pendingAfterSubmit:true,fastPoll:true,jobSequence:states});
+ try{
+  await click('Generar tres ideas');assert.equal(w.document.querySelectorAll('.story-content .grid>.card').length,3);
+  assert.equal(fixture.calls.filter(c=>c.path==='/jobs/job1').length,72);
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/ideas:generate')).length,1);
  }finally{dom.window.close();}
 });

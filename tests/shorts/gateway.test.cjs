@@ -18,3 +18,15 @@ test('Application revision reaches the installed worker only on writes; reads ar
   const invalid=await handleShortsRequest(new Request('https://app.invalid/api/shorts?path=/projects/p',{method:'POST',headers:{'X-Shorts-Revision':'*'},body:'{}'}),env);assert.equal(invalid.status,400);assert.equal(calls.length,3);
  }finally{global.fetch=original;}
 });
+test('Job diagnostics expose only bounded operational metadata, never texts, tokens or URLs',async()=>{
+ const {handleShortsRequest}=await import('../../shorts/gateway.mjs'),original=global.fetch,info=console.info,logs=[];
+ const env={SHORTS_ENABLED:'true',SHORTS_PRODUCTION_URL:'https://example.run.app',SHORTS_ENVIRONMENT:'production',VERCEL_ENV:'production'};
+ console.info=(...args)=>logs.push(args.join(' '));
+ const job={id:'job',operation:'ideas',state:'queued',payload:{secret:'story-secret'},session:'session-secret',owner:'owner-secret',providerCalls:[{kind:'text',state:'rejected',url:'signed-url-secret'}],result:{code:'PROVIDER_QUOTA',error:'story-secret'}};
+ global.fetch=async()=>new Response(JSON.stringify({jobs:[job]}),{headers:{'content-type':'application/json'}});
+ try{
+  const r=await handleShortsRequest(new Request('https://app.invalid/api/shorts?path=/projects/p/jobs',{headers:{Authorization:'Bearer token-secret'}}),env);
+  assert.deepEqual(await r.json(),{jobs:[job]});assert.equal(logs.length,1);assert.match(logs[0],/PROVIDER_QUOTA/);assert.doesNotMatch(logs[0],/secret/);
+  logs.length=0;await handleShortsRequest(new Request('https://app.invalid/api/shorts?path=/projects/p/jobs'),env);assert.equal(logs.length,0);
+ }finally{global.fetch=original;console.info=info;}
+});

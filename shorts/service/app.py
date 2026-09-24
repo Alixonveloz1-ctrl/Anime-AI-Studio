@@ -481,7 +481,7 @@ def job_action(jid,action):
             if v.get('started'):
                 from shorts.core.recovery import resume_known
                 v=resume_known(v)
-            v.update(state='queued',session=body()['session'],dispatchState=None,dispatchAttempt=v.get('dispatchAttempt',0)+1)
+            v.update(state='queued',session=body()['session'],dispatchState=None,dispatchError=None,queueError=None,dispatchAttempt=v.get('dispatchAttempt',0)+1)
         else:
             require(not v.get('settled') and v['state'] in ('queued','running','waiting_provider','cancel_requested'),'JOB_FINISHED','Este trabajo no admite cancelación',409)
             v['state']='cancelled' if v['state']=='queued' else 'cancel_requested'
@@ -500,9 +500,30 @@ def internal_identity():
 
 @app.post('/internal/diagnostic')
 def diagnostic_callback():
-    internal_identity();key=ident(body()['key']);ref=cloud().db.collection('animeShortsDiagnostics').document(key)
+    c=internal_identity();key=ident(body()['key']);ref=cloud().db.collection('animeShortsDiagnostics').document(key)
     require(key.startswith('diagnostic_') and ref.get().exists,'DIAGNOSTIC','Prueba no registrada',404)
-    ref.update({'queueDelivered':True});return jsonify(delivered=True)
+    from google.cloud import firestore
+    @firestore.transactional
+    def claim_probe(tx):
+        current=ref.get(transaction=tx).to_dict()
+        require(current,'DIAGNOSTIC','Prueba terminada',404)
+        if current.get('probeSubmitted'):return False
+        tx.update(ref,{'queueDelivered':True,'probeSubmitted':True});return True
+    if not claim_probe(cloud().db.transaction()):return jsonify(delivered=True)
+    # Exercise the SAME jobs:run permission and environment override as real
+    # work, but the child only acknowledges this temporary diagnostic record.
+    try:
+        response=start_worker(c,[{'name':'SHORTS_DISPATCH_PROBE','value':key}])
+        if not response.ok:
+            ref.update({'probeError':'Cloud Run rechazó la prueba de arranque ('+str(response.status_code)+')'})
+        elif not response.json().get('name'):
+            ref.update({'probeError':'No se confirmó la operación de arranque de prueba'})
+    except Exception:
+        ref.update({'probeError':'No se confirmó el arranque de prueba; no se reenvió'})
+    return jsonify(delivered=True)
+
+def start_worker(c,environment):
+    return cloud().http.post(f'https://run.googleapis.com/v2/projects/{c["project"]}/locations/{c["region"]}/jobs/{c["job"]}:run',json={'overrides':{'containerOverrides':[{'env':environment}]}},timeout=30)
 
 @app.post('/internal/dispatch')
 def dispatch():
@@ -510,7 +531,7 @@ def dispatch():
     jid=ident(body()['jobId']);j,should_dispatch=cloud().acquire_dispatch(jid)
     if not should_dispatch:return jsonify(dispatched=False)
     ref=cloud().db.collection('animeShortsJobs').document(jid)
-    try:r=cloud().http.post(f'https://run.googleapis.com/v2/projects/{c["project"]}/locations/{c["region"]}/jobs/{c["job"]}:run',json={'overrides':{'containerOverrides':[{'env':[{'name':'SHORTS_JOB_ID','value':jid}]}]}},timeout=30)
+    try:r=start_worker(c,[{'name':'SHORTS_JOB_ID','value':jid}])
     except Exception:
         ref.update({'dispatchUnknown':True});return jsonify(dispatched=False,unknown=True),202
     if not r.ok:
@@ -519,7 +540,11 @@ def dispatch():
             cloud().finish(jid,'cancelled',{'code':'DISPATCH_REJECTED','error':'Cloud Run rechazó el arranque'})
         else:ref.update({'dispatchUnknown':True})
         raise ContractError('DISPATCH','No se confirmó el arranque; consulta el trabajo antes de continuar',503)
-    result=r.json();require(result.get('name'),'DISPATCH','No se recibió operación de Cloud Run',503)
+    try:result=r.json()
+    except ValueError:result={}
+    if not result.get('name'):
+        ref.update({'dispatchUnknown':True,'dispatchError':{'code':'DISPATCH_UNKNOWN','message':'Google no confirmó el identificador del arranque. No se enviará otra ejecución.'}})
+        return jsonify(dispatched=False,unknown=True),202
     ref.update({'workerOperation':result['name']})
     return jsonify(dispatched=True)
 

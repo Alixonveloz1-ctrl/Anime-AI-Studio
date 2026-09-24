@@ -10,11 +10,19 @@ from shorts.service.providers import UnknownSubmission
 from shorts.core.contracts import ContractError
 
 def main():
+    if os.environ.get('SHORTS_DISPATCH_PROBE'):
+        from shorts.core.contracts import ident,require
+        key=ident(os.environ['SHORTS_DISPATCH_PROBE']);require(key.startswith('diagnostic_'),'DIAGNOSTIC','Prueba inválida')
+        cloud=Cloud(config());ref=cloud.db.collection('animeShortsDiagnostics').document(key)
+        require(ref.get().exists,'DIAGNOSTIC','Prueba terminada')
+        ref.update({'workerStarted':True,'workerCommit':os.environ.get('SHORTS_BUILD_COMMIT')})
+        print('Cloud Tasks → service → Cloud Run worker: OK. No model calls.')
+        return
     if os.environ.get('SHORTS_SELF_TEST')=='1':
         import subprocess
         # Container fixtures exercise the shipped media/service code. Repository
         # history/installer checks run in CI's full checkout, outside this image.
-        for pattern in ('test_contracts.py','test_dependencies.py','test_media.py','test_api.py','test_requests.py','test_revisions.py','test_subtitles.py','test_dispatch.py','test_workflow.py'):
+        for pattern in ('test_contracts.py','test_dependencies.py','test_media.py','test_api.py','test_requests.py','test_revisions.py','test_subtitles.py','test_dispatch.py','test_workflow.py','test_ideas.py','test_job_recovery.py'):
             subprocess.run([sys.executable,'-m','unittest','discover','-s','tests/shorts','-p',pattern],check=True)
         return
     if os.environ.get('SHORTS_CLOUD_SELF_TEST')=='1':
@@ -45,12 +53,17 @@ def main():
             parsed=urlparse(target)
             if parsed.scheme!='https' or not parsed.hostname.endswith('.run.app'):raise RuntimeError('Diagnostic target invalid')
             client.create_task(parent=parent,task={'name':parent+'/tasks/'+key,'http_request':{'http_method':tasks_v2.HttpMethod.POST,'url':target+'/internal/diagnostic','headers':{'Content-Type':'application/json'},'body':json.dumps({'key':key}).encode(),'oidc_token':{'service_account_email':cloud.c['serviceAccount'],'audience':cloud.c['service']}}})
-            deadline=time.time()+75
+            deadline=time.time()+600;next_notice=0
             while time.time()<deadline:
-                if doc.get().to_dict().get('queueDelivered'):break
+                state=doc.get().to_dict()
+                if state.get('probeError'):raise RuntimeError(state['probeError'])
+                if state.get('workerStarted') and state.get('workerCommit')==os.environ.get('SHORTS_BUILD_COMMIT'):break
+                if time.time()>=next_notice:
+                    print('Comprobando arranque real del worker…' if state.get('queueDelivered') else 'Esperando entrega autenticada de la cola…',flush=True)
+                    next_notice=time.time()+20
                 time.sleep(2)
-            else:raise RuntimeError('Authenticated queue delivery failed; candidate not activated')
-            print('Cloud identity, Firestore, Storage, signed media and authenticated queue: OK. No model calls.')
+            else:raise RuntimeError('No se verificó cola → servicio → worker de esta versión; la candidata no se activa')
+            print('Cloud identity, Firestore, Storage, signed media and queue → service → worker: OK. No model calls.')
         finally:
             doc.delete();obj.delete()
         return

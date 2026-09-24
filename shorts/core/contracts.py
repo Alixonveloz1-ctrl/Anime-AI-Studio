@@ -43,11 +43,13 @@ def project(owner, project_id, data):
 
 def validate_ideas(data):
     require(isinstance(data,list) and len(data)==3, 'THREE_IDEAS', 'Se requieren exactamente tres propuestas')
-    keys=('id','title','premise','characters','initialSituation','objective','obstacle','emotionalProgression','climax','ending','visualComplexity')
     for idea in data:
-        require(all(idea.get(k) for k in keys), 'IDEA_SCHEMA', 'Propuesta incompleta')
+        require(isinstance(idea,dict) and set(idea)=={'id','title','premise'}, 'IDEA_SCHEMA', 'Cada propuesta necesita solo título y concepto')
+        for key,limit in (('title',120),('premise',600)):
+            require(isinstance(idea.get(key),str) and 0<len(idea[key].strip())<=limit, 'IDEA_SCHEMA', 'Título o concepto incompleto o demasiado largo')
         ident(idea['id'])
-    require(len({x['id'] for x in data})==3 and len({digest((x['premise'],x['obstacle'])) for x in data})==3, 'DUPLICATE_IDEA', 'Propuestas repetidas')
+    for key in ('id','title','premise'):
+        require(len({' '.join(x[key].casefold().split()) for x in data})==3, 'DUPLICATE_IDEA', 'Propuestas repetidas')
     return data
 
 def plan_beats(beats, target=FRAMES):

@@ -238,13 +238,20 @@
       "shorts/service/production.py",
       "cortos/app.js",
       "cortos/studio.mjs",
-      "cortos/presentation.mjs"
+      "cortos/presentation.mjs",
+      "shorts/service/providers.py",
+      "shorts/core/requests.py"
     ],
-    "tests": [],
-    "fixture": "not_covered",
+    "tests": [
+      "tests/shorts/test_ideas.py",
+      "tests/shorts/ui/studio.test.mjs"
+    ],
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Faltan producciones de géneros contrastantes."
+    "remaining": "Trabajo real anterior inspeccionado: tres ideas guardadas y dos llamadas completadas; no 429. Contrato nuevo breve probado con fixtures. Falta actualizar worker y verificar nuevas propuestas con Google. Ver ideas-and-job-followup.md.",
+    "override": "U011",
+    "effectiveRequirement": "Exactamente tres propuestas con título y concepto breve; solo la elegida se desarrolla en guion y biblias completos."
   },
   {
     "id": "A014",
@@ -254,15 +261,20 @@
       "shorts/service/production.py",
       "cortos/app.js",
       "cortos/studio.mjs",
-      "cortos/presentation.mjs"
+      "cortos/presentation.mjs",
+      "shorts/service/providers.py",
+      "shorts/core/requests.py"
     ],
     "tests": [
-      "tests/shorts/ui/studio.test.mjs"
+      "tests/shorts/ui/studio.test.mjs",
+      "tests/shorts/test_ideas.py"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "ID/hash de idea elegida; falta contrato cloud extremo a extremo."
+    "remaining": "Trabajo real anterior inspeccionado: tres ideas guardadas y dos llamadas completadas; no 429. Contrato nuevo breve probado con fixtures. Falta actualizar worker y verificar nuevas propuestas con Google. Ver ideas-and-job-followup.md.",
+    "override": "U011",
+    "effectiveRequirement": "Exactamente tres propuestas con título y concepto breve; solo la elegida se desarrolla en guion y biblias completos."
   },
   {
     "id": "A015",
@@ -1230,16 +1242,20 @@
     "files": [
       "shorts/service/cloud.py",
       "shorts/service/app.py",
-      "shorts/core/jobs.py"
+      "shorts/core/jobs.py",
+      "cortos/presentation.mjs",
+      "worker/montage-shorts/runner.py"
     ],
     "tests": [
       "tests/shorts/test_contracts.py:test_A072_expired_lease",
-      "tests/shorts/test_dispatch.py:test_A072_expired_lease_stops_dispatch"
+      "tests/shorts/test_dispatch.py:test_A072_expired_lease_stops_dispatch",
+      "tests/shorts/test_job_recovery.py",
+      "tests/shorts/ui/studio.test.mjs"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Lease con vencimiento probado en núcleo; falta pérdida real de conexión."
+    "remaining": "Lease con vencimiento probado en núcleo; falta pérdida real de conexión. U011: seguimiento de arranque tardío, cola y recuperación con fixtures; prueba nueva cola→servicio→worker real pendiente de actualización."
   },
   {
     "id": "A073",
@@ -1266,17 +1282,21 @@
     "files": [
       "shorts/service/cloud.py",
       "shorts/service/app.py",
-      "shorts/core/jobs.py"
+      "shorts/core/jobs.py",
+      "cortos/presentation.mjs",
+      "worker/montage-shorts/runner.py"
     ],
     "tests": [
       "tests/shorts/test_contracts.py:test_A074_duplicate",
       "tests/shorts/test_dispatch.py:test_A074_duplicate_queue_message_never_starts_second_worker",
-      "tests/shorts/test_workflow.py:test_A074_batch_unknown_not_retried"
+      "tests/shorts/test_workflow.py:test_A074_batch_unknown_not_retried",
+      "tests/shorts/test_job_recovery.py",
+      "tests/shorts/ui/studio.test.mjs"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Idempotencia y capacidad transaccionales; fixture del núcleo, falta entrega duplicada real Cloud Tasks."
+    "remaining": "Idempotencia y capacidad transaccionales; fixture del núcleo, falta entrega duplicada real Cloud Tasks. U011: seguimiento de arranque tardío, cola y recuperación con fixtures; prueba nueva cola→servicio→worker real pendiente de actualización."
   },
   {
     "id": "A075",
@@ -1284,18 +1304,21 @@
     "files": [
       "shorts/service/cloud.py",
       "shorts/service/app.py",
-      "worker/montage-shorts/runner.py"
+      "worker/montage-shorts/runner.py",
+      "cortos/presentation.mjs"
     ],
     "tests": [
       "tests/shorts/test_contracts.py:test_A075_unknown_never_resubmitted",
       "tests/shorts/test_contracts.py:test_A075_network_timeout_single_request",
       "tests/shorts/test_requests.py:test_A075_failure_after_submit_is_not_retried",
-      "tests/shorts/test_requests.py:test_A075_unknown_submission_cannot_be_closed_or_repeated"
+      "tests/shorts/test_requests.py:test_A075_unknown_submission_cannot_be_closed_or_repeated",
+      "tests/shorts/test_job_recovery.py",
+      "tests/shorts/ui/studio.test.mjs"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Recuperación de operaciones conocidas y diagnóstico implementados. Un envío incierto conserva su registro y no se repite; falta ensayo de fallos cloud."
+    "remaining": "Recuperación de operaciones conocidas y diagnóstico implementados. Un envío incierto conserva su registro y no se repite; falta ensayo de fallos cloud. U011: seguimiento de arranque tardío, cola y recuperación con fixtures; prueba nueva cola→servicio→worker real pendiente de actualización."
   },
   {
     "id": "A076",
@@ -1359,18 +1382,22 @@
       "auth/gate.mjs",
       "auth/client.mjs",
       "login/index.html",
-      "infra/shorts/connect.py"
+      "infra/shorts/connect.py",
+      "cortos/presentation.mjs",
+      "worker/montage-shorts/runner.py"
     ],
     "tests": [
       "tests/shorts/test_api.py:test_A078_auth_required",
       "tests/shorts/test_api.py:test_A078_internal_no_fake_queue_header",
       "tests/access/owner.test.cjs",
-      "tests/shorts/test_installer.py:test_U005_mismatching_cloud_owner_cannot_change_site_access"
+      "tests/shorts/test_installer.py:test_U005_mismatching_cloud_owner_cannot_change_site_access",
+      "tests/shorts/test_job_recovery.py",
+      "tests/shorts/ui/studio.test.mjs"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Fixtures RSA reales: propietario, otras cuentas, firma falsa, revocación, CSRF, 12 APIs y puerta de ambas páginas. Acceso real Google del propietario pendiente de resolver Firebase 403; no se ha generado contenido pagado.",
+    "remaining": "Fixtures RSA reales: propietario, otras cuentas, firma falsa, revocación, CSRF, 12 APIs y puerta de ambas páginas. Acceso real Google del propietario pendiente de resolver Firebase 403; no se ha generado contenido pagado. U011: seguimiento de arranque tardío, cola y recuperación con fixtures; prueba nueva cola→servicio→worker real pendiente de actualización.",
     "effectiveRequirement": "Privacidad global (U005): solo el propietario autorizado genera o accede por Animes y Cortos; comprobación en servidor, sesión compartida y fallo cerrado.",
     "override": "U005"
   },
@@ -1615,7 +1642,11 @@
       "c",
       "setup-shorts.sh",
       "infra/shorts/install.py",
-      "infra/shorts/connect.py"
+      "infra/shorts/connect.py",
+      "shorts/service/cloud.py",
+      "shorts/service/app.py",
+      "cortos/presentation.mjs",
+      "worker/montage-shorts/runner.py"
     ],
     "tests": [
       "tests/shorts/test_installer.py:test_A092_partial_environment_not_ready",
@@ -1629,12 +1660,14 @@
       "tests/shorts/test_installer.py:test_A092_vercel_error_keeps_reason_but_never_values",
       "tests/shorts/test_installer.py:test_A092_vercel_timeout_and_invalid_response_do_not_retry",
       "tests/shorts/test_installer.py:test_A092_environment_failure_stops_before_later_variables",
-      "tests/shorts/test_installer.py:test_A092_environment_failure_cannot_start_deployment"
+      "tests/shorts/test_installer.py:test_A092_environment_failure_cannot_start_deployment",
+      "tests/shorts/test_job_recovery.py",
+      "tests/shorts/ui/studio.test.mjs"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Conector conserva motivo Vercel, oculta valores y limita espera sin reintento propio. Pruebas locales de rechazo, timeout y configuración parcial aprobadas. No requiere reinstalación del worker. Falta confirmar conexión real; no se declara aplicación lista."
+    "remaining": "Conector conserva motivo Vercel, oculta valores y limita espera sin reintento propio. Pruebas locales de rechazo, timeout y configuración parcial aprobadas. No requiere reinstalación del worker. Falta confirmar conexión real; no se declara aplicación lista. U011: seguimiento de arranque tardío, cola y recuperación con fixtures; prueba nueva cola→servicio→worker real pendiente de actualización."
   },
   {
     "id": "A093",
