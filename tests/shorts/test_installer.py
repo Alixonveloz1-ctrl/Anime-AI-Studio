@@ -9,6 +9,29 @@ from unittest.mock import Mock, patch
 spec=importlib.util.spec_from_file_location('shorts_install',Path(__file__).resolve().parents[2]/'infra/shorts/install.py');install=importlib.util.module_from_spec(spec);spec.loader.exec_module(install)
 ROOT=Path(__file__).resolve().parents[2]
 class InstallerTests(unittest.TestCase):
+    def test_A093_update_bucket_with_existing_conditional_builder_binding(self):
+        # Updating an installed bucket must not prompt for a condition or
+        # remove the builder's existing restriction to build-source/.
+        condition="expression=resource.name.startsWith('projects/_/buckets/owned-bucket/objects/build-source/'),title=shorts-build-source"
+        builder='serviceAccount:anime-shorts-preview-build@project.iam.gserviceaccount.com'
+        runtime='serviceAccount:anime-shorts-preview@project.iam.gserviceaccount.com'
+        policy={(builder,'roles/storage.objectViewer',condition)}
+        def g(*args,**kwargs):
+            if args[:2]==('billing','projects'):return '{"billingEnabled":true}'
+            if args[:3]==('storage','buckets','add-iam-policy-binding'):
+                flags=dict(x[2:].split('=',1) for x in args if x.startswith('--') and '=' in x)
+                if 'condition' not in flags:
+                    raise RuntimeError('Adding a binding without specifying a condition to a policy containing conditions is prohibited in non-interactive mode')
+                self.assertEqual(args[3],'gs://owned-bucket')
+                policy.add((flags['member'],flags['role'],flags['condition']))
+            return ''
+        with patch.object(install,'current_release',return_value='a'*40),patch.object(install,'g',side_effect=g),patch.object(install,'check_owned',return_value=True),patch.object(install,'state_load',return_value={'commit':'old'}),patch.object(install,'pick',return_value='Autorizar instalación/actualización'),patch.object(install,'command'),patch.object(install,'exists',return_value=True),patch.object(install,'build_config',side_effect=RuntimeError('fixture stop before build')),patch.object(install,'activate') as activate:
+            for _ in range(2):
+                with self.assertRaisesRegex(RuntimeError,'fixture stop before build'):
+                    install.install('account','project','us-central1','owned-bucket')
+            activate.assert_not_called()
+        self.assertEqual(policy,{(builder,'roles/storage.objectViewer',condition),(runtime,'roles/storage.objectAdmin','None')})
+
     def test_A092_storage_failure_keeps_google_reason_without_retry(self):
         reason='ERROR: Service account new@fixture.iam.gserviceaccount.com does not exist.'
         result=subprocess.CompletedProcess([],1,'not a diagnostic',reason)

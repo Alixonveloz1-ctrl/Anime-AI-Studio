@@ -177,7 +177,10 @@ def install(account,project,region,bucket):
             g('storage','buckets','update','gs://'+bucket,'--update-labels=managed-by=anime-shorts-v2,environment=production')
         g('storage','buckets','update','gs://'+bucket,'--public-access-prevention')
         if not exists('iam','service-accounts','describe',sa,'--project',project):g('iam','service-accounts','create',PREFIX,'--project',project,'--display-name','Anime Cortos')
-        g('storage','buckets','add-iam-policy-binding','gs://'+bucket,'--member=serviceAccount:'+sa,'--role=roles/storage.objectAdmin')
+        # Updates encounter the builder's conditional build-source binding.
+        # Explicit None selects the existing unconditional runtime grant;
+        # it does not remove or relax other bindings on the bucket.
+        g('storage','buckets','add-iam-policy-binding','gs://'+bucket,'--member=serviceAccount:'+sa,'--role=roles/storage.objectAdmin','--condition=None')
         for role in ['roles/aiplatform.user','roles/datastore.user','roles/cloudtasks.enqueuer','roles/run.jobsExecutorWithOverrides','roles/serviceusage.serviceUsageConsumer','roles/firebaseauth.viewer','roles/speech.client','roles/run.viewer']:
             g('projects','add-iam-policy-binding',project,'--member=serviceAccount:'+sa,'--role='+role,'--quiet')
         g('iam','service-accounts','add-iam-policy-binding',sa,'--project',project,'--member=serviceAccount:'+sa,'--role=roles/iam.serviceAccountTokenCreator','--quiet')
