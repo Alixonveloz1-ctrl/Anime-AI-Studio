@@ -34,7 +34,8 @@ const route=s=>`/projects/${p.id}${s}`;
 async function getProject(id){
  const project=await api('/projects/'+id);
  for(const [kind,first] of Object.entries(project.entityCursors||{})){let cursor=first;while(cursor){const page=await api(`/projects/${id}/entities/${kind}/after/${cursor}`);project[kind].push(...page.items);cursor=page.next;}}
- for(const kind of ['ideas','developments','assets','cues','events','timelines','previews'])project[kind].sort((a,b)=>(a.created||0)-(b.created||0)||a.id.localeCompare(b.id));
+ project.developmentDrafts=project.developmentDrafts||[];
+ for(const kind of ['ideas','developments','assets','cues','events','timelines','previews','developmentDrafts'])project[kind].sort((a,b)=>(a.created||0)-(b.created||0)||a.id.localeCompare(b.id));
  return project;
 }
 async function refresh(){p=await getProject(p.id);}
@@ -227,22 +228,46 @@ async function revise(kind,e){
 }
 async function approve(kind,id,reviewed=false){await mutate(route(`/revisions/${kind}/${id}:approve`),{reviewed});needsRedraw=true;say('Versión aprobada y conservada.');}
 function readable(parent,value){
- const labels={dramatic:'Dirección dramática',visual:'Estilo visual',characters:'Personajes',locations:'Lugares',props:'Objetos',name:'Nombre',japaneseReading:'Lectura japonesa',age:'Edad',objective:'Objetivo',relationships:'Relaciones',speech:'Forma de hablar',voice:'Voz',languageCode:'Idioma',direction:'Actuación',costumes:'Vestuario',description:'Descripción',referencePrompt:'Referencia visual',layout:'Distribución',entrances:'Entradas',windows:'Ventanas',furniture:'Mobiliario',light:'Luz',soundZones:'Zonas sonoras',owner:'Poseedor',state:'Estado'};
+ const labels={story:'Historia',beats:'Momentos dramáticos',shots:'Planos',utterances:'Voces del guion',soundRequests:'Efectos de sonido',musicRequests:'Música',subtitles:'Subtítulos',dramatic:'Dirección dramática',visual:'Estilo visual',characters:'Personajes',locations:'Lugares',props:'Objetos',name:'Nombre',japaneseReading:'Lectura japonesa',age:'Edad',objective:'Objetivo',relationships:'Relaciones',speech:'Forma de hablar',voice:'Voz',languageCode:'Idioma',direction:'Actuación',costumes:'Vestuario',description:'Descripción',referencePrompt:'Referencia visual',layout:'Distribución',entrances:'Entradas',windows:'Ventanas',furniture:'Mobiliario',light:'Luz',soundZones:'Zonas sonoras',owner:'Poseedor',state:'Estado'};
  for(const [key,item] of Object.entries(value)){if(['id','hash','sha256','developmentId','assetId','audioHash','nativeQualityGuaranteed','assetRevision','audioRevision','voiceBinding'].includes(key))continue;if(item&&typeof item==='object'){const group=document.createElement('details'),title=document.createElement('summary');title.textContent=item.name||labels[key]||(/^[0-9]+$/.test(key)?'Elemento '+(Number(key)+1):fieldLabel(key));group.append(title);readable(group,item);parent.append(group);}else{const line=document.createElement('p'),label=document.createElement('strong');label.textContent=(labels[key]||fieldLabel(key))+': ';line.append(label,document.createTextNode(typeof item==='boolean'?(item?'Sí':'No'):String(item??'')));parent.append(line);}}
 }
 async function script(parent=screen){
  if(!p.selectedIdea){const c=card('Elige una idea primero','<p>Las tres propuestas son el punto de partida de tu guion.</p>');buttons(c,[['Ver ideas',()=>ideas(parent)]]);parent.append(c);return;}
  const intro=card('Guion y biblias',`<p>${esc(p.ideas.find(i=>i.id===p.selectedIdea?.id)?.data.title||'Tu historia elegida')}</p>`);
- if(knownJobs.some(j=>j.operation==='develop'&&unresolved(j))){const note=document.createElement('p');note.textContent='El desarrollo solicitado está pendiente. Su estado aparece arriba.';intro.append(note);}
- else if(!p.developments.length){
-  const failed=knownJobs.filter(j=>j.operation==='develop'&&j.settled&&j.state==='failed'&&j.result?.code==='REFERENCE_LINK'&&j.recoveryIdeaId===p.selectedIdea.id).sort((a,b)=>b.created-a.created)[0];
-  if(failed)buttons(intro,[['Recuperar guion guardado',()=>runTask('develop',route('/develop'),{resumeFrom:failed.id})]]);
-  else buttons(intro,[['Desarrollar esta historia',()=>runTask('develop',route('/develop'))]]);
+ const working=knownJobs.some(j=>j.operation==='develop'&&unresolved(j));
+ const stages=['Historia','Guion, biblias y planos','Sonido, música y subtítulos','Revisión de continuidad'];
+ const drafts=(p.developmentDrafts||[]).filter(d=>d.ideaId===p.selectedIdea.id);
+ let approved=drafts.find(d=>d.id===p.activeDraft&&d.approvalState==='approved');
+ if(approved&&drafts.some(d=>d.stage===1&&d.approvalState!=='approved'&&d.created>approved.created))approved=null;
+ const next=(approved?.stage||0)+1;
+ const choices=drafts.filter(d=>d.stage===next&&(next===1||d.sourceDraftId===approved?.id)).sort((a,b)=>b.created-a.created);
+ const latest=choices[0];
+ const parentId=approved?.id;
+ const runStage=(number,instruction='')=>runTask('develop',route('/develop'),{stage:number,sourceDraftId:number>1?parentId:null,instruction});
+ const note=document.createElement('p');note.textContent='Cada paso se genera solo cuando lo pides. Lee el resultado y apruébalo antes de continuar.';intro.append(note);
+ if(approved){const details=fold(intro,'Paso '+approved.stage+' aprobado · '+stages[approved.stage-1]);try{const saved=await api(route('/drafts/'+approved.id));readable(details,saved.data);}catch(e){details.append(document.createTextNode(e.message));}}
+ if(working){const note=document.createElement('p');note.textContent='El paso solicitado está pendiente. Su estado aparece arriba.';intro.append(note);}
+ else if(next<=4){
+  const heading=document.createElement('h4');heading.textContent='Paso '+next+' de 4 · '+stages[next-1];intro.append(heading);
+  if(latest){
+   try{
+    const saved=await api(route('/drafts/'+latest.id));
+    if(saved.data?.story){const story=document.createElement('p');story.style.whiteSpace='pre-wrap';story.textContent=saved.data.story;intro.append(story);}
+    if(next>1){const details=fold(intro,'Leer contenido de este paso',true);const groups=next===2?['bible','shots','utterances']:next===3?['soundRequests','musicRequests','subtitles']:[];for(const group of groups)if(saved.data?.[group])readable(details,{[group]:saved.data[group]});if(saved.review)readable(details,saved.review);}
+    if(saved.error){const error=document.createElement('p');error.textContent=saved.error.message+' Los pasos aprobados siguen guardados.';intro.append(error);}
+    if(saved.status==='ready'&&next<4)buttons(intro,[['Aprobar este paso',async()=>{await mutate(route('/drafts/'+saved.id+':approve'),{});await draw();say('Paso aprobado. El siguiente se genera únicamente cuando lo solicites.');}]]);
+   }catch(e){const error=document.createElement('p');error.textContent=e.message;intro.append(error);}
+  }
+  const label=document.createElement('label');label.textContent=latest?'Qué quieres corregir en este paso (opcional)':'Indicaciones para este paso (opcional)';
+  const instruction=document.createElement('textarea');instruction.maxLength=3000;label.append(instruction);intro.append(label);
+  buttons(intro,[[latest?'Generar otra versión de este paso':'Generar '+stages[next-1].toLowerCase(),()=>runStage(next,instruction.value)]]);
+  if(next===1){
+   const old=drafts.filter(d=>!d.stage&&d.hasStory).sort((a,b)=>b.created-a.created);
+   if(old.length){const history=fold(intro,'Recuperar historias de intentos anteriores');for(const draft of old)buttons(history,[['Recuperar historia · '+new Date(draft.created*1000).toLocaleString(),async()=>{await mutate(route('/drafts/'+draft.id+':recover'),{});await draw();say('Historia recuperada para leer y aprobar. No se llamó a Gemini.');},true]]);}
+  }
  }
- else{
-  if(p.activeDevelopment)buttons(intro,[['Continuar a producción',()=>go('Escenas')]]);
-  const more=fold(intro,'Crear una nueva versión');buttons(more,[['Crear otra versión del guion',()=>runTask('develop',route('/develop')),true]]);
- }
+ if(p.activeDevelopment)buttons(intro,[['Continuar a producción',()=>go('Escenas')]]);
+ if(approved){const restart=fold(intro,'Crear otra historia para esta idea');buttons(restart,[['Generar otra historia',()=>runStage(1),true]]);}
  parent.append(intro);
  const grouped=versions(p.developments,p.activeDevelopment);
  const show=(target,e)=>{const d=e.data,c=card(d.title,`<p class="badge">${esc(titleFor(e.approvalState))}${e.id===p.activeDevelopment?' · versión en uso':''}</p>`);
@@ -517,7 +542,7 @@ document.addEventListener('play',e=>{if(e.target.matches('video,audio'))document
 $('#back').onclick=async e=>{if(active){e.preventDefault();if(confirm('¿Pausar nuevas generaciones y volver a Animes?')){await lease(false);location.href='/';}}};
 async function editDevelopment(entity){
  const dialog=document.createElement('dialog'),box=document.createElement('div');dialog.append(box);document.body.append(dialog);
- const patches=new Map(),labels={title:'Título',bible:'Biblias',dramatic:'Dirección dramática',visual:'Dirección visual',characters:'Personajes',locations:'Lugares',props:'Objetos',beats:'Unidades dramáticas',shots:'Tomas',utterances:'Intervenciones',soundRequests:'Efectos y ambientes',musicRequests:'Música',subtitles:'Subtítulos',spanish:'Español',japanese:'Japonés',acting:'Actuación',prompt:'Instrucción',frames:'Duración (fotogramas)',before:'Estado antes',after:'Estado después',treatment:'Tratamiento visual',camera:'Cámara',name:'Nombre',description:'Descripción',seconds:'Duración (segundos)',preparationSeconds:'Preparación',tailSeconds:'Cola',perspective:'Perspectiva',text:'Texto',layout:'Distribución',referencePrompt:'Referencia visual',voice:'Voz',direction:'Dirección de voz',japaneseReading:'Lectura japonesa',minFrames:'Mínimo de fotogramas',maxFrames:'Máximo de fotogramas',leadFrames:'Acción inicial (frames)',tailFrames:'Acción final (frames)',pauseBeforeFrames:'Pausa antes (frames)',pauseAfterFrames:'Pausa después (frames)',timingReason:'Razón de la duración',gainDb:'Ganancia (dB)',sourceInSample:'Recorte de entrada (muestras)',fadeInSamples:'Fundido de entrada (muestras)',fadeOutSamples:'Fundido de salida (muestras)'};
+ const patches=new Map(),labels={title:'Título',bible:'Biblias',story:'Historia',beats:'Momentos dramáticos',shots:'Planos',utterances:'Voces del guion',soundRequests:'Efectos de sonido',musicRequests:'Música',subtitles:'Subtítulos',dramatic:'Dirección dramática',visual:'Dirección visual',characters:'Personajes',locations:'Lugares',props:'Objetos',beats:'Unidades dramáticas',shots:'Tomas',utterances:'Intervenciones',soundRequests:'Efectos y ambientes',musicRequests:'Música',subtitles:'Subtítulos',spanish:'Español',japanese:'Japonés',acting:'Actuación',prompt:'Instrucción',frames:'Duración (fotogramas)',before:'Estado antes',after:'Estado después',treatment:'Tratamiento visual',camera:'Cámara',name:'Nombre',description:'Descripción',seconds:'Duración (segundos)',preparationSeconds:'Preparación',tailSeconds:'Cola',perspective:'Perspectiva',text:'Texto',layout:'Distribución',referencePrompt:'Referencia visual',voice:'Voz',direction:'Dirección de voz',japaneseReading:'Lectura japonesa',minFrames:'Mínimo de fotogramas',maxFrames:'Máximo de fotogramas',leadFrames:'Acción inicial (frames)',tailFrames:'Acción final (frames)',pauseBeforeFrames:'Pausa antes (frames)',pauseAfterFrames:'Pausa después (frames)',timingReason:'Razón de la duración',gainDb:'Ganancia (dB)',sourceInSample:'Recorte de entrada (muestras)',fadeInSamples:'Fundido de entrada (muestras)',fadeOutSamples:'Fundido de salida (muestras)'};
  const heading=document.createElement('h2');heading.textContent='Editar guion y biblias';box.append(heading);
  const explanation=document.createElement('p');explanation.textContent='Los cambios crean una candidata. Antes de guardar verás qué recursos necesitan revisión. Las versiones aprobadas se conservan.';box.append(explanation);
  function fields(parent,value,path=[]){

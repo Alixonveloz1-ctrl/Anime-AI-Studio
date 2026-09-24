@@ -71,7 +71,8 @@ test('Cortos includes every Animes genre/subgenre and sends choices accepted by 
 });
 test('Idea selection and development stay connected to the production actions',async()=>{
  const {fixture,w,dom,click}=await setup({empty:true});await click('Generar tres ideas');
- await click('Elegir esta historia',w.document.querySelector('.grid>.card'));await click('Desarrollar esta historia');
+ await click('Elegir esta historia',w.document.querySelector('.grid>.card'));await click('Generar historia');
+ for(const label of ['Generar guion, biblias y planos','Generar sonido, música y subtítulos','Generar revisión de continuidad']){await click('Aprobar este paso');await click(label);}
  await click('Aprobar guion y biblias');assert.equal(fixture.project.activeDevelopment,'dev');assert.equal(w.document.querySelector('#steps [aria-current]').textContent,'Escenas');dom.window.close();
 });
 test('Current and candidate remain visible; previous versions are folded; one review approves',async()=>{
@@ -254,16 +255,32 @@ test('Cold worker starting after the former three-minute limit still paints its 
   assert.equal(fixture.calls.filter(c=>c.path.endsWith('/ideas:generate')).length,1);
  }finally{dom.window.close();}
 });
-test('Reference failure offers explicit saved-script recovery for the selected idea only',async()=>{
+test('Every editorial step waits for explicit approval and another generation click',async()=>{
  const {fixture,w,dom,click}=await setup({empty:true});
  try{
-  await click('Generar tres ideas');
-  fixture.jobs.push({id:'failedReferences',operation:'develop',state:'failed',settled:true,created:99999999999,recoveryIdeaId:fixture.project.ideas[0].id,result:{code:'REFERENCE_LINK',error:'Faltan referencias'}});
+  await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
+  await click('Generar historia');
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).length,1);
+  assert.match(w.document.body.textContent,/Haru espera el último tren/);
+  assert.equal(fixture.project.developments.length,0);
+  await click('Aprobar este paso');
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).length,1,'Approval cannot generate');
+  for(const [index,label] of ['Generar guion, biblias y planos','Generar sonido, música y subtítulos','Generar revisión de continuidad'].entries()){
+   await click(label);const calls=fixture.calls.filter(c=>c.path.endsWith('/develop'));
+   assert.equal(calls.length,index+2);assert.equal(calls.at(-1).body.stage,index+2);assert.ok(calls.at(-1).body.sourceDraftId);
+   if(index<2){assert.equal(fixture.project.developments.length,0);await click('Aprobar este paso');}
+  }
+  assert.equal(fixture.project.developments.length,1);assert.equal(fixture.project.developments[0].approvalState,'candidate');
+ }finally{dom.window.close();}
+});
+test('Legacy recovery reads only the story and sends no generation request',async()=>{
+ const {fixture,w,dom,click}=await setup({empty:true});
+ try{
+  await click('Generar tres ideas');fixture.project.developmentDrafts.push({id:'old',ideaId:fixture.project.ideas[0].id,hasStory:true,created:1});
   await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
-  assert.ok([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Recuperar guion guardado'));
-  assert.equal(fixture.calls.some(c=>c.path.endsWith('/develop')),false);
-  await click('Recuperar guion guardado');
-  const sent=fixture.calls.filter(c=>c.path.endsWith('/develop'));
-  assert.equal(sent.length,1);assert.equal(sent[0].body.resumeFrom,'failedReferences');
+  const button=[...w.document.querySelectorAll('button')].find(b=>b.textContent.startsWith('Recuperar historia ·'));
+  assert.ok(button);await button.onclick();
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).length,0);
+  assert.match(w.document.body.textContent,/Haru espera el último tren/);
  }finally{dom.window.close();}
 });

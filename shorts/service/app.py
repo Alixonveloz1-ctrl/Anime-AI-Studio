@@ -73,7 +73,7 @@ def project_route(pid):
     p=owned(pid)
     if request.method=='GET':
         result={**p,'entityCursors':{}}
-        for k in ('ideas','developments','assets','cues','events','timelines','previews'):
+        for k in ('ideas','developments','assets','cues','events','timelines','previews','developmentDrafts'):
             page=entity_page(pid,k);result[k]=page['items']
             if page['next']:result['entityCursors'][k]=page['next']
         return jsonify(result)
@@ -82,13 +82,16 @@ def project_route(pid):
     _,p=cloud().mutate(pid,expected(),patch);return jsonify(p)
 
 def entity_page(pid,kind,cursor=None):
-    require(kind in ('ideas','developments','assets','cues','events','timelines','previews'),'ENTITY','Lista inválida')
+    require(kind in ('ideas','developments','assets','cues','events','timelines','previews','developmentDrafts'),'ENTITY','Lista inválida')
     query=cloud().project_ref(pid).collection(kind).order_by('__name__').limit(51)
     if cursor:
         snapshot=cloud().entity_ref(pid,kind,ident(cursor)).get();require(snapshot.exists,'CURSOR','Página inexistente');query=query.start_after(snapshot)
     docs=list(query.stream());items=[x.to_dict() for x in docs[:50]]
     for row in items:
         if kind=='developments':row['dataHash']=digest(row['data'])
+        if kind=='developmentDrafts':
+            row['hasStory']=bool(row.get('data',{}).get('story') or row.get('data',{}).get('bible',{}).get('dramatic'))
+            for field in ('data','raw','stages','review'):row.pop(field,None)
         if kind=='assets':row.pop('waveform',None) # retrieved on demand by its dedicated route
     return {'items':items,'next':docs[49].id if len(docs)>50 else None}
 
@@ -123,12 +126,51 @@ def select(pid,iid):
 @app.post('/projects/<pid>/develop')
 def develop(pid):
     p=owned(pid);require(p.get('selectedIdea'),'IDEA','Elige una idea')
-    payload={'ideaId':p['selectedIdea']['id']}
-    if body().get('resumeFrom'):
-        from shorts.service.development import recovery_source
-        source=ident(body()['resumeFrom']);recovery_source(cloud(),p,source,payload['ideaId'])
-        payload['resumeFrom']=source
+    from shorts.service.development import source_for_stage
+    stage=body().get('stage',1);source=body().get('sourceDraftId')
+    prior=source_for_stage(cloud(),p,stage,source)
+    instruction=body().get('instruction','')
+    require(isinstance(instruction,str) and len(instruction)<=3000,'INSTRUCTION','La corrección admite hasta 3000 caracteres.')
+    payload={'ideaId':p['selectedIdea']['id'],'stage':stage,'sourceDraftId':source,'sourceHash':digest(prior) if source else None,'instruction':instruction}
     return submit(pid,'develop',payload)
+
+@app.get('/projects/<pid>/drafts/<eid>')
+def get_draft(pid,eid):
+    owned(pid);row=cloud().entity(pid,'developmentDrafts',eid)
+    return jsonify({k:v for k,v in row.items() if k not in ('raw','stages')})
+
+@app.post('/projects/<pid>/drafts/<eid>:recover')
+def recover_draft(pid,eid):
+    from shorts.service.development import recover_story
+    p=owned(pid);revision(p,expected())
+    # Stable ID makes a repeated tap recover the same candidate, with no model.
+    key=digest(['recover-story-v1',pid,eid])
+    ref=cloud().entity_ref(pid,'developmentDrafts',key)
+    existing=ref.get().to_dict()
+    if existing:
+        require(existing.get('ideaId')==p.get('selectedIdea',{}).get('id'),'IDEA_CHANGED','El borrador pertenece a otra idea.',409)
+        return jsonify(existing)
+    return jsonify(recover_story(cloud(),p,eid,key))
+
+@app.post('/projects/<pid>/drafts/<eid>:approve')
+def approve_draft(pid,eid):
+    from shorts.service.development import validate_stage
+    owned(pid)
+    def change(tx,current):
+        ref=cloud().entity_ref(pid,'developmentDrafts',eid);row=ref.get(transaction=tx).to_dict()
+        require(row and row.get('status')=='ready' and row.get('stage') in (1,2,3),'DRAFT','El paso no está listo para aprobar.',409)
+        require(row.get('ideaId')==current.get('selectedIdea',{}).get('id'),'IDEA_CHANGED','Cambió la idea seleccionada.',409)
+        if row['stage']>1:
+            require(current.get('activeDraft')==row.get('sourceDraftId'),'STAGE_CHANGED','Cambió el paso anterior; revisa esta versión.',409)
+            parent=cloud().entity_ref(pid,'developmentDrafts',row['sourceDraftId']).get(transaction=tx).to_dict()
+            require(parent and digest(parent['data'])==row.get('sourceHash'),'STAGE_CHANGED','Cambió el contenido anterior.',409)
+        validate_stage(row['data'],row['stage'])
+        row.update(approvalState='approved',approvedBy=current['owner'],approvedAt=time.time())
+        tx.set(ref,row);current['activeDraft']=eid
+        if row['stage']==1:current['title']=row['data']['title']
+        return row
+    row,_=cloud().mutate(pid,expected(),change);return jsonify(row)
+
 @app.post('/projects/<pid>/revisions/<kind>/<eid>:revise')
 def revise(pid,kind,eid):
     owned(pid);cloud().entity(pid,kind,eid);d=body();require(isinstance(d.get('instruction'),str) and 0<len(d['instruction'])<=3000,'INSTRUCTION','Describe la corrección')
@@ -174,6 +216,8 @@ def approve(pid,kind,eid):
             if kind=='developments':current.update(activeDevelopment=eid,stage='tomas',timelineStale=True)
             tx.create(cloud().entity_ref(pid,'approvals',new_id()),{'kind':kind,'entity':eid,'action':'select_existing_approval','author':p['owner'],'at':time.time()})
             return entity
+        if kind=='developments' and entity.get('sourceDraftId'):
+            require(entity['sourceDraftId']==current.get('activeDraft'),'STAGE_CHANGED','Cambió el guion aprobado después de esta revisión.',409)
         if kind=='assets':
             require(body().get('reviewed') is True,'ASSET_REVIEW','Abre el recurso y aprueba su contenido')
             require(entity['kind'] in ('image','veo_silent_validated','pcm'),'ASSET_REVIEW','Tipo de recurso no aprobable')

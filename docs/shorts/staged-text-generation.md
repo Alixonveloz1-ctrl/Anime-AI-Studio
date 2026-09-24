@@ -1,5 +1,7 @@
 # Generación de texto encadenada — 2026-09-24
 
+> Flujo histórico: sustituido por U013 y [manual-development.md](manual-development.md).
+
 Referencia leída: api/script.js (Vertex global, JSON, thinkingLevel LOW) e
 index.html (generación encadenada y guardado parcial). No se modifican Animes,
 sus llamadas, datos ni diseño.

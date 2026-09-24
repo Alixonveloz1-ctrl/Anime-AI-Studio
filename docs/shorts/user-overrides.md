@@ -90,3 +90,9 @@ dividir desarrollo, conservar contexto y guardar entregas. No se simplifican
 los guiones, silencios, voces japonesas, subtítulos españoles, música, SFX ni
 montaje establecidos. La generación de ideas sigue limitada a tres títulos
 y conceptos; solo la idea elegida se desarrolla. Ver staged-text-generation.md.
+
+## U013 — Pasos manuales y revisión antes de continuar (2026-09-24)
+
+Sustituye el encadenamiento automático de U012. El usuario solicita generar y leer cada entrega antes de pedir la siguiente: Historia; Guion, biblias y planos; Sonido, música y subtítulos; Revisión de continuidad. Cada trabajo solicita una sola respuesta de texto. Aprobar no genera el paso siguiente. Se conserva el contexto aprobado, los requisitos de producción y el diseño.
+
+Recuperar una historia anterior no exige voces, música ni duración final y no llama a modelos. Los errores posteriores conservan las entregas aprobadas. Ver [manual-development.md](manual-development.md).

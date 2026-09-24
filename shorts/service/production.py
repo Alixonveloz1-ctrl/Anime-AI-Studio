@@ -48,10 +48,10 @@ def run_job(cloud,j,p):
     if op=='develop':
         idea=cloud.entity(pid,'ideas',data['ideaId'])
         require(p.get('selectedIdea',{}).get('id')==idea['id'] and p['selectedIdea']['hash']==digest(idea),'IDEA_CHANGED','La idea seleccionada cambió')
-        from shorts.service.development import develop, recover
-        d=recover(cloud,j,p,idea) if data.get('resumeFrom') else develop(cloud,provider,j,p,idea)
-        review=provider.text(RULES+'\nRevisa guion: intención japonés/español, continuidad espacial y emoción específica al género. Devuelve {issues:[],coverage:[],nativeQualityGuaranteed:false}. No inventes revisión audiovisual.\n'+json.dumps(d,ensure_ascii=False))
-        return {'developmentId':entity('developments',{'data':d,'review':review,'ideaId':idea['id']})['id']}
+        from shorts.service.development import develop
+        result=develop(cloud,provider,j,p,idea)
+        if data.get('stage',1)!=4:return result
+        return {'developmentId':entity('developments',{'data':result['data'],'review':result['review'],'ideaId':idea['id'],'sourceDraftId':data['sourceDraftId']})['id']}
     if op=='revise':
         from shorts.core.revisions import scoped_value,replace_scope,idea_scope,impact,changes
         old=cloud.entity(pid,data['kind'],data['entityId'])
