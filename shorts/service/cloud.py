@@ -25,7 +25,7 @@ class Cloud:
         require(d and d['owner']==owner,'PROJECT_ACCESS','Proyecto no disponible',404)
         return d
     def entity_ref(self,p,k,i):
-        require(k in ('ideas','developments','assets','cues','events','timelines','previews','corrections','approvals','uploads','references','batches'),'ENTITY','Entidad inválida',400)
+        require(k in ('ideas','developments','developmentDrafts','assets','cues','events','timelines','previews','corrections','approvals','uploads','references','batches'),'ENTITY','Entidad inválida',400)
         return self.project_ref(p).collection(k).document(ident(i))
     def entity(self,p,k,i):
         d=self.entity_ref(p,k,i).get().to_dict();require(d,'NOT_FOUND','Recurso no encontrado',404);return d

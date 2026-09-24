@@ -53,10 +53,13 @@ class Providers:
         # countTokens is a free preflight. It cannot trigger a generation.
         data=self.post(vertex(self.c,kind,'countTokens'),{'contents':contents})
         require(type(data.get('totalTokens')) is int and data['totalTokens']<=INPUT_LIMIT,'INPUT_TOKENS','Entrada supera el límite admitido por esta operación; reduce el alcance antes de generar')
-    def text(self,prompt,parts=None,analysis=False,max_output_tokens=TEXT_OUTPUT_LIMIT):
+    def text(self,prompt,parts=None,analysis=False,max_output_tokens=TEXT_OUTPUT_LIMIT,response_schema=None):
         kind='analysis' if analysis else 'text'
         require(type(max_output_tokens) is int and 1<=max_output_tokens<=TEXT_OUTPUT_LIMIT,'OUTPUT_LIMIT','Límite de salida inválido')
         body={'contents':[{'role':'user','parts':[{'text':prompt},*(parts or [])]}],'generationConfig':{'responseMimeType':'application/json','temperature':.7,'maxOutputTokens':max_output_tokens}}
+        if response_schema is not None:
+            require(isinstance(response_schema,dict),'RESPONSE_SCHEMA','Estructura de respuesta inválida')
+            body['generationConfig']['responseSchema']=response_schema
         self.check_input(kind,body['contents'])
         data=self.post(vertex(self.c,kind),body,kind)
         candidate=(data.get('candidates') or [{}])[0]

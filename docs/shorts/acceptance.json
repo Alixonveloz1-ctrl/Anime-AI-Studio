@@ -302,13 +302,20 @@
       "shorts/service/production.py",
       "cortos/app.js",
       "cortos/studio.mjs",
-      "cortos/presentation.mjs"
+      "cortos/presentation.mjs",
+      "shorts/service/development_schema.py",
+      "shorts/service/providers.py",
+      "docs/shorts/development-schema-fix.md"
     ],
-    "tests": [],
-    "fixture": "not_covered",
+    "tests": [
+      "tests/shorts/test_ideas.py:test_A018_reference_descriptions_required_for_every_bible_kind",
+      "tests/shorts/test_ideas.py:test_A018_invalid_reference_is_named_and_saved_without_review_or_approval",
+      "tests/shorts/test_ideas.py:test_A018_schema_reaches_real_provider_request_without_retry"
+    ],
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Tipos de intervención/acción modelados; falta revisión de guion generado."
+    "remaining": "Tipos de intervención/acción modelados; falta revisión de guion generado. Esquema requerido y conservación de respuesta incompleta probados con fixtures; falta instalar y probar desarrollo con Gemini real."
   },
   {
     "id": "A017",
@@ -336,13 +343,20 @@
       "shorts/service/production.py",
       "cortos/app.js",
       "cortos/studio.mjs",
-      "cortos/presentation.mjs"
+      "cortos/presentation.mjs",
+      "shorts/service/development_schema.py",
+      "shorts/service/providers.py",
+      "docs/shorts/development-schema-fix.md"
     ],
-    "tests": [],
-    "fixture": "not_covered",
+    "tests": [
+      "tests/shorts/test_ideas.py:test_A018_reference_descriptions_required_for_every_bible_kind",
+      "tests/shorts/test_ideas.py:test_A018_invalid_reference_is_named_and_saved_without_review_or_approval",
+      "tests/shorts/test_ideas.py:test_A018_schema_reaches_real_provider_request_without_retry"
+    ],
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Biblia, voz y lecturas editables por personaje; falta comprobar pronunciación y consistencia en voces reales."
+    "remaining": "Biblia, voz y lecturas editables por personaje; falta comprobar pronunciación y consistencia en voces reales. Esquema requerido y conservación de respuesta incompleta probados con fixtures; falta instalar y probar desarrollo con Gemini real."
   },
   {
     "id": "A019",
