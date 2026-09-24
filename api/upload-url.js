@@ -89,6 +89,23 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({ project });
       }
 
+      // Owner-only metadata recovery; existing generation endpoints are unchanged.
+      if (action === 'projectRecovery' || action === 'projectRecover') {
+        const id = safeProjectId(body.id);
+        if (!id) return res.status(400).json({ error:'project id inválido' });
+        const { token } = await auth();
+        const recovery = require('./_lib/project-recovery');
+        try {
+          if (action === 'projectRecover') {
+            const project = await recovery.restoreProject(token, id, body.key, body.expectedGeneration);
+            return res.status(200).json({ project });
+          }
+          const project = await readProjectManifest(token, id);
+          if (!project) return res.status(404).json({ error:'Proyecto no encontrado en el bucket' });
+          return res.status(200).json(await recovery.inspectProject(token, id, project));
+        } catch (e) { return res.status(e.status === 412 ? 409 : e.status || 500).json({ error:e.message }); }
+      }
+
       if (action === 'projectSave') {
         const id = safeProjectId(body.id);
         const data = body.data;
@@ -107,6 +124,7 @@ module.exports = async function handler(req, res) {
         if (Buffer.byteLength(raw, 'utf8') > 3.5 * 1024 * 1024) {
           return res.status(413).json({ error:'project.json demasiado grande; el estado no debe contener medios binarios' });
         }
+        await require('./_lib/project-recovery').preserveManifest(token, id, existing);
         await gcsUpload(token, cfg.bucket, manifestPath(id), raw, 'application/json; charset=utf-8');
         return res.status(200).json({ ok:true, project:{ id, name:manifest.name, created:manifest.created, updated:manifest.updated } });
       }

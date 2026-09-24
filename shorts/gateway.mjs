@@ -26,9 +26,19 @@ export async function handleShortsRequest(request, env = {}) {
     return json(400, { error: 'Ruta no válida.' });
   if (!['GET', 'POST', 'PATCH'].includes(request.method)) return json(405, { error: 'Método no admitido.' });
   const headers = { 'Content-Type': 'application/json' };
-  for (const key of ['authorization', 'if-match', 'idempotency-key']) {
+  for (const key of ['authorization', 'idempotency-key']) {
     const value = request.headers.get(key);
     if (value) headers[key] = value;
+  }
+  if (request.method !== 'GET') {
+    // Translate only at the service boundary; preserve the installed worker's
+    // optimistic concurrency contract without involving Vercel's HTTP cache.
+    const revision = request.headers.get('x-shorts-revision') || request.headers.get('if-match');
+    if (revision) {
+      const value = revision.replace(/^"|"$/g, '');
+      if (!/^\d+$/.test(value)) return json(400, { error: 'Revisión de Cortos inválida.' });
+      headers['if-match'] = value;
+    }
   }
   const origin = request.headers.get('origin');
   if (origin) headers['X-Shorts-Origin'] = origin;

@@ -19,13 +19,20 @@
     "files": [
       "shorts/gateway.mjs",
       "cortos/index.html",
-      "tests/shorts/legacy-regression.cjs"
+      "tests/shorts/legacy-regression.cjs",
+      "animes/recovery.js",
+      "api/_lib/project-recovery.js",
+      "api/upload-url.js"
     ],
-    "tests": [],
-    "fixture": "not_covered",
+    "tests": [
+      "tests/recovery/project-recovery.test.cjs",
+      "tests/shorts/ui/recovery.test.mjs",
+      "tests/shorts/ui/animes-loading.test.mjs"
+    ],
+    "fixture": "partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Código legado intacto; health y configuración de montaje leídos en el despliegue anterior. Falta abrir/exportar una copia de proyecto antiguo con autorización; la disponibilidad configurada no acredita la ejecución del contenedor."
+    "remaining": "Fixtures de lectura, respaldo y recuperación pasan. Log real del proyecto p1789929671378 muestra metadata sin escenas/personajes; falta restaurar su contenido real y exportarlo. No se declara recuperación completa."
   },
   {
     "id": "A003",
@@ -39,16 +46,20 @@
       "auth/ready.js",
       "api/upload-url.js",
       "auth/client.mjs",
-      "tests/shorts/ui/session-mount.test.mjs"
+      "tests/shorts/ui/session-mount.test.mjs",
+      "animes/recovery.js",
+      "api/_lib/project-recovery.js"
     ],
     "tests": [
       "tests/shorts/legacy-regression.cjs",
-      "tests/shorts/ui/animes-loading.test.mjs"
+      "tests/shorts/ui/animes-loading.test.mjs",
+      "tests/recovery/project-recovery.test.cjs",
+      "tests/shorts/ui/recovery.test.mjs"
     ],
-    "fixture": "passed_local_partial",
+    "fixture": "partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Diez casos de carga ejecutan el código de Animes con fixtures. Plantillas, controles y generadores se comparan con baseline. La API añade recuentos de diagnóstico. Pendiente comprobar el archivo concreto del propietario."
+    "remaining": "Fixtures de lectura, respaldo y recuperación pasan. Log real del proyecto p1789929671378 muestra metadata sin escenas/personajes; falta restaurar su contenido real y exportarlo. No se declara recuperación completa."
   },
   {
     "id": "A004",
@@ -92,16 +103,20 @@
       "auth/ready.js",
       "api/upload-url.js",
       "auth/client.mjs",
-      "tests/shorts/ui/session-mount.test.mjs"
+      "tests/shorts/ui/session-mount.test.mjs",
+      "animes/recovery.js",
+      "api/_lib/project-recovery.js"
     ],
     "tests": [
       "tests/shorts/legacy-regression.cjs",
-      "tests/shorts/ui/animes-loading.test.mjs"
+      "tests/shorts/ui/animes-loading.test.mjs",
+      "tests/recovery/project-recovery.test.cjs",
+      "tests/shorts/ui/recovery.test.mjs"
     ],
-    "fixture": "passed_local_partial",
+    "fixture": "partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Diez casos de carga ejecutan el código de Animes con fixtures. Plantillas, controles y generadores se comparan con baseline. La API añade recuentos de diagnóstico. Pendiente comprobar el archivo concreto del propietario."
+    "remaining": "Fixtures de lectura, respaldo y recuperación pasan. Log real del proyecto p1789929671378 muestra metadata sin escenas/personajes; falta restaurar su contenido real y exportarlo. No se declara recuperación completa."
   },
   {
     "id": "A007",
@@ -191,12 +206,13 @@
     ],
     "tests": [
       "tests/shorts/ui/studio.test.mjs",
-      "tests/shorts/ui/session-mount.test.mjs"
+      "tests/shorts/ui/session-mount.test.mjs",
+      "tests/shorts/gateway.test.cjs"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "U008: formulario único, catálogo completo de Animes, subgéneros persistidos y tres ideas verificados con fixtures y contrato Python. Recorrido real de Safari y calidad con proveedores pendientes."
+    "remaining": "Creación real devuelve 201; lectura fallaba con 412. Corregido control de revisión en gateway y reproducido con fixtures. Generación con modelos reales pendiente de prueba autorizada."
   },
   {
     "id": "A012",

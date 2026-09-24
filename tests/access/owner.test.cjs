@@ -143,3 +143,8 @@ test('both sections use one gate; no cookie, invalid session and network failure
     assert.equal(allowed.headers.get('cache-control'), 'private, no-store');
   }
 });
+
+test('New recovery reads and restores reject unauthorized access before storage',async()=>{
+ const handler=require('../../api/upload-url');
+ for(const action of ['projectRecovery','projectRecover']){const out=response();await handler(request({url:'/api/upload-url',body:{action,id:'p12345678',key:'deleted:3',expectedGeneration:'4'}}),out);assert.equal(out.statusCode,401);assert.equal(calls.length,0);}
+});

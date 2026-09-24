@@ -11,7 +11,9 @@ const html=await fs.readFile(new URL('../../../cortos/index.html',import.meta.ur
 let source=await fs.readFile(new URL('../../../cortos/studio.mjs',import.meta.url),'utf8');
 source=source.replace(/^import .*;\n/gm,'').replace('export async function mountStudio','async function mountStudio').replace('export {api,say};','');
 async function setup(options={}){
- const fixture=createFixture(options),dom=new JSDOM(html,{url:'https://fixture.invalid/cortos/',runScripts:'outside-only'}),w=dom.window;
+ const fixture=createFixture(options);
+ const baseTransport=fixture.transport;fixture.transport=async(url,request={})=>{if(options.nonJsonError&&decodeURIComponent(url).endsWith('/ideas:generate')){options.errorRequests=(options.errorRequests||0)+1;return new Response('',{status:502});}if(new Headers(request.headers).has('If-Match'))return new Response('',{status:412});return baseTransport(url,request);};
+ const dom=new JSDOM(html,{url:'https://fixture.invalid/cortos/',runScripts:'outside-only'}),w=dom.window;
  Object.assign(w,{...catalogue,steps:presentation.steps,titleFor:presentation.label,terminal:presentation.terminal,versions:presentation.versions,taskActions:presentation.taskActions,entityName:presentation.entityName,fieldLabel:presentation.fieldLabel,TextEncoder,structuredClone,fetch:fixture.transport,confirm:()=>{throw new Error('Unexpected confirmation')},prompt:()=>null});
  Object.defineProperty(w.crypto,'subtle',{value:webcrypto.subtle});w.setInterval=()=>0;
  w.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','')};w.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open')};w.HTMLMediaElement.prototype.pause=function(){};
@@ -85,4 +87,20 @@ test('Subtitle approval, automatic preview preparation and final export are conn
  await click('Aprobar subtítulos revisados');await click('Preparar vista previa');await click('Exportar');await click('Aprobar y exportar');await click('Descargar archivos');
  assert.ok(fixture.calls.some(c=>c.path.endsWith('/timeline:compile')));assert.ok(fixture.calls.some(c=>c.path.endsWith('/renders')));assert.equal(w.document.querySelectorAll('.download-list a').length,2);
  assert.equal([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Compilar montaje'),false);dom.window.close();
+});
+
+test('Cortos reads never carry a write precondition; writes retain the expected revision',async()=>{
+ const {fixture,dom,click}=await setup({empty:true});
+ try {
+  await click('Generar tres ideas');
+  const reads=fixture.calls.filter(c=>c.method==='GET'),writes=fixture.calls.filter(c=>c.method!=='GET');
+  assert.ok(reads.length>0);assert.ok(writes.length>0);
+  for(const c of reads){assert.equal(new Headers(c.headers).has('If-Match'),false);assert.equal(new Headers(c.headers).has('X-Shorts-Revision'),false);}
+  for(const c of writes)assert.match(new Headers(c.headers).get('X-Shorts-Revision'),/^\d+$/);
+ }finally{dom.window.close();}
+});
+
+test('An empty gateway error is explained and never retried as a paid generation',async()=>{
+ const options={empty:true,nonJsonError:true},{w,dom}=await setup(options);
+ try{await [...w.document.querySelectorAll('button')].find(b=>b.textContent==='Generar tres ideas').onclick();assert.match(w.document.querySelector('#notice').textContent,/respuesta del servicio \(502\)/);assert.equal(options.errorRequests,1);}finally{dom.window.close();}
 });

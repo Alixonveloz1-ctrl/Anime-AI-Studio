@@ -13,8 +13,16 @@ function action(label,fn,secondary=false){const b=document.createElement('button
 function card(title,content=''){const e=document.createElement('article');e.className='card';e.innerHTML=`<h3>${esc(title)}</h3>${content}`;return e;}
 function buttons(parent,items){const row=document.createElement('div');row.className='actions';items.forEach(([label,fn,secondary])=>row.append(action(label,fn,secondary)));parent.append(row);return row;}
 async function api(path,method='GET',data,headers={}){
-  const h={...headers};if(user)h.Authorization='Bearer '+await user.getIdToken();if(data)h['Content-Type']='application/json';if(p&&!h['If-Match'])h['If-Match']=String(p.revision);
-  const r=await transport('/api/shorts?path='+encodeURIComponent(path),{method,headers:h,body:data?JSON.stringify(data):undefined});const j=await r.json();if(!r.ok){const error=new Error(j.error||'No se completó la solicitud.');error.status=r.status;error.code=j.code;throw error;}return j;
+  const h={...headers};if(user)h.Authorization='Bearer '+await user.getIdToken();if(data)h['Content-Type']='application/json';
+  // Application revisions are not HTTP entity tags. A CDN evaluates If-Match
+  // before our gateway and can replace a valid read with an empty 412 response.
+  const revision=h['If-Match']??(p?String(p.revision):undefined);delete h['If-Match'];
+  if(method!=='GET'&&revision!==undefined)h['X-Shorts-Revision']=String(revision);
+  const r=await transport('/api/shorts?path='+encodeURIComponent(path),{method,headers:h,cache:'no-store',body:data?JSON.stringify(data):undefined});
+  let j;try{j=await r.json();}catch{
+    const error=new Error(`No se pudo leer la respuesta del servicio (${r.status}). La solicitud no se repetirá automáticamente.`);error.status=r.status;throw error;
+  }
+  if(!r.ok){const error=new Error(j.error||'No se completó la solicitud.');error.status=r.status;error.code=j.code;throw error;}return j;
 }
 const route=s=>`/projects/${p.id}${s}`;
 async function getProject(id){

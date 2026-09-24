@@ -35,7 +35,7 @@ jobs:
         run: |
           python -m unittest discover -s tests/shorts -p 'test_*.py' -v
           node --test tests/shorts/gateway.test.cjs tests/shorts/hash.test.mjs
-          node --test tests/access/*.test.cjs
+          node --test tests/access/*.test.cjs tests/recovery/*.test.cjs
           node --test tests/shorts/ui/*.test.mjs
           node --check cortos/app.js
           node --check cortos/studio.mjs

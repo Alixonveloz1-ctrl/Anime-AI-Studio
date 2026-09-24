@@ -53,6 +53,7 @@ async function setup(t, {rejectList=false, data=saved}={}) {
     if(url.startsWith('https://fixture.invalid/missing/')) return new Response('',{status:404});
     assert.equal(url,'/api/upload-url','No generation or unexpected endpoints');
     if(body.action==='projectList') return rejectList ? json({error:'Lista no disponible'},503) : json({projects:[{id:pid,name:saved.universe.title,updated:2}]});
+    if(body.action==='projectRecovery') return json({currentGeneration:'7',images:2,imageReferences:2,candidates:[],warnings:[]});
     if(body.action==='projectGet') return network.rejectGet ? json({error:'Lectura no disponible'},503) : json({project:{id:body.id,data}});
     if(body.action==='assetSign' && body.method==='GET') return json({url:'https://fixture.invalid/missing/'+body.key});
     assert.fail('Unexpected write or generation: '+JSON.stringify(body));
@@ -60,6 +61,7 @@ async function setup(t, {rejectList=false, data=saved}={}) {
   w.setInterval=()=>0;
   w.localStorage.setItem('anime_cloud_migrated_v1','1');
   w.eval(fs.readFileSync(new URL('auth/ready.js',root),'utf8'));
+  w.eval(fs.readFileSync(new URL('animes/recovery.js',root),'utf8'));
   w.eval(script.replace('(async function init() {','window.testInit = (async function init() {') + '\nwindow.testPage={loadStateFor,switchProject,applyStateData,renderAll,openProjectsModal,getState:()=>state};');
   // Baseline comparisons may reject during startup; preserve the rejection for
   // authorize() without reporting it as an unrelated unhandled promise.
@@ -194,4 +196,17 @@ test('A failed bucket cache read is reported as unavailable, never as a new unge
  assert.match(w.document.querySelector('#charactersList').textContent,/No se pudo leer parte del material/);
  const generate=[...w.document.querySelectorAll('#charactersList button')].find(b=>b.textContent.includes('Generar Imagen'));
  assert.equal(generate.disabled,true,'Cannot unknowingly regenerate a resource whose read failed');
+});
+
+test('Empty cloud metadata preserves a richer phone copy and never announces complete recovery',async t=>{
+ const empty={...saved,characters:[],episodes:{1:[]},currentEpisode:1};
+ const {w,authorize,calls}=await setup(t,{data:empty});
+ w.localStorage.setItem('proj_'+pid,JSON.stringify(saved));
+ await authorize();await w.testPage.switchProject(pid);
+ await new Promise(r=>setTimeout(r,20));
+ assert.equal(JSON.parse(w.localStorage.getItem('anime_recovery_'+pid)).episodes[2].length,1);
+ assert.match(w.document.querySelector('#animes-recovery').textContent,/2 imágenes/);
+ assert.match(w.document.querySelector('#animes-recovery').textContent,/Recuperar copia del teléfono/);
+ assert.doesNotMatch(w.document.querySelector('#toast').textContent,/Proyecto cargado desde/);
+ assert.equal(calls.some(c=>['projectSave','projectRecover'].includes(c.body.action)),false,'Inspection never overwrites metadata or regenerates media');
 });

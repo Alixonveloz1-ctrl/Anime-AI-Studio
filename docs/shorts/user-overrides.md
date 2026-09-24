@@ -59,3 +59,7 @@ El catálogo independiente de Cortos incluye las 17 opciones de género y los 23
 ## Evidencia y límites
 
 La matriz conserva A001–A100 y añade `effectiveRequirement`/`override` en las filas afectadas. El comprobador sigue cotejando literalmente los cien requisitos originales. Las pruebas de interfaz usan un transporte sintético explícito separado de la aplicación real; no prueban Firebase, modelos ni calidad de medios. Las pruebas FFmpeg sí generan/decodifican medios sintéticos. La aceptación con servicios reales y Safari/iPhone sigue pendiente.
+
+## U009 — Recuperar material previo y resolver Cortos (2026-09-24)
+
+El propietario confirma escenas e imágenes anteriores; que el nombre aparezca en la lista no satisface la recuperación. Se exige abrir el contenido real sin regenerarlo. La búsqueda y restauración deben preservar las copias existentes y comprobar el proyecto concreto antes de declarar el problema resuelto. El fallo 412 de Cortos se corrige manteniendo concurrencia/idempotencia y el worker instalado. Evidencia y límites: [recovery-and-http-fix.md](recovery-and-http-fix.md).

@@ -319,6 +319,7 @@
 <body>
 <nav aria-label="Secciones" style="padding:8px 16px;text-align:right"><button type="button" data-studio-signout style="margin-right:24px;background:none;border:0;color:inherit;font:inherit;cursor:pointer">Salir</button><a href="/cortos/" style="color:inherit">Cortos de anime →</a></nav>
 <script src="/auth/ready.js"></script>
+<script src="/animes/recovery.js"></script>
 <script type="module" src="/auth/animes.mjs"></script>
 
 
@@ -1888,6 +1889,7 @@ async function loadStateFor(pid) {
     const remote = await cloudLoadProject(pid);
     if (remote?.data) {
       if (!usable(remote.data)) throw new Error('El archivo guardado no tiene el formato esperado. No se modificó el proyecto abierto.');
+      window.animeRecovery?.remember(pid, remote.data);
       applyStateData(pid, remote.data);
       try { localStorage.setItem(`proj_${pid}`, JSON.stringify(remote.data)); } catch (_) {}
       return true;
@@ -2030,9 +2032,11 @@ async function switchProject(pid) {
     closeModal();
     const result = await rendering;
     if (state.projectId !== pid) return;
-    if (fromCloud) await pruneDeviceCacheExcept(pid);
+    if (fromCloud && !window.animeRecovery?.hasRetained(pid)) await pruneDeviceCacheExcept(pid);
     const incomplete = result.some(value => value?.failed);
-    showToast(incomplete ? 'Proyecto abierto. Algunos archivos necesitan volver a cargarse.' : fromCloud ? 'Proyecto cargado desde Google Cloud' : 'Proyecto abierto desde la copia de este dispositivo; Google Cloud no respondió.', incomplete || !fromCloud ? 'error' : 'success');
+    window.animeRecovery?.present(state, switchProject);
+    const noScenes = !Object.values(state.episodes || {}).some(rows => rows?.length);
+    showToast(fromCloud && noScenes && state.universe ? 'La copia abierta no contiene escenas. Comprobando archivos guardados…' : incomplete ? 'Proyecto abierto. Algunos archivos necesitan volver a cargarse.' : fromCloud ? 'Proyecto cargado desde Google Cloud' : 'Proyecto abierto desde la copia de este dispositivo; Google Cloud no respondió.', incomplete || !fromCloud ? 'error' : 'success');
   } catch (e) {
     openErrorModal('No se pudo cargar el proyecto', e.message);
   }
@@ -8862,6 +8866,7 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
 });
 
 function renderAll() {
+  window.animeRecovery?.invalidate(state.projectId);
   renderUniverse();
   return Promise.all([renderCharacters(), renderScenes()]);
 }
@@ -8893,7 +8898,7 @@ function renderAll() {
   } else {
     projects.sort((a,b) => Number(b.updated || 0) - Number(a.updated || 0));
     const fromCloud = await loadStateFor(projects[0].id);
-    if (fromCloud) await pruneDeviceCacheExcept(projects[0].id);
+    if (fromCloud && !window.animeRecovery?.hasRetained(projects[0].id)) await pruneDeviceCacheExcept(projects[0].id);
   }
   updateApiDot();
   // Antes de dibujar nada: el formato (9:16 / 16:9) decide cómo se recortan las
@@ -8907,6 +8912,7 @@ function renderAll() {
   cargarVoces();
   await renderAll();
   mostrarUltimoMontaje();
+  window.animeRecovery?.present(state, switchProject);
 })().catch(e => openErrorModal('No se pudo abrir el estudio', e.message));
 
 </script>
