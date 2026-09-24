@@ -1563,11 +1563,17 @@
       "infra/shorts/install.py",
       "infra/shorts/connect.py"
     ],
-    "tests": [],
-    "fixture": "not_covered",
+    "tests": [
+      "tests/shorts/test_installer.py:test_A091_firebase_setup_keeps_project_through_operations_and_identity",
+      "tests/shorts/test_installer.py:test_A091_environment_uses_individual_json_objects_and_upsert",
+      "tests/shorts/test_installer.py:test_A091_pinned_cli_receives_private_json_file",
+      "tests/shorts/test_installer.py:test_A091_cli_rejects_top_level_arrays_before_execution",
+      "tests/shorts/vercel-cli-contract.mjs"
+    ],
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Menú conecta Firebase/Vercel por autorización del navegador; falta ejecutar de principio a fin en iPhone."
+    "remaining": "Firebase activado y Google habilitado. IMG_3317 confirma recuperación y propietario; fallo posterior en Vercel. CLI 59.25.4 real reproduce array enviado como text/plain; cinco objetos individuales pasan loopback. Falta ejecutar el conector corregido con APIs reales y comprobar entrada desde iPhone."
   },
   {
     "id": "A092",
@@ -1585,12 +1591,17 @@
       "tests/shorts/test_installer.py:test_A092_read_timeout_stops_namespace_checks",
       "tests/shorts/test_installer.py:test_A092_google_noninteractive_preserves_vercel_browser_login",
       "tests/shorts/test_installer.py:test_A092_google_timeout_does_not_repeat_uncertain_change",
-      "tests/shorts/test_installer.py:test_A092_authorized_api_enable_precedes_namespace_queries"
+      "tests/shorts/test_installer.py:test_A092_authorized_api_enable_precedes_namespace_queries",
+      "tests/shorts/test_installer.py:test_A092_google_rejection_retains_reason_and_selected_quota_project",
+      "tests/shorts/test_installer.py:test_A092_vercel_error_keeps_reason_but_never_values",
+      "tests/shorts/test_installer.py:test_A092_vercel_timeout_and_invalid_response_do_not_retry",
+      "tests/shorts/test_installer.py:test_A092_environment_failure_stops_before_later_variables",
+      "tests/shorts/test_installer.py:test_A092_environment_failure_cannot_start_deployment"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Primer intento real detenido tras consentimiento; defecto de preguntas ocultas corregido con pruebas locales. Falta repetir instalación y autorizaciones cloud desde iPhone."
+    "remaining": "Conector conserva motivo Vercel, oculta valores y limita espera sin reintento propio. Pruebas locales de rechazo, timeout y configuración parcial aprobadas. No requiere reinstalación del worker. Falta confirmar conexión real; no se declara aplicación lista."
   },
   {
     "id": "A093",
@@ -1606,9 +1617,11 @@
       "cortos/app.js"
     ],
     "tests": [
-      "tests/shorts/ui/studio.test.mjs"
+      "tests/shorts/ui/studio.test.mjs",
+      "tests/shorts/test_installer.py:test_A093_connector_update_reuses_worker_only_for_allowed_changes",
+      "tests/shorts/test_installer.py:test_A093_worker_or_runtime_changes_still_require_installation"
     ],
-    "fixture": "not_covered",
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
     "remaining": "Lanzador y ausencia de controles de instalación comprobados localmente. Falta instalación/recuperación real desde Cloud Shell/iPhone con la cuenta indicada por el usuario.",

@@ -139,6 +139,80 @@ class ConnectorTests(unittest.TestCase):
         spec=importlib.util.spec_from_file_location('shorts_connect',ROOT/'infra/shorts/connect.py')
         self.c=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.c)
 
+    def test_A091_environment_uses_individual_json_objects_and_upsert(self):
+        values={'SHORTS_ENABLED':'true','SHORTS_FIREBASE_WEB_CONFIG':'{"apiKey":"fixture"}','STUDIO_ALLOWED_EMAILS':'owner@example.com'}
+        with patch.object(self.c,'vercel',return_value={}) as api:
+            self.c.branch_vars(None,'project','team',values)
+        self.assertEqual(api.call_count,len(values))
+        for call,(key,value) in zip(api.call_args_list,values.items()):
+            self.assertIn('upsert=true',call.args[1]);self.assertIn('teamId=team',call.args[1])
+            self.assertEqual(call.args[2],'POST')
+            self.assertEqual(call.args[3],{'key':key,'value':value,'type':'encrypted','target':['production']})
+
+    def test_A091_pinned_cli_receives_private_json_file(self):
+        payload={'key':'SHORTS_ENABLED','value':'true','type':'encrypted','target':['production']}
+        paths=[]
+        def run(args,**kwargs):
+            self.assertEqual(args[:3],['npx','--yes','vercel@59.25.4'])
+            self.assertIn('--non-interactive',args)
+            path=Path(args[args.index('--input')+1]);paths.append(path)
+            self.assertEqual(path.stat().st_mode & 0o777,0o600)
+            self.assertEqual(json.loads(path.read_text()),payload)
+            self.assertEqual(kwargs['stdin'],subprocess.DEVNULL)
+            self.assertEqual(kwargs['timeout'],120)
+            self.assertEqual(kwargs['env']['NO_UPDATE_NOTIFIER'],'1')
+            return subprocess.CompletedProcess(args,0,'{"created":[]}','')
+        with patch.object(self.c.subprocess,'run',side_effect=run):
+            self.assertEqual(self.c.vercel(None,'/fixture','POST',payload),{'created':[]})
+        self.assertFalse(paths[0].exists())
+
+    def test_A091_cli_rejects_top_level_arrays_before_execution(self):
+        with patch.object(self.c.subprocess,'run') as run:
+            with self.assertRaisesRegex(ValueError,'no una lista'):
+                self.c.vercel(None,'/fixture','POST',[{'key':'SHORTS_ENABLED'}])
+            run.assert_not_called()
+
+    def test_A092_vercel_error_keeps_reason_but_never_values(self):
+        cfg='{"apiKey":"private-fixture-key","appId":"private-fixture-app"}'
+        payload={'key':'SHORTS_FIREBASE_WEB_CONFIG','value':cfg}
+        stdout=json.dumps({'error':{'code':'bad_request','message':'Invalid JSON '+cfg},'value':'stdout-never-print'})
+        stderr='Error: HTTP 400 Bearer bearer-secret vcp_vercel-secret apiKey="private-fixture-key"'
+        result=subprocess.CompletedProcess([],1,stdout,stderr)
+        with patch.object(self.c.subprocess,'run',return_value=result) as run:
+            with self.assertRaises(RuntimeError) as caught:
+                self.c.vercel(None,'/v10/projects/p/env','POST',payload)
+        message=str(caught.exception)
+        self.assertIn('POST /v10/projects/p/env',message)
+        self.assertIn('bad_request',message);self.assertIn('Invalid JSON',message)
+        for secret in ('private-fixture-key','private-fixture-app','stdout-never-print','bearer-secret','vcp_vercel-secret'):
+            self.assertNotIn(secret,message)
+        self.assertEqual(run.call_count,1)
+
+    def test_A092_vercel_timeout_and_invalid_response_do_not_retry(self):
+        for outcome in (subprocess.TimeoutExpired(['npx'],120),subprocess.CompletedProcess([],0,'<html>private-body</html>','')):
+            with self.subTest(outcome=type(outcome).__name__):
+                with patch.object(self.c.subprocess,'run',side_effect=[outcome] if isinstance(outcome,Exception) else None,return_value=outcome) as run:
+                    with self.assertRaises(RuntimeError) as caught:
+                        self.c.vercel(None,'/v13/deployments','POST',{'name':'fixture'})
+                self.assertEqual(run.call_count,1);self.assertNotIn('private-body',str(caught.exception))
+
+    def test_A092_environment_failure_stops_before_later_variables(self):
+        with patch.object(self.c,'vercel',side_effect=[{},RuntimeError('fixture rejected')]) as api:
+            with self.assertRaisesRegex(RuntimeError,'fixture rejected'):
+                self.c.branch_vars(None,'project','team',{'SHORTS_ENABLED':'true','SHORTS_ENVIRONMENT':'production','STUDIO_ALLOWED_EMAILS':'owner@example.com'})
+        self.assertEqual(api.call_count,2)
+
+    def test_A092_environment_failure_cannot_start_deployment(self):
+        project={'id':'p','name':'site','link':{'productionBranch':'main','repoId':1}}
+        state={'project':'gcp','bucket':'b','url':'https://fixture.invalid','commit':'a'*40,'revision':'r','region':'us-central1'}
+        def g(*args):
+            if args[:2]==('auth','list'):return 'owner@example.com'
+            return json.dumps({'spec':{'containers':[{'env':[{'name':'SHORTS_ALLOWED_EMAILS','value':'owner@example.com'}]}]}})
+        with patch.object(self.c,'find_project',return_value=(project,'team')),patch.object(self.c,'connection_release',return_value='a'*40),patch.object(self.c,'firebase',return_value={'projectId':'gcp'}),patch.object(self.c,'branch_vars',side_effect=RuntimeError('env rejected')),patch.object(self.c,'vercel') as api:
+            with self.assertRaisesRegex(RuntimeError,'env rejected'):
+                self.c.connect(None,g,lambda *_:'Autorizar conexión',state,Mock())
+            api.assert_not_called()
+
     def test_A092_google_rejection_retains_reason_and_selected_quota_project(self):
         token='private-oauth-value'
         body={'error':{'status':'PERMISSION_DENIED','message':'Quota project required. Bearer '+token,
@@ -216,7 +290,7 @@ class ConnectorTests(unittest.TestCase):
     def test_A086_environment_is_branch_preview_only(self):
         with patch.object(self.c,'vercel',return_value={}) as api:
             self.c.branch_vars(None,'project','team',{'SHORTS_ENABLED':'true'},target='preview',branch='feature/cortos-anime-v2')
-            row=api.call_args.args[-1][0]
+            row=api.call_args.args[-1]
             self.assertEqual(row['target'],['preview']);self.assertEqual(row['gitBranch'],'feature/cortos-anime-v2')
     def test_A090_cannot_overwrite_legacy_environment(self):
         with patch.object(self.c,'vercel') as api:
@@ -229,7 +303,8 @@ class ConnectorTests(unittest.TestCase):
     def test_U003_production_variables_do_not_use_preview_branch_scope(self):
         with patch.object(self.c,'vercel',return_value={}) as api:
             self.c.branch_vars(None,'project','team',{'SHORTS_ENABLED':'true','SHORTS_ENVIRONMENT':'production'})
-            for row in api.call_args.args[-1]:
+            for call in api.call_args_list:
+                row=call.args[-1]
                 self.assertEqual(row['target'],['production']);self.assertNotIn('gitBranch',row)
         with self.assertRaises(RuntimeError):self.c.branch_vars(None,'project','team',{},branch='other')
 
@@ -259,7 +334,7 @@ class ConnectorTests(unittest.TestCase):
             result=self.c.connect(lambda *_:'a'*40+'\trefs/heads/main',g,lambda *_:'Autorizar conexión',state,lambda s:None)
         create=next(data for path,method,data in calls if path.startswith('/v13/deployments') and method=='POST')
         self.assertEqual(create['target'],'production');self.assertEqual(create['gitSource']['ref'],'main');self.assertEqual(create['gitSource']['sha'],'a'*40)
-        env=next(data for path,method,data in calls if path.startswith('/v10/projects'))
+        env=[data for path,method,data in calls if path.startswith('/v10/projects')]
         self.assertTrue(all((row['key'].startswith('SHORTS_') or row['key']=='STUDIO_ALLOWED_EMAILS') and row['target']==['production'] for row in env))
         self.assertEqual(next(row['value'] for row in env if row['key']=='STUDIO_ALLOWED_EMAILS'),'owner@example.com')
         self.assertEqual(result['siteUrl'],'https://site.vercel.app');self.assertEqual(result['vercel'],'production_ready')
@@ -286,7 +361,7 @@ class ConnectorTests(unittest.TestCase):
     def test_U005_private_owner_is_only_new_shared_environment_setting(self):
         with patch.object(self.c,'vercel',return_value={}) as api:
             self.c.branch_vars(None,'project','team',{'STUDIO_ALLOWED_EMAILS':'owner@example.com'})
-            self.assertEqual(api.call_args.args[-1][0]['key'],'STUDIO_ALLOWED_EMAILS')
+            self.assertEqual(api.call_args.args[-1]['key'],'STUDIO_ALLOWED_EMAILS')
             for key in ('STUDIO_DISABLE_AUTH','GCS_OUTPUT_BUCKET','GCP_SERVICE_ACCOUNT'):
                 with self.assertRaises(RuntimeError):self.c.branch_vars(None,'project','team',{key:'value'})
 

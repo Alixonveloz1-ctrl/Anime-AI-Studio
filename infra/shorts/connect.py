@@ -4,6 +4,7 @@ Called by the authorized installer. Only SHORTS_* and STUDIO_ALLOWED_EMAILS
 may be changed. The latter protects both sections (user decision U005).
 """
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -93,13 +94,67 @@ def firebase(g, pick, project):
             raise RuntimeError('Inicio de sesión pendiente. No se activó Cortos en Vercel.')
 
 
+def vercel_detail(stdout, stderr, data=None):
+    """Keep API errors, never print successful responses or environment values."""
+    message = stderr or ''
+    try:
+        body = json.loads(stdout)
+        error = body.get('error', {}) if isinstance(body, dict) else {}
+        if isinstance(error, dict):
+            message += '\n' + '\n'.join(str(error.get(k, '')) for k in ('code', 'message'))
+    except (ValueError, TypeError):
+        pass
+    def strings(value):
+        if isinstance(value, str):
+            yield value
+            try:
+                decoded = json.loads(value)
+            except ValueError:
+                return
+            if isinstance(decoded, (dict, list)):
+                yield from strings(decoded)
+        elif isinstance(value, dict):
+            for child in value.values():
+                yield from strings(child)
+        elif isinstance(value, list):
+            for child in value:
+                yield from strings(child)
+    # A rejected environment write can echo its value in either output stream.
+    value = data.get('value') if isinstance(data, dict) else None
+    for secret in sorted(set(strings(value)), key=len, reverse=True):
+        if secret:
+            message = message.replace(json.dumps(secret)[1:-1], '[omitido]').replace(secret, '[omitido]')
+    message = re.sub(r'vcp_[A-Za-z0-9_-]+', '[token omitido]', message)
+    return google_detail({'message': message}) if message.strip() else 'Vercel no devolvió un diagnóstico legible.'
+
+
 def vercel(command, path, method='GET', data=None):
-    args = [*CLI, 'api', path, '--raw', '--method', method]
+    # 59.25.4 only serializes plain JSON objects in Client._fetch. A top-level
+    # array becomes "[object Object]" with text/plain, even with --input.
+    if data is not None and not isinstance(data, dict):
+        raise ValueError('Vercel CLI requiere un objeto JSON por petición; no una lista.')
+    args = [*CLI, 'api', path, '--raw', '--method', method, '--non-interactive']
     with tempfile.TemporaryDirectory(prefix='shorts-vercel-') as tmp:
         if data is not None:
             file = Path(tmp) / 'body.json';file.write_text(json.dumps(data));file.chmod(0o600)
             args += ['--input', str(file)]
-        return json.loads(command(args))
+        # Login remains interactive in find_project. Capture API stderr here
+        # because the generic installer runner discards non-Google diagnostics.
+        try:
+            result = subprocess.run(args, text=True, capture_output=True,
+                stdin=subprocess.DEVNULL, timeout=120,
+                env={**os.environ, 'NO_UPDATE_NOTIFIER': '1', 'VERCEL_TELEMETRY_DISABLED': '1'})
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError(f'Vercel tardó demasiado: {method} {path}. No se repetirá automáticamente; el resultado puede estar pendiente.') from e
+        if result.returncode:
+            raise RuntimeError(f'Falló Vercel: {method} {path} (código {result.returncode}).\nDetalle de Vercel:\n' + vercel_detail(result.stdout, result.stderr, data))
+        try:
+            value = json.loads(result.stdout)
+        except ValueError as e:
+            raise RuntimeError(f'Vercel devolvió una respuesta no válida: {method} {path}. No se confirmó la operación.') from e
+        if isinstance(value, dict) and value.get('error'):
+            raise RuntimeError(f'Vercel rechazó {method} {path}.\nDetalle de Vercel:\n' + vercel_detail(result.stdout, '', data))
+        return value
 
 
 def find_project(command, pick):
@@ -132,10 +187,16 @@ def branch_vars(command, project_id, team, values, target='production', branch=B
         raise RuntimeError('El sitio habitual solo se conecta desde main')
     query = urllib.parse.urlencode({'upsert': 'true', **({'teamId': team} if team else {})})
     scope = {'gitBranch': branch} if target == 'preview' else {}
-    payload = [{'key': k, 'value': v, 'type': 'encrypted', 'target': [target], **scope} for k, v in values.items()]
-    result = vercel(command, '/v10/projects/' + project_id + '/env?' + query, 'POST', payload)
-    if isinstance(result, dict) and result.get('failed'):
-        raise RuntimeError('Vercel rechazó parte de la configuración; Cortos no está listo.')
+    for key, value in values.items():
+        print('Guardando configuración en Vercel: ' + key, flush=True)
+        payload = {'key': key, 'value': value, 'type': 'encrypted', 'target': [target], **scope}
+        result = vercel(command, '/v10/projects/' + project_id + '/env?' + query, 'POST', payload)
+        if isinstance(result, dict) and result.get('failed'):
+            failures = result['failed']
+            first = failures[0] if isinstance(failures, list) else {}
+            error = first.get('error', {}) if isinstance(first, dict) else {}
+            detail = vercel_detail(json.dumps({'error': error}), '', payload)
+            raise RuntimeError('Vercel rechazó la configuración ' + key + '; no se publicó una nueva versión.\nDetalle de Vercel:\n' + detail)
 
 
 def deployment_payload(project, state):
@@ -191,6 +252,7 @@ def connect(command, g, pick, state, save):
     values = {'SHORTS_ENABLED': 'true', 'SHORTS_ENVIRONMENT': 'production', 'SHORTS_PRODUCTION_URL': state['url'], 'SHORTS_FIREBASE_WEB_CONFIG': json.dumps(cfg), 'STUDIO_ALLOWED_EMAILS': owner}
     branch_vars(command, project['id'], team, values)
     query = '?' + urllib.parse.urlencode({'teamId': team}) if team else ''
+    print('Configuración guardada. Publicando tu página en Vercel…', flush=True)
     deployment = vercel(command, '/v13/deployments' + query, 'POST', payload)
     state.update(siteCommit=site_commit, vercelProjectId=project['id'], vercelTeamId=team, deploymentId=deployment['id'], auth='configured', vercel='building')
     save(state)
@@ -200,6 +262,7 @@ def connect(command, g, pick, state, save):
             raise RuntimeError('La página no se construyó. Se conserva el despliegue anterior.')
         if deployment.get('readyState') == 'READY':
             break
+        print('Vercel está preparando la página: ' + deployment.get('readyState', 'PENDIENTE'), flush=True)
         time.sleep(3)
     else:
         raise RuntimeError('Despliegue aún pendiente; su ID quedó guardado en nube.')

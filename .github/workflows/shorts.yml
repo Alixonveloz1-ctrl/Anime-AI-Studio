@@ -42,3 +42,10 @@ jobs:
           node --check cortos/presentation.mjs
       - name: Acceptance matrix completeness
         run: python tests/shorts/check_matrix.py
+      - name: Pinned Vercel CLI serialization — loopback only
+        env:
+          NO_UPDATE_NOTIFIER: '1'
+          VERCEL_TELEMETRY_DISABLED: '1'
+        run: |
+          npm install --prefix "$RUNNER_TEMP/shorts-cli-contract" --no-save --package-lock=false --ignore-scripts vercel@59.25.4
+          node tests/shorts/vercel-cli-contract.mjs "$RUNNER_TEMP/shorts-cli-contract/node_modules/vercel"
