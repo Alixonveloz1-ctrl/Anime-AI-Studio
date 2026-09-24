@@ -44,11 +44,17 @@ La configuración incompleta bloquea generaciones en ambas secciones. No se habi
 
 El usuario informa que un proyecto guardado de Animes no carga después de conectar el acceso privado. Se autoriza reparar su carga, manteniendo formatos, preferencias, motores y medios. El arranque espera a que se haya sincronizado la sesión. Una lectura fallida no equivale a un proyecto vacío, no debe purgar otras copias y no debe anunciar éxito. Una copia de emergencia local se identifica como tal. La confirmación de carga espera al renderizado de personajes y escenas.
 
-La comparación heredada admite diferencias solo en `loadStateFor`, `switchProject`, `renderAll` e `init`. `tests/shorts/ui/animes-loading.test.mjs` ejecuta la página real con seis escenarios sintéticos de sesión, lectura y medios. El resto del código de Animes, su CSS original, APIs, generadores e instaladores sigue comparándose con el baseline.
+La comparación heredada admite diferencias en las funciones de carga, el renderizado progresivo de personajes/escenas y la propagación de errores de lectura. Las plantillas de personajes/escenas y sus controles siguen comparándose literalmente con el baseline, además de todos los generadores. `tests/shorts/ui/animes-loading.test.mjs` ejecuta la página real con escenarios sintéticos de sesión, lectura y medios. El endpoint de lectura añade un registro de tipos/recuentos sin texto de historia, credenciales ni URLs; conserva payloads, almacenamiento y permisos. El CSS original y los instaladores permanecen iguales.
 
 ## U007 — conservar el diseño original en toda la aplicación
 
 El usuario rechaza la nueva paleta verde y pide el diseño original de Animes también en Cortos. Se reutilizan fondo azul oscuro, magenta, cian, rosa, tipografías, tarjetas con brillo, degradados, estrellas, cometas y transiciones originales. Se aplica a Cortos, acceso y revisión de sonido. No se modifica la hoja de estilos de Animes ni se añaden opciones de apariencia. Las áreas funcionales y controles de Cortos se conservan; se respeta la preferencia del dispositivo de reducir movimiento.
+
+## U008 — formulario único y catálogo completo en Cortos
+
+El usuario informa que el formulario de creación aparece tres veces y que faltan las opciones de Animes. Las notificaciones concurrentes de la sesión comparten un único montaje; los redibujados de Cortos se serializan. Un refresco del token no debe reconstruir ni borrar lo que se está escribiendo.
+
+El catálogo independiente de Cortos incluye las 17 opciones de género y los 23 subgéneros de Animes, junto con las opciones adicionales de Cortos. Ecchi y las primeras opciones aparecen directamente; el resto queda bajo «Más subgéneros». La selección se guarda en el proyecto y llega al director. Donghua / Cultivación se expresa de forma explícita como fantasía + el subgénero donghua / cultivación, ambos persistidos, compatible con el servicio instalado. El catálogo de Animes, sus demografías y sus modos no se modifican. Las tres ideas son resultados generados, nunca tres formularios a rellenar.
 
 ## Evidencia y límites
 

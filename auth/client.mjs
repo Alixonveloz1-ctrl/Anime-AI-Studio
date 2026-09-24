@@ -35,12 +35,22 @@ export function loginPath() {
 }
 export async function protectPage(onUser = () => {}, onError = showSessionError) {
   const { auth, sdk } = await getClient();
-  let mounted;
+  let mounted, mounting;
   sdk.onIdTokenChanged(auth, async user => {
     try {
       if (!user) { await sessionRequest('logout'); location.replace(loginPath()); return; }
       await syncSession(user);
-      if (mounted !== user.uid) { await onUser(user); mounted = user.uid; }
+      if (mounted !== user.uid) {
+        // getIdToken can notify again while the first mount is awaiting its
+        // project list. Share that mount; token refresh must preserve the form.
+        if (!mounting || mounting.uid !== user.uid) {
+          const current = { uid:user.uid };
+          current.promise = Promise.resolve().then(() => onUser(user)).then(() => { mounted = user.uid; })
+            .finally(() => { if (mounting === current) mounting = undefined; });
+          mounting = current;
+        }
+        await mounting.promise;
+      }
     } catch (e) { onError(e); }
   });
   // Safari can suspend refresh timers in the background. Renew on return;

@@ -84,6 +84,8 @@ module.exports = async function handler(req, res) {
         const { token } = await auth();
         const project = await readProjectManifest(token, id);
         if (!project) return res.status(404).json({ error:'Proyecto no encontrado en el bucket' });
+        // Load diagnostics contain counts only, never story text or media URLs.
+        console.info('[animes:project-load]', JSON.stringify({id, dataType:typeof project.data, universe:!!project.data?.universe, characters:Array.isArray(project.data?.characters)?project.data.characters.length:0, currentEpisode:project.data?.currentEpisode||1, episodes:Object.fromEntries(Object.entries(project.data?.episodes||{}).map(([key,value])=>[key,Array.isArray(value)?value.length:0])), legacyScenes:Array.isArray(project.data?.scenes)?project.data.scenes.length:0}));
         return res.status(200).json({ project });
       }
 

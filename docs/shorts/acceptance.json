@@ -36,7 +36,10 @@
       "tests/shorts/legacy-regression.cjs",
       "index.html",
       "auth/animes.mjs",
-      "auth/ready.js"
+      "auth/ready.js",
+      "api/upload-url.js",
+      "auth/client.mjs",
+      "tests/shorts/ui/session-mount.test.mjs"
     ],
     "tests": [
       "tests/shorts/legacy-regression.cjs",
@@ -45,7 +48,7 @@
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Comparación heredada y seis casos reales de código con transporte sintético pasan; pendiente abrir/exportar el proyecto concreto del propietario con APIs reales. Excepciones de carga acotadas en U006."
+    "remaining": "Diez casos de carga ejecutan el código de Animes con fixtures. Plantillas, controles y generadores se comparan con baseline. La API añade recuentos de diagnóstico. Pendiente comprobar el archivo concreto del propietario."
   },
   {
     "id": "A004",
@@ -86,7 +89,10 @@
       "tests/shorts/legacy-regression.cjs",
       "index.html",
       "auth/animes.mjs",
-      "auth/ready.js"
+      "auth/ready.js",
+      "api/upload-url.js",
+      "auth/client.mjs",
+      "tests/shorts/ui/session-mount.test.mjs"
     ],
     "tests": [
       "tests/shorts/legacy-regression.cjs",
@@ -95,7 +101,7 @@
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Comparación heredada y seis casos reales de código con transporte sintético pasan; pendiente abrir/exportar el proyecto concreto del propietario con APIs reales. Excepciones de carga acotadas en U006."
+    "remaining": "Diez casos de carga ejecutan el código de Animes con fixtures. Plantillas, controles y generadores se comparan con baseline. La API añade recuentos de diagnóstico. Pendiente comprobar el archivo concreto del propietario."
   },
   {
     "id": "A007",
@@ -179,15 +185,18 @@
       "shorts/service/production.py",
       "cortos/app.js",
       "cortos/studio.mjs",
-      "cortos/presentation.mjs"
+      "cortos/presentation.mjs",
+      "cortos/catalog.mjs",
+      "auth/client.mjs"
     ],
     "tests": [
-      "tests/shorts/ui/studio.test.mjs"
+      "tests/shorts/ui/studio.test.mjs",
+      "tests/shorts/ui/session-mount.test.mjs"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Validación exacta de tres; generación real pendiente."
+    "remaining": "U008: formulario único, catálogo completo de Animes, subgéneros persistidos y tres ideas verificados con fixtures y contrato Python. Recorrido real de Safari y calidad con proveedores pendientes."
   },
   {
     "id": "A012",
@@ -1665,15 +1674,18 @@
       "cortos/presentation.mjs",
       "auth/studio-theme.css",
       "auth/starfield.mjs",
-      "auth/login.css"
+      "auth/login.css",
+      "cortos/catalog.mjs",
+      "auth/client.mjs"
     ],
     "tests": [
-      "tests/shorts/ui/studio.test.mjs"
+      "tests/shorts/ui/studio.test.mjs",
+      "tests/shorts/ui/session-mount.test.mjs"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "U007 restaura el diseño original. Cinco flujos de UI pasan con fixtures. Navegador rechazó el fixture local; recorrido visual a 390 px en Safari y APIs reales pendiente."
+    "remaining": "U008: formulario único, catálogo completo de Animes, subgéneros persistidos y tres ideas verificados con fixtures y contrato Python. Recorrido real de Safari y calidad con proveedores pendientes."
   },
   {
     "id": "A096",

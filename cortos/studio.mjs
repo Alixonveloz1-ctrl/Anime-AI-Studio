@@ -1,9 +1,8 @@
 import {fileHash} from './hash.mjs';
 import {steps,label as titleFor,terminal,versions,taskActions,entityName,fieldLabel} from './presentation.mjs';
+import {genres,subgenres,storyChoice} from './catalog.mjs';
 const $=s=>document.querySelector(s), screen=$('#screen'), notice=$('#notice');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const genres=['acción','aventura','fantasía','isekai','drama','psicológico','terror','misterio','romance','comedia','comedia romántica','vida cotidiana','ciencia ficción','mecha','sobrenatural','supervivencia','deportes','videojuego/sistema'];
-const subgenres=['absurdo','humor negro','sátira','tensión romántica','ecchi adulto no explícito','tragedia','venganza','suspenso','terror psicológico','fantasía oscura','misterio sobrenatural','rivalidad','entrenamiento/superación','sistema/progresión','exploración','relación laboral','familia','reencuentro','conflicto moral','apocalipsis','combate táctico'];
 let batchRunning=false;
 let user,p,stage='Proyectos',productionTab='tomas',reviewTab='corto',active=false,busy=false,heartbeatBusy=false,needsRedraw=false;
 const expanded=new Set();
@@ -63,7 +62,13 @@ async function watch(id,projectId=p?.id){
  say('El trabajo continúa. Su resultado aparecerá en Producción.');
 }
 function navigation(){const nav=$('#steps');nav.replaceChildren();for(const [i,name] of steps.entries()){const b=action(name,()=>go(name),true);b.dataset.step=i+1;b.disabled=name!=='Proyectos'&&!p;b.classList.toggle('active',name===stage);if(name===stage)b.setAttribute('aria-current','step');nav.append(b);}$('#project-name').textContent=p?.title||'Mis historias';}
-async function draw(){
+let drawRequest=0,drawQueue=Promise.resolve();
+function draw(){
+ const request=++drawRequest;
+ const pending=drawQueue.catch(()=>{}).then(()=>{if(request===drawRequest)return drawScreen();});
+ drawQueue=pending;return pending;
+}
+async function drawScreen(){
  if(stage!=='Proyectos'&&!p)stage='Proyectos';
  if(p&&stage!=='Proyectos')await refresh();navigation();screen.replaceChildren();
  if(stage==='Proyectos')return projectList();
@@ -75,8 +80,9 @@ async function draw(){
 async function projectList(){
  pageTitle('Tus historias','Cada corto conserva su guion, sus recursos y tus decisiones.');
  const list=await api('/projects');const form=fold(screen,'Crear una historia',!list.projects.some(x=>!x.archived));
- form.insertAdjacentHTML('beforeend',`<label>Título<input id="title" placeholder="Título provisional"></label><label>Género principal<select id="genre">${genres.map(g=>`<option>${g}</option>`).join('')}</select></label><details class="disclosure"><summary>Subgéneros opcionales</summary><div class="choice-grid">${subgenres.map(g=>`<label class="choice"><input type="checkbox" class="subgenre" value="${g}"> ${g}</label>`).join('')}</div></details><label>Concepto opcional<textarea id="concept" placeholder="Una situación, un personaje, una emoción…"></textarea></label><label>Formato<select id="format"><option value="16:9">Horizontal · 16:9</option><option value="9:16">Vertical · 9:16</option></select></label>`);
- buttons(form,[['Crear historia',async()=>{p=await api('/projects','POST',{title:$('#title').value,genre:$('#genre').value,subgenres:[...document.querySelectorAll('.subgenre:checked')].map(e=>e.value),concept:$('#concept').value,format:$('#format').value});stage='Historia';location.hash=`/proyectos/${p.id}`;await draw();}]]);
+ const choices=items=>items.map(g=>`<label class="choice"><input type="checkbox" class="subgenre" value="${esc(g.value)}"> ${esc(g.label)}</label>`).join('');
+ form.insertAdjacentHTML('beforeend',`<label>Título<input id="title" placeholder="Título provisional"></label><label>Género principal<select id="genre">${genres.map(g=>`<option value="${esc(g.value)}">${esc(g.label)}</option>`).join('')}</select></label><fieldset class="story-subgenres"><legend>Subgéneros · puedes elegir varios</legend><div class="choice-grid">${choices(subgenres.slice(0,6))}</div><details class="disclosure"><summary>Más subgéneros</summary><div class="choice-grid">${choices(subgenres.slice(6))}</div></details></fieldset><label>Concepto opcional<textarea id="concept" placeholder="Una situación, un personaje, una emoción…"></textarea></label><label>Formato<select id="format"><option value="16:9">Horizontal · 16:9</option><option value="9:16">Vertical · 9:16</option></select></label>`);
+ buttons(form,[['Crear historia',async()=>{const settings=storyChoice(form.querySelector('#genre').value,[...form.querySelectorAll('.subgenre:checked')].map(e=>e.value));p=await api('/projects','POST',{title:form.querySelector('#title').value,...settings,concept:form.querySelector('#concept').value,format:form.querySelector('#format').value});stage='Historia';location.hash=`/proyectos/${p.id}`;await draw();}]]);
  const grid=document.createElement('div');grid.className='grid';screen.append(grid);
  for(const item of list.projects.filter(x=>!x.archived)){const c=card(item.title,`<p class="badge">${esc(item.genre)} · 5 minutos</p><p class="muted">${esc(item.concept||'Una nueva historia por contar.')}</p>`);buttons(c,[['Abrir historia',async()=>{if(active)await lease(false);p=item;stage='Historia';location.hash=`/proyectos/${p.id}`;await draw();}]]);const more=fold(c,'Opciones');buttons(more,[['Archivar historia',async()=>{if(!confirm('¿Archivar esta historia? Sus archivos se conservarán.'))return;const before=p;p=item;await mutate(route(''),{archived:true},'PATCH');p=before?.id===item.id?null:before;await draw();},true]]);grid.append(c);}
  const archived=list.projects.filter(x=>x.archived);if(archived.length){const history=fold(screen,'Archivadas · '+archived.length);for(const item of archived)buttons(history,[[`Recuperar ${item.title}`,async()=>{const before=p;p=item;await mutate(route(''),{archived:false},'PATCH');p=before;await draw();},true]]);}
