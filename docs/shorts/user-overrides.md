@@ -16,7 +16,7 @@ Código: `shorts/core/requests.py`, `jobs.py`, `recovery.py`, servicio, runner e
 
 ## U002 — simplificación funcional de la interfaz
 
-Cinco áreas: Proyectos, Historia, Producción, Revisión y Exportar. Una acción principal por contexto, versiones anteriores y ajustes avanzados desplegables, separación entre tomas/voces y música/efectos. Las etiquetas muestran nombres y estados comprensibles. No se muestran JSON ni identificadores como instrucciones al usuario.
+Organización inicial (sustituida por U010): cinco áreas, Proyectos, Historia, Producción, Revisión y Exportar. Una acción principal por contexto, versiones anteriores y ajustes avanzados desplegables, separación entre tomas/voces y música/efectos. Las etiquetas muestran nombres y estados comprensibles. No se muestran JSON ni identificadores como instrucciones al usuario.
 
 Una aprobación explícita sustituye las listas repetitivas de casillas. Preparar una preview o exportar ejecuta la compilación automáticamente. La revisión sigue ligada al material y al manifiesto exactos. El ajuste manual por fotogramas/onda, comparar, deshacer y fijar permanece accesible sin IA. No se eliminan capacidades para lograr una pantalla más sencilla.
 
@@ -63,3 +63,14 @@ La matriz conserva A001–A100 y añade `effectiveRequirement`/`override` en las
 ## U009 — Recuperar material previo y resolver Cortos (2026-09-24)
 
 El propietario confirma escenas e imágenes anteriores; que el nombre aparezca en la lista no satisface la recuperación. Se exige abrir el contenido real sin regenerarlo. La búsqueda y restauración deben preservar las copias existentes y comprobar el proyecto concreto antes de declarar el problema resuelto. El fallo 412 de Cortos se corrige manteniendo concurrencia/idempotencia y el worker instalado. Evidencia y límites: [recovery-and-http-fix.md](recovery-and-http-fix.md).
+
+
+## U010 — Misma organización que Animes, no solo sus colores (2026-09-24)
+
+El usuario aclara que conservar el diseño incluye la organización y los controles conocidos de Animes: proyectos en el encabezado, navegación inferior, imágenes y videos visibles en las escenas, voz junto al texto y música en su apartado. Igualar solamente la paleta no cumple esta instrucción.
+
+Cortos adopta la navegación inferior Historia, Personajes, Escenas y Exportar. «Proyectos» abre una lista compacta desde el encabezado. Historia contiene el único formulario y las tres propuestas generadas; Personajes contiene también lugares y objetos; Escenas conserva voces, música y efectos; la revisión del corto y sus subtítulos es accesible desde Escenas y Exportar. Las referencias y las tomas se muestran directamente; el historial y los ajustes adicionales siguen plegados. No se eliminan aprobaciones, comparación, edición manual, mezcla ni funciones de montaje.
+
+Las tres tarjetas observadas coinciden con tres altas de proyectos (201) seguidas de fallos de apertura (412). No son historias precargadas por la aplicación. Los registros existentes no se borran ni archivan automáticamente. Los títulos vacíos se identifican como «Corto sin título». Una creación confirmada conserva su ID y un reintento abre ese registro; una respuesta desconocida exige revisar la lista antes de crear otro. Abrir una pantalla solo lee recursos, nunca genera modelos.
+
+La adaptación modifica únicamente los archivos de Cortos, sus pruebas y documentación. `index.html`, APIs de Animes, proveedores y worker instalado conservan exactamente el contenido anterior a esta corrección. Evidencia: [animes-interface-adaptation.md](animes-interface-adaptation.md). La reparación del proyecto antiguo sigue siendo un requisito independiente y pendiente de verificar con sus escenas reales.

@@ -4,21 +4,22 @@ import {genres,subgenres,storyChoice} from './catalog.mjs';
 const $=s=>document.querySelector(s), screen=$('#screen'), notice=$('#notice');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let batchRunning=false;
-let user,p,stage='Proyectos',productionTab='tomas',reviewTab='corto',active=false,busy=false,heartbeatBusy=false,needsRedraw=false;
-const expanded=new Set();
+let user,p,stage='Historia',productionTab='tomas',reviewTab='corto',active=false,busy=false,heartbeatBusy=false,needsRedraw=false;
+let mediaLoads=[];
+const projectTitle=item=>item.title?.trim()||'Corto sin título';
 let transport=fetch;
 const session=crypto.randomUUID(),device=localStorage.getItem('animeShorts:v2:device')||crypto.randomUUID();localStorage.setItem('animeShorts:v2:device',device);
 const say=(s,error=false)=>{notice.textContent=s;notice.className=error?'error':'';};
 function action(label,fn,secondary=false){const b=document.createElement('button');b.textContent=label;if(secondary)b.className='secondary';b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn();}catch(e){say(e.message,true);}finally{b.disabled=false;if(needsRedraw&&!document.querySelector('dialog[open]')){needsRedraw=false;await draw();}}};return b;}
 function card(title,content=''){const e=document.createElement('article');e.className='card';e.innerHTML=`<h3>${esc(title)}</h3>${content}`;return e;}
 function buttons(parent,items){const row=document.createElement('div');row.className='actions';items.forEach(([label,fn,secondary])=>row.append(action(label,fn,secondary)));parent.append(row);return row;}
-async function api(path,method='GET',data,headers={}){
+async function api(path,method='GET',data,headers={},signal){
   const h={...headers};if(user)h.Authorization='Bearer '+await user.getIdToken();if(data)h['Content-Type']='application/json';
   // Application revisions are not HTTP entity tags. A CDN evaluates If-Match
   // before our gateway and can replace a valid read with an empty 412 response.
-  const revision=h['If-Match']??(p?String(p.revision):undefined);delete h['If-Match'];
+  const revision=h['X-Shorts-Revision']??h['If-Match']??(p?String(p.revision):undefined);delete h['If-Match'];
   if(method!=='GET'&&revision!==undefined)h['X-Shorts-Revision']=String(revision);
-  const r=await transport('/api/shorts?path='+encodeURIComponent(path),{method,headers:h,cache:'no-store',body:data?JSON.stringify(data):undefined});
+  const r=await transport('/api/shorts?path='+encodeURIComponent(path),{method,headers:h,cache:'no-store',signal,body:data?JSON.stringify(data):undefined});
   let j;try{j=await r.json();}catch{
     const error=new Error(`No se pudo leer la respuesta del servicio (${r.status}). La solicitud no se repetirá automáticamente.`);error.status=r.status;throw error;
   }
@@ -38,7 +39,7 @@ setInterval(async()=>{if(!active||busy||heartbeatBusy||!p)return;heartbeatBusy=t
 function fold(parent,title,open=false){const d=document.createElement('details');d.className='disclosure';const summary=document.createElement('summary');summary.textContent=title;d.append(summary);d.open=open;parent.append(d);return d;}
 function pageTitle(title,subtitle=''){const h=document.createElement('div');h.className='section-heading';h.innerHTML=`<div><p class="eyebrow">${esc(p?.title||'TU ESTUDIO')}</p><h2>${esc(title)}</h2>${subtitle?`<p class="muted">${esc(subtitle)}</p>`:''}</div>`;screen.append(h);return h;}
 function empty(title,text){screen.append(card(title,`<p class="muted">${esc(text)}</p>`));}
-async function go(next,part){stage=next;if(part&&next==='Producción')productionTab=part;if(part&&next==='Revisión')reviewTab=part;await draw();}
+async function go(next,part){stage=next;if(part&&next==='Escenas')productionTab=part;if(part&&next==='Revisión')reviewTab=part;await draw();}
 function tabs(parent,options,selected,onSelect){const nav=document.createElement('nav');nav.className='tabs';nav.setAttribute('aria-label','Contenido de esta etapa');for(const [id,name] of options){const b=action(name,()=>onSelect(id),true);b.setAttribute('aria-pressed',String(id===selected));nav.append(b);}parent.append(nav);}
 function describeIssue(text){const d=development();if(!d)return text;let value=String(text);const ids=[...d.shots,...d.utterances,...d.soundRequests,...d.musicRequests,...d.bible.characters,...d.bible.locations,...d.bible.props].sort((a,b)=>b.id.length-a.id.length);for(const row of ids)value=value.replaceAll(row.id,entityName(d,row.id));return value;}
 async function runTask(operation,path,data={}){
@@ -61,15 +62,24 @@ async function watch(id,projectId=p?.id){
   const j=await api('/jobs/'+id);status.textContent=titleFor(j.operation)+' · '+titleFor(j.state);
   if(terminal(j.state)||j.state==='waiting_provider'){
    stop.remove();if(j.result?.error)say(describeIssue(j.result.error),true);
-   else say(j.state==='failed'?'No se completó. Puedes comprobar el trabajo en Producción.':titleFor(j.state));
+   else say(j.state==='failed'?'No se completó. Puedes comprobar el trabajo en Escenas.':titleFor(j.state));
    if(p?.id===projectId)await refresh();return j;
   }
   if(p?.id!==projectId)return j;
   await new Promise(r=>setTimeout(r,3000));
  }
- say('El trabajo continúa. Su resultado aparecerá en Producción.');
+ say('El trabajo continúa. Su resultado aparecerá en Escenas.');
 }
-function navigation(){const nav=$('#steps');nav.replaceChildren();for(const [i,name] of steps.entries()){const b=action(name,()=>go(name),true);b.dataset.step=i+1;b.disabled=name!=='Proyectos'&&!p;b.classList.toggle('active',name===stage);if(name===stage)b.setAttribute('aria-current','step');nav.append(b);}$('#project-name').textContent=p?.title||'Mis historias';}
+function navigation(){
+ const nav=$('#steps');nav.replaceChildren();
+ const icons=['🌌','👥','🎬','📤'];
+ for(const [i,name] of steps.entries()){
+  const b=action(name,()=>go(name),true);b.dataset.icon=icons[i];b.disabled=name!=='Historia'&&!p;
+  const selected=name===stage||(name==='Exportar'&&stage==='Revisión');
+  b.classList.toggle('active',selected);if(selected)b.setAttribute('aria-current','page');nav.append(b);
+ }
+ $('#project-name').textContent=p?projectTitle(p):'';
+}
 let drawRequest=0,drawQueue=Promise.resolve();
 function draw(){
  const request=++drawRequest;
@@ -77,23 +87,79 @@ function draw(){
  drawQueue=pending;return pending;
 }
 async function drawScreen(){
- if(stage!=='Proyectos'&&!p)stage='Proyectos';
- if(p&&stage!=='Proyectos')await refresh();navigation();screen.replaceChildren();
- if(stage==='Proyectos')return projectList();
- if(stage==='Historia'){pageTitle('Tu historia','De una idea a un guion propio.');tabs(screen,[['ideas','Ideas'],['guion','Guion y biblias']],p.selectedIdea?'guion':'ideas',async part=>{screen.querySelector('.story-content')?.remove();const slot=document.createElement('div');slot.className='story-content';screen.append(slot);await (part==='ideas'?ideas:script)(slot);[...screen.querySelectorAll('.tabs button')].forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===(part==='ideas'?'Ideas':'Guion y biblias'))));});const slot=document.createElement('div');slot.className='story-content';screen.append(slot);return (p.selectedIdea?script:ideas)(slot);}
- if(stage==='Producción')return production();
+ mediaLoads=[];
+ await renderStage();
+ const queued=mediaLoads,generation=drawRequest;
+ // Paint the complete page first. Read only visible media, at most three at a
+ // time. A slow or inaccessible image never hides the other scene controls.
+ void Promise.all(Array.from({length:3},async()=>{
+  while(queued.length&&generation===drawRequest){const load=queued.shift();await load();}
+ }));
+}
+async function renderStage(){
+ if(!p)stage='Historia';
+ if(p)await refresh();navigation();screen.replaceChildren();
+ if(!p)return newProject();
+ if(stage==='Historia'){pageTitle('Tu historia');tabs(screen,[['ideas','Ideas'],['guion','Guion y biblias']],p.selectedIdea?'guion':'ideas',async part=>{screen.querySelector('.story-content')?.remove();const slot=document.createElement('div');slot.className='story-content';screen.append(slot);await (part==='ideas'?ideas:script)(slot);[...screen.querySelectorAll('.tabs button')].forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===(part==='ideas'?'Ideas':'Guion y biblias'))));});const slot=document.createElement('div');slot.className='story-content';screen.append(slot);return (p.selectedIdea?script:ideas)(slot);}
+ if(stage==='Personajes')return references();
+ if(stage==='Escenas')return production();
  if(stage==='Revisión')return review();
  return exportsView();
 }
-async function projectList(){
- pageTitle('Tus historias','Cada corto conserva su guion, sus recursos y tus decisiones.');
- const list=await api('/projects');const form=fold(screen,'Crear una historia',!list.projects.some(x=>!x.archived));
+async function openProject(id){
+ const next=await getProject(id);
+ if(active)await lease(false);
+ p=next;stage='Historia';location.hash=`/proyectos/${id}`;await draw();
+}
+function openFailure(id,error){
+ say('El proyecto está guardado, pero no se pudo abrir. '+error.message,true);
+ notice.append(action('Volver a abrir',async()=>{await openProject(id);say('Proyecto abierto.');},true));
+}
+function newProject(){
+ const form=card('🌌 Crear corto');form.id='new-project';screen.append(form);
  const choices=items=>items.map(g=>`<label class="choice"><input type="checkbox" class="subgenre" value="${esc(g.value)}"> ${esc(g.label)}</label>`).join('');
- form.insertAdjacentHTML('beforeend',`<label>Título<input id="title" placeholder="Título provisional"></label><label>Género principal<select id="genre">${genres.map(g=>`<option value="${esc(g.value)}">${esc(g.label)}</option>`).join('')}</select></label><fieldset class="story-subgenres"><legend>Subgéneros · puedes elegir varios</legend><div class="choice-grid">${choices(subgenres.slice(0,6))}</div><details class="disclosure"><summary>Más subgéneros</summary><div class="choice-grid">${choices(subgenres.slice(6))}</div></details></fieldset><label>Concepto opcional<textarea id="concept" placeholder="Una situación, un personaje, una emoción…"></textarea></label><label>Formato<select id="format"><option value="16:9">Horizontal · 16:9</option><option value="9:16">Vertical · 9:16</option></select></label>`);
- buttons(form,[['Crear historia',async()=>{const settings=storyChoice(form.querySelector('#genre').value,[...form.querySelectorAll('.subgenre:checked')].map(e=>e.value));p=await api('/projects','POST',{title:form.querySelector('#title').value,...settings,concept:form.querySelector('#concept').value,format:form.querySelector('#format').value});stage='Historia';location.hash=`/proyectos/${p.id}`;await draw();}]]);
- const grid=document.createElement('div');grid.className='grid';screen.append(grid);
- for(const item of list.projects.filter(x=>!x.archived)){const c=card(item.title,`<p class="badge">${esc(item.genre)} · 5 minutos</p><p class="muted">${esc(item.concept||'Una nueva historia por contar.')}</p>`);buttons(c,[['Abrir historia',async()=>{if(active)await lease(false);p=item;stage='Historia';location.hash=`/proyectos/${p.id}`;await draw();}]]);const more=fold(c,'Opciones');buttons(more,[['Archivar historia',async()=>{if(!confirm('¿Archivar esta historia? Sus archivos se conservarán.'))return;const before=p;p=item;await mutate(route(''),{archived:true},'PATCH');p=before?.id===item.id?null:before;await draw();},true]]);grid.append(c);}
- const archived=list.projects.filter(x=>x.archived);if(archived.length){const history=fold(screen,'Archivadas · '+archived.length);for(const item of archived)buttons(history,[[`Recuperar ${item.title}`,async()=>{const before=p;p=item;await mutate(route(''),{archived:false},'PATCH');p=before;await draw();},true]]);}
+ form.insertAdjacentHTML('beforeend',`<label>Género principal<select id="genre">${genres.map(g=>`<option value="${esc(g.value)}">${esc(g.label)}</option>`).join('')}</select></label><fieldset class="story-subgenres"><legend>Subgéneros · puedes elegir varios</legend><div class="choice-grid">${choices(subgenres.filter(g=>g.legacyId))}</div><details class="disclosure"><summary>Más subgéneros</summary><div class="choice-grid">${choices(subgenres.filter(g=>!g.legacyId))}</div></details></fieldset><label>Concepto opcional<textarea id="concept" placeholder="Una situación, un personaje, una emoción…"></textarea></label><label>Título opcional<input id="title" placeholder="Lo puedes decidir después"></label><label>Formato<select id="format"><option value="16:9">Horizontal · 16:9</option><option value="9:16">Vertical · 9:16</option></select></label><p class="muted">Después podrás generar tres ideas distintas y elegir una.</p>`);
+ let created,creationUncertain=false;
+ const create=action('Crear historia',async()=>{
+  if(creationUncertain){await projectList();return;}
+  if(!created){
+   const settings=storyChoice(form.querySelector('#genre').value,[...form.querySelectorAll('.subgenre:checked')].map(e=>e.value));
+   try{created=await api('/projects','POST',{title:form.querySelector('#title').value.trim()||'Corto sin título',...settings,concept:form.querySelector('#concept').value,format:form.querySelector('#format').value});}
+   catch(error){if(!error.status||error.status<400||error.status>=500){creationUncertain=true;create.textContent='Revisar proyectos guardados';say('No se pudo confirmar el guardado. Revisa Proyectos antes de crear otro corto.',true);return;}throw error;}
+   // Keep the successful ID even if opening fails. Retrying this button opens
+   // that record instead of creating a second project.
+   create.textContent='Abrir historia guardada';location.hash=`/proyectos/${created.id}`;
+  }
+  try{await openProject(created.id);say('Proyecto guardado. Ahora puedes generar tus tres ideas.');}
+  catch(error){openFailure(created.id,error);}
+ });
+ const row=document.createElement('div');row.className='actions';row.append(create);form.append(row);
+}
+async function projectList(){
+ if(document.querySelector('.projects-dialog[open]'))return;
+ const dialog=document.createElement('dialog');dialog.className='projects-dialog';document.body.append(dialog);
+ const heading=document.createElement('div');heading.className='dialog-header';const h=document.createElement('h2');h.textContent='📁 Proyectos';heading.append(h,action('Cerrar',()=>{dialog.close();dialog.remove();},true));dialog.append(heading);
+ const content=document.createElement('div');dialog.append(content);content.textContent='Cargando proyectos…';dialog.showModal();
+ try{
+  const list=await api('/projects');content.replaceChildren();
+  const visible=list.projects.filter(x=>!x.archived);
+  if(!visible.length){const line=document.createElement('p');line.textContent='Todavía no has guardado ningún corto.';content.append(line);}
+  for(const item of visible){
+   const row=document.createElement('div');row.className='project-row';
+   const open=action(projectTitle(item),async()=>{try{await openProject(item.id);dialog.close();dialog.remove();say('Proyecto abierto.');}catch(error){openFailure(item.id,error);}},true);open.className='project-open';
+   const meta=document.createElement('small');meta.textContent=[item.genre,item.created?new Date(item.created*1000).toLocaleString('es'):null].filter(Boolean).join(' · ');open.append(meta);row.append(open);
+   const archive=action('Archivar',async()=>{
+    if(!confirm('¿Archivar este corto? Su guion y sus archivos se conservarán.'))return;
+    const stored=await getProject(item.id);
+    await api(`/projects/${item.id}`,'PATCH',{archived:true},{'X-Shorts-Revision':String(stored.revision)});
+    if(p?.id===item.id){if(active)await lease(false);p=null;stage='Historia';location.hash='';await draw();}
+    row.remove();say('Corto archivado. Sus archivos se conservan.');
+   },true);row.append(archive);content.append(row);
+  }
+  buttons(content,[['＋ Nuevo proyecto',async()=>{if(active)await lease(false);p=null;stage='Historia';location.hash='';dialog.close();dialog.remove();await draw();say('');}]]);
+  const archived=list.projects.filter(x=>x.archived);
+  if(archived.length){const history=fold(content,'Archivados · '+archived.length);for(const item of archived)buttons(history,[[`Recuperar ${projectTitle(item)}`,async()=>{const stored=await getProject(item.id);await api(`/projects/${item.id}`,'PATCH',{archived:false},{'X-Shorts-Revision':String(stored.revision)});dialog.close();dialog.remove();await projectList();},true]]);}
+ }catch(error){content.textContent='No se pudo leer la lista: '+error.message;buttons(content,[['Reintentar',async()=>{dialog.close();dialog.remove();await projectList();},true]]);}
 }
 async function ideas(parent=screen){
  const c=card('El comienzo',`<p>${esc(p.genre)}${p.subgenres.length?' · '+esc(p.subgenres.join(', ')):''}</p><p class="muted">${esc(p.concept||'Partimos de tu género para proponer tres historias distintas.')}</p>`);buttons(c,[[p.ideas.length?'Generar otras tres ideas':'Generar tres ideas',()=>runTask('ideas',route('/ideas:generate'))]]);parent.append(c);
@@ -126,7 +192,7 @@ async function script(parent=screen){
  const intro=card('Guion y biblias',`<p>${esc(p.ideas.find(i=>i.id===p.selectedIdea?.id)?.data.title||'Tu historia elegida')}</p>`);
  if(!p.developments.length)buttons(intro,[['Desarrollar esta historia',()=>runTask('develop',route('/develop'))]]);
  else{
-  if(p.activeDevelopment)buttons(intro,[['Continuar a producción',()=>go('Producción')]]);
+  if(p.activeDevelopment)buttons(intro,[['Continuar a producción',()=>go('Escenas')]]);
   const more=fold(intro,'Crear una nueva versión');buttons(more,[['Crear otra versión del guion',()=>runTask('develop',route('/develop')),true]]);
  }
  parent.append(intro);
@@ -136,16 +202,16 @@ async function script(parent=screen){
  const bible=fold(c,'Personajes, lugares y objetos');readable(bible,d.bible);
  if(e.impact){const changes=fold(c,'Qué cambia en esta versión');const line=document.createElement('p');line.textContent=`${e.impact.changes.length} cambios. ${e.impact.assetsNeedingReview?.length||0} recursos necesitan revisión.`;changes.append(line);for(const asset of e.impact.assetsNeedingReview||[]){const note=document.createElement('p');note.textContent=entityName(d,asset.entityId);changes.append(note);}}
  if(e.review){const report=fold(c,'Notas de revisión');readable(report,e.review);}
- if(e.approvalState==='candidate')buttons(c,[['Aprobar guion y biblias',async()=>{await approve('developments',e.id);await go('Producción');}]]);
+ if(e.approvalState==='candidate')buttons(c,[['Aprobar guion y biblias',async()=>{await approve('developments',e.id);await go('Escenas');}]]);
  else if(e.approvalState==='approved'&&e.id!==p.activeDevelopment)buttons(c,[['Usar esta versión',()=>approve('developments',e.id),true]]);
  const edit=fold(c,'Editar esta versión');buttons(edit,[['Corregir con IA',()=>revise('developments',e),true],['Editar manualmente',()=>editDevelopment(e),true]]);target.append(c);};
  grouped.visible.forEach(e=>show(parent,e));if(grouped.history.length){const h=fold(parent,'Historial del guion · '+grouped.history.length);grouped.history.forEach(e=>show(h,e));}
 }
 async function production(){
- const heading=pageTitle('Producción','Da forma a las imágenes, las voces y el sonido.');
+ const heading=pageTitle('Escenas','Da forma a las imágenes, las voces y el sonido.');
  if(!development()){empty('Tu guion está primero','Aprueba el guion y sus biblias en Historia para preparar los recursos.');buttons(screen,[['Ir a Historia',()=>go('Historia')]]);return;}
- buttons(heading,[[batchRunning?'Producción en marcha':'Generar pendientes',()=>runBatch()],...(active?[['Pausar',async()=>{batchRunning=false;await lease(false);say('Producción pausada. Lo terminado se conserva.');await draw();},true]]:[])]);
- tabs(screen,[['tomas','Tomas y voces'],['sonido','Música y efectos']],productionTab,async part=>{productionTab=part;await draw();});
+ buttons(heading,[['Revisar el corto',()=>go('Revisión'),true],[batchRunning?'Producción en marcha':'Generar pendientes',()=>runBatch()],...(active?[['Pausar',async()=>{batchRunning=false;await lease(false);say('Producción pausada. Lo terminado se conserva.');await draw();},true]]:[])]);
+ tabs(screen,[['tomas','Escenas y voces'],['sonido','Música y efectos']],productionTab,async part=>{productionTab=part;await draw();});
  if(productionTab==='sonido')await sounds();else await shots();
  await activityList();
 }
@@ -181,33 +247,89 @@ async function runBatch(){
 
 const development=()=>p.developments.find(x=>x.id===p.activeDevelopment)?.data;
 const selectedAsset=(id,kind)=>p.assets.find(a=>a.id===p.assetSelections?.[id+'|'+kind])||p.assets.filter(a=>a.entityId===id&&a.kind===kind&&a.approvalState==='approved').at(-1);
+function expandImage(url,name){
+ const dialog=document.createElement('dialog');dialog.className='image-dialog';const bar=document.createElement('div');bar.className='dialog-header';const label=document.createElement('strong');label.textContent=name;bar.append(label,action('Cerrar',()=>{dialog.close();dialog.remove();},true));dialog.append(bar);
+ const img=document.createElement('img');img.src=url;img.alt=name;dialog.append(img);document.body.append(dialog);dialog.showModal();
+}
 async function assetCard(parent,a){
- const c=card(entityName(development(),a.entityId),`<p class="badge">${esc(titleFor(a.kind))} · ${esc(titleFor(a.approvalState))}${selectedAsset(a.entityId,a.kind)?.id===a.id?' · en uso':''}</p>`);parent.append(c);
+ const name=entityName(development(),a.entityId),projectId=p.id;
+ const c=card(titleFor(a.kind),`<p class="badge">${esc(titleFor(a.approvalState))}${selectedAsset(a.entityId,a.kind)?.id===a.id?' · en uso':''}</p>`);c.classList.add('asset-card');parent.append(c);
  if(a.requestId&&a.samples){const requested=development()?.soundRequests.find(x=>x.id===a.requestId);const duration=document.createElement('p');duration.className='muted';duration.textContent=`Solicitado: ${requested?.seconds??'—'} s · archivo: ${(a.samples/48000).toFixed(2)} s`;c.append(duration);}
- let opened=false;const mediaBox=document.createElement('div');mediaBox.className='asset-media';c.append(mediaBox);
- const open=async()=>{if(opened)return;const {url}=await api(route(`/assets/${a.id}/url`));const media=document.createElement(a.kind==='image'?'img':a.kind==='pcm'?'audio':'video');media.src=url;media.controls=true;media.playsInline=true;media.preload='metadata';media.alt=entityName(development(),a.entityId);mediaBox.replaceChildren(media);opened=true;};
- buttons(c,[[a.kind==='pcm'?'Escuchar':a.kind==='image'?'Ver imagen':'Ver video',open]]);
- if(a.approvalState==='candidate')buttons(c,[['Aprobar versión',async()=>{if(!opened){await open();say('Revisa el recurso y pulsa Aprobar versión cuando esté listo.');return;}await approve('assets',a.id,true);},true]]);
+ const mediaBox=document.createElement('div');mediaBox.className='asset-media';c.append(mediaBox);
+ if(a.approvalState==='quarantined'||!['image','pcm','veo_silent_validated'].includes(a.kind)){mediaBox.textContent='Este archivo no está validado para reproducirse.';return;}
+ let opened=false,loading;
+ const open=()=>{
+  if(loading)return loading;
+  if(opened)return Promise.resolve();
+  mediaBox.textContent='Cargando '+titleFor(a.kind).toLowerCase()+'…';
+  loading=(async()=>{
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
+   try{
+    const {url}=await api(`/projects/${projectId}/assets/${a.id}/url`,'GET',undefined,{},controller.signal);
+    if(!c.isConnected)return;
+    const media=document.createElement(a.kind==='image'?'img':a.kind==='pcm'?'audio':'video');
+    media.src=url;media.controls=true;media.playsInline=true;media.preload='none';media.alt=name;
+    if(a.kind==='image'){media.loading='lazy';media.decoding='async';media.tabIndex=0;media.setAttribute('role','button');media.setAttribute('aria-label','Ampliar imagen de '+name);media.onclick=()=>expandImage(url,name);media.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();expandImage(url,name);}};}
+    // The backend supplies only validated silent Veo derivatives. Raw provider
+    // files never appear in this view; integrated playback uses muxed previews.
+    if(a.kind==='veo_silent_validated')media.muted=true;
+    media.onloadeddata=()=>{opened=true;};media.onload=()=>{opened=true;};
+    media.onerror=()=>{opened=false;mediaBox.textContent='No se pudo cargar este archivo.';mediaBox.append(action('Volver a cargar',open,true));};
+    mediaBox.replaceChildren(media);
+   }catch(error){mediaBox.textContent='No se pudo cargar este archivo.';mediaBox.append(action('Volver a cargar',open,true));}
+   finally{clearTimeout(timer);loading=null;}
+  })();return loading;
+ };
+ mediaLoads.push(open);
+ if(a.approvalState==='candidate')buttons(c,[['Aprobar versión',async()=>{if(!opened){await open();say('Revisa el recurso cargado y pulsa Aprobar versión cuando esté listo.');return;}await approve('assets',a.id,true);},true]]);
  else if(a.approvalState==='approved'&&selectedAsset(a.entityId,a.kind)?.id!==a.id)buttons(c,[['Usar esta versión',()=>approve('assets',a.id),true]]);
 }
 async function assetVersions(parent,rows){
  const groups=Object.groupBy(rows,a=>a.entityId+'|'+a.kind);
- for(const [key,items] of Object.entries(groups)){const v=versions(items,p.assetSelections?.[key]);for(const item of v.visible)await assetCard(parent,item);if(v.history.length){const h=fold(parent,'Versiones anteriores · '+v.history.length);let loaded=false;h.addEventListener('toggle',async()=>{if(h.open&&!loaded){loaded=true;for(const item of v.history)await assetCard(h,item);}});}}
+ for(const [key,items] of Object.entries(groups)){const v=versions(items,p.assetSelections?.[key]);for(const item of v.visible)await assetCard(parent,item);if(v.history.length){const h=fold(parent,'Versiones anteriores · '+v.history.length);let loaded=false;h.addEventListener('toggle',async()=>{if(h.open&&!loaded){loaded=true;const start=mediaLoads.length;for(const item of v.history)await assetCard(h,item);const queue=mediaLoads.splice(start);for(const load of queue)await load();}});}}
+}
+async function references(){
+ pageTitle('👥 Personajes, lugares y objetos');
+ const d=development();
+ if(!d){empty('Aprueba primero tu historia','Las fichas de esta historia aparecerán aquí después de aprobar el guion y sus biblias.');buttons(screen,[['Ir a Historia',()=>go('Historia')]]);return;}
+ for(const [group,title] of [['characters','Personajes'],['locations','Lugares'],['props','Objetos']]){
+  if(!d.bible[group].length)continue;
+  const heading=document.createElement('h3');heading.textContent=title;screen.append(heading);
+  for(const e of d.bible[group]){
+   const section=card(e.name);section.classList.add('char-card');screen.append(section);
+   const description=document.createElement('p');description.className='char-detail';description.textContent=e.description||e.objective||e.layout||e.state||'';section.append(description);
+   const rows=p.assets.filter(a=>a.entityId===e.id);await assetVersions(section,rows);
+   if(!rows.length){const placeholder=document.createElement('div');placeholder.className='scene-img media-empty';placeholder.textContent='Referencia por generar';section.append(placeholder);}
+   buttons(section,[[rows.length?'Crear otra referencia':'Generar referencia',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:e.id}),rows.length>0]]);
+   const details=fold(section,'Ficha y dirección visual');readable(details,e);
+  }
+ }
+ const importBox=fold(screen,'Reutilizar de otra historia');buttons(importBox,[['Importar referencia o música',()=>importAsset(),true]]);
 }
 async function shots(){
- const d=development(),refRows=['characters','locations','props'].flatMap(k=>d.bible[k]);
- const refs=fold(screen,'Referencias de la historia',refRows.some(e=>!selectedAsset(e.id,'image')));
- for(const e of refRows){const section=fold(refs,e.name);const rows=p.assets.filter(a=>a.entityId===e.id);buttons(section,[[rows.length?'Crear otra referencia':'Generar referencia',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:e.id}),rows.length>0]]);await assetVersions(section,rows);}
- const importBox=fold(refs,'Reutilizar de otra historia');buttons(importBox,[['Importar referencia o música',()=>importAsset(),true]]);
+ const d=development();
+ const pending=['characters','locations','props'].flatMap(k=>d.bible[k]).filter(e=>!selectedAsset(e.id,'image'));
+ if(pending.length){const c=card('Referencias pendientes',`<p>${pending.length} fichas necesitan una imagen aprobada para producir las escenas.</p>`);buttons(c,[['Ver personajes y referencias',()=>go('Personajes'),true]]);screen.append(c);}
  for(const [index,shot] of d.shots.entries()){
-  const has=selectedAsset(shot.id,shot.treatment==='veo'?'veo_silent_validated':'image');const section=fold(screen,`Toma ${index+1} · ${has?'Lista para revisar':'En preparación'}`,expanded.has(shot.id));section.classList.add('shot-section');section.addEventListener('toggle',()=>{if(section.open)expanded.add(shot.id);else expanded.delete(shot.id);});
-  const c=card(shot.function,`<p class="badge">${esc(titleFor(shot.treatment))} · ${(shot.frames/24).toFixed(1)} s</p>`);section.append(c);const direction=fold(c,'Dirección visual');direction.append(document.createTextNode(shot.prompt));
+  const has=selectedAsset(shot.id,shot.treatment==='veo'?'veo_silent_validated':'image');
+  const c=document.createElement('article');c.className='shot-section scene-card';c.dataset.shot=shot.id;screen.append(c);
+  const header=document.createElement('div');header.className='scene-header';header.innerHTML=`<h3 class="scene-num">Plano ${String(index+1).padStart(2,'0')}</h3><span class="scene-act">${esc(titleFor(shot.treatment))} · ${(shot.frames/24).toFixed(1)} s</span>`;c.append(header);
   const image=selectedAsset(shot.id,'image'),visuals=p.assets.filter(a=>a.entityId===shot.id||a.variantOf===shot.id);
-  if(!image&&!visuals.some(a=>a.kind==='image'&&a.approvalState==='candidate'))buttons(c,[['Generar imagen',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id})]]);
-  if(image&&shot.treatment==='veo'&&!visuals.some(a=>a.kind==='veo_silent_validated'&&['candidate','approved'].includes(a.approvalState)))buttons(c,[['Generar video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id,seconds:8})]]);
-  await assetVersions(c,visuals);
-  const voices=d.utterances.filter(u=>u.shotId===shot.id);if(voices.length){const voiceBox=fold(c,'Voces · '+voices.length,!has);for(const u of voices){const row=card(entityName(d,u.speakerId),`<p>${esc(u.spanish)}</p>`);const assets=p.assets.filter(a=>a.entityId===u.id);buttons(row,[[assets.length?'Generar otra interpretación':'Generar voz japonesa',()=>runTask('tts',route('/assets:generate'),{operation:'tts',entityId:u.id}),assets.length>0]]);await assetVersions(row,assets);voiceBox.append(row);}}
+  const media=document.createElement('div');media.className='scene-visuals';c.append(media);
+  if(!visuals.length){const placeholder=document.createElement('div');placeholder.className='scene-img media-empty';placeholder.style.aspectRatio=p.format==='9:16'?'9 / 16':'16 / 9';placeholder.textContent='Imagen por generar';media.append(placeholder);}
+  await assetVersions(media,visuals);
+  const description=document.createElement('p');description.className='scene-narration';description.textContent=shot.function;c.append(description);
+  const actions=[];
+  if(!image&&!visuals.some(a=>a.kind==='image'&&a.approvalState==='candidate'))actions.push(['Generar imagen',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id})]);
+  if(image&&shot.treatment==='veo'&&!visuals.some(a=>a.kind==='veo_silent_validated'&&['candidate','approved'].includes(a.approvalState)))actions.push(['Generar video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id,seconds:8})]);
+  if(actions.length)buttons(c,actions);
+  for(const u of d.utterances.filter(u=>u.shotId===shot.id)){
+   const row=document.createElement('div');row.className='voice-row';row.innerHTML=`<p><strong>🎙️ ${esc(entityName(d,u.speakerId))}</strong></p><p class="scene-narration">${esc(u.spanish)}</p>`;c.append(row);
+   const assets=p.assets.filter(a=>a.entityId===u.id);await assetVersions(row,assets);
+   buttons(row,[[assets.length?'Generar otra interpretación':'Generar voz japonesa',()=>runTask('tts',route('/assets:generate'),{operation:'tts',entityId:u.id}),assets.length>0]]);
+  }
   if(has)buttons(c,[['Ver toma completa',()=>previewShots([shot.id],c)]]);
+  const direction=fold(c,'Dirección visual');direction.append(document.createTextNode(shot.prompt));
   const more=fold(c,'Editar y comparar');buttons(more,[['Movimiento y capas',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id}),true]]:[]),...(image&&shot.treatment==='veo'?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id,seconds:8}),true]]:[])]);
   if(has)buttons(more,[['Ver escena',()=>previewShots(d.shots.filter(x=>x.beatId===shot.beatId).map(x=>x.id),c),true],['Comparar tomas contiguas',()=>compareShots(shot,c),true]]);
  }
@@ -297,7 +419,7 @@ async function review(){
  await previewHistory(c,false);
  const mix=fold(screen,'Ajustes de mezcla');mix.innerHTML+=`<label class="choice"><input id="normalize-program" type="checkbox" ${p.mixPolicy?.normalization?.enabled?'checked':''}> Equilibrar el volumen del corto</label><label class="choice"><input id="duck-program" type="checkbox" ${p.mixPolicy?.ducking?.enabled?'checked':''}> Bajar la música cuando hay voces</label>`;
  buttons(mix,[['Guardar mezcla',async()=>{await mutate(route('/mix-policy'),{normalize:$('#normalize-program').checked,duckMusic:$('#duck-program').checked});say('Mezcla guardada. Prepara una nueva vista previa para escucharla.');},true]]);
- buttons(screen,[['Ajustar un efecto',()=>go('Producción','sonido'),true],['Ir a exportación',()=>go('Exportar'),true]]);
+ buttons(screen,[['Ajustar un efecto',()=>go('Escenas','sonido'),true],['Ir a exportación',()=>go('Exportar'),true]]);
 }
 async function previewHistory(parent,final){
  const rows=p.previews.filter(x=>!!x.final===final&&x.state==='ready').sort((a,b)=>(b.created||0)-(a.created||0));
@@ -313,7 +435,7 @@ async function exportsView(){
  const ready=p.previews.filter(r=>!r.final&&r.state==='ready'&&r.startFrame===0&&r.endFrame===7200).sort((a,b)=>(b.created||0)-(a.created||0));
  let current;for(const candidate of ready){const detail=await api(route(`/previews/${candidate.id}`));if(detail.current){current=detail;break;}}
  if(!current){c.innerHTML+='<p>Prepara y revisa el corto completo antes de exportar.</p>';buttons(c,[['Revisar el corto',()=>go('Revisión')]]);}
- else if(current.draftIssues?.length){const list=document.createElement('ul');for(const issue of current.draftIssues){const li=document.createElement('li');li.textContent=describeIssue(issue);list.append(li);}c.append(list);buttons(c,[['Revisar pendientes',()=>go('Revisión')],['Abrir producción',()=>go('Producción'),true]]);}
+ else if(current.draftIssues?.length){const list=document.createElement('ul');for(const issue of current.draftIssues){const li=document.createElement('li');li.textContent=describeIssue(issue);list.append(li);}c.append(list);buttons(c,[['Revisar pendientes',()=>go('Revisión')],['Abrir producción',()=>go('Escenas'),true]]);}
  else{c.innerHTML+='<p>Reproduce esta versión. Al aprobarla se prepararán el video final, los subtítulos y las pistas de sonido.</p>';await playPreview(current.id,c);buttons(c,[['Aprobar y exportar',async()=>{const t=await mutate(route('/timeline:compile'),{});if(t.compiledHash!==current.manifestHash)throw new Error('El corto cambió. Revisa una nueva vista previa antes de exportar.');await approve('timelines',t.id);await runTask('render',route('/renders'));await draw();}]]);}
  await previewHistory(screen,true);
 }
@@ -327,7 +449,7 @@ async function openEditor(initial){
  const frameInput=document.createElement('input');frameInput.type='number';frameInput.min=0;frameInput.value=0;const frameLabel=document.createElement('label');frameLabel.textContent='Inicio del intervalo de fotogramas';frameLabel.append(frameInput);const interval=fold(box,'Elegir otro intervalo');interval.append(frameLabel);
  function showFrame(){if(!frames.length)return;image.src=frames[framePos].url;info.textContent=`Fotograma ${frames[framePos].index} · ${Number(frames[framePos].seconds).toFixed(3)} s`;}
  async function save(patch){const result=await mutate(route(`/cues/${cue.id}`),{cueRevision:cue.revision,patch},'PATCH');cue=result.cue;correctionId=result.correctionId;status.textContent='Ajuste guardado como candidata. Prueba una nueva preview.';}
- buttons(box,[['Cargar fotogramas',async()=>{const jid=await runTask('frames',route(`/shots/${cue.shotId}/frames`),{start:Number(frameInput.value),count:48});if(!jid)return;const job=await api('/jobs/'+jid);framesId=job.result?.framesId;if(!framesId)throw new Error('La extracción no terminó. Consulta Producción.');const r=await api(route(`/frames/${framesId}`));frames=r.frames;framePos=0;showFrame();}],['← Fotograma',()=>{framePos=Math.max(0,framePos-1);showFrame();},true],['Fotograma →',()=>{framePos=Math.min(frames.length-1,framePos+1);showFrame();},true],['El sonido debe coincidir aquí',async()=>{if(!frames.length)throw new Error('Carga primero los fotogramas indexados.');cue=await mutate(route(`/cues/${cue.id}/anchor`),{cueRevision:cue.revision,framesId,frameIndex:frames[framePos].index});status.textContent='Contacto seleccionado. Marca ahora el ataque del sonido.';}]]);
+ buttons(box,[['Cargar fotogramas',async()=>{const jid=await runTask('frames',route(`/shots/${cue.shotId}/frames`),{start:Number(frameInput.value),count:48});if(!jid)return;const job=await api('/jobs/'+jid);framesId=job.result?.framesId;if(!framesId)throw new Error('La extracción no terminó. Consulta Escenas.');const r=await api(route(`/frames/${framesId}`));frames=r.frames;framePos=0;showFrame();}],['← Fotograma',()=>{framePos=Math.max(0,framePos-1);showFrame();},true],['Fotograma →',()=>{framePos=Math.min(frames.length-1,framePos+1);showFrame();},true],['El sonido debe coincidir aquí',async()=>{if(!frames.length)throw new Error('Carga primero los fotogramas indexados.');cue=await mutate(route(`/cues/${cue.id}/anchor`),{cueRevision:cue.revision,framesId,frameIndex:frames[framePos].index});status.textContent='Contacto seleccionado. Marca ahora el ataque del sonido.';}]]);
  const data=await api(route(`/assets/${cue.audioRevision}/waveform`));let selected=cue.sourceSyncSample,viewStart=0,viewEnd=data.samples;
  const canvas=document.createElement('canvas');canvas.width=900;canvas.height=180;canvas.className='wave';canvas.setAttribute('aria-label','Onda sonora; selecciona el ataque con el dedo');box.append(canvas);
  const sampleInfo=document.createElement('p');box.append(sampleInfo);
@@ -418,9 +540,10 @@ async function visualEditor(shot){
 // A transport can be injected by the isolated UI tests; production always uses fetch.
 export async function mountStudio(identity,options={}){
  user=identity;transport=options.transport||fetch;
+ $('#projects').hidden=!user;$('#projects').onclick=()=>projectList().catch(e=>say(e.message,true));
  $('#account').hidden=!user;$('#login').hidden=!!user;$('#workspace').hidden=!user;document.body.classList.toggle('connected',!!user);
  if(!user){p=null;active=false;return;}
- say('Todo se guarda en tu historia.');
+ say('');
  const match=location.hash.match(/^#\/proyectos\/([a-zA-Z0-9_-]+)$/);
  if(options.projectId||match){p=await getProject(options.projectId||match[1]);await lease(false);stage='Historia';}
  await draw();

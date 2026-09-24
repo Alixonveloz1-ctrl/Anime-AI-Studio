@@ -25,19 +25,21 @@ El instalador completo aún requiere ensayo real autorizado en Cloud Shell/iPhon
 
 ## Flujo editorial implementado
 
-Las cinco áreas del estudio son:
+La organización sigue la página de Animes:
 
-1. **Proyectos:** crear o abrir una historia; género principal, subgéneros y concepto opcional.
-2. **Historia:** generar tres ideas, elegir una y desarrollar/aprobar el guion y sus biblias.
-3. **Producción:** tomas y voces; en otra pestaña, música y efectos. Abre solo la toma o solicitud que quieres revisar. Las versiones anteriores están plegadas.
-4. **Revisión:** escuchar el corto muxado, corregir sonidos y revisar subtítulos.
-5. **Exportar:** aprobar el montaje revisado y descargar sus archivos.
+1. **📁 Proyectos**, arriba: abrir un corto guardado, crear otro o archivar uno conservando sus archivos.
+2. **Historia**, abajo: elegir género y subgéneros, añadir un concepto opcional, generar tres ideas y desarrollar/aprobar una.
+3. **Personajes**: fichas y referencias visuales de personajes, lugares y objetos.
+4. **Escenas**: imágenes y videos visibles, voz japonesa junto al diálogo. La pestaña **Música y efectos** conserva la música y las cargas de sonido.
+5. **Exportar**: revisar el corto, sus subtítulos y la mezcla; aprobar el montaje y descargarlo. **Revisar el corto** también está disponible en Escenas.
 
-Entra con Google para recuperar tus historias. Cada archivo tiene una acción explícita de aprobación después de abrirlo para revisar. Los modelos reales todavía no se han probado.
+Toca una imagen para ampliarla. Las candidatas y aprobadas se distinguen; las versiones anteriores se despliegan si las necesitas. Revisa el recurso cargado antes de aprobarlo. Si su carga falla, usa **Volver a cargar**; no regenera el recurso.
+
+Si se guardó el proyecto pero no se pudo abrir, **Abrir historia guardada** vuelve a abrir el mismo registro. Si no se pudo confirmar el guardado, **Revisar proyectos guardados** consulta la lista sin crear otro. Ningún registro anterior se borra automáticamente. Los modelos reales todavía no se han probado en esta corrección.
 
 Genera/aprueba primero referencias de identidad, lugares y objetos; después los planos y voces japonesas. Cada generación conserva la versión anterior. Veo exige `generateAudio:false`; el worker inspecciona la respuesta y solo expone su derivado silencioso. No hay sustitución automática de modelo/proveedor.
 
-En Producción → Música y efectos, cada solicitud tiene prompt, duración, perspectiva, preparación, cola y su entrada **Subir efecto**. Elige un MP3 desde Archivos. El original se conserva y el worker crea un PCM canónico con su onda y candidatos de ataque. Tras una interrupción, vuelve a seleccionar el mismo archivo para recuperar la sesión de carga. Si la sesión venció, se recupera el mismo destino y se reinicia únicamente la transferencia; no se duplican el recurso ni la solicitud. Esto requiere ensayo real desde iPhone.
+En Escenas → Música y efectos, cada solicitud tiene prompt, duración, perspectiva, preparación, cola y su entrada **Subir efecto**. Elige un MP3 desde Archivos. El original se conserva y el worker crea un PCM canónico con su onda y candidatos de ataque. Tras una interrupción, vuelve a seleccionar el mismo archivo para recuperar la sesión de carga. Si la sesión venció, se recupera el mismo destino y se reinicia únicamente la transferencia; no se duplican el recurso ni la solicitud. Esto requiere ensayo real desde iPhone.
 
 ## Corregir un sonido
 
@@ -48,7 +50,7 @@ En Producción → Música y efectos, cada solicitud tiene prompt, duración, pe
 5. Pulsa **Probar ajuste**. Se obtiene un MP4 muxado; no se arrancan dos reproductores separados. **Comparar anterior/candidata** alterna archivos; **Deshacer** recupera el ajuste previo.
 6. Escucha y pulsa **Aprobar y fijar**. El análisis automático no puede sobrescribirlo. Una dependencia cambiada obliga a revisar su uso; conserva el material y aprobación históricos.
 
-La extracción usa el mismo compositor para Veo, ilustración y cámara. Cambiar la edición visual exige revisar su ancla. Si hay varios contactos, elige el número y descripción correctos antes del análisis fino. En Producción → Tomas y voces → una toma → Movimiento y capas puedes editar la cámara o aplicar variantes aprobadas dentro de una región rectangular. La revisión visual en Chrome de un ancho móvil no sustituye las pruebas reales de Safari/iPhone. **Corregir sonido con IA** pide el cambio concreto y analiza la composición visual efectiva. El botón de IA tiene intentos limitados; no sustituye al ajuste manual.
+La extracción usa el mismo compositor para Veo, ilustración y cámara. Cambiar la edición visual exige revisar su ancla. Si hay varios contactos, elige el número y descripción correctos antes del análisis fino. En Escenas → Escenas y voces → un plano → Movimiento y capas puedes editar la cámara o aplicar variantes aprobadas dentro de una región rectangular. La revisión visual en Chrome de un ancho móvil no sustituye las pruebas reales de Safari/iPhone. **Corregir sonido con IA** pide el cambio concreto y analiza la composición visual efectiva. El botón de IA tiene intentos limitados; no sustituye al ajuste manual.
 
 ## Preview, exportación y recuperación
 
@@ -62,7 +64,7 @@ Si un envío queda **desconocido**, no repitas a ciegas: el proveedor puede habe
 
 En Guion y biblias, pulsa **Editar manualmente**, cambia los campos, **Revisar cambios** y **Guardar candidata**. Verás los recursos afectados antes de guardar; aprueba después la candidata. En **Subtítulos** puedes cambiar español, dividir bloques y marcar inicio/fin mientras escuchas la voz definitiva. Las advertencias de lectura requieren corregir el bloque o justificar una excepción. Cambiar la voz conserva la corrección anterior y solicita revisión.
 
-En Producción, **Recuperar pendiente** reencola trabajo no despachado o consulta una operación conocida; **Diagnosticar ejecución** consulta Cloud Run sin generar. Un envío incierto nunca se repite con ese botón.
+En Escenas → Actividad, **Continuar** reencola trabajo no despachado o consulta una operación conocida; **Comprobar estado** consulta Cloud Run sin generar. Un envío incierto nunca se repite con ese botón.
 
 ## Lotes, versiones e importación
 

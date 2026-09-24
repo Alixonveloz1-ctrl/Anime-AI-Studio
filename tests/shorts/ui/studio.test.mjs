@@ -12,7 +12,13 @@ let source=await fs.readFile(new URL('../../../cortos/studio.mjs',import.meta.ur
 source=source.replace(/^import .*;\n/gm,'').replace('export async function mountStudio','async function mountStudio').replace('export {api,say};','');
 async function setup(options={}){
  const fixture=createFixture(options);
- const baseTransport=fixture.transport;fixture.transport=async(url,request={})=>{if(options.nonJsonError&&decodeURIComponent(url).endsWith('/ideas:generate')){options.errorRequests=(options.errorRequests||0)+1;return new Response('',{status:502});}if(new Headers(request.headers).has('If-Match'))return new Response('',{status:412});return baseTransport(url,request);};
+ const baseTransport=fixture.transport;fixture.transport=async(url,request={})=>{
+ const path=new URL(url,'https://fixture.invalid').searchParams.get('path');
+ if(options.uncertainCreation&&path==='/projects'&&request.method==='POST'){options.createCalls=(options.createCalls||0)+1;await baseTransport(url,request);return new Response('',{status:502});}
+ if(options.failOpening&&path==='/projects/fixture'&&fixture.calls.some(c=>c.path==='/projects'&&c.method==='POST')){options.failOpening=false;return new Response(JSON.stringify({error:'Lectura temporalmente no disponible'}),{status:503});}
+ if(options.failImage&&path==='/projects/fixture/assets/imgCandidate/url')return new Response('{}',{status:503});
+ if(options.threeDrafts&&path==='/projects'&&(request.method||'GET')==='GET')return new Response(JSON.stringify({projects:[1,2,3].map(n=>({...fixture.project,id:'draft'+n,title:'',created:n}))}));
+ if(options.nonJsonError&&decodeURIComponent(url).endsWith('/ideas:generate')){options.errorRequests=(options.errorRequests||0)+1;return new Response('',{status:502});}if(new Headers(request.headers).has('If-Match'))return new Response('',{status:412});return baseTransport(url,request);};
  const dom=new JSDOM(html,{url:'https://fixture.invalid/cortos/',runScripts:'outside-only'}),w=dom.window;
  Object.assign(w,{...catalogue,steps:presentation.steps,titleFor:presentation.label,terminal:presentation.terminal,versions:presentation.versions,taskActions:presentation.taskActions,entityName:presentation.entityName,fieldLabel:presentation.fieldLabel,TextEncoder,structuredClone,fetch:fixture.transport,confirm:()=>{throw new Error('Unexpected confirmation')},prompt:()=>null});
  Object.defineProperty(w.crypto,'subtle',{value:webcrypto.subtle});w.setInterval=()=>0;
@@ -22,7 +28,7 @@ async function setup(options={}){
  async function click(name,parent=w.document){const buttons=[...parent.querySelectorAll('button')].filter(b=>b.textContent===name);assert.equal(buttons.length,1,'Unique button: '+name);await buttons[0].onclick();assert.equal(w.document.querySelector('#notice').className,'',w.document.querySelector('#notice').textContent);}
  return {fixture,w,dom,click};
 }
-test('Five stages, no budgets, no financial fields in generation requests',async()=>{
+test('Four familiar sections and projects in the header, no budgets, no financial fields in generation requests',async()=>{
  const {fixture,w,dom,click}=await setup({empty:true});
  assert.deepEqual([...w.document.querySelectorAll('#steps button')].map(b=>b.textContent),presentation.steps);
  assert.doesNotMatch(w.document.body.textContent,/USD|presupuesto|reserva máxima|Cloud Shell|Conectar el ensamblador/);
@@ -39,7 +45,7 @@ test('Three overlapping mounts leave one project form and submit only its select
   assert.equal(w.document.querySelectorAll('#concept').length,1);
   const ecchi=w.document.querySelector('input[value="ecchi adulto no explícito"]');
   assert.equal(ecchi.closest('fieldset').querySelector('legend').textContent,'Subgéneros · puedes elegir varios');
-  assert.equal(ecchi.closest('details').querySelector('summary').textContent,'Crear una historia','Ecchi is not hidden inside optional subgenres');
+  assert.equal(ecchi.closest('details'),null,'Ecchi is visible in the same selector layout as Animes');
   w.document.querySelector('#title').value='Historia elegida';w.document.querySelector('#genre').value='donghua';
   w.document.querySelector('#concept').value='Una secta de cultivadores rivales';ecchi.checked=true;
   w.document.querySelector('input[value="overpowered"]').checked=true;
@@ -63,18 +69,18 @@ test('Cortos includes every Animes genre/subgenre and sends choices accepted by 
 test('Idea selection and development stay connected to the production actions',async()=>{
  const {fixture,w,dom,click}=await setup({empty:true});await click('Generar tres ideas');
  await click('Elegir esta historia',w.document.querySelector('.grid>.card'));await click('Desarrollar esta historia');
- await click('Aprobar guion y biblias');assert.equal(fixture.project.activeDevelopment,'dev');assert.equal(w.document.querySelector('#steps [aria-current]').textContent,'Producción');dom.window.close();
+ await click('Aprobar guion y biblias');assert.equal(fixture.project.activeDevelopment,'dev');assert.equal(w.document.querySelector('#steps [aria-current]').textContent,'Escenas');dom.window.close();
 });
 test('Current and candidate remain visible; previous versions are folded; one review approves',async()=>{
- const {fixture,w,dom,click}=await setup();await click('Producción');
+ const {fixture,w,dom,click}=await setup();await click('Escenas');
  const shot=[...w.document.querySelectorAll('.shot-section')][0];const history=[...shot.querySelectorAll('details')].find(x=>x.querySelector('summary')?.textContent.startsWith('Versiones anteriores'));assert.ok(history);assert.equal(history.open,false);
  const candidate=[...shot.querySelectorAll('.card')].find(x=>x.querySelector(':scope>.badge')?.textContent.includes('Por revisar'));
  assert.ok(candidate);assert.equal(candidate.querySelectorAll('input[type=checkbox]').length,0);
- await click('Ver imagen',candidate);await click('Aprobar versión',candidate);
+ await new Promise(r=>setTimeout(r,0));assert.ok(candidate.querySelector('img'),'Candidate image is visible without opening another panel');candidate.querySelector('img').onload();await click('Aprobar versión',candidate);
  const sent=fixture.calls.find(c=>c.path.includes('imgCandidate:approve'));assert.deepEqual(sent.body,{reviewed:true});assert.equal(fixture.project.assetSelections['shot1|image'],'imgCandidate');dom.window.close();
 });
 test('Manual synchronization is usable with analysis exhausted and without AI calls',async()=>{
- const {fixture,w,dom,click}=await setup();await click('Producción');await click('Música y efectos');
+ const {fixture,w,dom,click}=await setup();await click('Escenas');await click('Música y efectos');
  assert.equal([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Usar propuesta'),false);
  await click('Ajustar sincronización');assert.ok(w.document.querySelector('#editor[open]'));
  await click('Cargar fotogramas');await click('Fotograma →');await click('El sonido debe coincidir aquí');await click('Este es el golpe');await click('Probar ajuste');await click('Aprobar y fijar');
@@ -82,7 +88,7 @@ test('Manual synchronization is usable with analysis exhausted and without AI ca
  dom.window.close();
 });
 test('Subtitle approval, automatic preview preparation and final export are connected',async()=>{
- const {fixture,w,dom,click}=await setup();await click('Revisión');await click('Subtítulos');
+ const {fixture,w,dom,click}=await setup();await click('Exportar');await click('Revisar el corto');await click('Subtítulos');
  assert.equal([...w.document.querySelectorAll('textarea')].length,1,'No empty exception fields');
  await click('Aprobar subtítulos revisados');await click('Preparar vista previa');await click('Exportar');await click('Aprobar y exportar');await click('Descargar archivos');
  assert.ok(fixture.calls.some(c=>c.path.endsWith('/timeline:compile')));assert.ok(fixture.calls.some(c=>c.path.endsWith('/renders')));assert.equal(w.document.querySelectorAll('.download-list a').length,2);
@@ -103,4 +109,91 @@ test('Cortos reads never carry a write precondition; writes retain the expected 
 test('An empty gateway error is explained and never retried as a paid generation',async()=>{
  const options={empty:true,nonJsonError:true},{w,dom}=await setup(options);
  try{await [...w.document.querySelectorAll('button')].find(b=>b.textContent==='Generar tres ideas').onclick();assert.match(w.document.querySelector('#notice').textContent,/respuesta del servicio \(502\)/);assert.equal(options.errorRequests,1);}finally{dom.window.close();}
+});
+
+
+test('Project list stays in the header, contains only stored records, and empty titles are explicit',async()=>{
+ const {fixture,w,dom,click}=await setup({empty:true,projectList:true,threeDrafts:true});
+ try{
+  assert.equal(w.document.querySelectorAll('#new-project').length,1);
+  assert.equal(w.document.querySelectorAll('.project-row').length,0,'No projects masquerading as generated stories on the creation page');
+  assert.deepEqual([...w.document.querySelectorAll('#steps button')].map(b=>b.textContent),['Historia','Personajes','Escenas','Exportar']);
+  await click('📁 Proyectos');
+  assert.equal(w.document.querySelectorAll('.projects-dialog[open] .project-row').length,3);
+  for(const row of w.document.querySelectorAll('.project-open'))assert.match(row.textContent,/Corto sin título/);
+  assert.doesNotMatch(w.document.body.textContent,/Una nueva historia por contar/);
+  assert.equal(fixture.calls.some(c=>c.method!=='GET'),false,'Viewing the list cannot create, archive or generate anything');
+ }finally{dom.window.close();}
+});
+
+test('A saved project with a failed opening retries its existing ID instead of creating a duplicate',async()=>{
+ const {fixture,w,dom,click}=await setup({empty:true,projectList:true,failOpening:true});
+ try{
+  const button=[...w.document.querySelectorAll('button')].find(b=>b.textContent==='Crear historia');
+  await button.onclick();
+  assert.match(w.document.querySelector('#notice').textContent,/proyecto está guardado/);
+  assert.equal(button.textContent,'Abrir historia guardada');
+  assert.equal(w.location.hash,'#/proyectos/fixture');
+  await click('Abrir historia guardada');
+  assert.equal(fixture.calls.filter(c=>c.path==='/projects'&&c.method==='POST').length,1);
+  assert.equal(fixture.project.title,'Corto sin título');
+  assert.ok([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Generar tres ideas'));
+  assert.equal(fixture.calls.some(c=>c.path.endsWith('/ideas:generate')),false);
+ }finally{dom.window.close();}
+});
+
+test('Scenes show image and voice players inline, references stay under Personajes, and opening views generates nothing',async()=>{
+ const {fixture,w,dom,click}=await setup();
+ try{
+  await click('Escenas');await new Promise(r=>setTimeout(r,0));
+  const shots=w.document.querySelectorAll('.scene-card');assert.equal(shots.length,2);
+  assert.equal(shots[0].closest('details'),null);
+  assert.equal(shots[0].querySelectorAll('.scene-visuals>.asset-card img').length,2,'Approved image and candidate both remain visible');
+  assert.ok(shots[0].querySelector('.voice-row audio[controls]'));
+  assert.equal(shots[0].querySelector('audio').autoplay,false);
+  assert.ok(shots[0].textContent.includes('Todavía estamos a tiempo.'));
+  assert.equal([...shots[0].querySelectorAll('button')].some(b=>b.textContent==='Ver imagen'),false);
+  const image=shots[0].querySelector('img');image.onclick();assert.ok(w.document.querySelector('.image-dialog[open] img'));await click('Cerrar',w.document.querySelector('.image-dialog'));
+  await click('Personajes');await new Promise(r=>setTimeout(r,0));
+  assert.equal(w.document.querySelectorAll('.char-card').length,2);assert.equal(w.document.querySelectorAll('.char-card img').length,2);
+  assert.equal(fixture.calls.some(c=>c.path.endsWith('/assets:generate')),false);
+ }finally{dom.window.close();}
+});
+
+test('A media read failure stays local, leaves scene controls usable and cannot approve an unloaded candidate',async()=>{
+ const {fixture,w,dom,click}=await setup({failImage:true});
+ try{
+  await click('Escenas');await new Promise(r=>setTimeout(r,0));
+  const broken=[...w.document.querySelectorAll('.asset-card')].find(c=>c.textContent.includes('No se pudo cargar'));
+  assert.ok(broken);assert.ok(broken.querySelector('.asset-media button'));
+  assert.equal(w.document.querySelectorAll('.scene-card').length,2);
+  await click('Aprobar versión',broken);
+  assert.equal(fixture.calls.some(c=>c.path.includes('imgCandidate:approve')),false);
+  assert.ok(w.document.querySelector('.scene-card .voice-row audio'));
+ }finally{dom.window.close();}
+});
+
+
+test('An unknown create response never automatically creates a second project',async()=>{
+ const options={empty:true,projectList:true,uncertainCreation:true},{fixture,w,dom,click}=await setup(options);
+ try{
+  await [...w.document.querySelectorAll('button')].find(b=>b.textContent==='Crear historia').onclick();
+  assert.match(w.document.querySelector('#notice').textContent,/No se pudo confirmar el guardado/);
+  await [...w.document.querySelectorAll('button')].find(b=>b.textContent==='Revisar proyectos guardados').onclick();
+  assert.equal(options.createCalls,1);assert.equal(w.document.querySelectorAll('.projects-dialog[open] .project-row').length,1);
+  assert.equal(fixture.calls.some(c=>c.path.endsWith('/ideas:generate')),false);
+ }finally{dom.window.close();}
+});
+
+test('Only validated silent video is displayed; playback pauses other media',async()=>{
+ const {fixture,w,dom,click}=await setup();
+ try{
+  fixture.project.assets.push({id:'clip',entityId:'shot1',kind:'veo_silent_validated',approvalState:'approved',created:3});
+  fixture.project.assets.push({id:'raw',entityId:'shot2',kind:'veo',approvalState:'quarantined',created:3});
+  await click('Escenas');await new Promise(r=>setTimeout(r,0));
+  const clip=w.document.querySelector('.asset-media video');assert.ok(clip);assert.equal(clip.muted,true);assert.equal(clip.autoplay,false);assert.equal(clip.playsInline,true);
+  assert.equal(fixture.calls.some(c=>c.path.endsWith('/assets/raw/url')),false);
+  let pauses=0;const voice=w.document.querySelector('audio');voice.pause=()=>pauses++;
+  clip.dispatchEvent(new w.Event('play'));assert.equal(pauses,1);
+ }finally{dom.window.close();}
 });

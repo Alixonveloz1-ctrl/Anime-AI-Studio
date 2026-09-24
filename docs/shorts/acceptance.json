@@ -32,7 +32,7 @@
     "fixture": "partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Fixtures de lectura, respaldo y recuperación pasan. Log real del proyecto p1789929671378 muestra metadata sin escenas/personajes; falta restaurar su contenido real y exportarlo. No se declara recuperación completa."
+    "remaining": "Logs reales del 24-09 muestran siete personajes, cero escenas, 31 imágenes y 151 referencias de imagen en p1789929671378. Las copias retenidas existen, pero no se ha confirmado una restauración con escenas. Falta recuperar/exportar su contenido real."
   },
   {
     "id": "A003",
@@ -1692,16 +1692,20 @@
       "auth/starfield.mjs",
       "auth/login.css",
       "cortos/catalog.mjs",
-      "auth/client.mjs"
+      "auth/client.mjs",
+      "cortos/index.html",
+      "docs/shorts/user-overrides.md"
     ],
     "tests": [
       "tests/shorts/ui/studio.test.mjs",
       "tests/shorts/ui/session-mount.test.mjs"
     ],
-    "fixture": "passed_local_partial",
+    "fixture": "partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "U008: formulario único, catálogo completo de Animes, subgéneros persistidos y tres ideas verificados con fixtures y contrato Python. Recorrido real de Safari y calidad con proveedores pendientes."
+    "remaining": "U010: navegación inferior y controles de medios adaptados de Animes. Fixtures verifican medios visibles, un reproductor activo, proyectos compactos y reapertura sin duplicados. Geometría a 390 px y recorrido Safari/iPhone con medios reales pendientes.",
+    "override": "U010 — organización original de Animes",
+    "effectiveRequirement": "Misma organización visual de Animes adaptada a Cortos; conservar toda la producción y revisión. Recorrido a 390 px sin desplazamiento horizontal, controles táctiles y un reproductor activo."
   },
   {
     "id": "A096",

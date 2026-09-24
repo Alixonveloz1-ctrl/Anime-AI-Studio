@@ -1,5 +1,5 @@
 // Presentation only. IDs and provider states stay in data, never in labels.
-export const steps=['Proyectos','Historia','Producción','Revisión','Exportar'];
+export const steps=['Historia','Personajes','Escenas','Exportar'];
 const names={queued:'En espera',running:'Preparando',waiting_provider:'Procesando en Google',awaiting_review:'Listo para revisar',succeeded:'Terminado',failed:'No se completó',cancelled:'Cancelado',cancel_requested:'Cancelando',submitted_unknown:'Pendiente de comprobar',approved:'Aprobado',candidate:'Por revisar',stale:'Necesita revisión',needs_review:'Por revisar',quarantined:'Archivo no utilizable',image:'Imagen',veo:'Video',veo_silent_validated:'Video',pcm:'Audio',ideas:'Ideas',develop:'Guion y biblias',revise:'Corrección',tts:'Voz',music:'Música',analyze:'Sincronización',review:'Revisión',transcribe:'Tiempos de voz',media:'Preparación del sonido',preview:'Vista previa',render:'Exportación',frames:'Fotogramas',import:'Importación',hold:'Ilustración',camera2d:'Cámara 2D',localized:'Animación localizada',dialogue:'Diálogo',thought:'Pensamiento',narration:'Narración',system:'Voz del sistema'};
 export const label=value=>names[value]||String(value||'').replace(/([a-z])([A-Z])/g,'$1 $2').replace(/[_-]/g,' ');
 export const terminal=state=>['awaiting_review','succeeded','failed','cancelled','submitted_unknown'].includes(state);
