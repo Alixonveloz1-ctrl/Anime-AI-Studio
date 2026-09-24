@@ -60,6 +60,7 @@ class DispatchRecoveryTests(unittest.TestCase):
         with patch('shorts.service.cloud.tasks_v2.CloudTasksClient',return_value=client):self.assertTrue(self.c.enqueue(self.c.db.data['animeShortsJobs/j']))
         self.assertTrue(client.create_task.call_args.kwargs['task']['name'].endswith('/j-0'));self.assertEqual(client.create_task.call_count,1)
     def test_A075_missing_operation_is_uncertain_not_retried(self):
+        self.c.db.data['animeShortsJobs/j']['operation']='analyze'
         self.c.db.data['animeShortsCapacity/text-analysis']={};self.c.http.post.return_value=Mock(ok=True,json=lambda:{})
         with patch('shorts.service.app.internal_identity',return_value=self.c.c),patch('shorts.service.app.cloud',return_value=self.c):
             r=self.client.post('/internal/dispatch',json={'jobId':'j'});again=self.client.post('/internal/dispatch',json={'jobId':'j'})

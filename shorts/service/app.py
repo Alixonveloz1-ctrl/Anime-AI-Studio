@@ -448,6 +448,8 @@ def job_action(jid,action):
     if action=='inspect':
         revision(j,expected())
         if j.get('settled'):return jsonify(state=j['state'],message='Trabajo cerrado; no se repitió.')
+        if j.get('executionMode')=='service':
+            return jsonify(state=j['state'],message='Estado de generación: '+j['state']+'. No se envió otra llamada.')
         path=j.get('workerExecution') or j.get('workerOperation')
         require(path and path.startswith('projects/') and '..' not in path and '://' not in path,'INSPECT_PENDING','No existe identificador de ejecución confirmado; consulta su estado antes de continuar.',409)
         response=cloud().http.get('https://run.googleapis.com/v2/'+path,timeout=30)
@@ -531,6 +533,10 @@ def dispatch():
     jid=ident(body()['jobId']);j,should_dispatch=cloud().acquire_dispatch(jid)
     if not should_dispatch:return jsonify(dispatched=False)
     ref=cloud().db.collection('animeShortsJobs').document(jid)
+    if j['operation'] in ('ideas','develop','revise'):
+        from shorts.service.execution import execute_text
+        execute_text(cloud(),jid)
+        return jsonify(dispatched=True)
     try:r=start_worker(c,[{'name':'SHORTS_JOB_ID','value':jid}])
     except Exception:
         ref.update({'dispatchUnknown':True});return jsonify(dispatched=False,unknown=True),202

@@ -10,8 +10,7 @@ from shorts.core.contracts import require, digest, validate_ideas, ContractError
 from shorts.core.requests import IDEAS_OUTPUT_LIMIT
 from shorts.service.providers import Providers, UnknownSubmission
 from shorts.service.cloud import RequestJournal
-from shorts.service.director import RULES, ideas_prompt, develop_prompt, validate_development
-from shorts.service.development_schema import development_schema
+from shorts.service.director import RULES, ideas_prompt, validate_development
 from shorts.service.timeline import approved_assets
 from shorts.core.dependencies import fingerprint, select_assets, dependency_records
 from media import pcm, waveform, silent_video, inspect, checksum, extract_frames, probe
@@ -49,17 +48,8 @@ def run_job(cloud,j,p):
     if op=='develop':
         idea=cloud.entity(pid,'ideas',data['ideaId'])
         require(p.get('selectedIdea',{}).get('id')==idea['id'] and p['selectedIdea']['hash']==digest(idea),'IDEA_CHANGED','La idea seleccionada cambió')
-        raw=provider.text(develop_prompt(p,idea['data']),response_schema=development_schema())
-        # Preserve the returned story before semantic validation. This private
-        # draft cannot be approved/rendered and never replaces existing work.
-        draft={'id':j['id'],'jobId':j['id'],'ideaId':idea['id'],'data':raw,
-            'created':time.time(),'status':'unvalidated','approvalState':'incomplete'}
-        cloud.put_entity(pid,'developmentDrafts',draft)
-        try:d=validate_development(raw)
-        except ContractError as error:
-            cloud.entity_ref(pid,'developmentDrafts',j['id']).update({'status':'invalid','error':{'code':error.code,'message':str(error)}})
-            raise
-        cloud.entity_ref(pid,'developmentDrafts',j['id']).update({'status':'validated'})
+        from shorts.service.development import develop
+        d=develop(cloud,provider,j,p,idea)
         review=provider.text(RULES+'\nRevisa guion: intención japonés/español, continuidad espacial y emoción específica al género. Devuelve {issues:[],coverage:[],nativeQualityGuaranteed:false}. No inventes revisión audiovisual.\n'+json.dumps(d,ensure_ascii=False))
         return {'developmentId':entity('developments',{'data':d,'review':review,'ideaId':idea['id']})['id']}
     if op=='revise':

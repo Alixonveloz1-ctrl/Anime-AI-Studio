@@ -56,7 +56,7 @@ class Providers:
     def text(self,prompt,parts=None,analysis=False,max_output_tokens=TEXT_OUTPUT_LIMIT,response_schema=None):
         kind='analysis' if analysis else 'text'
         require(type(max_output_tokens) is int and 1<=max_output_tokens<=TEXT_OUTPUT_LIMIT,'OUTPUT_LIMIT','Límite de salida inválido')
-        body={'contents':[{'role':'user','parts':[{'text':prompt},*(parts or [])]}],'generationConfig':{'responseMimeType':'application/json','temperature':.7,'maxOutputTokens':max_output_tokens}}
+        body={'contents':[{'role':'user','parts':[{'text':prompt},*(parts or [])]}],'generationConfig':{'responseMimeType':'application/json','temperature':.7,'maxOutputTokens':max_output_tokens,'thinkingConfig':{'thinkingLevel':'LOW'}}}
         if response_schema is not None:
             require(isinstance(response_schema,dict),'RESPONSE_SCHEMA','Estructura de respuesta inválida')
             body['generationConfig']['responseSchema']=response_schema

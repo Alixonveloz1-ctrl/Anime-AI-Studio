@@ -82,3 +82,11 @@ El usuario aclara que cada una de las tres ideas contiene únicamente un título
 El servicio de Cortos hace una sola generación de texto para las tres ideas, con salida limitada a 4096 tokens y contratos `{id,title,premise}`. La interfaz muestra título/concepto incluso para las propuestas antiguas más extensas; no borra los datos anteriores. La llamada de desarrollo sigue usando el límite anterior y solo la idea seleccionada. No cambia ningún proveedor, modelo o región.
 
 La captura «Ideas · En espera» corresponde a un trabajo cuyo arranque ocurrió después del límite de consulta de la web. Se amplía la consulta del mismo ID a doce minutos, se recupera el estado al abrir el proyecto y se muestran errores/cuotas, comprobación, cancelación y recuperación en Historia. No se repiten generaciones automáticamente ni se ofrecen nuevas ideas mientras exista una solicitud de ideas incierta o pendiente. Evidencia y límites: [ideas-and-job-followup.md](ideas-and-job-followup.md).
+
+## U012 — Desarrollo encadenado con producción completa (2026-09-24)
+
+El usuario autoriza usar como referencia las llamadas funcionales de Animes:
+dividir desarrollo, conservar contexto y guardar entregas. No se simplifican
+los guiones, silencios, voces japonesas, subtítulos españoles, música, SFX ni
+montaje establecidos. La generación de ideas sigue limitada a tres títulos
+y conceptos; solo la idea elegida se desarrolla. Ver staged-text-generation.md.

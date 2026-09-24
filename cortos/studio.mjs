@@ -68,7 +68,7 @@ async function runTask(operation,path,data={}){
 function showJob(job){
  const panel=$('#activity');panel.hidden=false;panel.replaceChildren();
  const text=document.createElement('div'),heading=document.createElement('strong'),message=document.createElement('p');
- heading.textContent=titleFor(job.operation)+' · '+titleFor(job.state);message.textContent=describeIssue(jobMessage(job));text.append(heading,message);panel.append(text);
+ heading.textContent=titleFor(job.operation)+' · '+titleFor(job.state);message.textContent=job.state==='running'&&job.progress?`${job.progress.stage}/${job.progress.total} · ${job.progress.label}`:describeIssue(jobMessage(job));text.append(heading,message);panel.append(text);
  const controls=[],available=taskActions(job);
  if(unresolved(job))controls.push(['Comprobar estado',async()=>{
   const latest=await api('/jobs/'+job.id);

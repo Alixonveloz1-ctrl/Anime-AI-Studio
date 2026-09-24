@@ -45,8 +45,8 @@ class BriefIdeasTests(unittest.TestCase):
         p={'id':'p','genre':'drama','subgenres':[],'concept':'','format':'16:9'}
         selected={'id':'chosen','data':IDEAS[1]};p['selectedIdea']={'id':'chosen','hash':digest(selected)}
         cloud=Mock();cloud.c=config();cloud.entity.return_value=selected
-        with patch('shorts.service.production.Providers') as provider,patch('shorts.service.production.validate_development',return_value={'title':'fixture'}):
-            provider.return_value.text.side_effect=[{'title':'fixture'},{'issues':[]}]
+        with patch('shorts.service.production.Providers') as provider,patch('shorts.service.development.validate_development',return_value={'title':'fixture'}):
+            provider.return_value.text.side_effect=[{'title':'fixture','bible':{},'beats':[]},{'shots':[],'utterances':[]},{'soundRequests':[],'musicRequests':[],'subtitles':[]},{'issues':[]}]
             run_job(cloud,{'id':'j','operation':'develop','payload':{'ideaId':'chosen'}},p)
             prompt=provider.return_value.text.call_args_list[0].args[0]
             self.assertIn(IDEAS[1]['premise'],prompt)
@@ -85,6 +85,7 @@ class DevelopmentSchemaTests(unittest.TestCase):
         Providers(config(),http).text('selected story',response_schema=schema)
         request=http.post.call_args
         self.assertEqual(request.kwargs['json']['generationConfig']['responseSchema'],schema)
+        self.assertEqual(request.kwargs['json']['generationConfig']['thinkingConfig'],{'thinkingLevel':'LOW'})
         self.assertEqual(request.kwargs['json']['generationConfig']['maxOutputTokens'],TEXT_OUTPUT_LIMIT)
         self.assertIn('/locations/global/publishers/google/models/gemini-3.1-pro-preview:generateContent',request.args[0])
         self.assertEqual(http.post.call_count,2) # free count + one generation
@@ -94,7 +95,7 @@ class DevelopmentSchemaTests(unittest.TestCase):
         from shorts.service.cloud import Cloud
         for kind in ('characters','locations','props'):
             with self.subTest(kind=kind):
-                raw=development()
+                raw=development();raw['title']='Fixture'
                 if kind=='props':raw['bible']['props']=[{'id':'book','name':'Libro','owner':'hero','state':'cerrado','referencePrompt':'libro rojo'}]
                 target=raw['bible'][kind][0];del target['referencePrompt']
                 original=copy.deepcopy(raw)
@@ -102,7 +103,7 @@ class DevelopmentSchemaTests(unittest.TestCase):
                 idea={'id':'chosen','data':IDEAS[0]};p['selectedIdea']={'id':'chosen','hash':digest(idea)}
                 cloud=Cloud.__new__(Cloud);cloud.c=config();cloud.http=Mock();cloud.db=Mock();cloud.entity=Mock(return_value=idea)
                 with patch('shorts.service.production.Providers') as provider:
-                    provider.return_value.text.return_value=raw
+                    provider.return_value.text.return_value={k:raw[k] for k in ('title','bible','beats')}
                     with self.assertRaises(ContractError) as error:
                         run_job(cloud,{'id':'job','operation':'develop','payload':{'ideaId':'chosen'}},p)
                     self.assertEqual(error.exception.code,'DEVELOPMENT_TEXT')
@@ -111,7 +112,8 @@ class DevelopmentSchemaTests(unittest.TestCase):
                     provider.return_value.text.assert_called_once()
                 ref=cloud.db.collection.return_value.document.return_value.collection.return_value.document.return_value
                 saved=ref.create.call_args.args[0]
-                self.assertEqual(saved['data'],original);self.assertEqual(raw,original)
+                self.assertEqual(saved['data'],{});self.assertEqual(raw,original)
+                self.assertTrue(any('stages' in call.args[0] for call in ref.update.call_args_list))
                 self.assertEqual(saved['approvalState'],'incomplete')
                 self.assertEqual(ref.update.call_args.args[0]['status'],'invalid')
                 kinds=[c.args[0] for c in cloud.db.collection.return_value.document.return_value.collection.call_args_list]
@@ -120,14 +122,19 @@ class DevelopmentSchemaTests(unittest.TestCase):
 
     def test_A018_valid_development_remains_candidate_after_review(self):
         from test_workflow import development
-        raw=development();original=copy.deepcopy(raw)
+        raw=development();raw['title']='Fixture';original=copy.deepcopy(raw)
         p={'id':'p','genre':'drama','subgenres':[],'concept':'','format':'16:9'}
         idea={'id':'chosen','data':IDEAS[0]};p['selectedIdea']={'id':'chosen','hash':digest(idea)}
         cloud=Mock();cloud.c=config();cloud.entity.return_value=idea
         with patch('shorts.service.production.Providers') as provider:
-            provider.return_value.text.side_effect=[raw,{'issues':[]}]
+            provider.return_value.text.side_effect=[{k:raw[k] for k in keys} for keys in [('title','bible','beats'),('shots','utterances'),('soundRequests','musicRequests','subtitles')]]+[{'issues':[]}]
             result=run_job(cloud,{'id':'job','operation':'develop','payload':{'ideaId':'chosen'}},p)
-            self.assertEqual(provider.return_value.text.call_count,2)
+            self.assertEqual(provider.return_value.text.call_count,4)
+            calls=provider.return_value.text.call_args_list
+            self.assertIn('red coat',calls[1].args[0])
+            self.assertIn('本。',calls[2].args[0])
+            self.assertEqual(set(calls[1].kwargs['response_schema']['required']),{'shots','utterances'})
+            self.assertEqual(set(calls[2].kwargs['response_schema']['required']),{'soundRequests','musicRequests','subtitles'})
         self.assertEqual([c.args[1] for c in cloud.put_entity.call_args_list],['developmentDrafts','developments'])
         candidate=cloud.put_entity.call_args.args[2]
         self.assertEqual(result['developmentId'],candidate['id'])
