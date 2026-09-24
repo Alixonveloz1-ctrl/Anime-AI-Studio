@@ -122,7 +122,13 @@ def select(pid,iid):
     _,p=cloud().mutate(pid,expected(),change);return jsonify(p)
 @app.post('/projects/<pid>/develop')
 def develop(pid):
-    p=owned(pid);require(p.get('selectedIdea'),'IDEA','Elige una idea');return submit(pid,'develop',{'ideaId':p['selectedIdea']['id']})
+    p=owned(pid);require(p.get('selectedIdea'),'IDEA','Elige una idea')
+    payload={'ideaId':p['selectedIdea']['id']}
+    if body().get('resumeFrom'):
+        from shorts.service.development import recovery_source
+        source=ident(body()['resumeFrom']);recovery_source(cloud(),p,source,payload['ideaId'])
+        payload['resumeFrom']=source
+    return submit(pid,'develop',payload)
 @app.post('/projects/<pid>/revisions/<kind>/<eid>:revise')
 def revise(pid,kind,eid):
     owned(pid);cloud().entity(pid,kind,eid);d=body();require(isinstance(d.get('instruction'),str) and 0<len(d['instruction'])<=3000,'INSTRUCTION','Describe la corrección')
@@ -429,10 +435,16 @@ def exports(pid,rid):
     owned(pid);r=cloud().entity(pid,'previews',rid);require(r.get('final') and r['state']=='ready','EXPORT','Exportación pendiente')
     return jsonify(files=[{'name':n,'url':cloud().url(pid,path)} for n,path in r['files'].items()])
 
+def public_job(j):
+    result={k:v for k,v in j.items() if k not in ('payload','session')}
+    if j.get('operation')=='develop' and j.get('settled') and j.get('state')=='failed' and j.get('result',{}).get('code')=='REFERENCE_LINK':
+        result['recoveryIdeaId']=j.get('payload',{}).get('ideaId')
+    return result
+
 @app.get('/jobs/<jid>')
 def job(jid):
     owner=uid();j=cloud().db.collection('animeShortsJobs').document(ident(jid)).get().to_dict();require(j and j['owner']==owner,'JOB','Trabajo no disponible',404)
-    return jsonify({k:v for k,v in j.items() if k not in ('payload','session')})
+    return jsonify(public_job(j))
 def update_job_review(ref,expected_revision,fields):
     from google.cloud import firestore
     @firestore.transactional
@@ -648,4 +660,4 @@ def project_jobs(pid):
     owned(pid)
     from google.cloud.firestore_v1.base_query import FieldFilter
     jobs=cloud().db.collection('animeShortsJobs').where(filter=FieldFilter('projectId','==',pid)).stream()
-    return jsonify(jobs=[{k:v for k,v in x.to_dict().items() if k not in ('payload','session')} for x in jobs])
+    return jsonify(jobs=[public_job(x.to_dict()) for x in jobs])

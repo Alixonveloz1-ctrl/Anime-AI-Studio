@@ -254,3 +254,16 @@ test('Cold worker starting after the former three-minute limit still paints its 
   assert.equal(fixture.calls.filter(c=>c.path.endsWith('/ideas:generate')).length,1);
  }finally{dom.window.close();}
 });
+test('Reference failure offers explicit saved-script recovery for the selected idea only',async()=>{
+ const {fixture,w,dom,click}=await setup({empty:true});
+ try{
+  await click('Generar tres ideas');
+  fixture.jobs.push({id:'failedReferences',operation:'develop',state:'failed',settled:true,created:99999999999,recoveryIdeaId:fixture.project.ideas[0].id,result:{code:'REFERENCE_LINK',error:'Faltan referencias'}});
+  await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
+  assert.ok([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Recuperar guion guardado'));
+  assert.equal(fixture.calls.some(c=>c.path.endsWith('/develop')),false);
+  await click('Recuperar guion guardado');
+  const sent=fixture.calls.filter(c=>c.path.endsWith('/develop'));
+  assert.equal(sent.length,1);assert.equal(sent[0].body.resumeFrom,'failedReferences');
+ }finally{dom.window.close();}
+});

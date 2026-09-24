@@ -234,7 +234,11 @@ async function script(parent=screen){
  if(!p.selectedIdea){const c=card('Elige una idea primero','<p>Las tres propuestas son el punto de partida de tu guion.</p>');buttons(c,[['Ver ideas',()=>ideas(parent)]]);parent.append(c);return;}
  const intro=card('Guion y biblias',`<p>${esc(p.ideas.find(i=>i.id===p.selectedIdea?.id)?.data.title||'Tu historia elegida')}</p>`);
  if(knownJobs.some(j=>j.operation==='develop'&&unresolved(j))){const note=document.createElement('p');note.textContent='El desarrollo solicitado está pendiente. Su estado aparece arriba.';intro.append(note);}
- else if(!p.developments.length)buttons(intro,[['Desarrollar esta historia',()=>runTask('develop',route('/develop'))]]);
+ else if(!p.developments.length){
+  const failed=knownJobs.filter(j=>j.operation==='develop'&&j.settled&&j.state==='failed'&&j.result?.code==='REFERENCE_LINK'&&j.recoveryIdeaId===p.selectedIdea.id).sort((a,b)=>b.created-a.created)[0];
+  if(failed)buttons(intro,[['Recuperar guion guardado',()=>runTask('develop',route('/develop'),{resumeFrom:failed.id})]]);
+  else buttons(intro,[['Desarrollar esta historia',()=>runTask('develop',route('/develop'))]]);
+ }
  else{
   if(p.activeDevelopment)buttons(intro,[['Continuar a producción',()=>go('Escenas')]]);
   const more=fold(intro,'Crear una nueva versión');buttons(more,[['Crear otra versión del guion',()=>runTask('develop',route('/develop')),true]]);
