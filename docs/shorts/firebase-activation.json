@@ -1,0 +1,27 @@
+{
+  "date": "2026-09-24",
+  "project": "civic-genre-507713-m2",
+  "account": "codigodinero7@gmail.com",
+  "firebaseActivation": "completed in Firebase console; project ready message observed",
+  "firebaseTerms": "accepted after explicit user authorization",
+  "billingPlan": "Blaze confirmed after separate explicit user authorization; existing project billing",
+  "googleAnalytics": "disabled during activation",
+  "googleSignInProvider": "enabled; provider table displays Habilitada",
+  "publicApplicationName": "Anime AI Studio",
+  "supportEmail": "codigodinero7@gmail.com",
+  "remaining": [
+    "Run updated installer menu 5 to register/reuse web app, write owner-only Vercel configuration, deploy and configure domains/CORS",
+    "Verify real application sign-in and access to both Animes and Cortos"
+  ],
+  "blocker": "Cloud Shell iframe and Google Cloud console show Site Unavailable in agent browser. Firebase console remains available. User Cloud Shell session required for final connector run.",
+  "mobileNextSteps": [
+    "Open existing installer with ./c if not already at its menu",
+    "Choose 6 (Buscar actualización de la rama)",
+    "In updated menu choose 5 (Conectar/recuperar Vercel)",
+    "Select same Google project and existing Vercel application; complete its connection confirmation"
+  ],
+  "workerReinstallationRequired": false,
+  "paidModelGenerations": 0,
+  "appReadyForOwnerUse": false,
+  "scope": "No changes to original Animes generators, credentials, bucket or montage; Firebase/Auth setup only."
+}
