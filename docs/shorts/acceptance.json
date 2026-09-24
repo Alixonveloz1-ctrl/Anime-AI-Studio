@@ -33,15 +33,19 @@
     "files": [
       "shorts/gateway.mjs",
       "cortos/index.html",
-      "tests/shorts/legacy-regression.cjs"
+      "tests/shorts/legacy-regression.cjs",
+      "index.html",
+      "auth/animes.mjs",
+      "auth/ready.js"
     ],
     "tests": [
-      "tests/shorts/legacy-regression.cjs"
+      "tests/shorts/legacy-regression.cjs",
+      "tests/shorts/ui/animes-loading.test.mjs"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Código productor de payloads sin cambios; no se ejecutaron APIs antiguas."
+    "remaining": "Comparación heredada y seis casos reales de código con transporte sintético pasan; pendiente abrir/exportar el proyecto concreto del propietario con APIs reales. Excepciones de carga acotadas en U006."
   },
   {
     "id": "A004",
@@ -79,15 +83,19 @@
     "files": [
       "shorts/gateway.mjs",
       "cortos/index.html",
-      "tests/shorts/legacy-regression.cjs"
+      "tests/shorts/legacy-regression.cjs",
+      "index.html",
+      "auth/animes.mjs",
+      "auth/ready.js"
     ],
     "tests": [
-      "tests/shorts/legacy-regression.cjs"
+      "tests/shorts/legacy-regression.cjs",
+      "tests/shorts/ui/animes-loading.test.mjs"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "Prueba heredada intacta; no se eliminó ninguna prohibición de su módulo."
+    "remaining": "Comparación heredada y seis casos reales de código con transporte sintético pasan; pendiente abrir/exportar el proyecto concreto del propietario con APIs reales. Excepciones de carga acotadas en U006."
   },
   {
     "id": "A007",
@@ -1654,13 +1662,18 @@
       "cortos/style.css",
       "shorts/service/director.py",
       "cortos/studio.mjs",
-      "cortos/presentation.mjs"
+      "cortos/presentation.mjs",
+      "auth/studio-theme.css",
+      "auth/starfield.mjs",
+      "auth/login.css"
     ],
-    "tests": [],
-    "fixture": "not_covered",
+    "tests": [
+      "tests/shorts/ui/studio.test.mjs"
+    ],
+    "fixture": "passed_local_partial",
     "api": "not_run",
     "acceptance": "pending",
-    "remaining": "CSS móvil y único reproductor; navegador local bloqueado, revisión visual pendiente."
+    "remaining": "U007 restaura el diseño original. Cinco flujos de UI pasan con fixtures. Navegador rechazó el fixture local; recorrido visual a 390 px en Safari y APIs reales pendiente."
   },
   {
     "id": "A096",

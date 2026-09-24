@@ -1,2 +1,2 @@
 import { protectPage, showSessionError } from './client.mjs';
-protectPage().catch(showSessionError);
+protectPage(() => window.dispatchEvent(new Event('studio-access-ready'))).catch(showSessionError);

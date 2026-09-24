@@ -40,6 +40,16 @@ Este cambio autoriza modificar el preámbulo de acceso de Animes; no sus modelos
 
 La configuración incompleta bloquea generaciones en ambas secciones. No se habilita una excepción pública para conservar el acceso mientras falta Firebase. Resolver la activación/permisos de Firebase y comprobar el acceso real del propietario sigue pendiente. Cambiar solo web/autenticación no exige recompilar el worker instalado; se conserva su commit para diagnóstico y rollback.
 
+## U006 — recuperar la carga de proyectos anteriores de Animes
+
+El usuario informa que un proyecto guardado de Animes no carga después de conectar el acceso privado. Se autoriza reparar su carga, manteniendo formatos, preferencias, motores y medios. El arranque espera a que se haya sincronizado la sesión. Una lectura fallida no equivale a un proyecto vacío, no debe purgar otras copias y no debe anunciar éxito. Una copia de emergencia local se identifica como tal. La confirmación de carga espera al renderizado de personajes y escenas.
+
+La comparación heredada admite diferencias solo en `loadStateFor`, `switchProject`, `renderAll` e `init`. `tests/shorts/ui/animes-loading.test.mjs` ejecuta la página real con seis escenarios sintéticos de sesión, lectura y medios. El resto del código de Animes, su CSS original, APIs, generadores e instaladores sigue comparándose con el baseline.
+
+## U007 — conservar el diseño original en toda la aplicación
+
+El usuario rechaza la nueva paleta verde y pide el diseño original de Animes también en Cortos. Se reutilizan fondo azul oscuro, magenta, cian, rosa, tipografías, tarjetas con brillo, degradados, estrellas, cometas y transiciones originales. Se aplica a Cortos, acceso y revisión de sonido. No se modifica la hoja de estilos de Animes ni se añaden opciones de apariencia. Las áreas funcionales y controles de Cortos se conservan; se respeta la preferencia del dispositivo de reducir movimiento.
+
 ## Evidencia y límites
 
 La matriz conserva A001–A100 y añade `effectiveRequirement`/`override` en las filas afectadas. El comprobador sigue cotejando literalmente los cien requisitos originales. Las pruebas de interfaz usan un transporte sintético explícito separado de la aplicación real; no prueban Firebase, modelos ni calidad de medios. Las pruebas FFmpeg sí generan/decodifican medios sintéticos. La aceptación con servicios reales y Safari/iPhone sigue pendiente.

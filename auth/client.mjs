@@ -55,9 +55,9 @@ export function showSessionError(error) {
   let notice = document.querySelector('#studio-access-notice');
   if (!notice) {
     notice = document.createElement('dialog'); notice.id = 'studio-access-notice';
-    notice.style.cssText = 'max-width:28rem;padding:24px;border:1px solid #424842;border-radius:18px;background:#151a17;color:#f2f4ed;font:16px/1.6 system-ui';
+    notice.style.cssText = 'max-width:28rem;padding:24px;border:1px solid rgba(180,140,255,.3);border-radius:18px;background:#0f0f2e;color:#f0eeff;font:16px/1.6 "M PLUS Rounded 1c",sans-serif';
     const text = document.createElement('p'); notice.append(text);
-    const link = document.createElement('a'); link.textContent = 'Comprobar mi acceso'; link.href = loginPath(); link.target = '_blank'; link.rel = 'noopener'; link.style.color = '#b6cf94'; notice.append(link);
+    const link = document.createElement('a'); link.textContent = 'Comprobar mi acceso'; link.href = loginPath(); link.target = '_blank'; link.rel = 'noopener'; link.style.color = '#00e5ff'; notice.append(link);
     const close = document.createElement('button'); close.textContent = 'Volver al proyecto'; close.style.cssText = 'display:block;margin-top:20px;padding:10px'; close.onclick = () => notice.close(); notice.append(close);
     document.body.append(notice);
   }

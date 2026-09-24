@@ -318,6 +318,7 @@
 </head>
 <body>
 <nav aria-label="Secciones" style="padding:8px 16px;text-align:right"><button type="button" data-studio-signout style="margin-right:24px;background:none;border:0;color:inherit;font:inherit;cursor:pointer">Salir</button><a href="/cortos/" style="color:inherit">Cortos de anime →</a></nav>
+<script src="/auth/ready.js"></script>
 <script type="module" src="/auth/animes.mjs"></script>
 
 
@@ -1877,6 +1878,7 @@ async function cloudLoadProject(pid) {
 
 async function loadStateFor(pid) {
   // Cloud FIRST. The device copy is only an offline/emergency cache.
+  let failure;
   try {
     const remote = await cloudLoadProject(pid);
     if (remote?.data) {
@@ -1885,13 +1887,20 @@ async function loadStateFor(pid) {
       return true;
     }
   } catch (e) {
+    failure = e;
     console.warn('Carga desde bucket:', e.message);
   }
 
-  const raw = localStorage.getItem(`proj_${pid}`);
-  if (!raw) { applyStateData(pid, null); return false; }
-  try { applyStateData(pid, JSON.parse(raw)); return false; }
-  catch (_) { applyStateData(pid, null); return false; }
+  try {
+    const raw = localStorage.getItem(`proj_${pid}`);
+    const cached = raw ? JSON.parse(raw) : null;
+    if (cached && typeof cached === 'object' && !Array.isArray(cached)) {
+      applyStateData(pid, cached);
+      return false;
+    }
+  } catch (_) {}
+  // A failed read is not an empty project. Keep the current project and caches.
+  throw failure || new Error('No se encontró una copia disponible del proyecto. No se modificó el proyecto abierto.');
 }
 
 function saveProjects() {
@@ -2008,11 +2017,15 @@ async function newProject() {
 }
 
 async function switchProject(pid) {
-  await loadStateFor(pid);
-  await pruneDeviceCacheExcept(pid);
-  renderAll();
-  closeModal();
-  showToast('Proyecto cargado desde Google Cloud', 'success');
+  try {
+    const fromCloud = await loadStateFor(pid);
+    if (fromCloud) await pruneDeviceCacheExcept(pid);
+    await renderAll();
+    closeModal();
+    showToast(fromCloud ? 'Proyecto cargado desde Google Cloud' : 'Proyecto abierto desde la copia de este dispositivo; Google Cloud no respondió.', fromCloud ? 'success' : 'error');
+  } catch (e) {
+    openErrorModal('No se pudo cargar el proyecto', e.message);
+  }
 }
 
 async function deleteProject(pid) {
@@ -8790,14 +8803,14 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
 
 function renderAll() {
   renderUniverse();
-  renderCharacters();
-  renderScenes();
+  return Promise.all([renderCharacters(), renderScenes()]);
 }
 
 // ════════════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════════════
 (async function init() {
+  await window.studioAccessReady;
   await initDB();
 
   // 1) Read whatever this device had BEFORE the cloud architecture existed.
@@ -8806,18 +8819,21 @@ function renderAll() {
   loadProjects();
   await migrateThisBrowserToCloud();
 
+  let cloudListReady = false;
   try {
     await refreshProjectsFromCloud();
+    cloudListReady = true;
   } catch (e) {
     console.warn('No se pudo leer proyectos del bucket; usando caché local:', e.message);
   }
 
   if (!projects.length) {
+    if (!cloudListReady) throw new Error('No se pudieron leer tus proyectos de Google Cloud. Vuelve a abrir la página; no se creó ni reemplazó ningún proyecto.');
     await newProject();
   } else {
     projects.sort((a,b) => Number(b.updated || 0) - Number(a.updated || 0));
-    await loadStateFor(projects[0].id);
-    await pruneDeviceCacheExcept(projects[0].id);
+    const fromCloud = await loadStateFor(projects[0].id);
+    if (fromCloud) await pruneDeviceCacheExcept(projects[0].id);
   }
   updateApiDot();
   // Antes de dibujar nada: el formato (9:16 / 16:9) decide cómo se recortan las
@@ -8829,9 +8845,9 @@ function renderAll() {
   actualizarPanelDeVoz();
   document.getElementById('voiceLang')?.addEventListener('change', pintarVocesDelIdioma);
   cargarVoces();
-  renderAll();
+  await renderAll();
   mostrarUltimoMontaje();
-})();
+})().catch(e => openErrorModal('No se pudo abrir el estudio', e.message));
 
 </script>
 </body>
