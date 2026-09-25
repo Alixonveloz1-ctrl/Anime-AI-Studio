@@ -32,6 +32,7 @@ def subtitle_files(plan, root):
 
 def mix(plan, root, files):
     """Track stems preserve absolute sample offsets, including tails across cuts."""
+    samples=plan['samples']
     stems={}
     for track in TRACKS:
         cues=[c for c in plan['cues'] if c['track']==track]
@@ -49,9 +50,9 @@ def mix(plan, root, files):
             if pan: f+=f',pan=stereo|c0={min(1,1-pan)}*c0|c1={min(1,1+pan)}*c1'
             f+=f',adelay={c["resolvedStartSample"]}S:all=1[a{i}]';filters.append(f);labels.append(f'[a{i}]')
         if cues:
-            filters.append(''.join(labels)+f'amix=inputs={len(labels)}:normalize=0,apad=whole_len={SAMPLES},atrim=end_sample={SAMPLES}[out]')
+            filters.append(''.join(labels)+f'amix=inputs={len(labels)}:normalize=0,apad=whole_len={samples},atrim=end_sample={samples}[out]')
             ff([*args,'-filter_complex',';'.join(filters),'-map','[out]','-ar',RATE,'-ac',2,'-c:a','pcm_s24le',dest])
-        else: ff(['-f','lavfi','-i','anullsrc=r=48000:cl=stereo','-af',f'atrim=end_sample={SAMPLES}','-c:a','pcm_s24le',dest])
+        else: ff(['-f','lavfi','-i','anullsrc=r=48000:cl=stereo','-af',f'atrim=end_sample={samples}','-c:a','pcm_s24le',dest])
         stems[track]=dest
     args=[]
     for p in stems.values():args+=['-i',p]
@@ -69,7 +70,7 @@ def mix(plan, root, files):
         graph+=f'[4:a][key]sidechaincompress=threshold={threshold}:ratio={ratio}:attack=20:release={release}:makeup=1[music];'
         labels='[voices][music][5:a][6:a]'
     count=4 if duck.get('enabled') else len(stems)
-    graph+=labels+f'amix=inputs={count}:normalize=0,volume={gain}dB,alimiter=limit=0.8912509:level=0:latency=1,atrim=end_sample={SAMPLES}[m]'
+    graph+=labels+f'amix=inputs={count}:normalize=0,volume={gain}dB,alimiter=limit=0.8912509:level=0:latency=1,atrim=end_sample={samples}[m]'
     ff([*args,'-filter_complex',graph,'-map','[m]','-ar',RATE,'-ac',2,'-c:a','pcm_s24le',root/'premaster.wav'])
     normalization=policy.get('normalization',{})
     report={'scope':'full-program','normalization':'disabled','ducking':bool(duck.get('enabled'))}
@@ -82,12 +83,12 @@ def mix(plan, root, files):
         # Silence has no finite LUFS value and must stay silent.
         if all(math.isfinite(float(stats[k])) for k in ('input_i','input_tp','input_lra','input_thresh','target_offset')):
             filt=base+f':measured_I={stats["input_i"]}:measured_TP={stats["input_tp"]}:measured_LRA={stats["input_lra"]}:measured_thresh={stats["input_thresh"]}:offset={stats["target_offset"]}:linear=true'
-            ff(['-i',root/'premaster.wav','-af',filt+f',aresample=48000,apad=whole_len={SAMPLES},atrim=end_sample={SAMPLES}','-ar',RATE,'-ac',2,'-c:a','pcm_s24le',root/'mix.wav'])
+            ff(['-i',root/'premaster.wav','-af',filt+f',aresample=48000,apad=whole_len={samples},atrim=end_sample={samples}','-ar',RATE,'-ac',2,'-c:a','pcm_s24le',root/'mix.wav'])
         else:
             shutil.copyfile(root/'premaster.wav',root/'mix.wav');report['normalization']='silence-preserved'
     else:shutil.copyfile(root/'premaster.wav',root/'mix.wav')
     (root/'mix-report.json').write_text(json.dumps(report,indent=2))
-    with wave.open(str(root/'mix.wav'),'rb') as w:require(w.getnframes()==SAMPLES,'MIX_LENGTH','Longitud PCM incorrecta')
+    with wave.open(str(root/'mix.wav'),'rb') as w:require(w.getnframes()==samples,'MIX_LENGTH','Longitud PCM incorrecta')
     return stems
 
 def visual_clip(s, files, target, w, h, offset, length):
@@ -136,11 +137,12 @@ def visual_clip(s, files, target, w, h, offset, length):
     else:opts=['-vf',','.join(vf),'-map','0:v:0']
     ff([*args,*opts,'-an','-frames:v',length,'-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p',target])
 
-def render(manifest, root, start=0, end=7200, final=False, width=None):
+def render(manifest, root, start=0, end=None, final=False, width=None):
     root=Path(root).resolve();root.mkdir(parents=True,exist_ok=True)
     plan=compile_timeline(manifest,final)
-    require(type(start)is int and type(end)is int and 0<=start<end<=7200,'RANGE','Intervalo inválido')
-    require(not final or (start,end)==(0,7200),'FINAL_RANGE','Final incompleto')
+    if end is None:end=plan['frames']
+    require(type(start)is int and type(end)is int and 0<=start<end<=plan['frames'],'RANGE','Intervalo inválido')
+    require(not final or (start,end)==(0,plan['frames']),'FINAL_RANGE','Final incompleto')
     files={k:local_asset(root,a) for k,a in plan['assets'].items()}
     # Metadata alone is not trusted for video/audio exclusion.
     for k,a in plan['assets'].items():

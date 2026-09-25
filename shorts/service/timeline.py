@@ -1,4 +1,4 @@
-from shorts.core.contracts import require, RATE, FPS, FRAMES, plan_beats, cue_render_data, digest
+from shorts.core.contracts import require, RATE, FPS, FRAMES, plan_beats, cue_render_data, digest, duration_target
 from shorts.core.dependencies import select_assets
 from shorts.core.subtitles import subtitle_segments,validate_segments
 from shorts.core.timing import voice_layout,shot_bounds
@@ -24,7 +24,8 @@ def assemble_plan(cloud,p,cue_overrides=None):
         # Only pauses explicitly approved with development can absorb time.
         lo,hi=shot_bounds(s,minimum)
         elastic.append({'id':s['id'],'minFrames':lo,'preferredFrames':max(lo,min(hi,s['frames'])),'maxFrames':hi,'timingEvidence':'measured_audio' if speech else 'approved_action'})
-    planned=plan_beats(elastic)
+    target=duration_target(sum(b['minFrames'] for b in elastic),sum(b['preferredFrames'] for b in elastic),sum(b['maxFrames'] for b in elastic))
+    planned=plan_beats(elastic,target)
     for s,t in zip(d['shots'],planned):
         kind='veo_silent_validated' if s['treatment']=='veo' else 'image'
         a=by.get((s['id'],kind))
@@ -108,4 +109,4 @@ def assemble_plan(cloud,p,cue_overrides=None):
         cues.append({'id':'music_'+r['id'],'track':'music','audioRevision':a['id'],'anchorSample':r['startFrame']*2000,'sourceSyncSample':source,'trimInSample':source,'trimOutSample':source+duration,'gainDb':r.get('gainDb',-18),'fadeInSamples':r.get('fadeInSamples',0),'fadeOutSamples':r.get('fadeOutSamples',0),'approvalState':'approved'})
     events={x.id:x.to_dict() for x in cloud.project_ref(pid).collection('events').stream()}
     used_events={c['eventId'] for c in cues if c.get('eventId')}
-    return {'schemaVersion':2,'projectId':pid,'format':p['format'],'fps':FPS,'sampleRate':RATE,'frames':FRAMES,'assets':assets,'shots':shots,'cues':cues,'events':{k:v for k,v in events.items() if k in used_events},'subtitles':subtitles,'developmentId':dev['id'],'globalGainDb':0,'draftIssues':issues,'cueOverrides':cue_overrides or {},'mixPolicy':p.get('mixPolicy',{})}
+    return {'schemaVersion':2,'projectId':pid,'format':p['format'],'fps':FPS,'sampleRate':RATE,'frames':target,'assets':assets,'shots':shots,'cues':cues,'events':{k:v for k,v in events.items() if k in used_events},'subtitles':subtitles,'developmentId':dev['id'],'globalGainDb':0,'draftIssues':issues,'cueOverrides':cue_overrides or {},'mixPolicy':p.get('mixPolicy',{})}

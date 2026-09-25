@@ -3,7 +3,7 @@
 def development_schema():
     def text(description=None):
         return {'type':'STRING',**({'description':description} if description else {})}
-    def number(kind='INTEGER',minimum=0,maximum=7200):
+    def number(kind='INTEGER',minimum=0,maximum=7560):
         return {'type':kind,'minimum':minimum,'maximum':maximum}
     def obj(**properties):
         return {'type':'OBJECT','properties':properties,'required':list(properties),
@@ -28,6 +28,8 @@ def development_schema():
         leadFrames=number(),tailFrames=number(),treatment={'type':'STRING','enum':['hold','camera2d','localized','veo']},
         prompt=text(),locationId=text(),visibleCharacters=strings(),offscreenCharacters=strings(),props=strings(),
         before=state,after=state,referenceEntityIds=strings(),camera=obj(start=cameraPoint,end=cameraPoint))
+    for field in ('frames','minFrames','maxFrames','leadFrames','tailFrames'):
+        shot['properties'][field]['description']='FOTOGRAMAS a 24 FPS, no segundos: 8 s = 192; 12 s = 288. frames incluye toda la acción, voz y pausas de esta toma.'
     return obj(title=text(),bible=obj(dramatic=text(),visual=text(),characters=rows(character,1),
         locations=rows(location,1),props=rows(prop)),
         beats=rows(obj(id=text(),change=text(),visible=text(),audible=text(),intention=text(),emotion=text(),
@@ -39,6 +41,6 @@ def development_schema():
             seconds=number('NUMBER',0,600),preparationSeconds=number('NUMBER',0,600),tailSeconds=number('NUMBER',0,600),
             perspective=text(),shotId=text(),eventDescription=text(),required={'type':'BOOLEAN'})),
         musicRequests=rows(obj(id=text(),prompt=text(),seconds=number(minimum=1,maximum=184),
-            startFrame=number(maximum=7199),endFrame=number(minimum=1),sourceInSample=number(maximum=14400000),
-            gainDb=number('NUMBER',-60,12),fadeInSamples=number(maximum=14400000),fadeOutSamples=number(maximum=14400000))),
+            startFrame=number(maximum=7559),endFrame=number(minimum=1),sourceInSample=number(maximum=15120000),
+            gainDb=number('NUMBER',-60,12),fadeInSamples=number(maximum=15120000),fadeOutSamples=number(maximum=15120000))),
         subtitles=rows(obj(utteranceId=text(),text=text())))

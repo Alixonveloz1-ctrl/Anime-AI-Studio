@@ -11,7 +11,7 @@ export function createFixture({empty=false}={}){
  if(empty){p.ideas=[];p.developments=[];p.assets=[];p.cues=[];delete p.selectedIdea;delete p.activeDevelopment;}
  const calls=[],jobs=[],keys=new Map();let n=0;
  function job(operation,result){const j={id:'job'+(++n),operation,state:'awaiting_review',created:n,revision:1,settled:true,result};jobs.push(j);return {jobId:j.id,state:j.state};}
- function render(final,body){const id='preview'+(++n),t=p.timelines.find(t=>t.id===(body.timelineId||p.activeTimeline));const row={id,created:n,state:'ready',final,timelineId:t.id,manifestHash:t.compiledHash,startFrame:body.startFrame||0,endFrame:body.endFrame||7200,url:still,draftIssues:[],current:true};p.previews.push(row);return job(final?'render':'preview',{previewId:id});}
+ function render(final,body){const id='preview'+(++n),t=p.timelines.find(t=>t.id===(body.timelineId||p.activeTimeline));const row={id,created:n,state:'ready',final,timelineId:t.id,manifestHash:t.compiledHash,startFrame:body.startFrame||0,endFrame:body.endFrame||7200,url:still,draftIssues:[],current:true,fullProgram:true};p.previews.push(row);return job(final?'render':'preview',{previewId:id});}
  async function transport(url,options={}){
   const path=new URL(url,'https://fixture.invalid').searchParams.get('path'),method=options.method||'GET',body=options.body?JSON.parse(options.body):{};calls.push({path,method,body,headers:options.headers});
   let result;const key=options.headers?.['Idempotency-Key'];

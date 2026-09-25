@@ -96,3 +96,11 @@ y conceptos; solo la idea elegida se desarrolla. Ver staged-text-generation.md.
 Sustituye el encadenamiento automático de U012. El usuario solicita generar y leer cada entrega antes de pedir la siguiente: Historia; Guion, biblias y planos; Sonido, música y subtítulos; Revisión de continuidad. Cada trabajo solicita una sola respuesta de texto. Aprobar no genera el paso siguiente. Se conserva el contexto aprobado, los requisitos de producción y el diseño.
 
 Recuperar una historia anterior no exige voces, música ni duración final y no llama a modelos. Los errores posteriores conservan las entregas aprobadas. Ver [manual-development.md](manual-development.md).
+
+## U014 — Duración flexible de cinco minutos (2026-09-25)
+
+El usuario permite entre 285 y 315 segundos totales. Sustituye la exigencia de 300 segundos exactos en planificación, compilación, mezcla, vistas previas y exportación. La duración incluye acciones, voces y pausas; música y efectos superpuestos no añaden tiempo. Se conserva la duración natural dentro del margen, sin acelerar voces ni añadir relleno. Las unidades internas siguen siendo 24 FPS y audio a 48 kHz.
+
+El prompt del paso Guion incluye un presupuesto orientativo por momento de la historia aprobada, explica segundos frente a fotogramas y exige cubrir el relato completo. No se cambia la historia aprobada ni se encadenan llamadas. Un plan de 32 segundos sigue siendo incompleto: el margen no permite aceptarlo ni estirarlo arbitrariamente.
+
+Pruebas: test_duration_range.py comprueba límites, música y efectos respecto de la duración real, compilación y exportación FFmpeg de 285 y 315 segundos. Son medios sintéticos sin llamadas a modelos; la generación de Gemini en la cuenta del usuario sigue pendiente de aceptación real.

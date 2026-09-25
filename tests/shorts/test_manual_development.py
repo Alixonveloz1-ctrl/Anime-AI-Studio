@@ -47,10 +47,10 @@ class ManualDevelopmentTests(unittest.TestCase):
     def test_provisional_math_fits_within_bounds_without_changing_dialogue(self):
         raw=complete();raw['shots'][0]['frames']=7100
         result=validate_stage(raw,2)
-        self.assertEqual(result['shots'][0]['frames'],7200);self.assertEqual(raw['shots'][0]['frames'],7100)
+        self.assertEqual(result['shots'][0]['frames'],7100);self.assertEqual(raw['shots'][0]['frames'],7100)
         self.assertEqual(result['utterances'],raw['utterances'])
     def test_impossible_duration_and_missing_voice_stop_at_script(self):
-        d=complete();d['shots'][0]['maxFrames']=7100
+        d=complete();d['shots'][0].update(minFrames=6600,maxFrames=6800)
         with self.assertRaises(ContractError) as error:validate_stage(d,2)
         self.assertEqual(error.exception.code,'DURATION_PLAN')
         d=complete();del d['bible']['characters'][0]['voice']

@@ -451,16 +451,18 @@ def previews(pid):
     p=owned(pid);d=body();tid=d.get('timelineId') or p.get('candidateTimeline') or p.get('activeTimeline');require(tid,'TIMELINE','Compila el montaje primero')
     require(not p.get('timelineStale'),'TIMELINE_STALE','Recompila el ajuste actual')
     assert_current_timeline(p,tid)
-    cached=cached_render(pid,tid,d.get('startFrame',0),d.get('endFrame',7200),False)
+    end=d.get('endFrame',cloud().entity(pid,'timelines',tid)['data']['frames'])
+    cached=cached_render(pid,tid,d.get('startFrame',0),end,False)
     if cached:return cached
-    return submit(pid,'preview',{'timelineId':tid,'startFrame':d.get('startFrame',0),'endFrame':d.get('endFrame',7200)})
+    return submit(pid,'preview',{'timelineId':tid,'startFrame':d.get('startFrame',0),'endFrame':end})
 @app.post('/projects/<pid>/renders')
 def renders(pid):
     p=owned(pid);require(p.get('activeTimeline') and not p.get('timelineStale'),'TIMELINE','Aprueba el montaje actual')
     assert_current_timeline(p,p['activeTimeline'])
-    cached=cached_render(pid,p['activeTimeline'],0,7200,True)
+    end=cloud().entity(pid,'timelines',p['activeTimeline'])['data']['frames']
+    cached=cached_render(pid,p['activeTimeline'],0,end,True)
     if cached:return cached
-    return submit(pid,'render',{'timelineId':p['activeTimeline'],'startFrame':0,'endFrame':7200})
+    return submit(pid,'render',{'timelineId':p['activeTimeline'],'startFrame':0,'endFrame':end})
 
 def assert_current_timeline(p,tid):
     from shorts.service.timeline import assemble_plan
@@ -472,6 +474,7 @@ def preview(pid,rid):
     if r.get('state')=='ready':r['url']=cloud().url(pid,r['object'])
     try:
         assert_current_timeline(p,r['timelineId']);r['current']=True
+        r['fullProgram']=r.get('startFrame')==0 and r.get('endFrame')==cloud().entity(pid,'timelines',r['timelineId'])['data']['frames']
     except ContractError:r['current']=False
     return jsonify(r)
 @app.get('/projects/<pid>/exports/<rid>')

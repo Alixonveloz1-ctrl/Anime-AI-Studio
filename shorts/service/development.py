@@ -3,7 +3,7 @@ import copy
 import json
 import math
 import time
-from shorts.core.contracts import require, ContractError, digest, ident, integer
+from shorts.core.contracts import require, ContractError, digest, ident, integer, duration_target
 from shorts.service.director import develop_prompt, validate_development
 from shorts.service.development_schema import development_schema
 from shorts.service.references import link_references
@@ -65,7 +65,7 @@ def validate_story(data):
     for beat in data['beats']:
         require(isinstance(beat,dict),'STORY','Momento dramático inválido')
         key=ident(beat.get('id'));require(key not in ids,'DUPLICATE_ID','Momentos dramáticos con ID repetido');ids.add(key)
-        for field in ('minFrames','preferredFrames','maxFrames'):integer(beat.get(field),field,0,7200)
+        for field in ('minFrames','preferredFrames','maxFrames'):integer(beat.get(field),field,0,7560)
         require(beat['minFrames']<=beat['preferredFrames']<=beat['maxFrames'],'BEAT_BOUNDS','Revisa los intervalos de los momentos dramáticos.')
     return data
 
@@ -81,19 +81,19 @@ def plan_shots(data):
     for shot in shots:
         require(isinstance(shot,dict),'SCRIPT','Plano inválido')
         ident(shot.get('id'))
-        for k in ('minFrames','maxFrames','frames'):integer(shot.get(k),k,1,7200)
-        for k in ('leadFrames','tailFrames'):integer(shot.get(k),k,0,7200)
+        for k in ('minFrames','maxFrames','frames'):integer(shot.get(k),k,1,7560)
+        for k in ('leadFrames','tailFrames'):integer(shot.get(k),k,0,7560)
         pauses=shot['leadFrames']+shot['tailFrames']
         for voice in voices:
             require(isinstance(voice,dict),'SCRIPT','Intervención inválida')
             if voice.get('shotId')==shot['id']:
-                for k in ('pauseBeforeFrames','pauseAfterFrames'):pauses+=integer(voice.get(k),k,0,7200)
+                for k in ('pauseBeforeFrames','pauseAfterFrames'):pauses+=integer(voice.get(k),k,0,7560)
         minimum=max(shot['minFrames'],pauses);maximum=shot['maxFrames']
         require(minimum<=maximum,'PAUSE_BOUNDS','Las pausas exceden el intervalo de la toma '+shot['id']+'. Corrige solo este paso.')
         require(shot.get('treatment')!='veo' or maximum<=192,'VEO_COVERAGE','La toma '+shot['id']+' supera 8 segundos de Veo. Divide la acción o cambia su tratamiento.')
         lo.append(minimum);hi.append(maximum);sizes.append(max(minimum,min(maximum,shot['frames'])))
-    require(sum(lo)<=7200<=sum(hi),'DURATION_PLAN',f'Los intervalos de los planos permiten entre {sum(lo)/24:.1f} y {sum(hi)/24:.1f} segundos; deben permitir 300. Corrige el paso Guion, no la historia.')
-    difference=7200-sum(sizes)
+    target=duration_target(sum(lo),sum(sizes),sum(hi))
+    difference=target-sum(sizes)
     while difference:
         sign=1 if difference>0 else -1
         for i in range(len(sizes)):
@@ -113,7 +113,7 @@ def plan_music(data):
     for row in rows:
         require(isinstance(row,dict),'MUSIC','Indicación musical inválida')
         key=ident(row.get('id'));require(key not in occupied,'DUPLICATE_ID','ID musical repetido: '+key);occupied.add(key)
-        start=integer(row.get('startFrame'),'entrada musical',0,7199);end=integer(row.get('endFrame'),'salida musical',1,7200)
+        start=integer(row.get('startFrame'),'entrada musical',0,7559);end=integer(row.get('endFrame'),'salida musical',1,7560)
         require(start<end,'MUSIC_COVERAGE','La salida musical debe ir después de su entrada: '+key)
         index=0
         while start<end:
@@ -132,6 +132,8 @@ def validate_stage(data,stage):
     validate_story(data)
     if stage==1:return copy.deepcopy(data)
     result=link_references(plan_shots(data))
+    missing={b['id'] for b in result['beats']}-{s.get('beatId') for s in result['shots']}
+    require(not missing,'STORY_COVERAGE','El guion omitió momentos de la historia aprobada: '+', '.join(sorted(missing))+'. Completa este paso conservando la historia.')
     if stage==2:
         check={**result,'soundRequests':[],'musicRequests':[],
                'subtitles':[{'utteranceId':u.get('id'),'text':u.get('spanish')} for u in result['utterances']]}
@@ -159,8 +161,9 @@ def develop(cloud,provider,job,project,idea):
     cloud.put_entity(pid,'developmentDrafts',copy.deepcopy(draft));ref=cloud.entity_ref(pid,'developmentDrafts',jid)
     cloud.db.collection('animeShortsJobs').document(jid).update({'progress':{'stage':stage,'total':4,'label':label}})
     prompt=develop_prompt(project,idea['data'])+'\nGenera SOLO el paso '+label+'. No escribas los otros pasos ni cambies el contenido previo aprobado. '
-    prompt+='La historia debe poder leerse completa antes de producir. Los intervalos de los planos deben permitir sumar 7200 frames, incluyendo todas las pausas, sin acelerar voces. La aplicación calcula la suma provisional dentro de esos intervalos. La aplicación calcula la duración de cada encargo musical a partir de sus entradas y salidas, y divide piezas de más de 184 segundos. '
+    prompt+='La historia debe poder leerse completa antes de producir. Los intervalos de los planos deben permitir que el TOTAL del corto dure entre 6840 y 7560 frames (285 a 315 segundos a 24 FPS), incluyendo todas las pausas, sin acelerar voces. La aplicación calcula la suma provisional dentro de esos intervalos. La aplicación calcula la duración de cada encargo musical a partir de sus entradas y salidas, y divide piezas de más de 184 segundos. '
     prompt+='Cada personaje necesita voz ja-JP y cada intervención debe referirse al ID exacto de su personaje.\nContexto aprobado:\n'+json.dumps(prior,ensure_ascii=False)
+    if stage==2:prompt+='\n'+script_timing_brief(prior)
     if job['payload'].get('instruction'):prompt+='\nCorrección solicitada por el usuario para este paso: '+job['payload']['instruction']
     try:
         part=provider.text(prompt,max_output_tokens=limit,response_schema=stage_schema(stage))
@@ -189,3 +192,23 @@ def recover_story(cloud,project,source_id,new_id):
     candidate={'id':new_id,'ideaId':source['ideaId'],'stage':1,'data':data,'status':'ready','approvalState':'candidate','created':time.time(),'recoveredFrom':source_id}
     cloud.put_entity(project['id'],'developmentDrafts',candidate)
     return candidate
+
+
+def script_timing_brief(prior):
+    """Budget the whole approved story, never reinterpret returned frame units."""
+    beats=prior.get('beats',[])
+    weights=[max(1,b.get('preferredFrames',1)) for b in beats]
+    total=sum(weights);cursor=0;budget=[]
+    for i,(beat,weight) in enumerate(zip(beats,weights)):
+        end=round(7200*sum(weights[:i+1])/total)
+        budget.append({'beatId':beat['id'],'targetSeconds':(end-cursor)/24,'targetFrames':end-cursor})
+        cursor=end
+    return ('PLANIFICA TODA LA HISTORIA APROBADA, desde inicio hasta desenlace; no entregues un ejemplo ni solo la primera escena. '
+        'Todos los campos cuyo nombre contiene Frames y el campo frames están en FOTOGRAMAS, NUNCA en segundos. '
+        'A 24 FPS: 1 segundo=24 frames; 8 segundos=192; 12 segundos=288. '
+        'frames incluye voces, pausas y acciones del plano, no solo su silencio. La música y los efectos simultáneos no se suman otra vez. '
+        'Puede haber planos sin voces, solo acción, silencio, música o ambiente. Distribuye el relato con ritmo natural. '
+        'Presupuesto orientativo por momento narrativo, calculado sobre el total de cinco minutos: '+json.dumps(budget,ensure_ascii=False)+'. '
+        'Cada momento necesita todos sus planos e intervenciones. Verifica antes de responder que la suma de frames de TODOS los planos está entre 6840 y 7560. '
+        'No confíes en que el montaje añadirá el tiempo que falta. No estires miradas ni dupliques planos para rellenar. '
+        'Solo Veo tiene límite de 192 frames por toma; hold/camera2d/localized pueden cubrir acciones más largas con justificación dramática.')

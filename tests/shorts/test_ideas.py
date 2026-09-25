@@ -126,7 +126,7 @@ class DevelopmentSchemaTests(unittest.TestCase):
         from test_workflow import development
         for change in ('duration','reference'):
             d=development()
-            if change=='duration':d['shots'][0]['frames']=7100
+            if change=='duration':d['shots'][0]['frames']=6800
             else:d['shots'][0]['referenceEntityIds']=[]
             with self.assertRaises(ContractError):validate_development(d)
 

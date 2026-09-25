@@ -6,6 +6,8 @@ import json
 import re
 
 FPS, RATE, FRAMES, SAMPLES = 24, 48000, 7200, 14400000
+MIN_FRAMES, MAX_FRAMES = 285*FPS, 315*FPS
+MAX_SAMPLES = MAX_FRAMES*(RATE//FPS)
 TRACKS = ('dialogue', 'thought', 'narration', 'system', 'music', 'ambience', 'sfx')
 GENRES = ('acción','aventura','fantasía','isekai','drama','psicológico','terror','misterio','romance','comedia','comedia romántica','vida cotidiana','ciencia ficción','mecha','sobrenatural','supervivencia','deportes','videojuego/sistema')
 
@@ -18,7 +20,7 @@ def require(ok, code, message, status=422):
     if not ok:
         raise ContractError(code, message, status)
 
-def integer(value, name, lo=0, hi=SAMPLES):
+def integer(value, name, lo=0, hi=MAX_SAMPLES):
     require(type(value) is int and lo <= value <= hi, 'INVALID_INTEGER', f'{name}: entero fuera de rango')
     return value
 
@@ -57,7 +59,7 @@ def plan_beats(beats, target=FRAMES):
     require(bool(beats), 'NO_BEATS', 'Faltan unidades dramáticas')
     for b in beats:
         for k in ('minFrames','preferredFrames','maxFrames'):
-            integer(b[k],k,0,FRAMES)
+            integer(b[k],k,0,MAX_FRAMES)
         require(b['minFrames'] <= b['preferredFrames'] <= b['maxFrames'], 'BEAT_BOUNDS', 'Duraciones incompatibles')
         require(b.get('timingEvidence') in ('measured_audio','approved_silence','approved_action'), 'UNMEASURED_TIMING', 'Falta audio real o duración de acción/pausa aprobada')
     require(sum(b['minFrames'] for b in beats)<=target<=sum(b['maxFrames'] for b in beats), 'SCRIPT_REVIEW', 'El contenido no cabe: revisa guion o pausas')
@@ -77,6 +79,11 @@ def plan_beats(beats, target=FRAMES):
         start+=n
     return result
 
+def duration_target(minimum, preferred, maximum):
+    lo=max(MIN_FRAMES,minimum);hi=min(MAX_FRAMES,maximum)
+    require(lo<=hi,'DURATION_PLAN',f'La duración TOTAL prevista permite de {minimum/FPS:.1f} a {maximum/FPS:.1f} segundos. El corto completo debe cubrir entre 285 y 315 segundos, sumando todos los planos, diálogos, acciones y silencios. Conserva la historia y completa el guion.')
+    return max(lo,min(hi,preferred))
+
 def visual_fingerprint(shot):
     return digest({k:v for k,v in shot.items() if k in ('assetRevision','frames','treatment','camera','layers','trimSeconds','speed')})
 
@@ -95,15 +102,15 @@ def resolve_event(shot, event):
     sample=round((Fraction(shot['startFrame'],FPS)+local)*RATE)
     return {'sample':sample,'frame':round(Fraction(sample*FPS,RATE))}
 
-def resolve_cue(cue, event_sample, audio_samples):
+def resolve_cue(cue, event_sample, audio_samples, program_samples=SAMPLES):
     sync=integer(cue['sourceSyncSample'],'ataque',0,audio_samples-1)
     trim=integer(cue.get('trimInSample',0),'entrada',0,audio_samples-1)
     end=integer(cue.get('trimOutSample',audio_samples),'salida',1,audio_samples)
     require(trim<=sync<end,'CUT_ATTACK','El recorte elimina el ataque')
-    offset=integer(cue.get('offsetSamples',0),'offset',-SAMPLES,SAMPLES)
+    offset=integer(cue.get('offsetSamples',0),'offset',-MAX_SAMPLES,MAX_SAMPLES)
     start=event_sample-(sync-trim)+offset
     require(start>=0,'NEGATIVE_CUE','La preparación cae antes del programa; requiere decisión editorial')
-    require(start+end-trim<=SAMPLES,'CUE_TAIL','La cola excede el programa; requiere recorte aprobado')
+    require(start+end-trim<=program_samples,'CUE_TAIL','La cola excede el programa; requiere recorte aprobado')
     return {**cue,'resolvedStartSample':start,'trimInSample':trim,'trimOutSample':end}
 
 def edit_cue(cue, patch, expected, source='manual'):
@@ -112,7 +119,7 @@ def edit_cue(cue, patch, expected, source='manual'):
     require(set(patch)<=allowed,'FIELDS','Campos de ajuste no permitidos')
     require(source=='manual' or not cue.get('manualLock'), 'MANUAL_LOCK', 'La IA solo puede proponer una alternativa',409)
     out={**copy.deepcopy(cue),**patch,'revision':cue['revision']+1,'approvalState':'candidate','correctionSource':source,'manualLock':False}
-    integer(out.get('offsetSamples',0),'offset',-SAMPLES,SAMPLES)
+    integer(out.get('offsetSamples',0),'offset',-MAX_SAMPLES,MAX_SAMPLES)
     gain=out.get('gainDb',0)
     require(type(gain) in (int,float) and -60<=gain<=12,'GAIN','Ganancia inválida')
     return out
@@ -134,7 +141,8 @@ def compile_timeline(manifest, final=False):
     require(set(manifest)<=allowed,'MANIFEST_FIELDS','El manifiesto contiene campos no admitidos; no se ejecutan comandos')
     require(not final or not manifest.get('draftIssues'), 'DRAFT_RESOURCES', 'Resuelve los recursos provisionales antes del final')
     require(manifest.get('schemaVersion')==2,'SCHEMA','Esquema incompatible')
-    require(manifest.get('fps')==FPS and manifest.get('sampleRate')==RATE and manifest.get('frames')==FRAMES,'TIMEBASE','Se requieren 7200 frames a 24 FPS y 48 kHz')
+    require(manifest.get('fps')==FPS and manifest.get('sampleRate')==RATE,'TIMEBASE','Se requieren 24 FPS y 48 kHz')
+    frames=integer(manifest.get('frames'),'duración total',MIN_FRAMES,MAX_FRAMES);samples=frames*(RATE//FPS)
     assets=manifest['assets']; shots=manifest['shots']; project_id=ident(manifest['projectId'])
     require(bool(shots),'NO_SHOTS','Faltan tomas')
     for key,a in assets.items():
@@ -145,7 +153,7 @@ def compile_timeline(manifest, final=False):
         require(a.get('approvalState')=='approved' or not final,'UNAPPROVED','Recurso sin aprobación vigente')
     cursor=0; last_video=None
     for shot in shots:
-        ident(shot['id']); integer(shot['frames'],'duración',1,FRAMES)
+        ident(shot['id']); integer(shot['frames'],'duración',1,MAX_FRAMES)
         require(shot['startFrame']==cursor,'COVERAGE','Hueco o solapamiento visual no declarado')
         cursor+=shot['frames']
         treatment=shot['treatment']
@@ -161,7 +169,7 @@ def compile_timeline(manifest, final=False):
         speed=Fraction(str(shot.get('speed',1)))
         require(speed>0 and (Fraction(9,10)<=speed<=Fraction(11,10) or shot.get('retimeApproved') is True),'RETIME','Velocidad no aprobada')
         require(not shot.get('timeRamp'),'TIME_RAMP','Rampa no implementada: requiere revisión')
-    require(cursor==FRAMES,'DURATION','El montaje debe durar 300 segundos')
+    require(cursor==frames,'DURATION','Los planos deben cubrir la duración total declarada')
     resolved=[]
     for cue in manifest.get('cues',[]):
         require(cue['track'] in TRACKS,'TRACK','Pista inválida')
@@ -177,12 +185,12 @@ def compile_timeline(manifest, final=False):
             shot=next(s for s in shots if s['id']==cue['anchorShotId'])
             sample=(shot['startFrame']+cue.get('anchorFrameOffset',0))*2000
         else: sample=integer(cue['anchorSample'],'ancla')
-        resolved.append(resolve_cue(cue,sample,a['samples']))
+        resolved.append(resolve_cue(cue,sample,a['samples'],samples))
     for sub in manifest.get('subtitles',[]):
-        require(0<=sub['startSample']<sub['endSample']<=SAMPLES,'SUBTITLE_TIME','Subtítulo fuera de programa')
+        require(0<=sub['startSample']<sub['endSample']<=samples,'SUBTITLE_TIME','Subtítulo fuera de programa')
         require(sub.get('audioRevision') in assets,'SUBTITLE_AUDIO','Subtítulo sin audio vinculado')
         require(not final or sub.get('approvalState')=='approved','SUBTITLE_REVIEW','Subtítulo pendiente')
-    out={**copy.deepcopy(manifest),'cues':resolved,'compilerVersion':'2.2.0','samples':SAMPLES}
+    out={**copy.deepcopy(manifest),'cues':resolved,'compilerVersion':'2.3.0','samples':samples}
     canonical=copy.deepcopy(out)
     for asset in canonical['assets'].values():asset.pop('local',None)
     out['manifestHash']=digest(canonical)
