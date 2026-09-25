@@ -14,6 +14,16 @@ async function setup(options={}){
  const fixture=createFixture(options);
  const baseTransport=fixture.transport;fixture.transport=async(url,request={})=>{
  const path=new URL(url,'https://fixture.invalid').searchParams.get('path');
+ if(options.segmented&&path==='/projects/fixture/develop'){
+  const result=await baseTransport(url,request),body=JSON.parse(request.body),row=fixture.project.developmentDrafts.at(-1);
+  if(body.stage===2){
+   const previous=fixture.project.developmentDrafts.find(d=>d.id===body.checkpointId),completed=previous?previous.scriptProgress.completed+1:0;
+   row.checkpointId=body.checkpointId;row.scriptProgress={completed,total:2,frames:completed*3600};
+   if(options.failSegment&&completed===1){row.status='invalid';row.error={message:'429'};row.scriptProgress={...previous.scriptProgress};options.failSegment=false;}
+   else if(completed<2){row.status='partial';row.approvalState='incomplete';}
+  }
+  return result;
+ }
  if(options.uncertainCreation&&path==='/projects'&&request.method==='POST'){options.createCalls=(options.createCalls||0)+1;await baseTransport(url,request);return new Response('',{status:502});}
  if(options.failOpening&&path==='/projects/fixture'&&fixture.calls.some(c=>c.path==='/projects'&&c.method==='POST')){options.failOpening=false;return new Response(JSON.stringify({error:'Lectura temporalmente no disponible'}),{status:503});}
  if(options.failImage&&path==='/projects/fixture/assets/imgCandidate/url')return new Response('{}',{status:503});
@@ -282,5 +292,25 @@ test('Legacy recovery reads only the story and sends no generation request',asyn
   assert.ok(button);await button.onclick();
   assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).length,0);
   assert.match(w.document.body.textContent,/Haru espera el último tren/);
+ }finally{dom.window.close();}
+});
+
+test('Screenplay chunks require individual clicks and retry keeps the prior checkpoint',async()=>{
+ const {fixture,w,dom,click}=await setup({empty:true,segmented:true,failSegment:true});
+ try{
+  await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));await click('Generar historia');await click('Aprobar este paso');await click('Generar guion, biblias y planos');
+  const bible=fixture.project.developmentDrafts.at(-1).id;
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).length,2,'Bible call stops until next click');
+  assert.ok(![...w.document.querySelectorAll('button')].some(b=>b.textContent==='Aprobar este paso'));
+  await click('Aprobar biblias y generar primer tramo');
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).at(-1).body.checkpointId,bible);
+  await click('Reintentar este tramo');
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).at(-1).body.checkpointId,bible,'Retry uses last successful checkpoint');
+  const segment=fixture.project.developmentDrafts.at(-1).id;
+  assert.ok(w.document.body.textContent.includes('1 de 2 tramos · 150.0 segundos'));
+  await click('Aprobar tramo y continuar');
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).at(-1).body.checkpointId,segment);
+  await click('Aprobar este paso');
+  assert.ok(w.document.body.textContent.includes('Generar sonido, música y subtítulos'));
  }finally{dom.window.close();}
 });

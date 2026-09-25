@@ -243,12 +243,19 @@ async function script(parent=screen){
  const choices=drafts.filter(d=>d.stage===next&&(next===1||d.sourceDraftId===approved?.id)).sort((a,b)=>b.created-a.created);
  const latest=choices[0];
  const parentId=approved?.id;
- const runStage=(number,instruction='')=>runTask('develop',route('/develop'),{stage:number,sourceDraftId:number>1?parentId:null,instruction});
+ const checkpoint=next===2?(latest?.status==='partial'?latest:latest?.status==='invalid'?choices.find(d=>d.id===latest?.checkpointId&&d.status==='partial'):null):null;
+ const runStage=(number,instruction='',checkpointId=null)=>runTask('develop',route('/develop'),{stage:number,sourceDraftId:number>1?parentId:null,instruction,...(checkpointId?{checkpointId}:{})});
  const note=document.createElement('p');note.textContent='Cada paso se genera solo cuando lo pides. Lee el resultado y apruébalo antes de continuar.';intro.append(note);
  if(approved){const details=fold(intro,'Paso '+approved.stage+' aprobado · '+stages[approved.stage-1]);try{const saved=await api(route('/drafts/'+approved.id));readable(details,saved.data);}catch(e){details.append(document.createTextNode(e.message));}}
  if(working){const note=document.createElement('p');note.textContent='El paso solicitado está pendiente. Su estado aparece arriba.';intro.append(note);}
  else if(next<=4){
   const heading=document.createElement('h4');heading.textContent='Paso '+next+' de 4 · '+stages[next-1];intro.append(heading);
+  if(next===2){
+   const progress=checkpoint?.scriptProgress||latest?.scriptProgress;
+   const explanation=document.createElement('p');
+   explanation.textContent=progress?`Guion guardado: ${progress.completed} de ${progress.total} tramos · ${(progress.frames/24).toFixed(1)} segundos. Cada llamada desarrolla un tramo; lee lo guardado antes de continuar.`:'Primero se preparan personajes y lugares. Después desarrollarás el guion por tramos, con guardado y revisión entre llamadas, hasta completar aproximadamente cinco minutos.';
+   intro.append(explanation);
+  }
   if(latest){
    try{
     const saved=await api(route('/drafts/'+latest.id));
@@ -258,9 +265,11 @@ async function script(parent=screen){
     if(saved.status==='ready'&&next<4)buttons(intro,[['Aprobar este paso',async()=>{await mutate(route('/drafts/'+saved.id+':approve'),{});await draw();say('Paso aprobado. El siguiente se genera únicamente cuando lo solicites.');}]]);
    }catch(e){const error=document.createElement('p');error.textContent=e.message;intro.append(error);}
   }
-  const label=document.createElement('label');label.textContent=latest?'Qué quieres corregir en este paso (opcional)':'Indicaciones para este paso (opcional)';
+  const label=document.createElement('label');label.textContent=next===2?'Indicaciones para la parte que vas a generar (opcional)':latest?'Qué quieres corregir en este paso (opcional)':'Indicaciones para este paso (opcional)';
   const instruction=document.createElement('textarea');instruction.maxLength=3000;label.append(instruction);intro.append(label);
-  buttons(intro,[[latest?'Generar otra versión de este paso':'Generar '+stages[next-1].toLowerCase(),()=>runStage(next,instruction.value)]]);
+  const generateLabel=checkpoint?(latest?.status==='invalid'?'Reintentar este tramo':checkpoint.scriptProgress.completed===0?'Aprobar biblias y generar primer tramo':'Aprobar tramo y continuar'):latest?'Generar otra versión de este paso':'Generar '+stages[next-1].toLowerCase();
+  buttons(intro,[[generateLabel,()=>runStage(next,instruction.value,checkpoint?.id)]]);
+  if(next===2&&latest?.status==='partial')buttons(intro,[['Generar otra versión de esta parte',()=>runStage(2,instruction.value,latest.checkpointId||null),true]]);
   if(next===1){
    const old=drafts.filter(d=>!d.stage&&d.hasStory).sort((a,b)=>b.created-a.created);
    if(old.length){const history=fold(intro,'Recuperar historias de intentos anteriores');for(const draft of old)buttons(history,[['Recuperar historia · '+new Date(draft.created*1000).toLocaleString(),async()=>{await mutate(route('/drafts/'+draft.id+':recover'),{});await draw();say('Historia recuperada para leer y aprobar. No se llamó a Gemini.');},true]]);}

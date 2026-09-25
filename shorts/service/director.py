@@ -10,7 +10,7 @@ def ideas_prompt(p):
 def develop_prompt(p,idea):
     return RULES+'''\nDesarrolla SOLO la idea seleccionada. Sigue el esquema de respuesta adjunto; todos sus campos requeridos deben estar presentes y los textos obligatorios no pueden estar vacíos. treatment: hold,camera2d,localized,veo. Usa 24 FPS; la suma provisional de TODOS los planos está entre 6840 y 7560 frames (285 a 315 segundos); frames son fotogramas, nunca segundos; 12 segundos son 288 frames; duración definitiva depende del audio medido. No marques aprobación ni inventes mediciones. Da planos y silencios con causa dramática. Cada toma incluye límites minFrames/maxFrames aprobables y timingReason que justifica la elasticidad; leadFrames/tailFrames son acción o silencio antes/después de las voces, pauseBeforeFrames/pauseAfterFrames son pausas interpretativas por intervención. Veo nunca supera 192 frames (8 segundos) por toma; divide una acción larga en tomas con continuidad explícita. No rellenes con ralentización/repetición. Música: seconds entre 1 y 184; cada uso cabe en su archivo, sourceInSample inicial 0, gainDb -18, fadeInSamples/fadeOutSamples 0 hasta revisión. Los tratamientos localized necesitan variantes y máscaras posteriormente aprobadas. Propón voces Gemini por personaje. Japonés y español conservan significado; incluye lecturas en biblia.\n'''+json.dumps({'project':{k:p[k] for k in ('genre','subgenres','concept','format')},'selectedIdea':idea},ensure_ascii=False)
 
-def validate_development(d):
+def validate_development(d, *, duration_bounds=(6840,7560)):
     require(isinstance(d,dict),'DEVELOPMENT_SCHEMA','Se requiere guion estructurado')
     for k in ('bible','beats','shots','utterances','soundRequests','musicRequests','subtitles'):require(k in d,'DEVELOPMENT_SCHEMA','Guion incompleto: '+k)
     for k in ('beats','shots','utterances','soundRequests','musicRequests','subtitles'):require(isinstance(d[k],list),'DEVELOPMENT_SCHEMA','Lista inválida: '+k)
@@ -60,7 +60,7 @@ def validate_development(d):
         from shorts.core.timing import shot_bounds,voice_layout
         shot_bounds(s,s['leadFrames']+s['tailFrames'])
     total_frames=sum(s['frames'] for s in d['shots'])
-    require(6840<=total_frames<=7560,'DURATION_PLAN','La duración TOTAL del guion debe estar entre 285 y 315 segundos')
+    require(duration_bounds[0]<=total_frames<=duration_bounds[1],'DURATION_PLAN','La duración TOTAL del guion debe estar entre 285 y 315 segundos' if duration_bounds==(6840,7560) else 'La duración del guion no corresponde al tramo solicitado')
     for u in d['utterances']:
         require(u.get('shotId') in shots and u.get('type') in ('dialogue','thought','narration','system'),'UTTERANCE','Intervención incompleta')
         for key in ('japanese','spanish','acting'):text(u,key)

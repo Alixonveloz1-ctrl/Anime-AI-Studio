@@ -26,6 +26,7 @@ class ManualDevelopmentTests(unittest.TestCase):
                 else:
                     p['activeDraft']='previous';c.entity.return_value={'ideaId':'idea','stage':stage-1,'status':'ready','approvalState':'approved','data':prior}
                 result={k:raw[k] for k in STAGES[stage-1][1]} if stage<4 else {'issues':[],'coverage':['continuidad'],'nativeQualityGuaranteed':False}
+                if stage==2:result={'bible':raw['bible']}
                 provider.text.return_value=result
                 answer=develop(c,provider,{'id':'job','payload':{'stage':stage,'sourceDraftId':'previous' if stage>1 else None}},p,{'id':'idea','data':{'title':'Idea','premise':'Encuentro'}})
                 provider.text.assert_called_once()

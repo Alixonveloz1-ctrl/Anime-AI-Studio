@@ -102,7 +102,7 @@ class DevelopmentSchemaTests(unittest.TestCase):
             prior={k:raw[k] for k in ('title','story','beats')}
             p={'id':'p','genre':'drama','subgenres':[],'concept':'','format':'16:9','selectedIdea':{'id':'idea'},'activeDraft':'old','activeDevelopment':'approved-old'}
             c=Mock();c.entity.return_value={'ideaId':'idea','stage':1,'status':'ready','approvalState':'approved','data':prior}
-            provider=Mock();provider.text.return_value={k:raw[k] for k in ('bible','shots','utterances')}
+            provider=Mock();provider.text.return_value={'bible':raw['bible']}
             with self.assertRaises(ContractError) as error:develop(c,provider,{'id':'job','payload':{'stage':2,'sourceDraftId':'old'}},p,{'id':'idea','data':{}})
             self.assertEqual(error.exception.code,'DEVELOPMENT_FIELDS');self.assertIn('referencePrompt',str(error.exception))
             provider.text.assert_called_once();self.assertEqual(p['activeDevelopment'],'approved-old')

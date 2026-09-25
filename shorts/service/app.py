@@ -132,6 +132,12 @@ def develop(pid):
     instruction=body().get('instruction','')
     require(isinstance(instruction,str) and len(instruction)<=3000,'INSTRUCTION','La corrección admite hasta 3000 caracteres.')
     payload={'ideaId':p['selectedIdea']['id'],'stage':stage,'sourceDraftId':source,'sourceHash':digest(prior) if source else None,'instruction':instruction}
+    checkpoint=body().get('checkpointId')
+    if checkpoint:
+        require(stage==2,'SCRIPT_CHECKPOINT','Solo el guion utiliza tramos.')
+        from shorts.service.script_segments import continuation,checkpoint_hash
+        row=continuation(cloud(),p,source,prior,ident(checkpoint))
+        payload.update(checkpointId=checkpoint,checkpointHash=checkpoint_hash(row))
     return submit(pid,'develop',payload)
 
 @app.get('/projects/<pid>/drafts/<eid>')

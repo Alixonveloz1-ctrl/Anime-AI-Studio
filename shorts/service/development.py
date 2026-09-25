@@ -84,7 +84,7 @@ def validate_story(data):
         require(beat['minFrames']<=beat['preferredFrames']<=beat['maxFrames'],'BEAT_BOUNDS','Revisa los intervalos de los momentos dramáticos.')
     return data
 
-def plan_shots(data):
+def plan_shots(data, duration_bounds=None):
     """Fit provisional durations only within the authored elastic intervals.
 
     No audio measurement/approval is fabricated; actual audio is fitted later
@@ -109,7 +109,12 @@ def plan_shots(data):
             require(max(minimum,shot['frames'])<=192,'VEO_COVERAGE',f"La toma {shot['id']} está prevista para {shot['frames']/24:.1f} segundos, con un mínimo de {minimum/24:.1f}; necesita una corrección de planificación para Veo. El guion se conserva.")
             maximum=min(maximum,192);shot['maxFrames']=maximum
         lo.append(minimum);hi.append(maximum);sizes.append(max(minimum,min(maximum,shot['frames'])))
-    target=duration_target(sum(lo),sum(sizes),sum(hi))
+    if duration_bounds is None:
+        target=duration_target(sum(lo),sum(sizes),sum(hi))
+    else:
+        lower=max(duration_bounds[0],sum(lo));upper=min(duration_bounds[1],sum(hi))
+        require(lower<=upper,'SCRIPT_SEGMENT_DURATION',f'Este tramo cubre entre {sum(lo)/24:.1f} y {sum(hi)/24:.1f} segundos; necesita entre {duration_bounds[0]/24:.1f} y {duration_bounds[1]/24:.1f}. Los tramos anteriores siguen guardados. Corrige únicamente este tramo.')
+        target=max(lower,min(upper,sum(sizes)))
     difference=target-sum(sizes)
     while difference:
         sign=1 if difference>0 else -1
@@ -172,6 +177,9 @@ def source_for_stage(cloud,project,stage,source_id,source_hash=None):
 def develop(cloud,provider,job,project,idea):
     stage=job['payload'].get('stage',1);integer(stage,'paso',1,4)
     prior=source_for_stage(cloud,project,stage,job['payload'].get('sourceDraftId'),job['payload'].get('sourceHash'))
+    if stage==2:
+        from shorts.service.script_segments import develop_segment
+        return develop_segment(cloud,provider,job,project,idea,prior)
     label,keys,limit=STAGES[stage-1];pid=project['id'];jid=job['id']
     draft={'id':jid,'jobId':jid,'ideaId':idea['id'],'stage':stage,'sourceDraftId':job['payload'].get('sourceDraftId'),
            'sourceHash':job['payload'].get('sourceHash'),'data':prior,'created':time.time(),'status':'building','approvalState':'incomplete'}
@@ -180,7 +188,6 @@ def develop(cloud,provider,job,project,idea):
     prompt=develop_prompt(project,idea['data'])+'\nGenera SOLO el paso '+label+'. No escribas los otros pasos ni cambies el contenido previo aprobado. '
     prompt+='La historia debe poder leerse completa antes de producir. Los intervalos de los planos deben permitir que el TOTAL del corto dure entre 6840 y 7560 frames (285 a 315 segundos a 24 FPS), incluyendo todas las pausas, sin acelerar voces. La aplicación calcula la suma provisional dentro de esos intervalos. La aplicación calcula la duración de cada encargo musical a partir de sus entradas y salidas, y divide piezas de más de 184 segundos. '
     prompt+='Cada personaje necesita voz ja-JP y cada intervención debe referirse al ID exacto de su personaje.\nContexto aprobado:\n'+json.dumps(prior,ensure_ascii=False)
-    if stage==2:prompt+='\n'+script_timing_brief(prior)
     if job['payload'].get('instruction'):prompt+='\nCorrección solicitada por el usuario para este paso: '+job['payload']['instruction']
     try:
         part=provider.text(prompt,max_output_tokens=limit,response_schema=stage_schema(stage))
