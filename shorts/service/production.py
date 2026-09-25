@@ -109,9 +109,10 @@ def run_job(cloud,j,p):
             raw,mime=provider.image(prompt,refs,p['format']);path=root/('image.png' if mime=='image/png' else 'image.jpg');path.write_bytes(raw);inspect(path,'video')
             return {'assetId':asset(path,'image',('layer_'+ident_new()) if data.get('variantPrompt') else eid,{'variantOf':eid if data.get('variantPrompt') else None,'parentAssetId':refs[0]['id'] if data.get('variantPrompt') else None,'references':[a['id'] for a in refs],'dependencies':dependency_records(refs),'model':cloud.c['models']['image'],'prompt':prompt})['id']}
         if op=='veo':
+            from shorts.core.timing import veo_seconds
             shot=next(s for s in d['shots'] if s['id']==eid);image=selected(eid,'image')
             raw_id=ident_new();output=j.get('providerOutput') or f'gs://{cloud.c["bucket"]}/{cloud.c["prefix"]}/projects/{pid}/assets/{raw_id}/'
-            operation={'name':j['providerOperation']} if j.get('providerOperation') else provider.veo({'prompt':shot['prompt'],'imageApproved':True,'imageMime':image['mimeType'],'durationSeconds':data.get('seconds',8),'format':p['format']},uri(image),output)
+            operation={'name':j['providerOperation']} if j.get('providerOperation') else provider.veo({'prompt':shot['prompt'],'imageApproved':True,'imageMime':image['mimeType'],'durationSeconds':veo_seconds(shot),'format':p['format']},uri(image),output)
             require(operation.get('name'),'VEO_OPERATION','No se recibió operationId')
             ref=cloud.db.collection('animeShortsJobs').document(j['id']);ref.update({'providerOperation':operation['name'],'providerOutput':output,'state':'waiting_provider'})
             deadline=time.time()+1800

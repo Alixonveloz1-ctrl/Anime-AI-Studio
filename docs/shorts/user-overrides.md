@@ -104,3 +104,11 @@ El usuario permite entre 285 y 315 segundos totales. Sustituye la exigencia de 3
 El prompt del paso Guion incluye un presupuesto orientativo por momento de la historia aprobada, explica segundos frente a fotogramas y exige cubrir el relato completo. No se cambia la historia aprobada ni se encadenan llamadas. Un plan de 32 segundos sigue siendo incompleto: el margen no permite aceptarlo ni estirarlo arbitrariamente.
 
 Pruebas: test_duration_range.py comprueba límites, música y efectos respecto de la duración real, compilación y exportación FFmpeg de 285 y 315 segundos. Son medios sintéticos sin llamadas a modelos; la generación de Gemini en la cuenta del usuario sigue pendiente de aceptación real.
+
+## U015 — Priorizar generación nueva válida (2026-09-25)
+
+El usuario aclara que regenerar no es el problema: prioriza que la generación funcione, tomando como referencia las llamadas de Animes. No se añaden botones de recuperación o reparación selectiva.
+
+Comparación realizada: api/script.js y api/video-start.js frente a shorts/service/providers.py y production.py. Animes solicita duraciones soportadas próximas a la deseada; Cortos fijaba ocho segundos. Cortos ahora elige 4/6/8 como la menor duración que cubra el intervalo aprobado, sin adoptar el retiming de Animes. El esquema del paso Guion diferencia planos de imagen y video mediante anyOf: los campos temporales de Veo tienen máximo 192 frames; las imágenes mantienen límites de hasta 7560. Los campos treatment se generan primero. Documentación consultada: https://docs.cloud.google.com/vertex-ai/generative-ai/docs/multimodal/control-generated-output (anyOf y maximum admitidos).
+
+El planificador solo limita un margen máximo excesivo cuando la duración prevista y mínima ya caben en ocho segundos; no recorta una acción larga ni cambia su tratamiento automáticamente. Las acciones largas permanecen sujetas a planificación narrativa compatible. Pruebas de esquema, límites, selección 4/6/8, API e interfaz no equivalen a una generación real con Gemini.

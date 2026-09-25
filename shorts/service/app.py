@@ -289,7 +289,6 @@ def batch_next(pid,bid):
     nodes,assets=batch_plan(p);node=next((n for n in nodes if n['state']=='ready' and n['key'] in b['authorizedKeys']),None)
     if not node:return jsonify(state='awaiting_review' if any(n['state']!='approved' for n in nodes) else 'completed',nodes=nodes)
     payload={'entityId':node['entityId'],'developmentId':b['developmentId'],'approvedAssetIds':[a['id'] for a in assets if a.get('approvalState')=='approved'],'assetSelections':p.get('assetSelections',{})}
-    if node['operation']=='veo':payload['seconds']=8
     # Keep the original payload when an HTTP response was lost. Do not derive a
     # different fingerprint from later approvals for an existing idempotency key.
     key=batch_key(b,node);jid=digest([pid,key]);old=cloud().db.collection('animeShortsJobs').document(jid).get().to_dict()

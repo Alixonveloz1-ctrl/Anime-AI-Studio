@@ -30,6 +30,8 @@ def development_schema():
         before=state,after=state,referenceEntityIds=strings(),camera=obj(start=cameraPoint,end=cameraPoint))
     for field in ('frames','minFrames','maxFrames','leadFrames','tailFrames'):
         shot['properties'][field]['description']='FOTOGRAMAS a 24 FPS, no segundos: 8 s = 192; 12 s = 288. frames incluye toda la acción, voz y pausas de esta toma.'
+    shot['properties']['maxFrames']['description']+=' Si treatment es veo, máximo absoluto 192 incluso para el margen de ajuste.'
+    shot['properties']['treatment']['description']='Elige por la acción: hold/camera2d para encuadre o contemplación; localized para movimiento puntual; veo cuando sea necesaria acción física continua. Una duración breve no exige video. Si veo, frames/minFrames/maxFrames no superan 192.'
     return obj(title=text(),bible=obj(dramatic=text(),visual=text(),characters=rows(character,1),
         locations=rows(location,1),props=rows(prop)),
         beats=rows(obj(id=text(),change=text(),visible=text(),audible=text(),intention=text(),emotion=text(),

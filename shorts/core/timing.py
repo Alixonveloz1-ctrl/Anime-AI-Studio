@@ -20,3 +20,11 @@ def shot_bounds(shot,measured_minimum):
     require(lo<=hi,'SCRIPT_REVIEW','La voz, pausas y acciones exceden el intervalo aprobado en '+shot['id']+'; revisa esa toma, sin acelerar el audio')
     require(shot['treatment']!='veo' or hi<=192,'VEO_COVERAGE','Divide o cambia el tratamiento de la toma Veo '+shot['id']+': máximo 8 segundos, sin repetir clips')
     return lo,hi
+
+
+def veo_seconds(shot):
+    """Shortest supported clip covering the approved editing interval; no retiming."""
+    require(shot.get('treatment')=='veo','VEO_TREATMENT','Esta toma no requiere Veo')
+    frames=integer(shot['frames'],'duración Veo',1,192)
+    maximum=integer(shot.get('maxFrames',frames),'máximo Veo',frames,192)
+    return next(seconds for seconds in (4,6,8) if seconds*24>=maximum)

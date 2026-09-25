@@ -27,12 +27,27 @@ def stage_schema(stage):
             item['properties'].pop(field,None)
             for order in ('required','propertyOrdering'):
                 if field in item.get(order,[]):item[order].remove(field)
+    if stage==2:
+        image=copy.deepcopy(properties['shots']['items']);video=copy.deepcopy(image)
+        image['properties']['treatment']['enum']=['hold','camera2d','localized']
+        video['properties']['treatment']['enum']=['veo']
+        for key in ('frames','minFrames','maxFrames','leadFrames','tailFrames'):
+            video['properties'][key]['maximum']=192
+        for variant in (image,video):
+            order=variant['propertyOrdering'];order.remove('treatment');order.insert(0,'treatment')
+        properties['shots']['items']={'anyOf':[image,video]}
     keys=STAGES[stage-1][1]
     return {'type':'OBJECT','properties':{k:properties[k] for k in keys},'required':list(keys),'propertyOrdering':list(keys)}
 
 def validate_shape(value,schema,path='respuesta'):
     problems=[]
     def check(v,s,p):
+        if 'anyOf' in s:
+            variants=s['anyOf']
+            if isinstance(v,dict):
+                variants=[a for a in variants if v.get('treatment') in a.get('properties',{}).get('treatment',{}).get('enum',[])]
+            if len(variants)!=1:problems.append(p+': tratamiento de toma inválido');return
+            check(v,variants[0],p);return
         kind=s.get('type')
         valid={'OBJECT':isinstance(v,dict),'ARRAY':isinstance(v,list),'STRING':isinstance(v,str),'INTEGER':type(v) is int,'NUMBER':type(v) in (int,float),'BOOLEAN':type(v) is bool}.get(kind,True)
         if not valid:problems.append(p+': tipo de dato incorrecto');return
@@ -90,7 +105,9 @@ def plan_shots(data):
                 for k in ('pauseBeforeFrames','pauseAfterFrames'):pauses+=integer(voice.get(k),k,0,7560)
         minimum=max(shot['minFrames'],pauses);maximum=shot['maxFrames']
         require(minimum<=maximum,'PAUSE_BOUNDS','Las pausas exceden el intervalo de la toma '+shot['id']+'. Corrige solo este paso.')
-        require(shot.get('treatment')!='veo' or maximum<=192,'VEO_COVERAGE','La toma '+shot['id']+' supera 8 segundos de Veo. Divide la acción o cambia su tratamiento.')
+        if shot.get('treatment')=='veo':
+            require(max(minimum,shot['frames'])<=192,'VEO_COVERAGE',f"La toma {shot['id']} está prevista para {shot['frames']/24:.1f} segundos, con un mínimo de {minimum/24:.1f}; necesita una corrección de planificación para Veo. El guion se conserva.")
+            maximum=min(maximum,192);shot['maxFrames']=maximum
         lo.append(minimum);hi.append(maximum);sizes.append(max(minimum,min(maximum,shot['frames'])))
     target=duration_target(sum(lo),sum(sizes),sum(hi))
     difference=target-sum(sizes)

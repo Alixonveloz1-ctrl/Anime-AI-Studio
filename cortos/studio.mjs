@@ -394,7 +394,7 @@ async function shots(){
   const description=document.createElement('p');description.className='scene-narration';description.textContent=shot.function;c.append(description);
   const actions=[];
   if(!image&&!visuals.some(a=>a.kind==='image'&&a.approvalState==='candidate'))actions.push(['Generar imagen',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id})]);
-  if(image&&shot.treatment==='veo'&&!visuals.some(a=>a.kind==='veo_silent_validated'&&['candidate','approved'].includes(a.approvalState)))actions.push(['Generar video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id,seconds:8})]);
+  if(image&&shot.treatment==='veo'&&!visuals.some(a=>a.kind==='veo_silent_validated'&&['candidate','approved'].includes(a.approvalState)))actions.push(['Generar video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id})]);
   if(actions.length)buttons(c,actions);
   for(const u of d.utterances.filter(u=>u.shotId===shot.id)){
    const row=document.createElement('div');row.className='voice-row';row.innerHTML=`<p><strong>🎙️ ${esc(entityName(d,u.speakerId))}</strong></p><p class="scene-narration">${esc(u.spanish)}</p>`;c.append(row);
@@ -403,7 +403,7 @@ async function shots(){
   }
   if(has)buttons(c,[['Ver toma completa',()=>previewShots([shot.id],c)]]);
   const direction=fold(c,'Dirección visual');direction.append(document.createTextNode(shot.prompt));
-  const more=fold(c,'Editar y comparar');buttons(more,[['Movimiento y capas',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id}),true]]:[]),...(image&&shot.treatment==='veo'?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id,seconds:8}),true]]:[])]);
+  const more=fold(c,'Editar y comparar');buttons(more,[['Movimiento y capas',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id}),true]]:[]),...(image&&shot.treatment==='veo'?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id}),true]]:[])]);
   if(has)buttons(more,[['Ver escena',()=>previewShots(d.shots.filter(x=>x.beatId===shot.beatId).map(x=>x.id),c),true],['Comparar tomas contiguas',()=>compareShots(shot,c),true]]);
  }
 }
