@@ -19,4 +19,5 @@ def verify_models(config):
 def check_call_scope(operation,calls,kind):
     require(operation in CALLS,'OPERATION','Acción desconocida')
     require(not any(c['state']=='submitted_unknown' for c in calls),'SUBMITTED_UNKNOWN','Hay un envío sin confirmar; no se repetirá automáticamente',409)
-    require(sum(c['kind']==kind for c in calls)<CALLS[operation].get(kind,0),'CALL_LIMIT','La acción solicitada ya realizó sus llamadas')
+    require(sum(c['kind']==kind and c['state']=='quota_rejected' for c in calls)<=3,'RETRY_LIMIT','Se agotaron los reintentos por cuota')
+    require(sum(c['kind']==kind and not (kind=='text' and c['state']=='quota_rejected') for c in calls)<CALLS[operation].get(kind,0),'CALL_LIMIT','La acción solicitada ya realizó sus llamadas')

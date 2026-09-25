@@ -16,6 +16,6 @@ def execute_text(cloud,jid):
     except UnknownSubmission:
         ref.update({'state':'submitted_unknown','errorCode':'SUBMITTED_UNKNOWN'})
     except ContractError as error:
-        cloud.finish(jid,'failed',{'code':error.code,'error':str(error)})
+        cloud.finish(jid,'cancelled' if error.code=='CANCELLED' else 'failed',{'code':error.code,'error':str(error)})
     except Exception as error:
         ref.update({'state':'submitted_unknown','errorCode':'WORKER_EXCEPTION','errorType':type(error).__name__})

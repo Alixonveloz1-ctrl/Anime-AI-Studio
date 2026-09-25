@@ -247,7 +247,7 @@ test('429 from a provider is displayed in Historia with no automatic resubmissio
  const {fixture,w,dom}=await setup({empty:true,pendingAfterSubmit:true,jobSequence:[{state:'failed',settled:true,result:{code:'PROVIDER_QUOTA',error:'Google rejected 429'}}]});
  try{
   await [...w.document.querySelectorAll('button')].find(b=>b.textContent==='Generar tres ideas').onclick();
-  assert.match(w.document.querySelector('#activity').textContent,/cuota o límite de solicitudes \(429\)/);
+  assert.match(w.document.querySelector('#activity').textContent,/Google rejected 429/);
   assert.equal(fixture.calls.filter(c=>c.path.endsWith('/ideas:generate')).length,1);
  }finally{dom.window.close();}
 });
@@ -313,4 +313,10 @@ test('Screenplay chunks require individual clicks and retry keeps the prior chec
   await click('Aprobar este paso');
   assert.ok(w.document.body.textContent.includes('Generar sonido, música y subtítulos'));
  }finally{dom.window.close();}
+});
+
+test('Quota waiting is visible without a second browser submission',()=>{
+ const message=presentation.jobMessage({state:'running',providerWait:{reason:'quota',retryAt:Date.now()/1000+60,attempt:2,maxRetries:3}});
+ assert.match(message,/Reintento 2 de 3/);assert.match(message,/No necesitas pulsar otra vez/);
+ assert.match(presentation.jobMessage({state:'running',providerWait:{reason:'spacing',retryAt:Date.now()/1000+60}}),/espaciar las llamadas/);
 });

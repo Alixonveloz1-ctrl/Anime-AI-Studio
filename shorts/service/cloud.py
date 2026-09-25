@@ -133,6 +133,29 @@ class Cloud:
 class RequestJournal:
     """Journal every generation request before transport, with an independent lease check."""
     def __init__(self,cloud,jid):self.cloud,self.jid=cloud,jid
+    def wait_for_provider(self,seconds,reason,attempt=0):
+        ref=self.cloud.db.collection('animeShortsJobs').document(self.jid)
+        ref.update({'providerWait':{'reason':reason,'retryAt':time.time()+seconds,'attempt':attempt,'maxRetries':3}})
+        deadline=time.monotonic()+seconds
+        while True:
+            job=ref.get().to_dict()
+            p=self.cloud.project_ref(job['projectId']).get().to_dict()
+            require(job['state'] not in ('cancel_requested','cancelled'),'CANCELLED','Se canceló la espera; no se envió otra generación.',409)
+            require(p.get('lease',{}).get('session')==job['session'] and p['lease']['expires']>time.time(),'LEASE','Se pausó la espera al perder la sesión; lo terminado sigue guardado.',409)
+            remaining=deadline-time.monotonic()
+            if remaining<=0:break
+            time.sleep(min(5,remaining))
+        ref.update({'providerWait':None})
+    def pace_text(self):
+        # Shared across Cortos text jobs in this GCP project, not just a browser.
+        ref=self.cloud.db.collection('animeShortsCapacity').document('text-pacing')
+        @firestore.transactional
+        def reserve(tx):
+            row=ref.get(transaction=tx).to_dict() or {};now=time.time()
+            start=max(now,row.get('nextAt',0));tx.set(ref,{'nextAt':start+60})
+            return max(0,start-now)
+        delay=reserve(self.cloud.db.transaction())
+        if delay:self.wait_for_provider(delay,'spacing')
     def begin_call(self,kind,url,payload):
         @firestore.transactional
         def apply(tx):
@@ -144,6 +167,8 @@ class RequestJournal:
             verify_models(self.cloud.c)
             calls=job.get('providerCalls',[])
             check_call_scope(job['operation'],calls,kind)
+            rejected=[c for c in calls if c['kind']==kind and c['state']=='quota_rejected']
+            if rejected:require(rejected[-1]['requestHash']==digest([url,payload]),'RETRY_CHANGED','El reintento debe conservar la misma solicitud.',409)
             call={'id':uuid.uuid4().hex,'kind':kind,'state':'submitted_unknown','requestHash':digest([url,payload]),'started':time.time()}
             tx.update(ref,{'providerCalls':calls+[call]})
             return call['id']

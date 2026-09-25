@@ -4,6 +4,9 @@ import json
 import re
 import io
 import wave
+import random
+import time
+from email.utils import parsedate_to_datetime
 from shorts.core.requests import INPUT_LIMIT, TEXT_OUTPUT_LIMIT, IMAGE_OUTPUT_LIMIT, verify_models
 from shorts.core.contracts import require, ContractError
 
@@ -34,24 +37,52 @@ def tts_payload(c,u,voice):
     require(len(u['japanese'].encode())<=4000 and len(prompt.encode())<=4000,'TTS_LENGTH','Texto o dirección supera 4000 bytes; divide la intervención antes de generar')
     return {'input':{'text':u['japanese'],'prompt':prompt},'voice':{'languageCode':'ja-JP','name':voice['name'],'modelName':c['models']['tts']['model']},'audioConfig':{'audioEncoding':'LINEAR16','sampleRateHertz':24000}}
 
+
+def quota_delay(response,attempt):
+    """Honor Retry-After/RetryInfo; never retry sooner than local backoff."""
+    delay=60*(2**attempt)+random.uniform(0,10)
+    header=getattr(response,'headers',{}).get('Retry-After')
+    if isinstance(header,str):
+        try:delay=max(delay,float(header))
+        except ValueError:
+            try:delay=max(delay,parsedate_to_datetime(header).timestamp()-time.time())
+            except (ValueError,TypeError,OverflowError):pass
+    try:
+        for detail in response.json().get('error',{}).get('details',[]):
+            if detail.get('@type','').endswith('google.rpc.RetryInfo'):
+                delay=max(delay,float(detail.get('retryDelay','0s').removesuffix('s')))
+    except (ValueError,TypeError,AttributeError):pass
+    return delay
+
 class Providers:
     def __init__(self,c,session,meter=None):
-        verify_models(c);self.c,self.session,self.meter=c,session,meter
-    def post(self,url,payload,kind=None):
-        call=self.meter.begin_call(kind,url,payload) if self.meter and kind else None
-        try:r=self.session.post(url,json=payload,timeout=180)
-        except Exception as e:raise UnknownSubmission() from e
-        if r.status_code>=500:raise UnknownSubmission()
-        if not r.ok:
-            if call:self.meter.end_call(call,'rejected')
-            code={400:'PROVIDER_INPUT',401:'PROVIDER_AUTH',403:'PROVIDER_PERMISSION',404:'MODEL_UNAVAILABLE',429:'PROVIDER_QUOTA'}.get(r.status_code,'PROVIDER_ERROR')
-            raise ContractError(code,f'Google rechazó la solicitud ({r.status_code}). No se cambió modelo ni se reenvió.',r.status_code)
-        data=r.json()
-        if call:self.meter.end_call(call,'completed')
-        return data
+        verify_models(c);self.c,self.session,self.meter=c,session,meter;self.quota_waited=0;self.retry_deadline=time.monotonic()+1200
+    def post(self,url,payload,kind=None,retry_quota=False):
+        retry_enabled=self.meter is not None and (kind=='text' or retry_quota)
+        for attempt in range(4 if retry_enabled else 1):
+            if kind=='text' and self.meter:self.meter.pace_text()
+            call=self.meter.begin_call(kind,url,payload) if self.meter and kind else None
+            try:r=self.session.post(url,json=payload,timeout=180)
+            except Exception as e:raise UnknownSubmission() from e
+            if r.status_code>=500:raise UnknownSubmission()
+            if not r.ok:
+                quota=r.status_code==429
+                if call:self.meter.end_call(call,'quota_rejected' if quota and retry_enabled else 'rejected')
+                if quota and retry_enabled and attempt<3:
+                    delay=quota_delay(r,attempt)
+                    require(self.quota_waited+delay<=600 and time.monotonic()+delay+180<=self.retry_deadline,'PROVIDER_QUOTA','Google pide una espera larga por cuota. El progreso queda guardado; no se enviaron más solicitudes.',429)
+                    self.quota_waited+=delay
+                    self.meter.wait_for_provider(delay,'quota',attempt+1)
+                    continue
+                code={400:'PROVIDER_INPUT',401:'PROVIDER_AUTH',403:'PROVIDER_PERMISSION',404:'MODEL_UNAVAILABLE',429:'PROVIDER_QUOTA'}.get(r.status_code,'PROVIDER_ERROR')
+                message='Google mantiene el límite de cuota (429) después de los reintentos con espera. Lo terminado sigue guardado.' if quota and retry_enabled else f'Google rechazó la solicitud ({r.status_code}). No se cambió modelo ni se reenvió.'
+                raise ContractError(code,message,r.status_code)
+            data=r.json()
+            if call:self.meter.end_call(call,'completed')
+            return data
     def check_input(self,kind,contents):
         # countTokens is a free preflight. It cannot trigger a generation.
-        data=self.post(vertex(self.c,kind,'countTokens'),{'contents':contents})
+        data=self.post(vertex(self.c,kind,'countTokens'),{'contents':contents},retry_quota=kind=='text')
         require(type(data.get('totalTokens')) is int and data['totalTokens']<=INPUT_LIMIT,'INPUT_TOKENS','Entrada supera el límite admitido por esta operación; reduce el alcance antes de generar')
     def text(self,prompt,parts=None,analysis=False,max_output_tokens=TEXT_OUTPUT_LIMIT,response_schema=None):
         kind='analysis' if analysis else 'text'

@@ -6,7 +6,8 @@ export const terminal=state=>['awaiting_review','succeeded','failed','cancelled'
 export const unresolved=job=>!job.settled&&(!terminal(job.state)||job.state==='submitted_unknown');
 export function jobMessage(job){
  const code=job.result?.code||job.errorCode;
- if(code==='PROVIDER_QUOTA')return 'Google rechazó la generación por cuota o límite de solicitudes (429). No se reintentó automáticamente.';
+ if(job.state==='running'&&job.providerWait){const wait=job.providerWait;const seconds=Math.max(0,Math.ceil(wait.retryAt-Date.now()/1000));return wait.reason==='quota'?`Google pidió esperar por cuota (429). Reintento ${wait.attempt} de ${wait.maxRetries} en aproximadamente ${seconds} s. No necesitas pulsar otra vez.`:`Esperando ${seconds} s para espaciar las llamadas a Gemini.`;}
+ if(code==='PROVIDER_QUOTA')return job.result?.error||'Google mantiene el límite de cuota (429). Lo terminado sigue guardado.';
  if(job.result?.error)return job.result.error;
  if(job.dispatchError?.message)return job.dispatchError.message;
  if(job.queueError?.message)return job.queueError.message;

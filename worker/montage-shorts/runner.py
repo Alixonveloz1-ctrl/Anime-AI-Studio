@@ -22,7 +22,7 @@ def main():
         import subprocess
         # Container fixtures exercise the shipped media/service code. Repository
         # history/installer checks run in CI's full checkout, outside this image.
-        for pattern in ('test_contracts.py','test_dependencies.py','test_media.py','test_api.py','test_requests.py','test_revisions.py','test_subtitles.py','test_dispatch.py','test_workflow.py','test_ideas.py','test_job_recovery.py','test_text_execution.py','test_reference_recovery.py','test_manual_development.py','test_duration_range.py','test_veo_planning.py','test_script_segments.py'):
+        for pattern in ('test_contracts.py','test_dependencies.py','test_media.py','test_api.py','test_requests.py','test_revisions.py','test_subtitles.py','test_dispatch.py','test_workflow.py','test_ideas.py','test_job_recovery.py','test_text_execution.py','test_reference_recovery.py','test_manual_development.py','test_duration_range.py','test_veo_planning.py','test_script_segments.py','test_quota_retry.py'):
             subprocess.run([sys.executable,'-m','unittest','discover','-s','tests/shorts','-p',pattern],check=True)
         return
     if os.environ.get('SHORTS_CLOUD_SELF_TEST')=='1':
@@ -80,7 +80,7 @@ def main():
     except ContractError as e:
         if e.code in ('VEO_PENDING','SPEECH_PENDING'):
             cloud.db.collection('animeShortsJobs').document(jid).update({'state':'waiting_provider','errorCode':e.code})
-        else:cloud.finish(jid,'failed',{'code':e.code,'error':str(e)})
+        else:cloud.finish(jid,'cancelled' if e.code=='CANCELLED' else 'failed',{'code':e.code,'error':str(e)})
         raise SystemExit(1)
     except Exception as e:
         # Unknown crash after claim can include an accepted paid call.
