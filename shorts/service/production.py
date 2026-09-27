@@ -99,17 +99,23 @@ def run_job(cloud,j,p):
             shot=next((s for s in d['shots'] if s['id']==eid),None)
             refs=[]
             if shot and data.get('variantPrompt'):
-                base=selected(eid,'image');refs=[{**base,'uri':uri(base)}]
+                base=selected(eid,'image');refs=[{**base,'uri':uri(base),'referenceLabel':'imagen aprobada de la toma '+eid+' que se debe editar'}]
                 require(isinstance(data['variantPrompt'],str) and 0<len(data['variantPrompt'])<=3000,'VARIANT_PROMPT','Describe el movimiento localizado')
                 prompt=image_prompt(shot,variant=data['variantPrompt'])
             elif shot:
                 for rid in shot['referenceEntityIds']:
-                    a=selected(rid,'image');refs.append({**a,'uri':uri(a)})
+                    a=selected(rid,'image')
+                    group,e=next((k,e) for k in ('characters','locations','props') for e in d['bible'][k] if e['id']==rid)
+                    label={'characters':'Personaje','locations':'Lugar','props':'Objeto'}[group]+': '+e['name']+' ('+rid+')'
+                    refs.append({**a,'uri':uri(a),'referenceLabel':label})
                 prompt=image_prompt(shot,shot=True)
             else:
                 e=next((e for k in ('characters','locations','props') for e in d['bible'][k] if e['id']==eid),None)
                 require(e,'ENTITY','Referencia inexistente');prompt=image_prompt(e)
-            raw,mime=provider.image(prompt,refs,p['format']);path=root/('image.png' if mime=='image/png' else 'image.jpg');path.write_bytes(raw);inspect(path,'video')
+            raw,mime=provider.image(prompt,refs,p['format'])
+            extension={'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp','image/gif':'.gif'}.get(mime)
+            require(extension,'IMAGE_FORMAT','Google devolvió un formato de imagen no admitido. No se repitió la generación.')
+            path=root/('image'+extension);path.write_bytes(raw);inspect(path,'video')
             return {'assetId':asset(path,'image',('layer_'+ident_new()) if data.get('variantPrompt') else eid,{'variantOf':eid if data.get('variantPrompt') else None,'parentAssetId':refs[0]['id'] if data.get('variantPrompt') else None,'references':[a['id'] for a in refs],'dependencies':dependency_records(refs),'model':provider_config['models']['image'],'prompt':prompt})['id']}
         if op=='veo':
             from shorts.core.timing import veo_seconds

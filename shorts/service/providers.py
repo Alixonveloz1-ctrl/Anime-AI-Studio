@@ -58,14 +58,18 @@ def quota_delay(response,attempt):
 class Providers:
     def __init__(self,c,session,meter=None):
         verify_models(c);self.c,self.session,self.meter=c,session,meter;self.quota_waited=0;self.retry_deadline=time.monotonic()+1200
-    def post(self,url,payload,kind=None,retry_quota=False):
+    def post(self,url,payload,kind=None,retry_quota=False,read_only=False):
         retry_enabled=self.meter is not None and (kind=='text' or retry_quota)
         for attempt in range(4 if retry_enabled else 1):
             if kind=='text' and self.meter:self.meter.pace_text()
             call=self.meter.begin_call(kind,url,payload) if self.meter and kind else None
             try:r=self.session.post(url,json=payload,timeout=180)
-            except Exception as e:raise UnknownSubmission() from e
-            if r.status_code>=500:raise UnknownSubmission()
+            except Exception as e:
+                if not read_only:raise UnknownSubmission() from e
+                raise ContractError('PROVIDER_CHECK_FAILED','No se pudo completar la consulta a Google. Esta consulta no genera contenido.',503) from e
+            if r.status_code>=500:
+                if not read_only:raise UnknownSubmission()
+                raise ContractError('PROVIDER_CHECK_FAILED','Google no pudo completar la consulta. Esta consulta no genera contenido.',503)
             if not r.ok:
                 quota=r.status_code==429
                 if call:self.meter.end_call(call,'quota_rejected' if quota and retry_enabled else 'rejected')
@@ -78,12 +82,16 @@ class Providers:
                 code={400:'PROVIDER_INPUT',401:'PROVIDER_AUTH',403:'PROVIDER_PERMISSION',404:'MODEL_UNAVAILABLE',429:'PROVIDER_QUOTA'}.get(r.status_code,'PROVIDER_ERROR')
                 message='Google mantiene el límite de cuota (429) después de los reintentos con espera. Lo terminado sigue guardado.' if quota and retry_enabled else f'Google rechazó la solicitud ({r.status_code}). No se cambió modelo ni se reenvió.'
                 raise ContractError(code,message,r.status_code)
-            data=r.json()
+            try:data=r.json()
+            except ValueError as e:
+                if call:self.meter.end_call(call,'completed')
+                raise ContractError('PROVIDER_RESPONSE','Google respondió con datos ilegibles. No se repitió la solicitud.',502) from e
             if call:self.meter.end_call(call,'completed')
+            require(isinstance(data,dict),'PROVIDER_RESPONSE','Google devolvió una respuesta inesperada. No se repitió la solicitud.',502)
             return data
     def check_input(self,kind,contents):
         # countTokens is a free preflight. It cannot trigger a generation.
-        data=self.post(vertex(self.c,kind,'countTokens'),{'contents':contents},retry_quota=kind=='text')
+        data=self.post(vertex(self.c,kind,'countTokens'),{'contents':contents},retry_quota=kind=='text',read_only=True)
         require(type(data.get('totalTokens')) is int and data['totalTokens']<=INPUT_LIMIT,'INPUT_TOKENS','Entrada supera el límite admitido por esta operación; reduce el alcance antes de generar')
     def text(self,prompt,parts=None,analysis=False,max_output_tokens=TEXT_OUTPUT_LIMIT,response_schema=None):
         kind='analysis' if analysis else 'text'
@@ -105,6 +113,7 @@ class Providers:
         parts=[{'text':prompt}]
         for a in references:
             require(a['approvalState']=='approved','REFERENCE','Referencia no aprobada')
+            parts.append({'text':'Referencia visual: '+a.get('referenceLabel',a.get('entityId','referencia aprobada'))+'. Conserva su identidad y diseño al representar este elemento.'})
             parts.append({'fileData':{'fileUri':a['uri'],'mimeType':a['mimeType']}})
         contents=[{'role':'user','parts':parts}]
         self.check_input('image',contents)
@@ -134,7 +143,9 @@ class Providers:
     def poll_veo(self,name):
         prefix=f'projects/{self.c["project"]}/locations/{self.c["models"]["veo"]["region"]}/publishers/google/models/{self.c["models"]["veo"]["model"]}/operations/'
         require(name.startswith(prefix),'OPERATION','Operación ajena')
-        return self.post(vertex(self.c,'veo','fetchPredictOperation'),{'operationName':name})
+        try:return self.post(vertex(self.c,'veo','fetchPredictOperation'),{'operationName':name},read_only=True)
+        except ContractError as e:
+            raise ContractError('VEO_PENDING','No se pudo consultar el video. Su operación sigue guardada; reanudar consultará el mismo video sin generar otro.',503) from e
     def poll_speech(self,name):
         require(isinstance(name,str) and re.fullmatch(r'[0-9]{1,40}',name),'OPERATION','Operación Speech inválida')
         try:response=self.session.get('https://speech.googleapis.com/v1/operations/'+name,timeout=30)
@@ -145,12 +156,20 @@ class Providers:
         r=self.c['models']['tts']['region'];require(r in ('global','us','eu','northamerica-northeast1'),'TTS_REGION','Región TTS no verificada')
         host=('' if r=='global' else r+'-')+'texttospeech.googleapis.com'
         result=self.post('https://'+host+'/v1/text:synthesize',tts_payload(self.c,u,voice),'tts')
-        return base64.b64decode(result['audioContent'])
+        return audio_bytes(result.get('audioContent'),'TTS')
     def music(self,prompt,seconds):
         require(self.c['models']['music']=={'model':'lyria-3-pro-preview','region':'global'},'MUSIC_MODEL','Configuración Lyria pendiente de verificar')
         require(0<seconds<=184,'MUSIC_DURATION','Una pieza Lyria no puede cubrir 300 segundos')
         result=self.post(f'https://aiplatform.googleapis.com/v1beta1/projects/{self.c["project"]}/locations/global/interactions',{'model':self.c['models']['music']['model'],'input':[{'type':'text','text':f'Instrumental music only. No vocals, lyrics or speech. Requested duration {seconds} seconds. '+prompt}]},'music')
         require(result.get('status')=='completed','MUSIC_PENDING','Lyria no devolvió una pieza completada')
         aud=next((x for x in result.get('outputs',[]) if x.get('type')=='audio'),None)
-        require(aud and aud.get('mime_type')=='audio/mpeg','MUSIC_FORMAT','Salida Lyria inesperada')
-        return base64.b64decode(aud['data'])
+        require(aud and aud.get('mime_type') in ('audio/mpeg','audio/mp3'),'MUSIC_FORMAT','Lyria no entregó audio MP3. No se repitió la generación.')
+        return audio_bytes(aud.get('data'),'MUSIC')
+
+def audio_bytes(value,kind):
+    require(isinstance(value,str) and value,'{}_EMPTY'.format(kind),'Google terminó sin entregar el archivo de audio. No se repitió la generación.')
+    try:raw=base64.b64decode(value,validate=True)
+    except (ValueError,TypeError) as e:
+        raise ContractError(kind+'_INVALID','Google devolvió un archivo de audio ilegible. No se repitió la generación.') from e
+    require(raw,kind+'_EMPTY','Google devolvió un archivo de audio vacío. No se repitió la generación.')
+    return raw
