@@ -325,7 +325,7 @@ test('Every editorial step waits for explicit approval and another generation cl
    await click(label);const calls=fixture.calls.filter(c=>c.path.endsWith('/develop'));
    assert.equal(calls.length,index+2);assert.equal(calls.at(-1).body.stage,index+2);assert.ok(calls.at(-1).body.sourceDraftId);
    if(index===0){assert.equal(w.document.querySelectorAll('.story-content .script-shot').length,2);assert.match(w.document.querySelector('.story-content .script-shot').textContent,/Haru decide quedarse|Todavía estamos a tiempo/);}
-   if(index===1){assert.match(w.document.body.textContent,/Todavía no se han generado voces, música ni efectos/);assert.match(w.document.body.textContent,/Piano íntimo/);assert.equal(fixture.calls.filter(c=>c.path.endsWith('/assets:generate')).length,0);}
+   if(index===1){assert.match(w.document.body.textContent,/prepararlo no genera archivos de audio/);assert.match(w.document.body.textContent,/Piano íntimo/);assert.equal(fixture.calls.filter(c=>c.path.endsWith('/assets:generate')).length,0);}
    if(index<2){assert.equal(fixture.project.developments.length,0);await click('Aprobar este paso');}
   }
   assert.equal(fixture.project.developments.length,1);assert.equal(fixture.project.developments[0].approvalState,'candidate');
@@ -369,4 +369,24 @@ test('Quota waiting is visible without a second browser submission',()=>{
  const message=presentation.jobMessage({state:'running',providerWait:{reason:'quota',retryAt:Date.now()/1000+60,attempt:2,maxRetries:3}});
  assert.match(message,/Reintento 2 de 3/);assert.match(message,/No necesitas pulsar otra vez/);
  assert.match(presentation.jobMessage({state:'running',providerWait:{reason:'spacing',retryAt:Date.now()/1000+60}}),/espaciar las llamadas/);
+});
+
+
+test('Approved screenplay opens production before sound planning and retains assets when advancing',async()=>{
+ const {fixture,w,dom,click}=await setup({empty:true});
+ try{
+  await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
+  await click('Generar historia');await click('Aprobar este paso');await click('Generar guion, biblias y planos');await click('Aprobar este paso');
+  const calls=fixture.calls.filter(c=>c.path.endsWith('/develop')).length;
+  await click('Abrir producción con este guion');
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).length,calls,'Opening production makes no model call');
+  assert.equal(w.document.querySelectorAll('.shot-section').length,2);
+  await click('Generar voz japonesa',w.document.querySelector('.shot-section'));
+  const asset=fixture.project.assets.at(-1).id;
+  await click('Música y efectos');await click('Abrir plan de sonido');await click('Generar sonido, música y subtítulos');await click('Aprobar este paso');
+  await click('Usar este guion en producción');assert.ok(fixture.project.assets.some(a=>a.id===asset));
+  await click('Música y efectos');assert.match(w.document.body.textContent,/Piano íntimo/);
+  await click('Continuar preparación en Historia');await click('Generar revisión de continuidad');await click('Aprobar guion y biblias');
+  assert.ok(fixture.project.assets.some(a=>a.id===asset));await click('Escenas y voces');assert.equal(w.document.querySelectorAll('.shot-section').length,2);
+ }finally{dom.window.close();}
 });

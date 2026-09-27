@@ -14,6 +14,8 @@ def assemble_plan(cloud,p,cue_overrides=None):
     if 'approvedAssetIds' in p:available=[a for a in available if a['id'] in p['approvedAssetIds']]
     by=select_assets(available,d,dev['id'],p.get('assetSelections'))
     assets={};shots=[];cues=[];subtitles=[];elastic=[];voice_by_shot={};issues=[]
+    if dev.get('editorialStage',4)<4:
+        issues.append('Completa y aprueba el plan de sonido y la revisión de continuidad en Historia antes de exportar.')
     for u in d['utterances']:
         a=by.get((u['id'],'pcm'))
         if not a:

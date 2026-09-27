@@ -29,10 +29,11 @@ export function createFixture({empty=false}={}){
    const prior=body.sourceDraftId?p.developmentDrafts.find(x=>x.id===body.sourceDraftId)?.data||{}:{};
    const current=step<4?{...clone(prior),...Object.fromEntries(groups[step-1].map(k=>[k,clone(data[k])]))}:clone(prior);
    p.developmentDrafts.push({id,ideaId:p.selectedIdea.id,stage:step,sourceDraftId:body.sourceDraftId,data:current,status:'ready',approvalState:'candidate',created:n});
-   if(step===4)p.developments=[{id:'dev',data:current,created:n,revision:1,approvalState:'candidate'}];
+   if(step===4)p.developments.push({id:'dev',data:current,created:n,revision:1,approvalState:'candidate'});
    result=job('develop',{draftId:id,stage:step});
   }
   else if(path.includes('/drafts/')&&path.endsWith(':approve')){const id=path.split('/').at(-1).split(':')[0];const row=p.developmentDrafts.find(x=>x.id===id);row.approvalState='approved';p.activeDraft=id;result=row;}
+  else if(path.includes('/drafts/')&&path.endsWith(':produce')){const id=path.split('/').at(-1).split(':')[0],row=p.developmentDrafts.find(x=>x.id===id);const record={id:'production-'+id,data:{soundRequests:[],musicRequests:[],subtitles:[],...clone(row.data)},sourceDraftId:id,editorialStage:row.stage,approvalState:'approved',created:++n};p.developments.push(record);p.activeDevelopment=record.id;result=record;}
   else if(path.includes('/drafts/')&&path.endsWith(':recover')){const row={id:'recovered'+(++n),ideaId:p.selectedIdea.id,stage:1,data:{title:data.title,story:data.story,beats:data.beats},created:n,status:'ready',approvalState:'candidate'};p.developmentDrafts.push(row);result=row;}
   else if(path.includes('/drafts/'))result=p.developmentDrafts.find(x=>x.id===path.split('/').at(-1));
   else if(path.includes('/revisions/')&&path.endsWith(':approve')){const parts=path.split('/'),kind=parts[4],id=parts[5].split(':')[0];const entity=p[kind].find(x=>x.id===id);if(kind==='assets'&&entity.approvalState!=='approved'&&!body.reviewed)return new Response(JSON.stringify({error:'Revisión requerida'}),{status:422});entity.approvalState='approved';if(kind==='developments')p.activeDevelopment=id;if(kind==='assets')p.assetSelections[entity.entityId+'|'+entity.kind]=id;if(kind==='timelines')p.activeTimeline=id;result=entity;}

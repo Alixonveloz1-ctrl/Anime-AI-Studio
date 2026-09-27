@@ -177,6 +177,31 @@ def approve_draft(pid,eid):
         return row
     row,_=cloud().mutate(pid,expected(),change);return jsonify(row)
 
+@app.post('/projects/<pid>/drafts/<eid>:produce')
+def produce_draft(pid,eid):
+    from shorts.service.development import production_draft
+    owned(pid)
+    key=digest(['production-draft-v1',pid,eid])
+    def change(tx,current):
+        row=cloud().entity_ref(pid,'developmentDrafts',eid).get(transaction=tx).to_dict()
+        require(row and row.get('ideaId')==current.get('selectedIdea',{}).get('id'),'IDEA_CHANGED','Cambió la idea seleccionada.',409)
+        require(current.get('activeDraft')==eid,'STAGE_CHANGED','Abre producción desde el paso aprobado vigente.',409)
+        ref=cloud().entity_ref(pid,'developments',key)
+        existing=ref.get(transaction=tx).to_dict()
+        data=production_draft(row)
+        if existing:
+            require(existing.get('data')==data,'STAGE_CHANGED','Cambió el guion de esta versión.',409)
+            record=existing
+        else:
+            record={'id':key,'revision':1,'data':data,'created':time.time(),
+                    'ideaId':row['ideaId'],'sourceDraftId':eid,'editorialStage':row['stage'],
+                    'approvalState':'approved','approvedBy':current['owner'],'approvedAt':time.time()}
+            tx.create(ref,record)
+        current.update(activeDevelopment=key,stage='tomas',timelineStale=True,title=data['title'])
+        return record
+    record,_=cloud().mutate(pid,expected(),change)
+    return jsonify(record)
+
 @app.post('/projects/<pid>/revisions/<kind>/<eid>:revise')
 def revise(pid,kind,eid):
     owned(pid);cloud().entity(pid,kind,eid);d=body();require(isinstance(d.get('instruction'),str) and 0<len(d['instruction'])<=3000,'INSTRUCTION','Describe la corrección')
@@ -202,7 +227,7 @@ def development_edit(pid,eid):
     if request.path.endswith(':preview'):return jsonify(report=report,impactHash=digest(report))
     require(d.get('impactHash')==digest(report),'EDIT_IMPACT','Revisa las dependencias actualizadas antes de guardar',409)
     record={'id':new_id(),'revision':1,'approvalState':'candidate','data':candidate,'previousId':eid,
-            'created':time.time(),'source':'manual','impact':report,'ideaId':old.get('ideaId')}
+            'created':time.time(),'source':'manual','impact':report,'ideaId':old.get('ideaId'),'editorialStage':old.get('editorialStage',4)}
     def save(tx,current):
         tx.create(cloud().entity_ref(pid,'developments',record['id']),record)
         return record
@@ -313,7 +338,7 @@ def visual_propose(pid,sid):
     available=[x.to_dict() for x in cloud().project_ref(pid).collection('assets').stream()]
     shot.update(d);validate_visual(shot,{a['id']:a for a in available})
     report=impact(old['data'],candidate,available,old['id'])
-    record={'id':new_id(),'revision':1,'created':time.time(),'approvalState':'candidate','data':candidate,'previousId':old['id'],'ideaId':old.get('ideaId'),'impact':report,'source':'manual_visual'}
+    record={'id':new_id(),'revision':1,'created':time.time(),'approvalState':'candidate','data':candidate,'previousId':old['id'],'ideaId':old.get('ideaId'),'impact':report,'source':'manual_visual','editorialStage':old.get('editorialStage',4)}
     def save(tx,current):tx.create(cloud().entity_ref(pid,'developments',record['id']),record)
     cloud().mutate(pid,expected(),save)
     return jsonify(record),201

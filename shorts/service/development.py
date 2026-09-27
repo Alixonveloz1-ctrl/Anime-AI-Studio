@@ -174,6 +174,20 @@ def source_for_stage(cloud,project,stage,source_id,source_hash=None):
     if source_hash:require(digest(source['data'])==source_hash,'STAGE_CHANGED','El contenido aprobado cambió.',409)
     return copy.deepcopy(source['data'])
 
+def production_draft(row):
+    """Expose an approved screenplay for media work without inventing a score.
+
+    The snapshot uses the same development contract as final editorial review.
+    A stage marker keeps export pending until the remaining review is finished.
+    """
+    require(row.get('stage') in (2,3) and row.get('status')=='ready' and row.get('approvalState')=='approved',
+            'SCRIPT_APPROVAL','Aprueba el guion completo antes de abrir producción.',409)
+    data=validate_stage(row['data'],row['stage'])
+    if row['stage']==2:
+        data.update(soundRequests=[],musicRequests=[],subtitles=[
+            {'utteranceId':u['id'],'text':u['spanish']} for u in data['utterances']])
+    return validate_development(data)
+
 def develop(cloud,provider,job,project,idea):
     stage=job['payload'].get('stage',1);integer(stage,'paso',1,4)
     prior=source_for_stage(cloud,project,stage,job['payload'].get('sourceDraftId'),job['payload'].get('sourceHash'))

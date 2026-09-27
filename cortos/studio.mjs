@@ -251,7 +251,7 @@ function scriptBreakdown(parent,data){
 }
 function audioPlan(parent,data){
  const sounds=data?.soundRequests||[],music=data?.musicRequests||[],subs=data?.subtitles||[];
- const explanation=document.createElement('p');explanation.textContent='Esto es un plan escrito. Todavía no se han generado voces, música ni efectos. Los subtítulos son texto provisional; sus tiempos se ajustan después de generar y revisar las voces.';parent.append(explanation);
+ const explanation=document.createElement('p');explanation.textContent='Esto es un plan escrito; prepararlo no genera archivos de audio. Las voces, la música y los efectos se generan y escuchan en Escenas. Los subtítulos son texto provisional; sus tiempos se ajustan después de generar y revisar las voces.';parent.append(explanation);
  if(music.length){const box=fold(parent,`Música prevista · ${music.length}`,true);for(const [i,row] of music.entries()){const c=card(`Pieza ${i+1}`,`<p>${esc(row.prompt)}</p>`);box.append(c);}}
  if(sounds.length){const box=fold(parent,`Efectos previstos · ${sounds.length}`,true);for(const row of sounds)box.append(card(row.name,`<p>${esc(row.description)}</p>`));}
  if(subs.length){const box=fold(parent,`Texto provisional de subtítulos · ${subs.length}`);for(const row of subs){const line=document.createElement('p');line.textContent=row.text;box.append(line);}}
@@ -271,7 +271,11 @@ async function script(parent=screen){
  const checkpoint=next===2?(latest?.status==='partial'?latest:latest?.status==='invalid'?choices.find(d=>d.id===latest?.checkpointId&&d.status==='partial'):null):null;
  const runStage=(number,instruction='',checkpointId=null)=>runTask('develop',route('/develop'),{stage:number,sourceDraftId:number>1?parentId:null,instruction,...(checkpointId?{checkpointId}:{})});
  const nextControls=document.createElement('section');nextControls.className='next-step';intro.append(nextControls);
- const note=document.createElement('p');note.textContent=p.activeDevelopment?'Tu guion está aprobado. Ya puedes producir las tomas.':'Completa el paso indicado aquí para abrir los botones de imagen, video y voz de cada toma.';nextControls.append(note);
+ const note=document.createElement('p');note.textContent=p.activeDevelopment?'Tu guion está aprobado. Ya puedes producir las tomas.':'Aprueba la historia y el guion completo para abrir los botones de imagen, video y voz de cada toma.';nextControls.append(note);
+ const inUse=p.developments.find(d=>d.id===p.activeDevelopment);
+ if(approved&&[2,3].includes(approved.stage)&&inUse?.sourceDraftId!==approved.id){
+  buttons(nextControls,[[inUse?'Usar este guion en producción':'Abrir producción con este guion',async()=>{await mutate(route('/drafts/'+approved.id+':produce'),{});await go('Escenas');say('Guion abierto. Genera y revisa cada imagen, video y voz desde su toma.');}]]);
+ }
  if(approved){
   const history=[],seen=new Set();let current=approved;
   while(current&&!seen.has(current.id)){seen.add(current.id);history.unshift(current);current=drafts.find(d=>d.id===current.sourceDraftId&&d.approvalState==='approved');}
@@ -297,7 +301,7 @@ async function script(parent=screen){
     if(saved.status==='ready'&&next<4)buttons(nextControls,[['Aprobar este paso',async()=>{await mutate(route('/drafts/'+saved.id+':approve'),{});await draw();say('Paso aprobado. El siguiente se genera únicamente cuando lo solicites.');}]]);
    }catch(e){const error=document.createElement('p');error.textContent=e.message;intro.append(error);}
   }
-  if(next===3){const note=document.createElement('p');note.textContent='El siguiente paso solo prepara indicaciones de música, efectos y traducciones provisionales. Podrás generar, escuchar y elegir la música y las voces en Escenas, después de revisar y aprobar el guion.';intro.append(note);}
+  if(next===3){const note=document.createElement('p');note.textContent='Ya puedes abrir producción y trabajar las imágenes y voces. Este paso prepara el plan de música y efectos; no genera archivos de audio. Completa el plan y la revisión antes de exportar.';intro.append(note);}
   const label=document.createElement('label');label.textContent=next===2?'Indicaciones para la parte que vas a generar (opcional)':latest?'Qué quieres corregir en este paso (opcional)':'Indicaciones para este paso (opcional)';
   const instruction=document.createElement('textarea');instruction.maxLength=3000;label.append(instruction);const adjustments=fold(nextControls,'Cambiar indicaciones (opcional)');adjustments.append(label);
   const generateLabel=checkpoint?(latest?.status==='invalid'?'Reintentar este tramo':checkpoint.scriptProgress.completed===0?'Aprobar biblias y generar primer tramo':'Aprobar tramo y continuar'):latest?'Generar otra versión de este paso':'Generar '+stages[next-1].toLowerCase();
@@ -324,6 +328,7 @@ async function script(parent=screen){
 async function production(){
  const heading=pageTitle('Escenas','Da forma a las imágenes, las voces y el sonido.');
  if(!development()){return script(screen);}
+ editorialNotice(screen);
  buttons(heading,[['Revisar el corto',()=>go('Revisión'),true],...(active?[['Pausar',async()=>{await lease(false);say('Producción pausada. Lo terminado se conserva.');await draw();},true]]:[])]);
  tabs(screen,[['tomas','Escenas y voces'],['sonido','Música y efectos']],productionTab,async part=>{productionTab=part;await draw();});
  if(productionTab==='sonido')await sounds();else await shots();
@@ -344,6 +349,12 @@ async function activityList(){
 }
 
 const development=()=>p.developments.find(x=>x.id===p.activeDevelopment)?.data;
+function editorialNotice(parent){
+ const current=p.developments.find(x=>x.id===p.activeDevelopment);
+ if((current?.editorialStage??4)>=4)return;
+ const box=card('Puedes producir tus tomas','<p>Genera y revisa imágenes, videos y voces. Antes de exportar, completa el plan de sonido y la revisión de continuidad en Historia.</p>');
+ buttons(box,[['Continuar preparación en Historia',()=>go('Historia'),true]]);parent.append(box);
+}
 const selectedAsset=(id,kind)=>p.assets.find(a=>a.id===p.assetSelections?.[id+'|'+kind])||p.assets.filter(a=>a.entityId===id&&a.kind===kind&&a.approvalState==='approved').at(-1);
 function expandImage(url,name){
  const dialog=document.createElement('dialog');dialog.className='image-dialog';const bar=document.createElement('div');bar.className='dialog-header';const label=document.createElement('strong');label.textContent=name;bar.append(label,action('Cerrar',()=>{dialog.close();dialog.remove();},true));dialog.append(bar);
@@ -458,6 +469,7 @@ async function compareShots(shot,parent){
 }
 async function sounds(){
  const d=development();
+ if(!d.musicRequests.length&&!d.soundRequests.length){const c=card('Música y efectos','<p>Este guion todavía no tiene encargos de sonido. Prepara y aprueba el plan en Historia para generarlos y escucharlos aquí.</p>');buttons(c,[['Abrir plan de sonido',()=>go('Historia')]]);screen.append(c);}
  if(d.musicRequests.length){const music=fold(screen,'Música',true);for(const [index,m] of d.musicRequests.entries()){const c=card('Pieza '+(index+1),`<p class="muted">${m.seconds} segundos</p>`);const description=fold(c,'Dirección musical');description.append(document.createTextNode(m.prompt));const rows=p.assets.filter(a=>a.entityId===m.id);buttons(c,[[rows.length?'Crear otra pieza':'Generar música',()=>runTask('music',route('/assets:generate'),{operation:'music',entityId:m.id}),rows.length>0]]);await assetVersions(c,rows);music.append(c);}}
  for(const r of d.soundRequests){const c=card(r.name,`<p>${esc(r.description)}</p><p class="muted">${r.seconds} s · ${esc(r.perspective)}</p>`);screen.append(c);
   const request=fold(c,'Prompt y preparación');request.innerHTML+=`<p>${esc(r.prompt)}</p><p>Preparación: ${r.preparationSeconds} s · Cola: ${r.tailSeconds} s</p>`;buttons(request,[['Copiar prompt',()=>navigator.clipboard.writeText(r.prompt),true]]);

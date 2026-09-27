@@ -68,7 +68,7 @@ def run_job(cloud,j,p):
             # Validate an individual candidate without inventing a new idea batch.
             require(set(original)<=set(candidate) and all(candidate.get(k) for k in original),'IDEA_SCHEMA','Idea corregida incompleta')
             report={'changes':changes(original,candidate),'assetsNeedingReview':[],'paidCalls':1}
-        return {'candidateId':entity(data['kind'],{'data':candidate,'impact':report,'scope':scope,'previousId':old['id'],'batchId':old.get('batchId'),'ideaId':old.get('ideaId')})['id']}
+        return {'candidateId':entity(data['kind'],{'data':candidate,'impact':report,'scope':scope,'previousId':old['id'],'batchId':old.get('batchId'),'ideaId':old.get('ideaId'),'editorialStage':old.get('editorialStage',4)})['id']}
     with tempfile.TemporaryDirectory(prefix='shorts-') as temp:
         root=Path(temp)
         if op=='import':
@@ -82,7 +82,7 @@ def run_job(cloud,j,p):
             validate_development(candidate)
             if candidate!=old['data']:
                 available=[x.to_dict() for x in cloud.project_ref(pid).collection('assets').stream()]
-                dev=entity('developments',{'data':candidate,'previousId':old['id'],'ideaId':old.get('ideaId'),'source':'import','impact':impact(old['data'],candidate,available,old['id'],p.get('assetSelections')),'provenance':metadata['provenance']})
+                dev=entity('developments',{'data':candidate,'previousId':old['id'],'ideaId':old.get('ideaId'),'source':'import','editorialStage':old.get('editorialStage',4),'impact':impact(old['data'],candidate,available,old['id'],p.get('assetSelections')),'provenance':metadata['provenance']})
                 p={**p,'activeDevelopment':dev['id']}
             source_path=root/('import.png' if source['mimeType']=='image/png' else 'import.jpg' if source['kind']=='image' else 'import.wav')
             cloud.download(source_project['id'],source['object'],source_path)
