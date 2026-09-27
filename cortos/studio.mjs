@@ -3,7 +3,6 @@ import {steps,label as titleFor,terminal,unresolved,jobMessage,versions,taskActi
 import {genres,subgenres,storyChoice} from './catalog.mjs';
 const $=s=>document.querySelector(s), screen=$('#screen'), notice=$('#notice');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let batchRunning=false;
 let user,p,stage='Historia',productionTab='tomas',reviewTab='corto',active=false,busy=false,heartbeatBusy=false,needsRedraw=false;
 let mediaLoads=[];
 let knownJobs=[],watchVersion=0;
@@ -233,6 +232,33 @@ function readable(parent,value){
  const labels={story:'Historia',beats:'Momentos dramáticos',shots:'Planos',utterances:'Voces del guion',soundRequests:'Efectos de sonido',musicRequests:'Música',subtitles:'Subtítulos',dramatic:'Dirección dramática',visual:'Estilo visual',characters:'Personajes',locations:'Lugares',props:'Objetos',name:'Nombre',japaneseReading:'Lectura japonesa',age:'Edad',objective:'Objetivo',relationships:'Relaciones',speech:'Forma de hablar',voice:'Voz',languageCode:'Idioma',direction:'Actuación',costumes:'Vestuario',description:'Descripción',referencePrompt:'Referencia visual',layout:'Distribución',entrances:'Entradas',windows:'Ventanas',furniture:'Mobiliario',light:'Luz',soundZones:'Zonas sonoras',owner:'Poseedor',state:'Estado'};
  for(const [key,item] of Object.entries(value)){if(['id','hash','sha256','developmentId','assetId','audioHash','nativeQualityGuaranteed','assetRevision','audioRevision','voiceBinding'].includes(key))continue;if(item&&typeof item==='object'){const group=document.createElement('details'),title=document.createElement('summary');title.textContent=item.name||labels[key]||(/^[0-9]+$/.test(key)?'Elemento '+(Number(key)+1):fieldLabel(key));group.append(title);readable(group,item);parent.append(group);}else{const line=document.createElement('p'),label=document.createElement('strong');label.textContent=(labels[key]||fieldLabel(key))+': ';line.append(label,document.createTextNode(typeof item==='boolean'?(item?'Sí':'No'):String(item??'')));parent.append(line);}}
 }
+function scriptBreakdown(parent,data){
+ const shots=data?.shots||[],voices=data?.utterances||[],characters=data?.bible?.characters||[];
+ if(!shots.length)return;
+ const title=document.createElement('h4');title.textContent=`Desglose de tomas · ${shots.length} · ${(shots.reduce((n,s)=>n+s.frames,0)/24).toFixed(1)} s escritos`;parent.append(title);
+ const names=new Map(characters.map(c=>[c.id,c.name]));
+ for(const [index,shot] of shots.entries()){
+  const scene=card(`Toma ${index+1} · ${(shot.frames/24).toFixed(1)} s`,`<p class="badge">${esc(titleFor(shot.treatment))}</p>`);scene.classList.add('scene-card','script-shot');parent.append(scene);
+  const location=data.bible?.locations?.find(x=>x.id===shot.locationId);
+  if(location){const place=document.createElement('p');place.className='muted';place.textContent='Lugar: '+location.name;scene.append(place);}
+  const purpose=document.createElement('p');purpose.textContent=shot.function;scene.append(purpose);
+  for(const voice of voices.filter(x=>x.shotId===shot.id)){
+   const row=document.createElement('div');row.className='voice-row';scene.append(row);
+   const actor=document.createElement('strong');actor.textContent=names.get(voice.speakerId)||'Voz';row.append(actor);
+   const spanish=document.createElement('p');spanish.textContent=voice.spanish;row.append(spanish);
+   const japanese=fold(row,'Japonés y actuación');japanese.append(document.createTextNode(voice.japanese+' · '+voice.acting));
+  }
+  const visual=fold(scene,'Acción, imagen y movimiento');visual.append(document.createTextNode(shot.prompt));
+  if(shot.timingReason){const timing=fold(scene,'Por qué dura este tiempo');timing.append(document.createTextNode(shot.timingReason));}
+ }
+}
+function audioPlan(parent,data){
+ const sounds=data?.soundRequests||[],music=data?.musicRequests||[],subs=data?.subtitles||[];
+ const explanation=document.createElement('p');explanation.textContent='Esto es un plan escrito. Todavía no se han generado voces, música ni efectos. Los subtítulos son texto provisional; sus tiempos se ajustan después de generar y revisar las voces.';parent.append(explanation);
+ if(music.length){const box=fold(parent,`Música prevista · ${music.length}`,true);for(const [i,row] of music.entries()){const c=card(`Pieza ${i+1}`,`<p>${esc(row.prompt)}</p>`);box.append(c);}}
+ if(sounds.length){const box=fold(parent,`Efectos previstos · ${sounds.length}`,true);for(const row of sounds)box.append(card(row.name,`<p>${esc(row.description)}</p>`));}
+ if(subs.length){const box=fold(parent,`Texto provisional de subtítulos · ${subs.length}`);for(const row of subs){const line=document.createElement('p');line.textContent=row.text;box.append(line);}}
+}
 async function script(parent=screen){
  if(!p.selectedIdea){const c=card('Elige una idea primero','<p>Las tres propuestas son el punto de partida de tu guion.</p>');buttons(c,[['Ver ideas',()=>ideas(parent)]]);parent.append(c);return;}
  const intro=card('Guion y biblias',`<p>${esc(p.ideas.find(i=>i.id===p.selectedIdea?.id)?.data.title||'Tu historia elegida')}</p>`);
@@ -248,8 +274,12 @@ async function script(parent=screen){
  const checkpoint=next===2?(latest?.status==='partial'?latest:latest?.status==='invalid'?choices.find(d=>d.id===latest?.checkpointId&&d.status==='partial'):null):null;
  const runStage=(number,instruction='',checkpointId=null)=>runTask('develop',route('/develop'),{stage:number,sourceDraftId:number>1?parentId:null,instruction,...(checkpointId?{checkpointId}:{})});
  const note=document.createElement('p');note.textContent='Cada paso se genera solo cuando lo pides. Lee el resultado y apruébalo antes de continuar.';intro.append(note);
- if(approved){const details=fold(intro,'Paso '+approved.stage+' aprobado · '+stages[approved.stage-1]);try{const saved=await api(route('/drafts/'+approved.id));readable(details,saved.data);}catch(e){details.append(document.createTextNode(e.message));}}
- if(working){const note=document.createElement('p');note.textContent='El paso solicitado está pendiente. Su estado aparece arriba.';intro.append(note);}
+ if(approved){
+  const history=[],seen=new Set();let current=approved;
+  while(current&&!seen.has(current.id)){seen.add(current.id);history.unshift(current);current=drafts.find(d=>d.id===current.sourceDraftId&&d.approvalState==='approved');}
+  for(const previous of history){const details=fold(intro,'Paso '+previous.stage+' aprobado · '+stages[previous.stage-1],previous.stage===2);try{const saved=await api(route('/drafts/'+previous.id));if(previous.stage===2){scriptBreakdown(details,saved.data);const bible=fold(details,'Personajes, lugares y objetos');readable(bible,{bible:saved.data.bible});}else if(previous.stage===3)audioPlan(details,saved.data);else readable(details,saved.data);}catch(e){details.append(document.createTextNode(e.message));}}
+ }
+ if(working){const note=document.createElement('p');note.textContent='El paso solicitado está pendiente. Su estado aparece arriba.';intro.append(note);if(next===2&&checkpoint){try{const saved=await api(route('/drafts/'+checkpoint.id));scriptBreakdown(intro,saved.data);}catch(e){const error=document.createElement('p');error.textContent=e.message;intro.append(error);}}}
  else if(next<=4){
   const heading=document.createElement('h4');heading.textContent='Paso '+next+' de 4 · '+stages[next-1];intro.append(heading);
   if(next===2){
@@ -262,11 +292,14 @@ async function script(parent=screen){
    try{
     const saved=await api(route('/drafts/'+latest.id));
     if(saved.data?.story){const story=document.createElement('p');story.style.whiteSpace='pre-wrap';story.textContent=saved.data.story;intro.append(story);}
-    if(next>1){const details=fold(intro,'Leer contenido de este paso',true);const groups=next===2?['bible','shots','utterances']:next===3?['soundRequests','musicRequests','subtitles']:[];for(const group of groups)if(saved.data?.[group])readable(details,{[group]:saved.data[group]});if(saved.review)readable(details,saved.review);}
+    if(next===2){const visible=checkpoint&&latest?.status==='invalid'&&!saved.data?.shots?.length?await api(route('/drafts/'+checkpoint.id)):saved;const bible=fold(intro,'Personajes, lugares y objetos',!visible.data?.shots?.length);if(visible.data?.bible)readable(bible,{bible:visible.data.bible});scriptBreakdown(intro,visible.data);}
+    if(next===3)audioPlan(intro,saved.data);
+    if(saved.review){const review=fold(intro,'Revisión de continuidad');readable(review,saved.review);}
     if(saved.error){const error=document.createElement('p');error.textContent=saved.error.message+' Los pasos aprobados siguen guardados.';intro.append(error);}
     if(saved.status==='ready'&&next<4)buttons(intro,[['Aprobar este paso',async()=>{await mutate(route('/drafts/'+saved.id+':approve'),{});await draw();say('Paso aprobado. El siguiente se genera únicamente cuando lo solicites.');}]]);
    }catch(e){const error=document.createElement('p');error.textContent=e.message;intro.append(error);}
   }
+  if(next===3){const note=document.createElement('p');note.textContent='El siguiente paso solo prepara indicaciones de música, efectos y traducciones provisionales. Podrás generar, escuchar y elegir la música y las voces en Escenas, después de revisar y aprobar el guion.';intro.append(note);}
   const label=document.createElement('label');label.textContent=next===2?'Indicaciones para la parte que vas a generar (opcional)':latest?'Qué quieres corregir en este paso (opcional)':'Indicaciones para este paso (opcional)';
   const instruction=document.createElement('textarea');instruction.maxLength=3000;label.append(instruction);intro.append(label);
   const generateLabel=checkpoint?(latest?.status==='invalid'?'Reintentar este tramo':checkpoint.scriptProgress.completed===0?'Aprobar biblias y generar primer tramo':'Aprobar tramo y continuar'):latest?'Generar otra versión de este paso':'Generar '+stages[next-1].toLowerCase();
@@ -294,7 +327,7 @@ async function script(parent=screen){
 async function production(){
  const heading=pageTitle('Escenas','Da forma a las imágenes, las voces y el sonido.');
  if(!development()){empty('Tu guion está primero','Aprueba el guion y sus biblias en Historia para preparar los recursos.');buttons(screen,[['Ir a Historia',()=>go('Historia')]]);return;}
- buttons(heading,[['Revisar el corto',()=>go('Revisión'),true],[batchRunning?'Producción en marcha':'Generar pendientes',()=>runBatch()],...(active?[['Pausar',async()=>{batchRunning=false;await lease(false);say('Producción pausada. Lo terminado se conserva.');await draw();},true]]:[])]);
+ buttons(heading,[['Revisar el corto',()=>go('Revisión'),true],...(active?[['Pausar',async()=>{await lease(false);say('Producción pausada. Lo terminado se conserva.');await draw();},true]]:[])]);
  tabs(screen,[['tomas','Escenas y voces'],['sonido','Música y efectos']],productionTab,async part=>{productionTab=part;await draw();});
  if(productionTab==='sonido')await sounds();else await shots();
  await activityList();
@@ -311,22 +344,6 @@ async function activityList(){
  if(job.result?.previewId)items.push(['Reproducir',()=>playPreview(job.result.previewId,row),true]);
  if(items.length)buttons(row,items);if(job.result?.error){const message=document.createElement('p');message.className='muted';message.textContent=describeIssue(job.result.error);row.append(message);}box.append(row);
  }
-}
-
-async function runBatch(){
- if(batchRunning)return;
- const plan=await api(route('/batches')),ready=plan.nodes.filter(x=>x.state==='ready');
- if(!ready.length){say('No hay generaciones listas. Revisa y aprueba las candidatas o completa sus referencias.');return;}
- say(`Preparando ${ready.length} recursos pendientes. Conservamos las versiones ya creadas.`);
- await lease(true);const batch=await mutate(route('/batches'),{session,acceptPlanHash:plan.planHash});batchRunning=true;
- const allowed=new Set(ready.map(x=>x.key));
- try{for(let n=0;n<plan.nodes.length&&batchRunning&&active;n++){
-  const now=await api(route('/batches'));const next=now.nodes.find(x=>x.state==='ready');
-  if(!next||!allowed.has(next.key)){say('Lote conservado. Revisa las candidatas antes de continuar la siguiente etapa.');break;}
-  await refresh();const result=await api(route(`/batches/${batch.id}:next`),'POST',{session});
-  if(!result.jobId){say('Pendientes guardados para revisión.');break;}
-  const job=await watch(result.jobId);if(!job||!['succeeded','awaiting_review'].includes(job.state)){say('Lote pausado: revisa la tarea antes de continuar.',true);break;}
- }}finally{batchRunning=false;needsRedraw=true;}
 }
 
 const development=()=>p.developments.find(x=>x.id===p.activeDevelopment)?.data;

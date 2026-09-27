@@ -161,6 +161,7 @@ test('Scenes show image and voice players inline, references stay under Personaj
  try{
   await click('Escenas');await new Promise(r=>setTimeout(r,0));
   const shots=w.document.querySelectorAll('.scene-card');assert.equal(shots.length,2);
+  assert.equal([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Generar pendientes'),false,'Production must not silently launch multiple assets');
   assert.equal(shots[0].closest('details'),null);
   assert.equal(shots[0].querySelectorAll('.scene-visuals>.asset-card img').length,2,'Approved image and candidate both remain visible');
   assert.ok(shots[0].querySelector('.voice-row audio[controls]'));
@@ -299,6 +300,8 @@ test('Every editorial step waits for explicit approval and another generation cl
   for(const [index,label] of ['Generar guion, biblias y planos','Generar sonido, música y subtítulos','Generar revisión de continuidad'].entries()){
    await click(label);const calls=fixture.calls.filter(c=>c.path.endsWith('/develop'));
    assert.equal(calls.length,index+2);assert.equal(calls.at(-1).body.stage,index+2);assert.ok(calls.at(-1).body.sourceDraftId);
+   if(index===0){assert.equal(w.document.querySelectorAll('.story-content .script-shot').length,2);assert.match(w.document.querySelector('.story-content .script-shot').textContent,/Haru decide quedarse|Todavía estamos a tiempo/);}
+   if(index===1){assert.match(w.document.body.textContent,/Todavía no se han generado voces, música ni efectos/);assert.match(w.document.body.textContent,/Piano íntimo/);assert.equal(fixture.calls.filter(c=>c.path.endsWith('/assets:generate')).length,0);}
    if(index<2){assert.equal(fixture.project.developments.length,0);await click('Aprobar este paso');}
   }
   assert.equal(fixture.project.developments.length,1);assert.equal(fixture.project.developments[0].approvalState,'candidate');
@@ -329,6 +332,8 @@ test('Screenplay chunks require individual clicks and retry keeps the prior chec
   assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).at(-1).body.checkpointId,bible,'Retry uses last successful checkpoint');
   const segment=fixture.project.developmentDrafts.at(-1).id;
   assert.ok(w.document.body.textContent.includes('1 de 2 tramos · 150.0 segundos'));
+  assert.equal(w.document.querySelectorAll('.story-content .script-shot').length,2,'The saved shots remain visible after a failed later request');
+  assert.match(w.document.querySelector('.story-content .script-shot .voice-row').textContent,/Todavía estamos a tiempo/);
   await click('Aprobar tramo y continuar');
   assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).at(-1).body.checkpointId,segment);
   await click('Aprobar este paso');
