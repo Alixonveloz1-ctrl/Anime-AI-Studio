@@ -35,10 +35,24 @@ class DurationRangeTests(unittest.TestCase):
         m.update(frames=285*24);m['shots'][0]['frames']=285*24;m['cues'][0]['anchorSample']=285*48000
         with self.assertRaises(ContractError) as error:compile_timeline(m)
         self.assertEqual(error.exception.code,'CUE_TAIL')
-    def test_music_cannot_exceed_actual_shorter_program(self):
+    def test_music_is_trimmed_to_actual_shorter_program(self):
         d=complete();d['shots'][0].update(frames=285*24,minFrames=285*24,maxFrames=285*24)
         d['musicRequests']=[{'id':'m','prompt':'Piano','startFrame':0,'endFrame':300*24,'gainDb':-18}]
-        with self.assertRaises(ContractError):validate_stage(d,3)
+        original=copy.deepcopy(d)
+        result=validate_stage(d,3)
+        self.assertEqual(d,original)
+        self.assertEqual(result['shots'],original['shots'])
+        self.assertEqual(result['musicRequests'][-1]['endFrame'],285*24)
+        self.assertEqual(sum(row['endFrame']-row['startFrame'] for row in result['musicRequests']),285*24)
+        self.assertTrue(all(row['endFrame']<=285*24 for row in result['musicRequests']))
+        self.assertEqual(validate_stage(result,3),result)
+    def test_music_starting_at_or_after_program_end_is_rejected(self):
+        for start in (285*24,286*24):
+            with self.subTest(start=start):
+                d=complete();d['shots'][0].update(frames=285*24,minFrames=285*24,maxFrames=285*24)
+                d['musicRequests']=[{'id':'m','prompt':'Piano','startFrame':start,'endFrame':300*24}]
+                with self.assertRaises(ContractError) as error:validate_stage(d,3)
+                self.assertEqual(error.exception.code,'MUSIC_COVERAGE')
     def test_measured_timeline_uses_actual_duration(self):
         d=complete();d['utterances']=[];d['subtitles']=[];d['shots'][0].update(frames=310*24,minFrames=310*24,maxFrames=310*24)
         c=Mock();c.entity.return_value={'id':'dev','approvalState':'approved','data':d};c.project_ref.return_value.collection.return_value.stream.return_value=[]
