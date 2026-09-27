@@ -76,10 +76,52 @@ def project_route(pid):
         for k in ('ideas','developments','assets','cues','events','timelines','previews','developmentDrafts'):
             page=entity_page(pid,k);result[k]=page['items']
             if page['next']:result['entityCursors'][k]=page['next']
+        if p.get('activeDevelopment'):
+            from shorts.core.dependencies import select_assets
+            dev=cloud().entity(pid,'developments',p['activeDevelopment'])
+            assets=result['assets'] if 'assets' not in result['entityCursors'] else [x.to_dict() for x in cloud().project_ref(pid).collection('assets').stream()]
+            result['usableAssetSelections']={eid+'|'+kind:a['id'] for (eid,kind),a in select_assets(assets,dev['data'],dev['id'],p.get('assetSelections')).items()}
         return jsonify(result)
     d=body();require(set(d)<={'title','archived'},'FIELDS','Edita el contenido como una nueva revisión')
     def patch(tx,current):current.update(d)
     _,p=cloud().mutate(pid,expected(),patch);return jsonify(p)
+
+@app.route('/projects/<pid>/generators',methods=['GET','POST'])
+def generators(pid):
+    from shorts.core.requests import MODEL_CHOICES,VOICES,selected_models
+    p=owned(pid)
+    if request.method=='POST':
+        settings=body();selected_models(config(),settings)
+        def save(tx,current):current['generators']=settings
+        _,p=cloud().mutate(pid,expected(),save)
+    return jsonify(choices={k:[{'id':m,'name':n} for m,n in rows] for k,rows in MODEL_CHOICES.items()},voices=VOICES,
+                   selected={k:v['model'] for k,v in selected_models(config(),p.get('generators',{})).items() if k in MODEL_CHOICES})
+
+@app.post('/projects/<pid>/characters/<cid>/voice')
+def character_voice(pid,cid):
+    from shorts.core.requests import VOICES
+    from shorts.service.director import validate_development
+    p=owned(pid);d=body()
+    require(set(d)<={'name','direction'} and d.get('name') in VOICES,'VOICE','Elige una voz del catálogo.')
+    require(isinstance(d.get('direction',''),str) and len(d.get('direction',''))<=1000,'VOICE_DIRECTION','La dirección admite hasta 1000 caracteres.')
+    require(p.get('activeDevelopment'),'DEVELOPMENT','Abre producción con el guion aprobado.')
+    old=cloud().entity(pid,'developments',p['activeDevelopment'])
+    candidate=copy.deepcopy(old['data']);person=next((x for x in candidate['bible']['characters'] if x['id']==cid),None)
+    require(person,'CHARACTER','Personaje inexistente')
+    voice={'name':d['name'],'direction':d.get('direction',''),'languageCode':'ja-JP'};person['voice']=voice
+    validate_development(candidate)
+    record={**old,'id':new_id(),'data':candidate,'previousId':old['id'],'source':'voice_assignment','created':time.time(),'revision':1,
+            'approvalState':'approved','approvedBy':p['owner'],'approvedAt':time.time()}
+    for field in ('impact','review','jobId','dataHash'):record.pop(field,None)
+    def save(tx,current):
+        require(current.get('activeDevelopment')==old['id'],'STAGE_CHANGED','Cambió el guion. Vuelve a elegir la voz.',409)
+        assignments=current.get('voiceAssignments',{})
+        if assignments.get('ideaId')!=current['selectedIdea']['id']:assignments={'ideaId':current['selectedIdea']['id'],'voices':{}}
+        assignments['voices'][cid]=voice;current['voiceAssignments']=assignments
+        tx.create(cloud().entity_ref(pid,'developments',record['id']),record)
+        current.update(activeDevelopment=record['id'],timelineStale=True)
+        return record
+    result,_=cloud().mutate(pid,expected(),save);return jsonify(result),201
 
 def entity_page(pid,kind,cursor=None):
     require(kind in ('ideas','developments','assets','cues','events','timelines','previews','developmentDrafts'),'ENTITY','Lista inválida')
@@ -177,27 +219,37 @@ def approve_draft(pid,eid):
         return row
     row,_=cloud().mutate(pid,expected(),change);return jsonify(row)
 
+@app.post('/projects/<pid>/drafts/<eid>:recover-sound')
+def recover_sound_draft(pid,eid):
+    from shorts.service.development import recover_sound
+    p=owned(pid);revision(p,expected())
+    key=digest(['recover-sound-v1',pid,eid])
+    existing=cloud().entity_ref(pid,'developmentDrafts',key).get().to_dict()
+    if existing:return jsonify(existing)
+    return jsonify(recover_sound(cloud(),p,eid,key)),201
+
 @app.post('/projects/<pid>/drafts/<eid>:produce')
 def produce_draft(pid,eid):
-    from shorts.service.development import production_draft
+    from shorts.service.development import production_draft,apply_voice_assignments
     owned(pid)
     key=digest(['production-draft-v1',pid,eid])
     def change(tx,current):
         row=cloud().entity_ref(pid,'developmentDrafts',eid).get(transaction=tx).to_dict()
         require(row and row.get('ideaId')==current.get('selectedIdea',{}).get('id'),'IDEA_CHANGED','Cambió la idea seleccionada.',409)
         require(current.get('activeDraft')==eid,'STAGE_CHANGED','Abre producción desde el paso aprobado vigente.',409)
-        ref=cloud().entity_ref(pid,'developments',key)
+        data=apply_voice_assignments(production_draft(row),current)
+        production_key=digest([key,current['voiceAssignments']]) if current.get('voiceAssignments') else key
+        ref=cloud().entity_ref(pid,'developments',production_key)
         existing=ref.get(transaction=tx).to_dict()
-        data=production_draft(row)
         if existing:
             require(existing.get('data')==data,'STAGE_CHANGED','Cambió el guion de esta versión.',409)
             record=existing
         else:
-            record={'id':key,'revision':1,'data':data,'created':time.time(),
+            record={'id':production_key,'revision':1,'data':data,'created':time.time(),
                     'ideaId':row['ideaId'],'sourceDraftId':eid,'editorialStage':row['stage'],
                     'approvalState':'approved','approvedBy':current['owner'],'approvedAt':time.time()}
             tx.create(ref,record)
-        current.update(activeDevelopment=key,stage='tomas',timelineStale=True,title=data['title'])
+        current.update(activeDevelopment=production_key,stage='tomas',timelineStale=True,title=data['title'])
         return record
     record,_=cloud().mutate(pid,expected(),change)
     return jsonify(record)
@@ -256,6 +308,9 @@ def approve(pid,kind,eid):
         if kind=='timelines':
             compile_timeline(entity['data'],True)
             require(not current.get('timelineStale') and current.get('candidateTimeline')==eid,'TIMELINE_STALE','Compila el montaje actual antes de aprobar',409)
+        if kind=='developments':
+            from shorts.service.development import apply_voice_assignments
+            entity['data']=apply_voice_assignments(entity['data'],current)
         entity.update(approvalState='approved',approvedBy=p['owner'],approvedAt=time.time())
         tx.set(ref,entity);tx.create(cloud().entity_ref(pid,'approvals',new_id()),{'entity':eid,'kind':kind,'hash':digest(entity),'author':p['owner'],'at':time.time()})
         if kind=='developments':current['activeDevelopment']=eid;current['stage']='tomas';current['timelineStale']=True
@@ -514,6 +569,8 @@ def exports(pid,rid):
 
 def public_job(j):
     result={k:v for k,v in j.items() if k not in ('payload','session')}
+    from shorts.core.jobs import service_startable
+    result['canStartInService']=service_startable(j)
     if j.get('operation')=='develop' and j.get('settled') and j.get('state')=='failed' and j.get('result',{}).get('code')=='REFERENCE_LINK':
         result['recoveryIdeaId']=j.get('payload',{}).get('ideaId')
     return result
@@ -561,12 +618,18 @@ def job_action(jid,action):
             return jsonify(state='submitted_unknown',message='Worker detenido con envío incierto. No se repetirá automáticamente.')
         cloud().finish(jid,'failed',{'code':'WORKER_STOPPED','error':'El worker terminó sin publicar resultado. Se conservan los recursos ya guardados.'})
         return jsonify(state='failed',message='Trabajo cerrado sin repetir llamadas. Revisa los recursos conservados.')
-    require(action in ('pause','cancel','resume'),'ACTION','Acción inválida')
+    require(action in ('pause','cancel','resume','start'),'ACTION','Acción inválida')
     from google.cloud import firestore
     @firestore.transactional
     def apply(tx):
         v=ref.get(transaction=tx).to_dict();revision(v,expected())
-        if action=='resume':
+        if action=='start':
+            from shorts.core.jobs import service_startable
+            require(service_startable(v),'JOB_STARTED','El trabajo ya comenzó o necesita comprobar su estado.',409)
+            # Both the old worker and service must claim this SAME job in a
+            # transaction. Whichever claims second cannot submit a provider call.
+            v.update(session=ident(body()['session']),dispatchState=None,dispatchError=None,queueError=None,dispatchAttempt=v.get('dispatchAttempt',0)+1)
+        elif action=='resume':
             require((v['state']=='queued' and not v.get('started') and not v.get('settled') and not v.get('dispatchState')) or (v['state']=='waiting_provider' and v.get('providerOperation') and v.get('errorCode') in ('VEO_PENDING','SPEECH_PENDING')),'UNKNOWN','Un envío incierto no se reenvía. Solo se recuperan operaciones conocidas o pendientes sin despachar.',409)
             require(not v.get('dispatchUnknown'),'DISPATCH_UNKNOWN','El arranque no se confirmó. Diagnostica antes de reenviar.',409)
             if v.get('started'):
@@ -578,7 +641,7 @@ def job_action(jid,action):
             v['state']='cancelled' if v['state']=='queued' else 'cancel_requested'
         v['revision']+=1;tx.set(ref,v);return v
     j=apply(cloud().db.transaction())
-    if action=='resume':cloud().enqueue(j)
+    if action in ('resume','start'):cloud().enqueue(j)
     elif j['state']=='cancelled':cloud().finish(jid,'cancelled',{'reason':'Cancelado antes de despachar'})
     return jsonify(state=j['state'],message='Los trabajos ya iniciados pueden terminar; no se iniciarán otros con esta cancelación.')
 
@@ -622,9 +685,9 @@ def dispatch():
     jid=ident(body()['jobId']);j,should_dispatch=cloud().acquire_dispatch(jid)
     if not should_dispatch:return jsonify(dispatched=False)
     ref=cloud().db.collection('animeShortsJobs').document(jid)
-    if j['operation'] in ('ideas','develop','revise'):
-        from shorts.service.execution import execute_text
-        execute_text(cloud(),jid)
+    if j['operation'] in ('ideas','develop','revise','image','tts','music'):
+        from shorts.service.execution import execute_job
+        execute_job(cloud(),jid)
         return jsonify(dispatched=True)
     try:r=start_worker(c,[{'name':'SHORTS_JOB_ID','value':jid}])
     except Exception:

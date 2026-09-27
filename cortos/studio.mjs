@@ -6,6 +6,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 let user,p,stage='Historia',productionTab='tomas',reviewTab='corto',active=false,busy=false,heartbeatBusy=false,needsRedraw=false;
 let mediaLoads=[];
 let knownJobs=[],watchVersion=0;
+let generatorCatalog;
 const projectTitle=item=>item.title?.trim()||'Corto sin título';
 let transport=fetch;
 const session=crypto.randomUUID(),device=localStorage.getItem('animeShorts:v2:device')||crypto.randomUUID();localStorage.setItem('animeShorts:v2:device',device);
@@ -48,7 +49,7 @@ async function go(next,part){stage=next;if(part&&next==='Escenas')productionTab=
 function tabs(parent,options,selected,onSelect){const nav=document.createElement('nav');nav.className='tabs';nav.setAttribute('aria-label','Contenido de esta etapa');for(const [id,name] of options){const b=action(name,()=>onSelect(id),true);b.setAttribute('aria-pressed',String(id===selected));nav.append(b);}parent.append(nav);}
 function describeIssue(text){const d=development();if(!d)return text;let value=String(text);const ids=[...d.shots,...d.utterances,...d.soundRequests,...d.musicRequests,...d.bible.characters,...d.bible.locations,...d.bible.props].sort((a,b)=>b.id.length-a.id.length);for(const row of ids)value=value.replaceAll(row.id,entityName(d,row.id));return value;}
 async function runTask(operation,path,data={}){
- if(['ideas','develop'].includes(operation)){
+ if(['ideas','develop','image','veo','tts','music'].includes(operation)){
   const {jobs}=await api(route('/jobs'));knownJobs=jobs;
   const existing=jobs.find(j=>j.operation===operation&&unresolved(j));
   if(existing){say('Ya existe una solicitud pendiente. Comprobamos esa misma solicitud.');await watch(existing.id);needsRedraw=true;return existing.id;}
@@ -70,6 +71,11 @@ function showJob(job){
  const text=document.createElement('div'),heading=document.createElement('strong'),message=document.createElement('p');
  heading.textContent=titleFor(job.operation)+' · '+titleFor(job.state);message.textContent=job.state==='running'&&job.progress&&!job.providerWait?`${job.progress.stage}/${job.progress.total} · ${job.progress.label}`:describeIssue(jobMessage(job));text.append(heading,message);panel.append(text);
  const controls=[],available=taskActions(job);
+ if(job.canStartInService)controls.push(['Iniciar generación pendiente',async()=>{
+  if(!active)await lease(true);const latest=await api('/jobs/'+job.id);
+  await api('/jobs/'+job.id+':start','POST',{session},{'If-Match':String(latest.revision)});
+  await watch(job.id);await draw();
+ }]);
  if(unresolved(job))controls.push(['Comprobar estado',async()=>{
   const latest=await api('/jobs/'+job.id);
   if(taskActions(latest).inspect){const result=await api('/jobs/'+job.id+':inspect','POST',{}, {'If-Match':String(latest.revision)});say(result.message);}
@@ -97,7 +103,7 @@ async function watch(id,projectId=p?.id){
   knownJobs=[j,...knownJobs.filter(x=>x.id!==j.id)];showJob(j);
   if(terminal(j.state)){
    say(describeIssue(jobMessage(j)),['failed','submitted_unknown'].includes(j.state));
-   await refresh();return j;
+   await refresh();needsRedraw=true;return j;
   }
   if(j.dispatchError||j.queueError){say(jobMessage(j),true);return j;}
   if(n===239){say(j.state==='queued'?'Todavía no se confirmó el inicio. Puedes comprobar o cancelar este mismo trabajo.':'La consulta automática se pausó. Usa Comprobar estado para consultar este mismo trabajo.');return j;}
@@ -324,6 +330,7 @@ async function script(parent=screen){
 async function production(){
  const heading=pageTitle('Escenas','Da forma a las imágenes, las voces y el sonido.');
  if(!development()){return script(screen);}
+ await generatorControls(screen);
  editorialNotice(screen);
  buttons(heading,[['Revisar el corto',()=>go('Revisión'),true],...(active?[['Pausar',async()=>{await lease(false);say('Producción pausada. Lo terminado se conserva.');await draw();},true]]:[])]);
  tabs(screen,[['tomas','Escenas y voces'],['sonido','Música y efectos']],productionTab,async part=>{productionTab=part;await draw();});
@@ -333,7 +340,7 @@ async function production(){
 async function activityList(){
  const {jobs}=await api(route('/jobs'));if(!jobs.length)return;
  const pending=jobs.filter(j=>!j.settled&&!terminal(j.state)),attention=jobs.filter(j=>j.state==='submitted_unknown'||j.state==='failed');
- const box=fold(screen,'Actividad · '+pending.length+' en curso',attention.length>0);
+ const box=fold(screen,'Historial de actividad · '+pending.length+' en curso',pending.length>0);
  const ordered=[...jobs].sort((a,b)=>(b.created||0)-(a.created||0));
  for(const job of ordered.slice(0,30)){const row=document.createElement('div');row.className='activity-row';row.innerHTML=`<p><strong>${esc(titleFor(job.operation))}</strong><span class="muted">${esc(titleFor(job.state))}</span></p>`;const a=taskActions(job),items=[];
  if(a.recover)items.push(['Continuar',async()=>{if(!active)await lease(true);const j=await api('/jobs/'+job.id);await api('/jobs/'+job.id+':resume','POST',{session},{'If-Match':String(j.revision)});await watch(job.id);await draw();},true]);
@@ -351,7 +358,7 @@ function editorialNotice(parent){
  const box=card('Puedes producir tus tomas','<p>Genera y revisa imágenes, videos y voces. Antes de exportar, completa el plan de sonido y la revisión de continuidad en Historia.</p>');
  buttons(box,[['Continuar preparación en Historia',()=>go('Historia'),true]]);parent.append(box);
 }
-const selectedAsset=(id,kind)=>p.assets.find(a=>a.id===p.assetSelections?.[id+'|'+kind])||p.assets.filter(a=>a.entityId===id&&a.kind===kind&&a.approvalState==='approved').at(-1);
+const selectedAsset=(id,kind)=>p.usableAssetSelections?p.assets.find(a=>a.id===p.usableAssetSelections[id+'|'+kind]):p.assets.find(a=>a.id===p.assetSelections?.[id+'|'+kind])||p.assets.filter(a=>a.entityId===id&&a.kind===kind&&a.approvalState==='approved').at(-1);
 function expandImage(url,name){
  const dialog=document.createElement('dialog');dialog.className='image-dialog';const bar=document.createElement('div');bar.className='dialog-header';const label=document.createElement('strong');label.textContent=name;bar.append(label,action('Cerrar',()=>{dialog.close();dialog.remove();},true));dialog.append(bar);
  const img=document.createElement('img');img.src=url;img.alt=name;dialog.append(img);document.body.append(dialog);dialog.showModal();
@@ -393,10 +400,36 @@ async function assetVersions(parent,rows){
  const groups=Object.groupBy(rows,a=>a.entityId+'|'+a.kind);
  for(const [key,items] of Object.entries(groups)){const v=versions(items,p.assetSelections?.[key]);for(const item of v.visible)await assetCard(parent,item);if(v.history.length){const h=fold(parent,'Versiones anteriores · '+v.history.length);let loaded=false;h.addEventListener('toggle',async()=>{if(h.open&&!loaded){loaded=true;const start=mediaLoads.length;for(const item of v.history)await assetCard(h,item);const queue=mediaLoads.splice(start);for(const load of queue)await load();}});}}
 }
+async function generatorControls(parent){
+ const box=card('Generadores','<p class="muted">Elige con qué generar. Se guarda para este corto y se aplica a las nuevas solicitudes.</p>');parent.append(box);
+ try{generatorCatalog=await api(route('/generators'));}catch(error){generatorCatalog=null;box.append(document.createTextNode('No se pudieron cargar los generadores. '+error.message));return;}
+ for(const [kind,title] of [['image','Imagen'],['veo','Video'],['tts','Voces'],['music','Música']]){
+  const label=document.createElement('label');label.textContent=title;const select=document.createElement('select');select.setAttribute('aria-label','Generador de '+title.toLowerCase());
+  for(const model of generatorCatalog.choices[kind]){const option=document.createElement('option');option.value=model.id;option.textContent=model.name;select.append(option);}
+  select.value=generatorCatalog.selected[kind];label.append(select);box.append(label);
+  select.onchange=async()=>{select.disabled=true;try{const result=await mutate(route('/generators'),{...generatorCatalog.selected,[kind]:select.value});generatorCatalog=result;say('Generador guardado.');}catch(error){select.value=generatorCatalog.selected[kind];say(error.message,true);}finally{select.disabled=false;}};
+ }
+}
+function voiceControls(parent,character){
+ if(!generatorCatalog)return;
+ const label=document.createElement('label');label.textContent='Voz de '+character.name;const select=document.createElement('select');select.setAttribute('aria-label','Voz de '+character.name);
+ const names=[...generatorCatalog.voices];if(!names.includes(character.voice.name))names.unshift(character.voice.name);
+ for(const name of names){const option=document.createElement('option');option.value=name;option.textContent=name;select.append(option);}select.value=character.voice.name;label.append(select);parent.append(label);
+ const directionLabel=document.createElement('label');directionLabel.textContent='Cómo habla';const direction=document.createElement('textarea');direction.value=character.voice.direction||'';direction.maxLength=1000;directionLabel.append(direction);parent.append(directionLabel);
+ const note=document.createElement('p');note.className='muted';note.textContent='Se aplica a todas sus frases en japonés. Los audios anteriores se conservan como versiones; las frases afectadas necesitan una nueva interpretación.';parent.append(note);
+ buttons(parent,[['Guardar voz',async()=>{await mutate(route('/characters/'+character.id+'/voice'),{name:select.value,direction:direction.value});await draw();say('Voz asignada a '+character.name+'.');},true]]);
+ const first=development().utterances.find(u=>u.speakerId===character.id);
+ if(first){const sample=document.createElement('div');parent.append(sample);buttons(sample,[['Generar primera frase para escuchar',async()=>{
+  if(select.value!==character.voice.name||direction.value!==(character.voice.direction||''))throw new Error('Guarda la voz elegida antes de generar la frase.');
+  await runTask('tts',route('/assets:generate'),{operation:'tts',entityId:first.id});await draw();
+ },true]]);for(const a of p.assets.filter(a=>a.entityId===first.id).slice(-1))void assetCard(sample,a);}
+}
+
 async function references(){
  pageTitle('👥 Personajes, lugares y objetos');
  const d=development();
  if(!d){return script(screen);}
+ await generatorControls(screen);
  for(const [group,title] of [['characters','Personajes'],['locations','Lugares'],['props','Objetos']]){
   if(!d.bible[group].length)continue;
   const heading=document.createElement('h3');heading.textContent=title;screen.append(heading);
@@ -406,6 +439,7 @@ async function references(){
    const rows=p.assets.filter(a=>a.entityId===e.id);await assetVersions(section,rows);
    if(!rows.length){const placeholder=document.createElement('div');placeholder.className='scene-img media-empty';placeholder.textContent='Referencia por generar';section.append(placeholder);}
    buttons(section,[[rows.length?'Crear otra referencia':'Generar referencia',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:e.id}),rows.length>0]]);
+   if(group==='characters')voiceControls(section,e);
    const details=fold(section,'Ficha y dirección visual');readable(details,e);
   }
  }
@@ -429,7 +463,9 @@ async function shots(){
   if(image&&shot.treatment==='veo'&&!visuals.some(a=>a.kind==='veo_silent_validated'&&['candidate','approved'].includes(a.approvalState)))actions.push(['Generar video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id})]);
   if(actions.length)buttons(c,actions);
   for(const u of d.utterances.filter(u=>u.shotId===shot.id)){
-   const row=document.createElement('div');row.className='voice-row';row.innerHTML=`<p><strong>🎙️ ${esc(entityName(d,u.speakerId))}</strong></p><p class="scene-narration">${esc(u.spanish)}</p>`;c.append(row);
+   const character=d.bible.characters.find(x=>x.id===u.speakerId);
+   const row=document.createElement('div');row.className='voice-row';row.innerHTML=`<p><strong>🎙️ ${esc(entityName(d,u.speakerId))} · ${esc(character?.voice?.name)}</strong></p><p class="scene-narration">${esc(u.spanish)}</p>`;c.append(row);
+   buttons(row,[['Cambiar voz del personaje',()=>go('Personajes'),true]]);
    const assets=p.assets.filter(a=>a.entityId===u.id);await assetVersions(row,assets);
    buttons(row,[[assets.length?'Generar otra interpretación':'Generar voz japonesa',()=>runTask('tts',route('/assets:generate'),{operation:'tts',entityId:u.id}),assets.length>0]]);
   }
@@ -465,7 +501,24 @@ async function compareShots(shot,parent){
 }
 async function sounds(){
  const d=development();
- if(!d.musicRequests.length&&!d.soundRequests.length){const c=card('Música y efectos','<p>Este guion todavía no tiene encargos de sonido. Prepara y aprueba el plan en Historia para generarlos y escucharlos aquí.</p>');buttons(c,[['Abrir plan de sonido',()=>go('Historia')]]);screen.append(c);}
+ if(!d.musicRequests.length&&!d.soundRequests.length){
+  const c=card('Prepara la música y los efectos','<p>Conservamos tu guion. Puedes preparar, revisar y aprobar su sonido aquí.</p>');screen.append(c);
+  const activeDraft=p.developmentDrafts.find(x=>x.id===p.activeDraft);
+  const candidate=p.developmentDrafts.filter(x=>x.stage===3&&x.status==='ready'&&x.approvalState==='candidate'&&x.sourceDraftId===p.activeDraft).at(-1);
+  const recoverable=p.developmentDrafts.filter(x=>x.stage===3&&x.status==='invalid'&&x.sourceDraftId===p.activeDraft&&['MUSIC_COVERAGE','MUSIC_DURATION','MUSIC_FADE'].includes(x.error?.code)).at(-1);
+  if(candidate){
+   const draft=await api(route('/drafts/'+candidate.id));
+   for(const [i,m] of draft.data.musicRequests.entries()){const line=document.createElement('p');line.textContent=`Pieza ${i+1} · ${m.seconds} segundos · ${m.prompt}`;c.append(line);}
+   for(const effect of draft.data.soundRequests){const line=document.createElement('p');line.textContent='Efecto: '+effect.name;c.append(line);}
+   buttons(c,[['Aprobar sonido y abrir sus generadores',async()=>{await mutate(route('/drafts/'+candidate.id+':approve'),{});await mutate(route('/drafts/'+candidate.id+':produce'),{});await draw();}]]);
+  }else if(activeDraft?.stage===3&&activeDraft.approvalState==='approved'){
+   buttons(c,[['Abrir el sonido aprobado',async()=>{await mutate(route('/drafts/'+activeDraft.id+':produce'),{});await draw();}]]);
+  }else if(activeDraft?.stage===2&&activeDraft.approvalState==='approved'){
+   if(recoverable)buttons(c,[['Recuperar plan musical guardado',async()=>{await mutate(route('/drafts/'+recoverable.id+':recover-sound'),{});await draw();say('Plan recuperado para revisar, sin otra llamada al generador.');}]]);
+   buttons(c,[['Preparar música y efectos',()=>runTask('develop',route('/develop'),{stage:3,sourceDraftId:activeDraft.id}),!!recoverable]]);
+  }else buttons(c,[['Revisar el guion',()=>go('Historia')]]);
+ }
+
  if(d.musicRequests.length){const music=fold(screen,'Música',true);for(const [index,m] of d.musicRequests.entries()){const c=card('Pieza '+(index+1),`<p class="muted">${m.seconds} segundos</p>`);const description=fold(c,'Dirección musical');description.append(document.createTextNode(m.prompt));const rows=p.assets.filter(a=>a.entityId===m.id);buttons(c,[[rows.length?'Crear otra pieza':'Generar música',()=>runTask('music',route('/assets:generate'),{operation:'music',entityId:m.id}),rows.length>0]]);await assetVersions(c,rows);music.append(c);}}
  const effects=d.soundRequests.length?fold(screen,'Efectos · ajustes avanzados'):null;
  for(const r of d.soundRequests){const c=card(r.name,`<p>${esc(r.description)}</p><p class="muted">${r.seconds} s · ${esc(r.perspective)}</p>`);effects.append(c);

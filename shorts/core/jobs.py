@@ -33,3 +33,8 @@ def settle(job,state,result=None):
     require(not any(c['state']=='submitted_unknown' for c in job.get('providerCalls',[])),'UNSETTLED_CALL','Hay un envío sin resultado confirmado',409)
     j=copy.deepcopy(job);j.update(state=state,result=result,settled=True,revision=j['revision']+1)
     return j
+
+def service_startable(job):
+    return (job.get('operation') in ('image','tts','music') and job.get('state')=='queued'
+            and not job.get('settled') and not job.get('started') and not job.get('providerCalls')
+            and bool(job.get('workerOperation')) and not job.get('dispatchUnknown'))

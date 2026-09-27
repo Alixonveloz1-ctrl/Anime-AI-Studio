@@ -62,9 +62,9 @@ class QuotaTests(unittest.TestCase):
         self.assertEqual(Providers(config(),s,m).text('prompt'),{'title':'ok'})
         self.assertEqual(len(m.calls),1);self.assertEqual(len(m.waits),1)
     def test_cancel_wait_settles_as_cancelled(self):
-        from shorts.service.execution import execute_text
+        from shorts.service.execution import execute_job
         c=Mock();c.claim.return_value=({'id':'j'}, {}, True)
-        with patch('shorts.service.production.run_job',side_effect=ContractError('CANCELLED','cancel')):execute_text(c,'j')
+        with patch('shorts.service.production.run_job',side_effect=ContractError('CANCELLED','cancel')):execute_job(c,'j')
         self.assertEqual(c.finish.call_args.args[1],'cancelled')
     def test_shared_pacing_reserves_minute_between_jobs(self):
         c=Mock();ref=c.db.collection.return_value.document.return_value;ref.get.return_value.to_dict.return_value={'nextAt':150}

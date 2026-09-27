@@ -383,8 +383,8 @@ test('Approved screenplay opens production before sound planning and retains ass
   assert.equal(w.document.querySelectorAll('.shot-section').length,2);
   await click('Generar voz japonesa',w.document.querySelector('.shot-section'));
   const asset=fixture.project.assets.at(-1).id;
-  await click('Música y efectos');await click('Abrir plan de sonido');await click('Generar sonido, música y subtítulos');await click('Aprobar este paso');
-  await click('Usar este guion en producción');assert.ok(fixture.project.assets.some(a=>a.id===asset));
+  await click('Música y efectos');await click('Preparar música y efectos');await click('Aprobar sonido y abrir sus generadores');
+  assert.ok(fixture.project.assets.some(a=>a.id===asset));
   await click('Música y efectos');assert.match(w.document.body.textContent,/Piano íntimo/);
   await click('Continuar preparación en Historia');await click('Generar revisión de continuidad');await click('Aprobar guion y biblias');
   assert.ok(fixture.project.assets.some(a=>a.id===asset));await click('Escenas y voces');assert.equal(w.document.querySelectorAll('.shot-section').length,2);
@@ -400,5 +400,21 @@ test('Music keeps playback and generation visible while effect instructions stay
   assert.ok(effects);assert.equal(effects.open,false);assert.match(effects.textContent,/La puerta del andén/);
   const music=[...w.document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent==='Música');
   assert.ok(music.open);await new Promise(r=>setTimeout(r,0));assert.ok(music.querySelector('audio'));assert.match(music.textContent,/Crear otra pieza/);
+ }finally{dom.window.close();}
+});
+
+
+test('Visible generators save their selection and character voice assignment stays in Personajes',async()=>{
+ const {fixture,w,dom,click}=await setup();
+ try{
+  await click('Personajes');
+  for(const label of ['imagen','video','voces','música'])assert.ok(w.document.querySelector(`select[aria-label="Generador de ${label}"]`));
+  const image=w.document.querySelector('select[aria-label="Generador de imagen"]');image.value='gemini-2.5-flash-image';await image.onchange();
+  assert.equal(fixture.project.generators.image,'gemini-2.5-flash-image');
+  const voice=w.document.querySelector('select[aria-label="Voz de Haru"]');voice.value='Puck';await click('Guardar voz');
+  assert.equal(w.document.querySelector('select[aria-label="Voz de Haru"]').value,'Puck');
+  await click('Escenas');assert.match(w.document.body.textContent,/Haru · Puck/);
+  assert.equal(w.document.querySelector('select[aria-label="Generador de imagen"]').value,'gemini-2.5-flash-image');
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/assets:generate')).length,0,'Selecting models and voices does not generate paid content');
  }finally{dom.window.close();}
 });

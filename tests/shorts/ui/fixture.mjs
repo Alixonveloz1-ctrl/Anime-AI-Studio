@@ -19,6 +19,12 @@ export function createFixture({empty=false}={}){
   if(path==='/projects'&&method==='GET')result={projects:[p]};
   else if(path==='/projects'&&method==='POST'){Object.assign(p,body);result=p;}
   else if(path==='/projects/fixture'&&method==='GET')result=p;
+  else if(path.endsWith('/generators')){
+   const choices={image:[{id:'gemini-3.1-flash-image',name:'Nano Banana 2'},{id:'gemini-2.5-flash-image',name:'Nano Banana'}],veo:[{id:'veo-3.1-generate-001',name:'Veo 3.1'},{id:'veo-3.1-fast-generate-001',name:'Veo 3.1 Fast'}],tts:[{id:'gemini-2.5-pro-tts',name:'Gemini Pro TTS'},{id:'gemini-2.5-flash-tts',name:'Gemini Flash TTS'}],music:[{id:'lyria-3-pro-preview',name:'Lyria 3 Pro'}]};
+   if(method==='POST')p.generators=body;
+   result={choices,voices:['Kore','Puck','Aoede'],selected:p.generators||Object.fromEntries(Object.entries(choices).map(([k,v])=>[k,v[0].id]))};
+  }
+  else if(path.includes('/characters/')&&path.endsWith('/voice')){const dev=p.developments.find(x=>x.id===p.activeDevelopment);dev.data.bible.characters.find(x=>x.id===path.split('/')[4]).voice={...body,languageCode:'ja-JP'};result=dev;}
   else if(path.endsWith('/lease')){p.revision++;p.lease={session:body.session,expires:Date.now()/1000+30};result=p;}
   else if(path.endsWith('/jobs'))result={jobs};
   else if(path.startsWith('/jobs/'))result=jobs.find(j=>j.id===path.split('/')[2]);

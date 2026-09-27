@@ -20,7 +20,8 @@ def vertex(c,kind,method='generateContent'):
     return f'https://{host}/v1/projects/{c["project"]}/locations/{region}/publishers/google/models/{m["model"]}:{method}'
 
 def veo_payload(c,shot,image_uri,output_uri):
-    require(c['models']['veo']['model']=='veo-3.1-generate-001' and c['models']['veo']['region']=='us-central1','VEO_CAPABILITY','Combinación Veo aún no verificada')
+    from shorts.core.requests import MODEL_CHOICES
+    require(c['models']['veo']['model'] in [m for m,_ in MODEL_CHOICES['veo']] and c['models']['veo']['region']=='us-central1','VEO_CAPABILITY','Combinación Veo aún no verificada')
     require(shot.get('durationSeconds') in (4,6,8),'VEO_DURATION','Veo admite 4, 6 u 8 segundos')
     require(shot.get('format','16:9') in ('16:9','9:16'),'VEO_FORMAT','Formato inválido')
     require(shot.get('imageApproved') is True,'IMAGE_APPROVAL','Aprueba la imagen primero')
@@ -99,13 +100,17 @@ class Providers:
         try:return json.loads(''.join(x.get('text','') for x in data['candidates'][0]['content']['parts'] if not x.get('thought')))
         except (KeyError,IndexError,ValueError) as e:raise ContractError('MODEL_SCHEMA','Respuesta incompleta; no se creó una candidata válida') from e
     def image(self,prompt,references,aspect):
+        limit=3 if self.c['models']['image']['model']=='gemini-2.5-flash-image' else 14
+        require(len(references)<=limit,'IMAGE_REFERENCES',f'El generador elegido admite hasta {limit} referencias por imagen. Elige otro generador para conservar todos los personajes y lugares.')
         parts=[{'text':prompt}]
         for a in references:
             require(a['approvalState']=='approved','REFERENCE','Referencia no aprobada')
             parts.append({'fileData':{'fileUri':a['uri'],'mimeType':a['mimeType']}})
         contents=[{'role':'user','parts':parts}]
         self.check_input('image',contents)
-        data=self.post(vertex(self.c,'image'),{'contents':contents,'generationConfig':{'maxOutputTokens':IMAGE_OUTPUT_LIMIT,'responseModalities':['TEXT','IMAGE'],'imageConfig':{'aspectRatio':aspect,'imageSize':'1K'}}},'image')
+        image_config={'aspectRatio':aspect}
+        if self.c['models']['image']['model']!='gemini-2.5-flash-image':image_config['imageSize']='1K'
+        data=self.post(vertex(self.c,'image'),{'contents':contents,'generationConfig':{'maxOutputTokens':IMAGE_OUTPUT_LIMIT,'responseModalities':['TEXT','IMAGE'],'imageConfig':image_config}},'image')
         for p in data.get('candidates',[{}])[0].get('content',{}).get('parts',[]):
             if p.get('inlineData',{}).get('mimeType','').startswith('image/'):
                 return base64.b64decode(p['inlineData']['data']),p['inlineData']['mimeType']

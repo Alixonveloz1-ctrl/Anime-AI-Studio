@@ -178,6 +178,14 @@ def source_for_stage(cloud,project,stage,source_id,source_hash=None):
     if source_hash:require(digest(source['data'])==source_hash,'STAGE_CHANGED','El contenido aprobado cambió.',409)
     return copy.deepcopy(source['data'])
 
+def apply_voice_assignments(data,project):
+    out=copy.deepcopy(data)
+    settings=project.get('voiceAssignments',{})
+    if settings.get('ideaId')==project.get('selectedIdea',{}).get('id'):
+        for character in out['bible']['characters']:
+            if character['id'] in settings.get('voices',{}):character['voice']=copy.deepcopy(settings['voices'][character['id']])
+    return out
+
 def production_draft(row):
     """Expose an approved screenplay for media work without inventing a score.
 
@@ -232,6 +240,20 @@ def recover_story(cloud,project,source_id,new_id):
     require(not any(c.get('state')=='submitted_unknown' for c in job.get('providerCalls',[])),'SUBMITTED_UNKNOWN','Hay una llamada sin confirmar.',409)
     data=validate_story(story_data(source.get('data',{})))
     candidate={'id':new_id,'ideaId':source['ideaId'],'stage':1,'data':data,'status':'ready','approvalState':'candidate','created':time.time(),'recoveredFrom':source_id}
+    cloud.put_entity(project['id'],'developmentDrafts',candidate)
+    return candidate
+
+def recover_sound(cloud,project,source_id,new_id):
+    """Repair saved editorial cue durations without another provider call."""
+    source=cloud.entity(project['id'],'developmentDrafts',source_id)
+    require(source.get('stage')==3 and source.get('status')=='invalid' and source.get('error',{}).get('code') in ('MUSIC_COVERAGE','MUSIC_DURATION','MUSIC_FADE'),'SOUND_RECOVERY','Este borrador no contiene un plan musical recuperable.',409)
+    require(source.get('ideaId')==project.get('selectedIdea',{}).get('id'),'IDEA_CHANGED','Cambió la idea seleccionada.',409)
+    source_for_stage(cloud,project,3,source.get('sourceDraftId'),source.get('sourceHash'))
+    job=cloud.db.collection('animeShortsJobs').document(source.get('jobId',source_id)).get().to_dict()
+    require(job and job.get('projectId')==project['id'] and job.get('owner')==project['owner'] and job.get('settled'),'RECOVERY_STATE','El trabajo todavía no está cerrado.',409)
+    require(not any(c.get('state')=='submitted_unknown' for c in job.get('providerCalls',[])),'SUBMITTED_UNKNOWN','Hay una llamada sin confirmar.',409)
+    candidate={'id':new_id,'ideaId':source['ideaId'],'stage':3,'sourceDraftId':source['sourceDraftId'],'sourceHash':source['sourceHash'],
+               'data':validate_stage(source['data'],3),'status':'ready','approvalState':'candidate','created':time.time(),'recoveredFrom':source_id}
     cloud.put_entity(project['id'],'developmentDrafts',candidate)
     return candidate
 

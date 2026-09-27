@@ -61,7 +61,10 @@ class Cloud:
             current=self.project_ref(p['id']).get(transaction=tx).to_dict();old=j_ref.get(transaction=tx).to_dict()
             require(current and current['owner']==p['owner'],'PROJECT_ACCESS','Historia no disponible',404)
             job,created=create_job(current,{j_id:old} if old else {},operation,payload,key,expected,time.time(),session)
-            if created:tx.set(j_ref,job)
+            if created:
+                from shorts.core.requests import selected_models
+                job['models']=selected_models(self.c,current.get('generators',{}))
+                tx.set(j_ref,job)
             return job
         job=save(self.db.transaction())
         if job['state']=='queued':self.enqueue(job)

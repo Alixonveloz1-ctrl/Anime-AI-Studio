@@ -19,7 +19,9 @@ from render import render, visual_clip
 def ident_new():return uuid.uuid4().hex
 
 def run_job(cloud,j,p):
-    pid=p['id'];op=j['operation'];data=j['payload'];provider=Providers(cloud.c,cloud.http,RequestJournal(cloud,j['id']))
+    pid=p['id'];op=j['operation'];data=j['payload']
+    provider_config={**cloud.c,'models':copy.deepcopy(j.get('models',cloud.c['models']))}
+    provider=Providers(provider_config,cloud.http,RequestJournal(cloud,j['id']))
     if data.get('developmentId'):p={**p,'activeDevelopment':data['developmentId']}
     if 'assetSelections' in data:p={**p,'assetSelections':data['assetSelections']}
     if 'approvedAssetIds' in data:p={**p,'approvedAssetIds':data['approvedAssetIds']}
@@ -48,10 +50,10 @@ def run_job(cloud,j,p):
     if op=='develop':
         idea=cloud.entity(pid,'ideas',data['ideaId'])
         require(p.get('selectedIdea',{}).get('id')==idea['id'] and p['selectedIdea']['hash']==digest(idea),'IDEA_CHANGED','La idea seleccionada cambió')
-        from shorts.service.development import develop
+        from shorts.service.development import develop,apply_voice_assignments
         result=develop(cloud,provider,j,p,idea)
         if data.get('stage',1)!=4:return result
-        return {'developmentId':entity('developments',{'data':result['data'],'review':result['review'],'ideaId':idea['id'],'sourceDraftId':data['sourceDraftId']})['id']}
+        return {'developmentId':entity('developments',{'data':apply_voice_assignments(result['data'],p),'review':result['review'],'ideaId':idea['id'],'sourceDraftId':data['sourceDraftId']})['id']}
     if op=='revise':
         from shorts.core.revisions import scoped_value,replace_scope,idea_scope,impact,changes
         old=cloud.entity(pid,data['kind'],data['entityId'])
@@ -107,7 +109,7 @@ def run_job(cloud,j,p):
                 e=next((e for k in ('characters','locations','props') for e in d['bible'][k] if e['id']==eid),None)
                 require(e,'ENTITY','Referencia inexistente');prompt=RULES+'\nReferencia maestra limpia: '+json.dumps(e,ensure_ascii=False)
             raw,mime=provider.image(prompt,refs,p['format']);path=root/('image.png' if mime=='image/png' else 'image.jpg');path.write_bytes(raw);inspect(path,'video')
-            return {'assetId':asset(path,'image',('layer_'+ident_new()) if data.get('variantPrompt') else eid,{'variantOf':eid if data.get('variantPrompt') else None,'parentAssetId':refs[0]['id'] if data.get('variantPrompt') else None,'references':[a['id'] for a in refs],'dependencies':dependency_records(refs),'model':cloud.c['models']['image'],'prompt':prompt})['id']}
+            return {'assetId':asset(path,'image',('layer_'+ident_new()) if data.get('variantPrompt') else eid,{'variantOf':eid if data.get('variantPrompt') else None,'parentAssetId':refs[0]['id'] if data.get('variantPrompt') else None,'references':[a['id'] for a in refs],'dependencies':dependency_records(refs),'model':provider_config['models']['image'],'prompt':prompt})['id']}
         if op=='veo':
             from shorts.core.timing import veo_seconds
             shot=next(s for s in d['shots'] if s['id']==eid);image=selected(eid,'image')
@@ -127,7 +129,7 @@ def run_job(cloud,j,p):
             source=videos[0]['gcsUri'];require(source.startswith(output),'VEO_OUTPUT','Salida fuera del destino autorizado')
             name=source.removeprefix('gs://'+cloud.c['bucket']+'/');original=root/'original.mp4';cloud.download(pid,name,original)
             silent=root/'silent.mp4';meta=silent_video(original,silent)
-            return {'assetId':asset(silent,'veo_silent_validated',eid,{**meta,'dependencies':dependency_records([image]),'originalObject':name,'referenceImage':image['id'],'model':cloud.c['models']['veo'],'generateAudio':False})['id']}
+            return {'assetId':asset(silent,'veo_silent_validated',eid,{**meta,'dependencies':dependency_records([image]),'originalObject':name,'referenceImage':image['id'],'model':provider_config['models']['veo'],'generateAudio':False})['id']}
         if op in ('tts','music'):
             if op=='tts':
                 u=next(u for u in d['utterances'] if u['id']==eid);character=next(c for c in d['bible']['characters'] if c['id']==u['speakerId'])
@@ -135,7 +137,7 @@ def run_job(cloud,j,p):
             else:
                 r=next(r for r in d['musicRequests'] if r['id']==eid);raw=provider.music(r['prompt'],r['seconds']);source=root/'original.mp3'
             source.write_bytes(raw);target=root/'audio.wav';meta=pcm(source,target);meta['waveform']=waveform(target)
-            meta['model']=cloud.c['models'][op];meta['contentReview']='needs_review';meta['originalObject']=cloud.upload_file(pid,ident_new(),source,source.name,mimetypes.guess_type(source)[0])
+            meta['model']=provider_config['models'][op];meta['contentReview']='needs_review';meta['originalObject']=cloud.upload_file(pid,ident_new(),source,source.name,mimetypes.guess_type(source)[0])
             return {'assetId':asset(target,'pcm',eid,meta)['id']}
         if op=='media':
             u=cloud.entity(pid,'uploads',data['uploadId']);source=root/'upload';cloud.download(pid,u['object'],source)

@@ -2,7 +2,7 @@
 from shorts.core.contracts import ContractError
 from shorts.service.providers import UnknownSubmission
 
-def execute_text(cloud,jid):
+def execute_job(cloud,jid):
     from shorts.service.production import run_job
     job,project,claimed=cloud.claim(jid)
     if not claimed:

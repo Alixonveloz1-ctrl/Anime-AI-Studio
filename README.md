@@ -444,6 +444,6 @@ episodios quedan intactos.
 
 La implementación nueva vive en `/cortos/`, `shorts/`, `api/shorts.js` y `worker/montage-shorts/`. La raíz conserva Animes. Estado verificable: [matriz de 100 pruebas](docs/shorts/acceptance.md), [auditoría](docs/shorts/audit.md), [guía móvil](docs/shorts/mobile.md).
 
-[Abrir instalador de Cortos en Cloud Shell](https://shell.cloud.google.com/?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2FAlixonveloz1-ctrl%2FAnime-AI-Studio&cloudshell_git_branch=feature%2Fcortos-anime-v2&cloudshell_working_dir=.)
+[Abrir instalador de Cortos en Cloud Shell](https://shell.cloud.google.com/?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2FAlixonveloz1-ctrl%2FAnime-AI-Studio&cloudshell_git_branch=main&cloudshell_workspace=.)
 
 Escribe `./c` (respaldo `bash c`). El menú permite instalar/actualizar, diagnosticar y restaurar una versión anterior. Solicita autorización antes de infraestructura y nunca genera contenido en health/CI. La autenticación y enlace Vercel deben verificarse antes de activar la sección. `i` y `setup.sh` conservan su función anterior.
