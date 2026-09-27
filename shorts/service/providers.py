@@ -111,10 +111,25 @@ class Providers:
         image_config={'aspectRatio':aspect}
         if self.c['models']['image']['model']!='gemini-2.5-flash-image':image_config['imageSize']='1K'
         data=self.post(vertex(self.c,'image'),{'contents':contents,'generationConfig':{'maxOutputTokens':IMAGE_OUTPUT_LIMIT,'responseModalities':['TEXT','IMAGE'],'imageConfig':image_config}},'image')
-        for p in data.get('candidates',[{}])[0].get('content',{}).get('parts',[]):
-            if p.get('inlineData',{}).get('mimeType','').startswith('image/'):
-                return base64.b64decode(p['inlineData']['data']),p['inlineData']['mimeType']
-        raise ContractError('IMAGE_MISSING','No se recibió imagen; no hay candidata válida')
+        candidate=(data.get('candidates') or [{}])[0]
+        parts=candidate.get('content',{}).get('parts',[]) or []
+        reason=candidate.get('finishReason','UNKNOWN');blocked=data.get('promptFeedback',{}).get('blockReason')
+        summary={'finishReason':reason if isinstance(reason,str) and re.fullmatch('[A-Z_]{1,64}',reason) else 'UNKNOWN',
+                 'blocked':bool(blocked),'textParts':sum('text' in p and not p.get('thought') for p in parts),
+                 'imageParts':sum(p.get('inlineData',{}).get('mimeType','').startswith('image/') and not p.get('thought') for p in parts)}
+        recorder=getattr(self.meter,'record_image_response',None)
+        if callable(recorder):recorder(summary)
+        require(not blocked and reason not in ('SAFETY','IMAGE_SAFETY','BLOCKLIST','PROHIBITED_CONTENT','RECITATION','IMAGE_PROHIBITED_CONTENT','IMAGE_RECITATION'),'IMAGE_BLOCKED','Google bloqueó la imagen solicitada. Revisa la descripción visual; no se repitió la generación.')
+        require(reason!='MAX_TOKENS','IMAGE_TRUNCATED','Google agotó el límite de respuesta antes de completar la imagen. No se repitió la generación.')
+        for p in parts:
+            inline=p.get('inlineData',{})
+            if not p.get('thought') and inline.get('mimeType','').startswith('image/') and inline.get('data'):
+                try:raw=base64.b64decode(inline['data'],validate=True)
+                except (ValueError,TypeError):raise ContractError('IMAGE_INVALID','Google devolvió un archivo de imagen ilegible.')
+                require(raw,'IMAGE_INVALID','Google devolvió un archivo de imagen vacío.')
+                return raw,inline['mimeType']
+        if summary['textParts']:raise ContractError('IMAGE_TEXT_ONLY','Google respondió con texto en lugar de una imagen. No se creó un archivo ni se repitió la solicitud.')
+        raise ContractError('IMAGE_MISSING','Google terminó sin entregar una imagen. Motivo registrado: '+summary['finishReason']+'. No se repitió la solicitud.')
     def veo(self,shot,image_uri,output_uri):return self.post(vertex(self.c,'veo','predictLongRunning'),veo_payload(self.c,shot,image_uri,output_uri),'veo')
     def poll_veo(self,name):
         prefix=f'projects/{self.c["project"]}/locations/{self.c["models"]["veo"]["region"]}/publishers/google/models/{self.c["models"]["veo"]["model"]}/operations/'

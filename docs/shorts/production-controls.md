@@ -46,3 +46,21 @@ real. El cambio requiere actualizar tanto Vercel como el servicio de Cloud Run.
 - https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/veo/3-1-generate
 - https://docs.cloud.google.com/text-to-speech/docs/gemini-tts
 - https://ai.google.dev/gemini-api/docs/image-generation
+
+## Incidente de imagen del 27 de septiembre
+
+Con c53df06 instalado, los registros de las 23:00 UTC muestran una llamada image
+completada y el trabajo cerrado con IMAGE_MISSING. No se conservó la respuesta
+original, por lo que no puede afirmarse su finishReason histórico.
+Se encontró un defecto verificable en el recorrido real: las tres ramas de
+imagen anteponían RULES del guionista, incluida «Devuelve solo JSON».
+`image_direction.py` separa el contrato visual y elimina instrucciones de guion
+ajenas a la generación de una imagen. Conserva los datos visuales y las referencias.
+Se mantiene TEXT+IMAGE, según el contrato REST de Vertex:
+https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/start
+
+El adaptador distingue bloqueo, truncamiento, solo texto, archivo inválido y
+respuesta vacía, sin reintentos pagados. Solo almacena metadatos de diagnóstico
+acotados; no registra textos de la respuesta, imágenes ni pensamientos. Las
+imágenes de pensamiento no se aceptan como resultado final. Los tests de salida,
+producción y gateway pasan; no equivalen a una generación real en la cuenta.

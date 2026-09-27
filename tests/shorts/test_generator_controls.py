@@ -39,6 +39,9 @@ class GeneratorControlsTests(unittest.TestCase):
         self.assertEqual(provider.call_args.args[0]['models']['image']['model'],'gemini-3-pro-image')
         self.assertEqual(cloud.put_entity.call_args.args[2]['model']['model'],'gemini-3-pro-image')
         self.assertTrue(result['assetId']);self.assertEqual(cloud.c,original)
+        sent_prompt=provider.return_value.image.call_args.args[0]
+        self.assertIn('Entrega la imagen renderizada',sent_prompt)
+        self.assertNotIn('Devuelve solo JSON',sent_prompt)
 
     def test_voice_choice_survives_sound_plan_without_invalidating_images(self):
         original=complete();voice={'name':'Puck','languageCode':'ja-JP','direction':'Sereno'}

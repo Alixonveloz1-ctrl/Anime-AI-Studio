@@ -22,7 +22,7 @@ test('Job diagnostics expose only bounded operational metadata, never texts, tok
  const {handleShortsRequest}=await import('../../shorts/gateway.mjs'),original=global.fetch,info=console.info,logs=[];
  const env={SHORTS_ENABLED:'true',SHORTS_PRODUCTION_URL:'https://example.run.app',SHORTS_ENVIRONMENT:'production',VERCEL_ENV:'production'};
  console.info=(...args)=>logs.push(args.join(' '));
- const job={id:'job',operation:'ideas',state:'queued',payload:{secret:'story-secret'},session:'session-secret',owner:'owner-secret',providerCalls:[{kind:'text',state:'rejected',url:'signed-url-secret'}],result:{code:'PROVIDER_QUOTA',error:'story-secret'}};
+ const job={id:'job',operation:'ideas',state:'queued',payload:{secret:'story-secret'},imageResponse:{finishReason:'STOP',textParts:1,imageParts:0,privateText:'secret'},session:'session-secret',owner:'owner-secret',providerCalls:[{kind:'text',state:'rejected',url:'signed-url-secret'}],result:{code:'PROVIDER_QUOTA',error:'story-secret'}};
  global.fetch=async()=>new Response(JSON.stringify({jobs:[job]}),{headers:{'content-type':'application/json'}});
  try{
   const r=await handleShortsRequest(new Request('https://app.invalid/api/shorts?path=/projects/p/jobs',{headers:{Authorization:'Bearer token-secret'}}),env);

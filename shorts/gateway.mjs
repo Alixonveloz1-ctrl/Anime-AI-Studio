@@ -62,6 +62,7 @@ export async function handleShortsRequest(request, env = {}) {
         if(!job?.id)continue;
         console.info('shorts.job.status',JSON.stringify({id:safe(job.id),operation:safe(job.operation),state:safe(job.state),settled:job.settled===true,
           dispatch:safe(job.dispatchState),dispatchUnknown:job.dispatchUnknown===true,workerAccepted:!!job.workerOperation,workerStarted:!!job.workerExecution,
+          imageResponse:job.imageResponse?{finishReason:safe(job.imageResponse.finishReason),blocked:job.imageResponse.blocked===true,textParts:Number.isSafeInteger(job.imageResponse.textParts)?job.imageResponse.textParts:undefined,imageParts:Number.isSafeInteger(job.imageResponse.imageParts)?job.imageResponse.imageParts:undefined}:undefined,
           error:safe(job.result?.code||job.errorCode||job.dispatchError?.code||job.queueError?.code),calls:(job.providerCalls||[]).map(c=>({kind:safe(c.kind),state:safe(c.state)}))}));
       }
     }

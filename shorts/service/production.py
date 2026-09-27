@@ -95,19 +95,20 @@ def run_job(cloud,j,p):
         if op in ('image','veo','tts','music','transcribe','review'):
             dev=development();d=dev['data'];eid=data['entityId']
         if op=='image':
+            from shorts.service.image_direction import image_prompt
             shot=next((s for s in d['shots'] if s['id']==eid),None)
             refs=[]
             if shot and data.get('variantPrompt'):
                 base=selected(eid,'image');refs=[{**base,'uri':uri(base)}]
                 require(isinstance(data['variantPrompt'],str) and 0<len(data['variantPrompt'])<=3000,'VARIANT_PROMPT','Describe el movimiento localizado')
-                prompt=RULES+'\nMantén encuadre, identidad y fondo del frame de referencia. Cambia únicamente esta región/acción: '+data['variantPrompt']
+                prompt=image_prompt(shot,variant=data['variantPrompt'])
             elif shot:
                 for rid in shot['referenceEntityIds']:
                     a=selected(rid,'image');refs.append({**a,'uri':uri(a)})
-                prompt=RULES+'\nProduce un frame narrativo anime 2D, sin texto ni subtítulos. Estados, participantes y distribución: '+json.dumps(shot,ensure_ascii=False)
+                prompt=image_prompt(shot,shot=True)
             else:
                 e=next((e for k in ('characters','locations','props') for e in d['bible'][k] if e['id']==eid),None)
-                require(e,'ENTITY','Referencia inexistente');prompt=RULES+'\nReferencia maestra limpia: '+json.dumps(e,ensure_ascii=False)
+                require(e,'ENTITY','Referencia inexistente');prompt=image_prompt(e)
             raw,mime=provider.image(prompt,refs,p['format']);path=root/('image.png' if mime=='image/png' else 'image.jpg');path.write_bytes(raw);inspect(path,'video')
             return {'assetId':asset(path,'image',('layer_'+ident_new()) if data.get('variantPrompt') else eid,{'variantOf':eid if data.get('variantPrompt') else None,'parentAssetId':refs[0]['id'] if data.get('variantPrompt') else None,'references':[a['id'] for a in refs],'dependencies':dependency_records(refs),'model':provider_config['models']['image'],'prompt':prompt})['id']}
         if op=='veo':

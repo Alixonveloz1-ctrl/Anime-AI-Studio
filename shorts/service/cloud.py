@@ -136,6 +136,8 @@ class Cloud:
 class RequestJournal:
     """Journal every generation request before transport, with an independent lease check."""
     def __init__(self,cloud,jid):self.cloud,self.jid=cloud,jid
+    def record_image_response(self,summary):
+        self.cloud.db.collection('animeShortsJobs').document(self.jid).update({'imageResponse':summary})
     def wait_for_provider(self,seconds,reason,attempt=0):
         ref=self.cloud.db.collection('animeShortsJobs').document(self.jid)
         ref.update({'providerWait':{'reason':reason,'retryAt':time.time()+seconds,'attempt':attempt,'maxRetries':3}})
