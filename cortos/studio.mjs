@@ -138,7 +138,9 @@ async function renderStage(){
  try{
   const {jobs}=await api(route('/jobs'));knownJobs=jobs;
   const latest=[...jobs].sort((a,b)=>(b.created||0)-(a.created||0));
-  const current=latest.find(unresolved)||latest.find(j=>j.state==='failed');
+  // Keep the newest result after polling finishes. An older failed attempt
+  // must not replace a newer successful generation when the page redraws.
+  const current=latest.find(unresolved)||latest[0];
   if(current)showJob(current);else $('#activity').hidden=true;
  }catch(error){say('No se pudo leer el estado de los trabajos. '+error.message,true);}
  if(stage==='Historia'){pageTitle('Tu historia');tabs(screen,[['ideas','Ideas'],['guion','Guion y biblias']],p.selectedIdea?'guion':'ideas',async part=>{screen.querySelector('.story-content')?.remove();const slot=document.createElement('div');slot.className='story-content';screen.append(slot);await (part==='ideas'?ideas:script)(slot);[...screen.querySelectorAll('.tabs button')].forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===(part==='ideas'?'Ideas':'Guion y biblias'))));});const slot=document.createElement('div');slot.className='story-content';screen.append(slot);return (p.selectedIdea?script:ideas)(slot);}

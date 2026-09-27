@@ -251,6 +251,27 @@ test('429 from a provider is displayed in Historia with no automatic resubmissio
   assert.equal(fixture.calls.filter(c=>c.path.endsWith('/ideas:generate')).length,1);
  }finally{dom.window.close();}
 });
+test('A completed screenplay step stays visible after redraw instead of resurrecting an old 429',async()=>{
+ const {fixture,w,dom,click}=await setup({empty:true});
+ try{
+  await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
+  fixture.jobs.push({id:'old-quota',operation:'develop',state:'failed',settled:true,created:0,revision:1,result:{code:'PROVIDER_QUOTA',error:'Google rechazó la solicitud (429). No se cambió modelo ni se reenvió.'}});
+  await click('Generar historia');
+  assert.match(w.document.querySelector('#notice').textContent,/Listo para revisar/);
+  assert.match(w.document.querySelector('#activity').textContent,/Guion y biblias · Listo para revisar/);
+  assert.doesNotMatch(w.document.querySelector('#activity').textContent,/429|No se completó/);
+  assert.match(w.document.body.textContent,/Haru espera el último tren/);
+  await click('Historia',w.document.querySelector('#steps'));
+  assert.doesNotMatch(w.document.querySelector('#activity').textContent,/429/);
+  fixture.jobs.push({id:'new-quota',operation:'develop',state:'failed',settled:true,created:100,revision:1,result:{code:'PROVIDER_QUOTA',error:'Nueva solicitud rechazada (429)'}});
+  await click('Historia',w.document.querySelector('#steps'));
+  assert.match(w.document.querySelector('#activity').textContent,/Nueva solicitud rechazada \(429\)/);
+  fixture.jobs.push({id:'pending',operation:'develop',state:'running',settled:false,created:101,revision:1});
+  await click('Historia',w.document.querySelector('#steps'));
+  assert.match(w.document.querySelector('#activity').textContent,/Guion y biblias · Preparando/);
+  assert.doesNotMatch(w.document.querySelector('#activity').textContent,/429/);
+ }finally{dom.window.close();}
+});
 test('Confirmed Cloud Run operation enables status inspection even while still queued',()=>{
  assert.equal(presentation.taskActions({state:'queued',dispatchState:'submitted',workerOperation:'projects/p/locations/r/operations/o'}).inspect,true);
  assert.equal(presentation.taskActions({state:'queued',dispatchUnknown:true}).recover,false);
