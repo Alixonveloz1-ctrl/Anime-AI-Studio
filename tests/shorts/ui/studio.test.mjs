@@ -85,6 +85,30 @@ test('Idea selection and development stay connected to the production actions',a
  for(const label of ['Generar guion, biblias y planos','Generar sonido, música y subtítulos','Generar revisión de continuidad']){await click('Aprobar este paso');await click(label);}
  await click('Aprobar guion y biblias');assert.equal(fixture.project.activeDevelopment,'dev');assert.equal(w.document.querySelector('#steps [aria-current]').textContent,'Escenas');dom.window.close();
 });
+test('Blocked production exposes the next action above the script and reaches image, video and voice controls',async()=>{
+ const {fixture,w,dom,click}=await setup({empty:true});
+ try{
+  await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));await click('Generar historia');
+  await click('Personajes');
+  assert.ok(w.document.querySelector('.next-step button'));
+  await click('Aprobar este paso');await click('Generar guion, biblias y planos');
+  const first=w.document.querySelector('.script-shot'),controls=w.document.querySelector('.next-step');
+  assert.ok(controls.compareDocumentPosition(first)&w.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.doesNotMatch(first.textContent,/Japonés y actuación|Acción, imagen y movimiento|Por qué dura este tiempo/);
+  await click('Escenas');await click('Aprobar este paso');await click('Generar sonido, música y subtítulos');await click('Aprobar este paso');await click('Generar revisión de continuidad');
+  assert.ok([...w.document.querySelectorAll('.next-step button')].some(b=>b.textContent==='Aprobar guion y biblias'));
+  await click('Aprobar guion y biblias');
+  fixture.project.developments[0].data.shots[0].treatment='veo';
+  await click('Escenas');
+  let shot=w.document.querySelector('.shot-section');
+  await click('Generar imagen',shot);await new Promise(r=>setTimeout(r,0));
+  shot=w.document.querySelector('.shot-section');shot.querySelector('img').onload();
+  await click('Aprobar versión',shot);
+  shot=w.document.querySelector('.shot-section');await click('Generar video',shot);
+  shot=w.document.querySelector('.shot-section');await click('Generar voz japonesa',shot);
+  assert.deepEqual(fixture.calls.filter(c=>c.path.endsWith('/assets:generate')).map(c=>c.body.operation),['image','veo','tts']);
+ }finally{dom.window.close();}
+});
 test('Current and candidate remain visible; previous versions are folded; one review approves',async()=>{
  const {fixture,w,dom,click}=await setup();await click('Escenas');
  const shot=[...w.document.querySelectorAll('.shot-section')][0];const history=[...shot.querySelectorAll('details')].find(x=>x.querySelector('summary')?.textContent.startsWith('Versiones anteriores'));assert.ok(history);assert.equal(history.open,false);

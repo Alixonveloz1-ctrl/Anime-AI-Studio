@@ -246,10 +246,7 @@ function scriptBreakdown(parent,data){
    const row=document.createElement('div');row.className='voice-row';scene.append(row);
    const actor=document.createElement('strong');actor.textContent=names.get(voice.speakerId)||'Voz';row.append(actor);
    const spanish=document.createElement('p');spanish.textContent=voice.spanish;row.append(spanish);
-   const japanese=fold(row,'Japonés y actuación');japanese.append(document.createTextNode(voice.japanese+' · '+voice.acting));
   }
-  const visual=fold(scene,'Acción, imagen y movimiento');visual.append(document.createTextNode(shot.prompt));
-  if(shot.timingReason){const timing=fold(scene,'Por qué dura este tiempo');timing.append(document.createTextNode(shot.timingReason));}
  }
 }
 function audioPlan(parent,data){
@@ -273,20 +270,21 @@ async function script(parent=screen){
  const parentId=approved?.id;
  const checkpoint=next===2?(latest?.status==='partial'?latest:latest?.status==='invalid'?choices.find(d=>d.id===latest?.checkpointId&&d.status==='partial'):null):null;
  const runStage=(number,instruction='',checkpointId=null)=>runTask('develop',route('/develop'),{stage:number,sourceDraftId:number>1?parentId:null,instruction,...(checkpointId?{checkpointId}:{})});
- const note=document.createElement('p');note.textContent='Cada paso se genera solo cuando lo pides. Lee el resultado y apruébalo antes de continuar.';intro.append(note);
+ const nextControls=document.createElement('section');nextControls.className='next-step';intro.append(nextControls);
+ const note=document.createElement('p');note.textContent=p.activeDevelopment?'Tu guion está aprobado. Ya puedes producir las tomas.':'Completa el paso indicado aquí para abrir los botones de imagen, video y voz de cada toma.';nextControls.append(note);
  if(approved){
   const history=[],seen=new Set();let current=approved;
   while(current&&!seen.has(current.id)){seen.add(current.id);history.unshift(current);current=drafts.find(d=>d.id===current.sourceDraftId&&d.approvalState==='approved');}
-  for(const previous of history){const details=fold(intro,'Paso '+previous.stage+' aprobado · '+stages[previous.stage-1],previous.stage===2);try{const saved=await api(route('/drafts/'+previous.id));if(previous.stage===2){scriptBreakdown(details,saved.data);const bible=fold(details,'Personajes, lugares y objetos');readable(bible,{bible:saved.data.bible});}else if(previous.stage===3)audioPlan(details,saved.data);else readable(details,saved.data);}catch(e){details.append(document.createTextNode(e.message));}}
+  for(const previous of history){const details=fold(intro,'Paso '+previous.stage+' aprobado · '+stages[previous.stage-1]);try{const saved=await api(route('/drafts/'+previous.id));if(previous.stage===2){scriptBreakdown(details,saved.data);const bible=fold(details,'Personajes, lugares y objetos');readable(bible,{bible:saved.data.bible});}else if(previous.stage===3)audioPlan(details,saved.data);else readable(details,saved.data);}catch(e){details.append(document.createTextNode(e.message));}}
  }
  if(working){const note=document.createElement('p');note.textContent='El paso solicitado está pendiente. Su estado aparece arriba.';intro.append(note);if(next===2&&checkpoint){try{const saved=await api(route('/drafts/'+checkpoint.id));scriptBreakdown(intro,saved.data);}catch(e){const error=document.createElement('p');error.textContent=e.message;intro.append(error);}}}
  else if(next<=4){
-  const heading=document.createElement('h4');heading.textContent='Paso '+next+' de 4 · '+stages[next-1];intro.append(heading);
+  const heading=document.createElement('h4');heading.textContent='Paso '+next+' de 4 · '+stages[next-1];nextControls.append(heading);
   if(next===2){
    const progress=checkpoint?.scriptProgress||latest?.scriptProgress;
    const explanation=document.createElement('p');
    explanation.textContent=progress?`Guion guardado: ${progress.completed} de ${progress.total} tramos · ${(progress.frames/24).toFixed(1)} segundos. Cada llamada desarrolla un tramo; lee lo guardado antes de continuar.`:'Primero se preparan personajes y lugares. Después desarrollarás el guion por tramos, con guardado y revisión entre llamadas, hasta completar aproximadamente cinco minutos.';
-   intro.append(explanation);
+   nextControls.append(explanation);
   }
   if(latest){
    try{
@@ -296,37 +294,36 @@ async function script(parent=screen){
     if(next===3)audioPlan(intro,saved.data);
     if(saved.review){const review=fold(intro,'Revisión de continuidad');readable(review,saved.review);}
     if(saved.error){const error=document.createElement('p');error.textContent=saved.error.message+' Los pasos aprobados siguen guardados.';intro.append(error);}
-    if(saved.status==='ready'&&next<4)buttons(intro,[['Aprobar este paso',async()=>{await mutate(route('/drafts/'+saved.id+':approve'),{});await draw();say('Paso aprobado. El siguiente se genera únicamente cuando lo solicites.');}]]);
+    if(saved.status==='ready'&&next<4)buttons(nextControls,[['Aprobar este paso',async()=>{await mutate(route('/drafts/'+saved.id+':approve'),{});await draw();say('Paso aprobado. El siguiente se genera únicamente cuando lo solicites.');}]]);
    }catch(e){const error=document.createElement('p');error.textContent=e.message;intro.append(error);}
   }
   if(next===3){const note=document.createElement('p');note.textContent='El siguiente paso solo prepara indicaciones de música, efectos y traducciones provisionales. Podrás generar, escuchar y elegir la música y las voces en Escenas, después de revisar y aprobar el guion.';intro.append(note);}
   const label=document.createElement('label');label.textContent=next===2?'Indicaciones para la parte que vas a generar (opcional)':latest?'Qué quieres corregir en este paso (opcional)':'Indicaciones para este paso (opcional)';
-  const instruction=document.createElement('textarea');instruction.maxLength=3000;label.append(instruction);intro.append(label);
+  const instruction=document.createElement('textarea');instruction.maxLength=3000;label.append(instruction);const adjustments=fold(nextControls,'Cambiar indicaciones (opcional)');adjustments.append(label);
   const generateLabel=checkpoint?(latest?.status==='invalid'?'Reintentar este tramo':checkpoint.scriptProgress.completed===0?'Aprobar biblias y generar primer tramo':'Aprobar tramo y continuar'):latest?'Generar otra versión de este paso':'Generar '+stages[next-1].toLowerCase();
-  buttons(intro,[[generateLabel,()=>runStage(next,instruction.value,checkpoint?.id)]]);
+  buttons(latest?.status==='ready'?fold(nextControls,'Generar otra versión'):nextControls,[[generateLabel,()=>runStage(next,instruction.value,checkpoint?.id)]]);
   if(next===2&&latest?.status==='partial')buttons(intro,[['Generar otra versión de esta parte',()=>runStage(2,instruction.value,latest.checkpointId||null),true]]);
   if(next===1){
    const old=drafts.filter(d=>!d.stage&&d.hasStory).sort((a,b)=>b.created-a.created);
    if(old.length){const history=fold(intro,'Recuperar historias de intentos anteriores');for(const draft of old)buttons(history,[['Recuperar historia · '+new Date(draft.created*1000).toLocaleString(),async()=>{await mutate(route('/drafts/'+draft.id+':recover'),{});await draw();say('Historia recuperada para leer y aprobar. No se llamó a Gemini.');},true]]);}
   }
  }
- if(p.activeDevelopment)buttons(intro,[['Continuar a producción',()=>go('Escenas')]]);
+ if(p.activeDevelopment)buttons(nextControls,[['Continuar a producción',()=>go('Escenas')]]);
  if(approved){const restart=fold(intro,'Crear otra historia para esta idea');buttons(restart,[['Generar otra historia',()=>runStage(1),true]]);}
  parent.append(intro);
  const grouped=versions(p.developments,p.activeDevelopment);
  const show=(target,e)=>{const d=e.data,c=card(d.title,`<p class="badge">${esc(titleFor(e.approvalState))}${e.id===p.activeDevelopment?' · versión en uso':''}</p>`);
- for(const [index,shot] of d.shots.entries()){const scene=fold(c,`Toma ${index+1} · ${(shot.frames/24).toFixed(1)} s · ${shot.function}`);for(const u of d.utterances.filter(u=>u.shotId===shot.id)){const line=document.createElement('p');line.innerHTML=`<strong>${esc(entityName(d,u.speakerId))}</strong><br>${esc(u.spanish)}`;scene.append(line);const jp=fold(scene,'Japonés y actuación');jp.append(document.createTextNode(u.japanese+' · '+u.acting));}const direction=fold(scene,'Dirección visual');direction.append(document.createTextNode(shot.prompt));}
- const bible=fold(c,'Personajes, lugares y objetos');readable(bible,d.bible);
+ scriptBreakdown(c,d);
  if(e.impact){const changes=fold(c,'Qué cambia en esta versión');const line=document.createElement('p');line.textContent=`${e.impact.changes.length} cambios. ${e.impact.assetsNeedingReview?.length||0} recursos necesitan revisión.`;changes.append(line);for(const asset of e.impact.assetsNeedingReview||[]){const note=document.createElement('p');note.textContent=entityName(d,asset.entityId);changes.append(note);}}
  if(e.review){const report=fold(c,'Notas de revisión');readable(report,e.review);}
- if(e.approvalState==='candidate')buttons(c,[['Aprobar guion y biblias',async()=>{await approve('developments',e.id);await go('Escenas');}]]);
+ if(e.approvalState==='candidate')buttons(target===parent?nextControls:c,[['Aprobar guion y biblias',async()=>{await approve('developments',e.id);await go('Escenas');}]]);
  else if(e.approvalState==='approved'&&e.id!==p.activeDevelopment)buttons(c,[['Usar esta versión',()=>approve('developments',e.id),true]]);
  const edit=fold(c,'Editar esta versión');buttons(edit,[['Corregir con IA',()=>revise('developments',e),true],['Editar manualmente',()=>editDevelopment(e),true]]);target.append(c);};
  grouped.visible.forEach(e=>show(parent,e));if(grouped.history.length){const h=fold(parent,'Historial del guion · '+grouped.history.length);grouped.history.forEach(e=>show(h,e));}
 }
 async function production(){
  const heading=pageTitle('Escenas','Da forma a las imágenes, las voces y el sonido.');
- if(!development()){empty('Tu guion está primero','Aprueba el guion y sus biblias en Historia para preparar los recursos.');buttons(screen,[['Ir a Historia',()=>go('Historia')]]);return;}
+ if(!development()){return script(screen);}
  buttons(heading,[['Revisar el corto',()=>go('Revisión'),true],...(active?[['Pausar',async()=>{await lease(false);say('Producción pausada. Lo terminado se conserva.');await draw();},true]]:[])]);
  tabs(screen,[['tomas','Escenas y voces'],['sonido','Música y efectos']],productionTab,async part=>{productionTab=part;await draw();});
  if(productionTab==='sonido')await sounds();else await shots();
@@ -392,7 +389,7 @@ async function assetVersions(parent,rows){
 async function references(){
  pageTitle('👥 Personajes, lugares y objetos');
  const d=development();
- if(!d){empty('Aprueba primero tu historia','Las fichas de esta historia aparecerán aquí después de aprobar el guion y sus biblias.');buttons(screen,[['Ir a Historia',()=>go('Historia')]]);return;}
+ if(!d){return script(screen);}
  for(const [group,title] of [['characters','Personajes'],['locations','Lugares'],['props','Objetos']]){
   if(!d.bible[group].length)continue;
   const heading=document.createElement('h3');heading.textContent=title;screen.append(heading);
@@ -430,7 +427,6 @@ async function shots(){
    buttons(row,[[assets.length?'Generar otra interpretación':'Generar voz japonesa',()=>runTask('tts',route('/assets:generate'),{operation:'tts',entityId:u.id}),assets.length>0]]);
   }
   if(has)buttons(c,[['Ver toma completa',()=>previewShots([shot.id],c)]]);
-  const direction=fold(c,'Dirección visual');direction.append(document.createTextNode(shot.prompt));
   const more=fold(c,'Editar y comparar');buttons(more,[['Movimiento y capas',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id}),true]]:[]),...(image&&shot.treatment==='veo'?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id}),true]]:[])]);
   if(has)buttons(more,[['Ver escena',()=>previewShots(d.shots.filter(x=>x.beatId===shot.beatId).map(x=>x.id),c),true],['Comparar tomas contiguas',()=>compareShots(shot,c),true]]);
  }
