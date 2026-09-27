@@ -250,11 +250,7 @@ function scriptBreakdown(parent,data){
  }
 }
 function audioPlan(parent,data){
- const sounds=data?.soundRequests||[],music=data?.musicRequests||[],subs=data?.subtitles||[];
- const explanation=document.createElement('p');explanation.textContent='Esto es un plan escrito; prepararlo no genera archivos de audio. Las voces, la música y los efectos se generan y escuchan en Escenas. Los subtítulos son texto provisional; sus tiempos se ajustan después de generar y revisar las voces.';parent.append(explanation);
- if(music.length){const box=fold(parent,`Música prevista · ${music.length}`,true);for(const [i,row] of music.entries()){const c=card(`Pieza ${i+1}`,`<p>${esc(row.prompt)}</p>`);box.append(c);}}
- if(sounds.length){const box=fold(parent,`Efectos previstos · ${sounds.length}`,true);for(const row of sounds)box.append(card(row.name,`<p>${esc(row.description)}</p>`));}
- if(subs.length){const box=fold(parent,`Texto provisional de subtítulos · ${subs.length}`);for(const row of subs){const line=document.createElement('p');line.textContent=row.text;box.append(line);}}
+ const explanation=document.createElement('p');explanation.textContent='La dirección sonora está preparada. La aplicación decide dónde colocar música y efectos. Podrás generar, escuchar y cambiar la música en Escenas.';parent.append(explanation);
 }
 async function script(parent=screen){
  if(!p.selectedIdea){const c=card('Elige una idea primero','<p>Las tres propuestas son el punto de partida de tu guion.</p>');buttons(c,[['Ver ideas',()=>ideas(parent)]]);parent.append(c);return;}
@@ -471,7 +467,8 @@ async function sounds(){
  const d=development();
  if(!d.musicRequests.length&&!d.soundRequests.length){const c=card('Música y efectos','<p>Este guion todavía no tiene encargos de sonido. Prepara y aprueba el plan en Historia para generarlos y escucharlos aquí.</p>');buttons(c,[['Abrir plan de sonido',()=>go('Historia')]]);screen.append(c);}
  if(d.musicRequests.length){const music=fold(screen,'Música',true);for(const [index,m] of d.musicRequests.entries()){const c=card('Pieza '+(index+1),`<p class="muted">${m.seconds} segundos</p>`);const description=fold(c,'Dirección musical');description.append(document.createTextNode(m.prompt));const rows=p.assets.filter(a=>a.entityId===m.id);buttons(c,[[rows.length?'Crear otra pieza':'Generar música',()=>runTask('music',route('/assets:generate'),{operation:'music',entityId:m.id}),rows.length>0]]);await assetVersions(c,rows);music.append(c);}}
- for(const r of d.soundRequests){const c=card(r.name,`<p>${esc(r.description)}</p><p class="muted">${r.seconds} s · ${esc(r.perspective)}</p>`);screen.append(c);
+ const effects=d.soundRequests.length?fold(screen,'Efectos · ajustes avanzados'):null;
+ for(const r of d.soundRequests){const c=card(r.name,`<p>${esc(r.description)}</p><p class="muted">${r.seconds} s · ${esc(r.perspective)}</p>`);effects.append(c);
   const request=fold(c,'Prompt y preparación');request.innerHTML+=`<p>${esc(r.prompt)}</p><p>Preparación: ${r.preparationSeconds} s · Cola: ${r.tailSeconds} s</p>`;buttons(request,[['Copiar prompt',()=>navigator.clipboard.writeText(r.prompt),true]]);
   const label=document.createElement('label');label.className='upload';label.textContent='Subir tu efecto';const input=document.createElement('input');input.type='file';input.accept='audio/*';label.append(input);c.append(label);const progress=document.createElement('progress');progress.max=1;progress.value=0;progress.hidden=true;c.append(progress);
   input.onchange=async()=>{progress.hidden=false;try{await uploadSound(r,input.files[0],progress);await draw();}catch(e){say(e.message,true);}finally{progress.hidden=true;}};

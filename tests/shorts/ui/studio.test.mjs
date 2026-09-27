@@ -325,7 +325,7 @@ test('Every editorial step waits for explicit approval and another generation cl
    await click(label);const calls=fixture.calls.filter(c=>c.path.endsWith('/develop'));
    assert.equal(calls.length,index+2);assert.equal(calls.at(-1).body.stage,index+2);assert.ok(calls.at(-1).body.sourceDraftId);
    if(index===0){assert.equal(w.document.querySelectorAll('.story-content .script-shot').length,2);assert.match(w.document.querySelector('.story-content .script-shot').textContent,/Haru decide quedarse|Todavía estamos a tiempo/);}
-   if(index===1){assert.match(w.document.body.textContent,/prepararlo no genera archivos de audio/);assert.match(w.document.body.textContent,/Piano íntimo/);assert.equal(fixture.calls.filter(c=>c.path.endsWith('/assets:generate')).length,0);}
+   if(index===1){assert.match(w.document.body.textContent,/La dirección sonora está preparada/);assert.doesNotMatch(w.document.body.textContent,/Piano íntimo|La puerta del andén|Metal station door/);assert.equal(fixture.calls.filter(c=>c.path.endsWith('/assets:generate')).length,0);}
    if(index<2){assert.equal(fixture.project.developments.length,0);await click('Aprobar este paso');}
   }
   assert.equal(fixture.project.developments.length,1);assert.equal(fixture.project.developments[0].approvalState,'candidate');
@@ -388,5 +388,17 @@ test('Approved screenplay opens production before sound planning and retains ass
   await click('Música y efectos');assert.match(w.document.body.textContent,/Piano íntimo/);
   await click('Continuar preparación en Historia');await click('Generar revisión de continuidad');await click('Aprobar guion y biblias');
   assert.ok(fixture.project.assets.some(a=>a.id===asset));await click('Escenas y voces');assert.equal(w.document.querySelectorAll('.shot-section').length,2);
+ }finally{dom.window.close();}
+});
+
+
+test('Music keeps playback and generation visible while effect instructions stay collapsed',async()=>{
+ const {w,dom,click}=await setup();
+ try{
+  await click('Escenas');await click('Música y efectos');
+  const effects=[...w.document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent==='Efectos · ajustes avanzados');
+  assert.ok(effects);assert.equal(effects.open,false);assert.match(effects.textContent,/La puerta del andén/);
+  const music=[...w.document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent==='Música');
+  assert.ok(music.open);await new Promise(r=>setTimeout(r,0));assert.ok(music.querySelector('audio'));assert.match(music.textContent,/Crear otra pieza/);
  }finally{dom.window.close();}
 });

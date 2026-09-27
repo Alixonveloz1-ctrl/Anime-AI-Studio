@@ -128,6 +128,7 @@ def plan_shots(data, duration_bounds=None):
 def plan_music(data):
     """Turn editorial cue bounds into physically valid source requests."""
     out=copy.deepcopy(data);pieces=[];rows=out.get('musicRequests')
+    total=sum(s['frames'] for s in out.get('shots',[]))
     require(isinstance(rows,list),'MUSIC','Falta el plan musical.')
     occupied={r.get('id') for group in ('beats','shots','utterances','soundRequests') for r in out.get(group,[]) if isinstance(r,dict)}
     for kind in ('characters','locations','props'):occupied.update(r.get('id') for r in out.get('bible',{}).get(kind,[]) if isinstance(r,dict))
@@ -137,6 +138,9 @@ def plan_music(data):
         key=ident(row.get('id'));require(key not in occupied,'DUPLICATE_ID','ID musical repetido: '+key);occupied.add(key)
         start=integer(row.get('startFrame'),'entrada musical',0,7559);end=integer(row.get('endFrame'),'salida musical',1,7560)
         require(start<end,'MUSIC_COVERAGE','La salida musical debe ir después de su entrada: '+key)
+        # The screenplay is authoritative: a cue cannot extend past its ending.
+        require(start<total,'MUSIC_COVERAGE','La música comienza después del final del guion: '+key)
+        end=min(end,total)
         index=0
         while start<end:
             stop=min(end,start+184*24);index+=1

@@ -63,6 +63,15 @@ class ManualDevelopmentTests(unittest.TestCase):
         self.assertEqual([r['seconds'] for r in result['musicRequests']],[184,116])
         self.assertEqual([(r['startFrame'],r['endFrame']) for r in result['musicRequests']],[(0,4416),(4416,7200)])
         validate_development(result);self.assertEqual(plan_music(result),result)
+    def test_music_ends_at_actual_script_end_without_changing_shots(self):
+        d=complete();d['shots'][0]['frames']=6840
+        d['shots'][0]['minFrames']=6840;d['shots'][0]['maxFrames']=6840
+        d['musicRequests']=[{'id':'score','prompt':'Piano','startFrame':0,'endFrame':7200}]
+        result=plan_music(d)
+        self.assertEqual(result['musicRequests'][-1]['endFrame'],6840)
+        self.assertEqual(result['shots'],d['shots'])
+        self.assertEqual(plan_music(result),result)
+
     def test_story_recovery_does_not_require_voices_music_or_full_timing(self):
         c=Mock();d=complete();del d['bible']['characters'][0]['voice'];d['shots'][0]['frames']=1
         c.entity.return_value={'ideaId':'idea','jobId':'old','data':d};c.db.collection.return_value.document.return_value.get.return_value.to_dict.return_value={'projectId':'p','owner':'u','settled':True,'providerCalls':[]}
