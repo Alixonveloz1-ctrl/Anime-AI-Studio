@@ -7,7 +7,7 @@ import wave
 import random
 import time
 from email.utils import parsedate_to_datetime
-from shorts.core.requests import INPUT_LIMIT, TEXT_OUTPUT_LIMIT, IMAGE_OUTPUT_LIMIT, verify_models
+from shorts.core.requests import INPUT_LIMIT, TEXT_OUTPUT_LIMIT, IMAGE_OUTPUT_LIMIT, VOICES, verify_models
 from shorts.core.contracts import require, ContractError
 
 class UnknownSubmission(ContractError):
@@ -32,11 +32,63 @@ def veo_payload(c,shot,image_uri,output_uri):
     return {'instances':[instance],'parameters':{'generateAudio':False,'durationSeconds':shot['durationSeconds'],'sampleCount':1,'aspectRatio':shot.get('format','16:9'),'resolution':'720p','storageUri':output_uri}}
 
 def tts_payload(c,u,voice):
-    require(bool(re.search('[\u3040-\u30ff\u3400-\u9fff]',u.get('japanese',''))),'JAPANESE','Falta texto japonés aprobado')
+    # Validate before begin_call: an invalid stored voice never consumes a
+    # provider submission. Do not silently substitute another character voice.
+    require(isinstance(u,dict) and isinstance(u.get('japanese'),str) and bool(re.search('[\u3040-\u30ff\u3400-\u9fff]',u['japanese'])),'JAPANESE','Falta texto japonés aprobado')
+    require(isinstance(voice,dict) and voice.get('name') in VOICES,'CHARACTER_VOICE','La voz guardada no pertenece al catálogo Gemini TTS. Abre Personajes, elige una voz válida y vuelve a generar.')
     require(voice.get('languageCode','ja-JP')=='ja-JP','JAPANESE','La voz de Cortos debe ser japonesa')
-    prompt=voice.get('direction','')+' '+u.get('acting','')
+    direction=voice.get('direction') or '';acting=u.get('acting') or ''
+    require(isinstance(direction,str) and isinstance(acting,str),'TTS_DIRECTION','La dirección de voz y la actuación deben ser texto.')
+    prompt=' '.join(part.strip() for part in (direction,acting) if part.strip())
     require(len(u['japanese'].encode())<=4000 and len(prompt.encode())<=4000,'TTS_LENGTH','Texto o dirección supera 4000 bytes; divide la intervención antes de generar')
-    return {'input':{'text':u['japanese'],'prompt':prompt},'voice':{'languageCode':'ja-JP','name':voice['name'],'modelName':c['models']['tts']['model']},'audioConfig':{'audioEncoding':'LINEAR16','sampleRateHertz':24000}}
+    inputs={'text':u['japanese']}
+    if prompt:inputs['prompt']=prompt
+    return {'input':inputs,'voice':{'languageCode':'ja-JP','name':voice['name'],'modelName':c['models']['tts']['model']},'audioConfig':{'audioEncoding':'LINEAR16','sampleRateHertz':24000}}
+
+
+def rejection_detail(response,payload):
+    """Bounded detail for the authenticated job owner, never a raw body/log.
+
+    Remove submitted content and resource/credential-like values before keeping
+    Google's useful explanation. Gateway logs continue to contain codes only.
+    """
+    try:error=response.json().get('error',{})
+    except (ValueError,TypeError,AttributeError):return ''
+    if not isinstance(error,dict):return ''
+    status=error.get('status','')
+    if not isinstance(status,str) or not re.fullmatch(r'[A-Z_]{1,64}',status):status=''
+    message=error.get('message','')
+    if not isinstance(message,str):message=''
+    message=message[:4000]
+    sensitive=[]
+    def collect(value):
+        if isinstance(value,dict):
+            for key,item in value.items():
+                if key in ('text','prompt','data','audioContent','fileUri','gcsUri','storageUri') and isinstance(item,str) and len(item)>=4:sensitive.append(item)
+                else:collect(item)
+        elif isinstance(value,list):
+            for item in value:collect(item)
+    collect(payload)
+    for value in sorted(sensitive,key=len,reverse=True):message=message.replace(value,'[contenido]')
+    if 'PRIVATE KEY' in message:message='Detalle omitido por contener datos sensibles.'
+    message=re.sub(r'(?i)\b(?:Bearer|Basic)\s+\S+','[credencial]',message)
+    message=re.sub(r'(?i)(?:https?://|gs://)\S+','[recurso]',message)
+    message=re.sub(r'\b(?:AIza[A-Za-z0-9_-]+|ya29\.[A-Za-z0-9._-]+|eyJ[A-Za-z0-9_.-]+)\b','[credencial]',message)
+    message=re.sub(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}','[cuenta]',message)
+    message=re.sub(r'\bprojects/[^\s,;]+','[recurso]',message)
+    message=re.sub(r'[A-Za-z0-9_+/=.-]{80,}','[valor]',message)
+    message=' '.join(message.split())[:420]
+    fields=[]
+    details=error.get('details',[])
+    if isinstance(details,list):
+        for detail in details:
+            if not isinstance(detail,dict) or not str(detail.get('@type','')).endswith('google.rpc.BadRequest'):continue
+            violations=detail.get('fieldViolations',[])
+            if not isinstance(violations,list):continue
+            for row in violations:
+                field=row.get('field') if isinstance(row,dict) else None
+                if isinstance(field,str) and re.fullmatch(r'(?:input|voice|audioConfig|generationConfig)(?:\.[A-Za-z][A-Za-z0-9_]{0,40}){1,4}',field):fields.append(field)
+    return ' · '.join(part for part in (status,message,('Campos: '+', '.join(dict.fromkeys(fields))) if fields else '') if part)[:600]
 
 
 def quota_delay(response,attempt):
@@ -81,6 +133,8 @@ class Providers:
                     continue
                 code={400:'PROVIDER_INPUT',401:'PROVIDER_AUTH',403:'PROVIDER_PERMISSION',404:'MODEL_UNAVAILABLE',429:'PROVIDER_QUOTA'}.get(r.status_code,'PROVIDER_ERROR')
                 message='Google mantiene el límite de cuota (429) después de los reintentos con espera. Lo terminado sigue guardado.' if quota and retry_enabled else f'Google rechazó la solicitud ({r.status_code}). No se cambió modelo ni se reenvió.'
+                detail=rejection_detail(r,payload)
+                if detail:message+=' Detalle de Google: '+detail
                 raise ContractError(code,message,r.status_code)
             try:data=r.json()
             except ValueError as e:

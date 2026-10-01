@@ -6,29 +6,42 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 let user,p,stage='Historia',productionTab='tomas',reviewTab='corto',active=false,busy=false,heartbeatBusy=false,needsRedraw=false;
 let mediaLoads=[];
 let knownJobs=[],watchVersion=0;
-let generatorCatalog;
+let generatorCatalog,generatorSave=null,mutationQueue=Promise.resolve();
 const projectTitle=item=>item.title?.trim()||'Corto sin título';
 let transport=fetch;
 const session=crypto.randomUUID(),device=localStorage.getItem('animeShorts:v2:device')||crypto.randomUUID();localStorage.setItem('animeShorts:v2:device',device);
 const say=(s,error=false)=>{notice.textContent=s;notice.className=error?'error':'';};
-function action(label,fn,secondary=false){const b=document.createElement('button');b.textContent=label;if(secondary)b.className='secondary';b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn();}catch(e){say(e.message,true);}finally{b.disabled=false;if(needsRedraw&&!document.querySelector('dialog[open]')){needsRedraw=false;await draw();}}};return b;}
+function action(label,fn,secondary=false){const b=document.createElement('button');b.textContent=label;if(secondary)b.className='secondary';b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn();}catch(e){say(e.message,true);}finally{b.disabled=false;if(needsRedraw&&!document.querySelector('dialog[open]')){needsRedraw=false;try{await draw();}catch(e){say('No se pudo actualizar la vista. '+e.message,true);}}}};return b;}
 function card(title,content=''){const e=document.createElement('article');e.className='card';e.innerHTML=`<h3>${esc(title)}</h3>${content}`;return e;}
 function buttons(parent,items){const row=document.createElement('div');row.className='actions';items.forEach(([label,fn,secondary])=>row.append(action(label,fn,secondary)));parent.append(row);return row;}
 async function api(path,method='GET',data,headers={},signal){
-  const h={...headers};if(user)h.Authorization='Bearer '+await user.getIdToken();if(data)h['Content-Type']='application/json';
-  // Application revisions are not HTTP entity tags. A CDN evaluates If-Match
-  // before our gateway and can replace a valid read with an empty 412 response.
-  const revision=h['X-Shorts-Revision']??h['If-Match']??(p?String(p.revision):undefined);delete h['If-Match'];
-  if(method!=='GET'&&revision!==undefined)h['X-Shorts-Revision']=String(revision);
-  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000);
-  let r;
-  try{r=await transport('/api/shorts?path='+encodeURIComponent(path),{method,headers:h,cache:'no-store',signal:signal||controller.signal,body:data?JSON.stringify(data):undefined});}
-  catch(error){if(controller.signal.aborted)throw new Error('El servicio no respondió en 30 segundos. La solicitud no se repetirá automáticamente.');throw error;}
-  finally{clearTimeout(timeout);}
-  let j;try{j=await r.json();}catch{
-    const error=new Error(`No se pudo leer la respuesta del servicio (${r.status}). La solicitud no se repetirá automáticamente.`);error.status=r.status;throw error;
-  }
-  if(!r.ok){const error=new Error(j.error||'No se completó la solicitud.');error.status=r.status;error.code=j.code;throw error;}return j;
+  // Bound the entire request, including token refresh and reading its body.
+  // Receiving response headers alone must not leave a button locked forever.
+  const controller=new AbortController();
+  const timeoutError=new Error('El servicio no respondió en 30 segundos. La solicitud no se repetirá automáticamente.');
+  const cancelError=new Error('La consulta se canceló. No se repetirá la solicitud automáticamente.');
+  let timedOut=false,rejectAbort;
+  const aborted=new Promise((resolve,reject)=>{rejectAbort=reject;});
+  const onAbort=()=>rejectAbort(timedOut?timeoutError:cancelError);
+  const forwardAbort=()=>controller.abort();
+  controller.signal.addEventListener('abort',onAbort,{once:true});
+  signal?.addEventListener('abort',forwardAbort,{once:true});
+  if(signal?.aborted)controller.abort();
+  const timeout=setTimeout(()=>{timedOut=true;controller.abort();},30000);
+  const work=async()=>{
+    const h={...headers};if(user)h.Authorization='Bearer '+await user.getIdToken();if(data)h['Content-Type']='application/json';
+    if(controller.signal.aborted)throw timedOut?timeoutError:cancelError;
+    // Translate application revisions without invoking CDN entity-tag checks.
+    const revision=h['X-Shorts-Revision']??h['If-Match']??(p?String(p.revision):undefined);delete h['If-Match'];
+    if(method!=='GET'&&revision!==undefined)h['X-Shorts-Revision']=String(revision);
+    const r=await transport('/api/shorts?path='+encodeURIComponent(path),{method,headers:h,cache:'no-store',signal:controller.signal,body:data?JSON.stringify(data):undefined});
+    let j;try{j=await r.json();}catch{
+      const error=new Error(`No se pudo leer la respuesta del servicio (${r.status}). La solicitud no se repetirá automáticamente.`);error.status=r.status;error.confirmedRejected=false;throw error;
+    }
+    if(!r.ok){const error=new Error(j?.error||'No se completó la solicitud.');error.status=r.status;error.code=j?.code;error.confirmedRejected=r.status>=400&&r.status<500;throw error;}return j;
+  };
+  try{return await Promise.race([work(),aborted]);}
+  finally{clearTimeout(timeout);controller.signal.removeEventListener('abort',onAbort);signal?.removeEventListener('abort',forwardAbort);}
 }
 const route=s=>`/projects/${p.id}${s}`;
 async function getProject(id){
@@ -38,8 +51,23 @@ async function getProject(id){
  for(const kind of ['ideas','developments','assets','cues','events','timelines','previews','developmentDrafts'])project[kind].sort((a,b)=>(a.created||0)-(b.created||0)||a.id.localeCompare(b.id));
  return project;
 }
-async function refresh(){p=await getProject(p.id);}
-async function mutate(path,data,method='POST'){busy=true;try{while(heartbeatBusy)await new Promise(r=>setTimeout(r,50));await refresh();const result=await api(path,method,data);await refresh();return result;}finally{busy=false;}}
+async function refresh(){const id=p?.id;if(!id)return;const next=await getProject(id);if(p?.id===id)p=next;}
+async function mutate(path,data,method='POST'){
+ const projectId=p?.id;
+ const task=mutationQueue.then(async()=>{
+  if(p?.id!==projectId)throw new Error('Cambió el proyecto abierto. No se guardó este cambio.');
+  busy=true;
+  try{
+   while(heartbeatBusy)await new Promise(r=>setTimeout(r,50));
+   await refresh();
+   if(p?.id!==projectId)throw new Error('Cambió el proyecto abierto. No se guardó este cambio.');
+   const result=await api(path,method,data);
+   if(p?.id===projectId)await refresh();
+   return result;
+  }finally{busy=false;}
+ });
+ mutationQueue=task.catch(()=>{});return task;
+}
 async function lease(enable){if(!p)return;await refresh();const v=await api(route('/lease'),'POST',{session,device,active:enable});p={...p,revision:v.revision,lease:v.lease};active=enable;}
 setInterval(async()=>{if(!active||busy||heartbeatBusy||!p)return;heartbeatBusy=true;try{const v=await api(route('/lease'),'POST',{session,device,heartbeat:true,active:true});p.revision=v.revision;p.lease=v.lease;}catch{active=false;say('Lote pausado por pérdida de sesión. Puedes continuar sin rehacer lo terminado.',true);}finally{heartbeatBusy=false;}},10000);
 function fold(parent,title,open=false){const d=document.createElement('details');d.className='disclosure';const summary=document.createElement('summary');summary.textContent=title;d.append(summary);d.open=open;parent.append(d);return d;}
@@ -49,6 +77,8 @@ async function go(next,part){stage=next;if(part&&next==='Escenas')productionTab=
 function tabs(parent,options,selected,onSelect){const nav=document.createElement('nav');nav.className='tabs';nav.setAttribute('aria-label','Contenido de esta etapa');for(const [id,name] of options){const b=action(name,()=>onSelect(id),true);b.setAttribute('aria-pressed',String(id===selected));nav.append(b);}parent.append(nav);}
 function describeIssue(text){const d=development();if(!d)return text;let value=String(text);const ids=[...d.shots,...d.utterances,...d.soundRequests,...d.musicRequests,...d.bible.characters,...d.bible.locations,...d.bible.props].sort((a,b)=>b.id.length-a.id.length);for(const row of ids)value=value.replaceAll(row.id,entityName(d,row.id));return value;}
 async function runTask(operation,path,data={}){
+ if(generatorSave)await generatorSave;
+ await mutationQueue;
  if(['ideas','develop','image','veo','tts','music'].includes(operation)){
   const {jobs}=await api(route('/jobs'));knownJobs=jobs;
   const existing=jobs.find(j=>j.operation===operation&&unresolved(j));
@@ -59,7 +89,7 @@ async function runTask(operation,path,data={}){
  const bytes=new TextEncoder().encode(JSON.stringify([projectId,operation,path,data]));
  const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');
  const storageKey='animeShorts:request:'+hash,key=localStorage.getItem(storageKey)||crypto.randomUUID();localStorage.setItem(storageKey,key);
- let job;try{job=await api(path,'POST',{...data,session},{'Idempotency-Key':key});}catch(e){if(e.status&&e.status<500)localStorage.removeItem(storageKey);throw e;}
+ let job;try{job=await api(path,'POST',{...data,session},{'Idempotency-Key':key});}catch(e){if(e.confirmedRejected)localStorage.removeItem(storageKey);throw e;}
  say('Solicitud guardada. Comprobando su estado…');
  const result=await watch(job.jobId,projectId);
  if(result&&terminal(result.state)&&result.state!=='submitted_unknown')localStorage.removeItem(storageKey);
@@ -401,27 +431,64 @@ async function assetVersions(parent,rows){
  for(const [key,items] of Object.entries(groups)){const v=versions(items,p.assetSelections?.[key]);for(const item of v.visible)await assetCard(parent,item);if(v.history.length){const h=fold(parent,'Versiones anteriores · '+v.history.length);let loaded=false;h.addEventListener('toggle',async()=>{if(h.open&&!loaded){loaded=true;const start=mediaLoads.length;for(const item of v.history)await assetCard(h,item);const queue=mediaLoads.splice(start);for(const load of queue)await load();}});}}
 }
 async function generatorControls(parent){
+ const projectId=p.id;
  const box=card('Generadores','<p class="muted">Elige con qué generar. Se guarda para este corto y se aplica a las nuevas solicitudes.</p>');parent.append(box);
  try{generatorCatalog=await api(route('/generators'));}catch(error){generatorCatalog=null;box.append(document.createTextNode('No se pudieron cargar los generadores. '+error.message));return;}
  for(const [kind,title] of [['image','Imagen'],['veo','Video'],['tts','Voces'],['music','Música']]){
   const label=document.createElement('label');label.textContent=title;const select=document.createElement('select');select.setAttribute('aria-label','Generador de '+title.toLowerCase());
   for(const model of generatorCatalog.choices[kind]){const option=document.createElement('option');option.value=model.id;option.textContent=model.name;select.append(option);}
   select.value=generatorCatalog.selected[kind];label.append(select);box.append(label);
-  select.onchange=async()=>{select.disabled=true;try{const result=await mutate(route('/generators'),{...generatorCatalog.selected,[kind]:select.value});generatorCatalog=result;say('Generador guardado.');}catch(error){select.value=generatorCatalog.selected[kind];say(error.message,true);}finally{select.disabled=false;}};
+  select.onchange=async()=>{
+   const model=select.value,previous=generatorCatalog.selected[kind];
+   select.disabled=true;say('Guardando generador…');
+   const pending=(generatorSave||Promise.resolve()).catch(()=>{}).then(async()=>{
+    if(p?.id!==projectId)throw new Error('Cambió el proyecto abierto. Vuelve a elegir el generador.');
+    const latest=await api(`/projects/${projectId}/generators`);
+    const result=await mutate(`/projects/${projectId}/generators`,{...latest.selected,[kind]:model});
+    if(p?.id===projectId)generatorCatalog=result;
+    return result;
+   });
+   generatorSave=pending;
+   try{await pending;say('Generador guardado.');}
+   catch(error){select.value=generatorCatalog?.selected?.[kind]||previous;say(error.message,true);}
+   finally{select.disabled=false;if(generatorSave===pending)generatorSave=null;}
+  };
  }
 }
 function voiceControls(parent,character){
  if(!generatorCatalog)return;
+ const projectId=p.id,names=[...generatorCatalog.voices];
+ let saved={name:character.voice?.name||'',direction:character.voice?.direction||''},saving=null;
  const label=document.createElement('label');label.textContent='Voz de '+character.name;const select=document.createElement('select');select.setAttribute('aria-label','Voz de '+character.name);
- const names=[...generatorCatalog.voices];if(!names.includes(character.voice.name))names.unshift(character.voice.name);
- for(const name of names){const option=document.createElement('option');option.value=name;option.textContent=name;select.append(option);}select.value=character.voice.name;label.append(select);parent.append(label);
- const directionLabel=document.createElement('label');directionLabel.textContent='Cómo habla';const direction=document.createElement('textarea');direction.value=character.voice.direction||'';direction.maxLength=1000;directionLabel.append(direction);parent.append(directionLabel);
- const note=document.createElement('p');note.className='muted';note.textContent='Se aplica a todas sus frases en japonés. Los audios anteriores se conservan como versiones; las frases afectadas necesitan una nueva interpretación.';parent.append(note);
- buttons(parent,[['Guardar voz',async()=>{await mutate(route('/characters/'+character.id+'/voice'),{name:select.value,direction:direction.value});await draw();say('Voz asignada a '+character.name+'.');},true]]);
+ if(!names.includes(saved.name)){const option=document.createElement('option');option.value='';option.textContent='Elige una voz válida del catálogo';option.disabled=true;select.append(option);}
+ for(const name of names){const option=document.createElement('option');option.value=name;option.textContent=name;select.append(option);}
+ select.value=names.includes(saved.name)?saved.name:'';label.append(select);parent.append(label);
+ const directionLabel=document.createElement('label');directionLabel.textContent='Cómo habla';const direction=document.createElement('textarea');direction.value=saved.direction;direction.maxLength=1000;directionLabel.append(direction);parent.append(directionLabel);
+ const note=document.createElement('p');note.className='muted';note.textContent='Se aplica a todas sus frases en japonés. Al escuchar se guardan primero tus cambios. Los audios anteriores se conservan como versiones.';parent.append(note);
+ const status=document.createElement('p');status.className='muted';status.setAttribute('role','status');parent.append(status);
+ const describe=()=>{status.textContent=!names.includes(select.value)?'La voz guardada no pertenece al catálogo. Elige una voz antes de generar.':select.value!==saved.name||direction.value!==saved.direction?'Cambios pendientes. Puedes guardar o generar la primera frase.':'Voz guardada: '+saved.name+'.';};
+ select.onchange=describe;direction.oninput=describe;describe();
+ const saveVoice=async()=>{
+  if(saving)return saving;
+  if(p?.id!==projectId)throw new Error('Cambió el proyecto abierto. Vuelve a abrir este personaje.');
+  if(!names.includes(select.value))throw new Error('Elige una voz válida del catálogo antes de generar.');
+  const desired={name:select.value,direction:direction.value};
+  if(desired.name===saved.name&&desired.direction===saved.direction)return;
+  select.disabled=true;direction.disabled=true;status.textContent='Guardando voz…';
+  saving=(async()=>{
+   await mutate(`/projects/${projectId}/characters/${character.id}/voice`,desired);
+   saved=desired;describe();
+  })();
+  try{await saving;}
+  catch(error){status.textContent='No se confirmó el guardado. '+error.message;throw error;}
+  finally{select.disabled=false;direction.disabled=false;saving=null;}
+ };
+ buttons(parent,[['Guardar voz',async()=>{await saveVoice();await draw();say('Voz asignada a '+character.name+'.');},true]]);
  const first=development().utterances.find(u=>u.speakerId===character.id);
  if(first){const sample=document.createElement('div');parent.append(sample);buttons(sample,[['Generar primera frase para escuchar',async()=>{
-  if(select.value!==character.voice.name||direction.value!==(character.voice.direction||''))throw new Error('Guarda la voz elegida antes de generar la frase.');
-  await runTask('tts',route('/assets:generate'),{operation:'tts',entityId:first.id});await draw();
+  await saveVoice();
+  if(p?.id!==projectId)throw new Error('Cambió el proyecto abierto. No se generó otra voz.');
+  await runTask('tts',`/projects/${projectId}/assets:generate`,{operation:'tts',entityId:first.id});await draw();
  },true]]);for(const a of p.assets.filter(a=>a.entityId===first.id).slice(-1))void assetCard(sample,a);}
 }
 

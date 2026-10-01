@@ -1,4 +1,6 @@
 """Vertex responseSchema for new developments; existing stories are not migrated."""
+from shorts.core.requests import VOICES
+
 
 def development_schema():
     def text(description=None):
@@ -14,7 +16,7 @@ def development_schema():
     reference=text('Descripción visual completa y no vacía para generar la referencia maestra de esta entidad; identidad, aspecto, materiales y detalles constantes.')
     character=obj(id=text(),name=text(),japaneseReading=text(),age=number(maximum=130),
         objective=text(),relationships=strings(),speech=text(),
-        voice=obj(name=text('Nombre de voz Gemini TTS.'),languageCode={'type':'STRING','enum':['ja-JP']},direction=text()),
+        voice=obj(name={'type':'STRING','enum':list(VOICES),'description':'Elige exactamente un nombre del catálogo Gemini TTS. No inventes nombres ni añadas prefijos de idioma o de Chirp.'},languageCode={'type':'STRING','enum':['ja-JP']},direction=text()),
         costumes=rows(obj(id=text(),description=text()),1),referencePrompt=reference)
     location=obj(id=text(),name=text(),layout=text('Distribución espacial y posiciones relativas.'),
         entrances=strings(),windows=strings(),furniture=strings(),light=text(),soundZones=strings(),referencePrompt=reference)
