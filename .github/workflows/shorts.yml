@@ -24,6 +24,8 @@ jobs:
           sudo apt-get install -y ffmpeg
           pip install -r worker/montage-shorts/requirements.txt
           npm ci --prefix tests/shorts/ui --ignore-scripts
+      - name: Build the exact Cloud Run image
+        run: docker build -f worker/montage-shorts/Dockerfile -t shorts-cloud-build-check .
       - name: Original contracts
         run: |
           node tests/static-check.mjs
