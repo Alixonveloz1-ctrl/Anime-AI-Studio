@@ -29,7 +29,12 @@ def require(ok, message):
 
 
 def active_revisions(info):
-    return {row.get('revisionName'): row.get('percent') for row in info.get('status', {}).get('traffic', []) if row.get('percent', 0)}
+    revisions = {}
+    for row in info.get('status', {}).get('traffic', []):
+        if row.get('percent', 0):
+            key = row.get('revisionName')
+            revisions[key] = revisions.get(key, 0) + row['percent']
+    return revisions
 
 
 def validate_existing(project, account, state, service):
@@ -74,6 +79,10 @@ def update(project):
     def describe():
         return json.loads(g('run', 'services', 'describe', PREFIX, '--project', project, '--region', region, '--format=json'))
     live = describe()
+    # Service.spec describes the last deployment, which may be an unactivated
+    # failed candidate. Copy configuration from the revision actually serving.
+    serving = json.loads(g('run', 'revisions', 'describe', old['revision'], '--project', project, '--region', region, '--format=json'))
+    live['spec']['template']['spec'] = serving['spec']
     env = validate_existing(project, account, old, live)
     print('\nProyecto: ' + project + '\nServidor actual: ' + old['commit'][:12] + '\nNueva versión: ' + sha[:12])
     print('Actualiza únicamente Cortos. Conserva historias, archivos, permisos y configuración de Animes/Vercel.')
@@ -110,12 +119,13 @@ def update(project):
         g('run', 'jobs', 'deploy', job, *common)
         # Update existing service settings in place, but do not send it traffic yet.
         g('run', 'deploy', PREFIX, '--image', immutable, '--project', project, '--region', region,
-          '--update-env-vars', 'SHORTS_BUILD_COMMIT=' + sha + ',SHORTS_RENDER_JOB=' + job,
+          '--env-vars-file', str(envfile),
           '--no-traffic', '--tag', tag, '--command=gunicorn',
           '--args=^~^' + '~'.join(live['spec']['template']['spec']['containers'][0]['args']))
         info = describe()
-        candidate_url = next(row['url'] for row in info['status']['traffic'] if row.get('tag') == tag)
-        candidate = {**copy.deepcopy(old), 'revision': info['status']['latestReadyRevisionName'], 'image': immutable,
+        target = next(row for row in info['status']['traffic'] if row.get('tag') == tag)
+        candidate_url = target['url']
+        candidate = {**copy.deepcopy(old), 'revision': target['revisionName'], 'image': immutable,
                      'commit': sha, 'job': job, 'diagnosticUrl': candidate_url, 'previous': old}
         require(health(project, region, candidate), 'La candidata no pasó la comprobación de infraestructura.')
         g('run', 'jobs', 'execute', job, '--project', project, '--region', region,

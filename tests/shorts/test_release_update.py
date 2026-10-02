@@ -50,14 +50,18 @@ class ExistingReleaseTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(RuntimeError):
                 updater.validate_existing(project, account, old, live)
 
-    def exercise(self, *, approved=True, image=True, voice=True, public_sha=SHA):
+    def exercise(self, *, approved=True, image=True, voice=True, public_sha=SHA, stale_template=False):
         project, old, live = fixture(); calls = []; envs = []; saved = []; tag = None
+        serving = copy.deepcopy(live['spec']['template']['spec'])
+        if stale_template:
+            live['spec']['template']['spec']['containers'][0]['env'] = [{'name': 'WRONG', 'value': 'failed-old-candidate'}]
         report = {'commit': SHA, 'ok': image and voice, 'image': {'ok': image}, 'tts': {'ok': voice}}
         def google(*args, **kwargs):
             nonlocal tag
             calls.append(args)
             if args[:2] == ('auth', 'list'): return 'owner@example.com'
             if args[:3] == ('run', 'services', 'describe'): return json.dumps(live)
+            if args[:3] == ('run', 'revisions', 'describe'): return json.dumps({'spec': serving})
             if args[:4] == ('artifacts', 'docker', 'images', 'describe'): return 'sha256:' + 'c' * 64
             if args[:3] == ('run', 'jobs', 'deploy'):
                 envs.append((args[3], json.loads(Path(args[args.index('--env-vars-file')+1]).read_text()), args))
@@ -84,7 +88,7 @@ class ExistingReleaseTests(unittest.TestCase):
     def test_cancel_stops_before_all_cloud_writes_and_paid_probes(self):
         calls, _, saved, error, _ = self.exercise(approved=False)
         self.assertIsNone(error); self.assertFalse(saved)
-        self.assertTrue(all(c[:2] == ('auth', 'list') or c[:3] == ('run', 'services', 'describe') for c in calls))
+        self.assertTrue(all(c[:2] == ('auth', 'list') or c[:3] in (('run', 'services', 'describe'), ('run', 'revisions', 'describe')) for c in calls))
 
     def test_update_verifies_both_files_before_activating_same_digest_without_iam_or_vercel(self):
         calls, envs, saved, error, _ = self.exercise()
@@ -100,6 +104,11 @@ class ExistingReleaseTests(unittest.TestCase):
         traffic_index = next(i for i,c in enumerate(calls) if c[:3] == ('run', 'services', 'update-traffic'))
         report_index = next(i for i,c in enumerate(calls) if c[:2] == ('storage', 'cat'))
         self.assertLess(report_index, traffic_index)
+
+    def test_a_prior_failed_candidate_cannot_supply_the_active_runtime_configuration(self):
+        calls, envs, saved, error, _ = self.exercise(stale_template=True)
+        self.assertIsNone(error); self.assertEqual(envs[0][1]['PRESERVE_SETTING'], 'retained')
+        self.assertNotIn('WRONG', envs[0][1]); self.assertEqual(len(saved), 1)
 
     def test_either_failed_media_probe_prevents_activation_and_does_not_repeat(self):
         for image, voice in ((False, True), (True, False)):
