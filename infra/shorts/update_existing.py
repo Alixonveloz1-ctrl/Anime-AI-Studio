@@ -165,7 +165,7 @@ def update(project):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, epilog='Uso desde Cloud Shell: ./c')
     parser.add_argument('--project', help='Proyecto original; si se omite se lee la configuración pública de tu web.')
     args = parser.parse_args()
     project = args.project or read_site('/config').get('firebase', {}).get('projectId', '')
