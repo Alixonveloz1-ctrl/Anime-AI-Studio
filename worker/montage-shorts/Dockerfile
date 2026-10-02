@@ -1,4 +1,4 @@
-FROM python:3.12.10-slim-bookworm
+FROM mirror.gcr.io/library/python:3.12.10-slim-bookworm
 WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core ca-certificates \
