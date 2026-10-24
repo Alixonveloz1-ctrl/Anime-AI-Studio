@@ -719,6 +719,7 @@ function projectIdFromDbKey(k) {
 }
 function isVideoDbKey(k) { return /^sv[abc]_/.test(String(k || '')); }
 function isImageDbKey(k) { return /^(?:ci|sia|sib|sic)_/.test(String(k || '')); }
+function isMusicDbKey(k) { return /^mus_/.test(String(k || '')); }
 function isGcsUri(v) { return typeof v === 'string' && v.startsWith('gs://'); }
 
 function canonicalVideoValue(v) {
@@ -896,6 +897,9 @@ async function dbGet(k) {
   if (v == null) return null;
   if (isVideoDbKey(k)) return resolveVideoValue(v);
   if (isImageDbKey(k) && isGcsUri(v)) return imageUriToBase64(v);
+  // A music cue is a bucket object too: resolveVideoValue is the same
+  // gs:// → signed URL step, which <audio> plays and the mix preview fetches.
+  if (isMusicDbKey(k) && isGcsUri(v)) return resolveVideoValue(v);
   return v;
 }
 async function dbDel(k) {
@@ -8027,7 +8031,23 @@ const ACT_LABELS = {
   cold_open: 'Cold open', act1: 'Acto 1', act2: 'Acto 2',
   'clímax': 'Clímax', 'resolución': 'Resolución',
 };
-const musicKey = act => `mus_${state.projectId}${epSfx()}_${act}`;
+// Storage keys are ASCII: "clímax" and "resolución" were rejected by the
+// bucket's key check, so those two acts could never be saved even once.
+const actoEnClave = act => String(act || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_.-]/g, '_');
+const musicKey = act => `mus_${state.projectId}${epSfx()}_${actoEnClave(act)}`;
+
+// A stored cue is either a bucket pointer that dbGet already turned into a
+// signed URL, or a legacy "mime|base64" entry from an older build.
+async function arrayBufferDeAudio(stored) {
+  const value = String(stored || '');
+  if (/^https?:\/\//.test(value)) {
+    const r = await fetch(value);
+    if (!r.ok) throw new Error(`No se pudo leer el audio del bucket (${r.status})`);
+    return r.arrayBuffer();
+  }
+  const i = value.indexOf('|');
+  return base64ToArrayBuffer(i > 0 ? value.slice(i + 1) : value);
+}
 
 // Acts actually present in this episode, in narrative order.
 function episodeActs() {
@@ -8069,7 +8089,7 @@ async function generateEpisodeMusic() {
       saveState();
     }
 
-    let done = 0, failed = 0, skipped = 0;
+    let done = 0, failed = 0, skipped = 0, ultimoFallo = '';
     for (const act of acts) {
       if (tanda.detener) break;
       setProg(20 + Math.round((done / acts.length) * 75), `Componiendo ${ACT_LABELS[act] || act}...`);
@@ -8082,17 +8102,33 @@ async function generateEpisodeMusic() {
           const res = await fetch('/api/music', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: brief.prompt, negativePrompt: brief.negative || '' }),
+            body: JSON.stringify({
+              prompt: brief.prompt, negativePrompt: brief.negative || '',
+              // With these the clip is written into the bucket and only its
+              // pointer comes back: a 30 s stereo cue is 7.3 MB as base64 and
+              // never fitted in a Vercel response.
+              studioProjectId: state.projectId, storageKey: musicKey(act),
+            }),
           });
-          const d = await res.json();
+          const raw = await res.text();
+          let d;
+          try {
+            d = JSON.parse(raw);
+          } catch {
+            throw new Error(res.status === 504 || /FUNCTION_INVOCATION_TIMEOUT/.test(raw)
+              ? 'Google tardó más de 60 s componiendo esta pista y el servidor cortó la petición.'
+              : `El servidor de música respondió algo inesperado (HTTP ${res.status}).`);
+          }
           if (!res.ok || d.error) throw new Error(d.error || `Music proxy ${res.status}`);
           return d;
         }, (seg) => setProg(20 + Math.round((done / acts.length) * 75), `Cuota de música: reanudando en ${seg}s…`));
         const clip = data.clips?.[0];
-        if (!clip?.audioData) throw new Error('sin audio');
-        await dbSet(musicKey(act), `${clip.mimeType}|${clip.audioData}`);
+        if (!clip?.audioUri && !clip?.audioData) throw new Error('Google no devolvió la pista');
+        await dbSet(musicKey(act), clip.audioUri || `${clip.mimeType}|${clip.audioData}`);
       } catch (e) {
+        // A silent counter left the owner with "0 pistas" and no reason why.
         console.warn(`Música ${act}:`, e.message);
+        ultimoFallo = `${ACT_LABELS[act] || act}: ${e.message}`;
         failed++;
       }
       done++;
@@ -8101,6 +8137,7 @@ async function generateEpisodeMusic() {
 
     setProg(100, failed ? `${acts.length - failed}/${acts.length} pistas listas` : 'Música lista');
     showToast(`Música: ${acts.length - failed} listas · ${skipped} ya existían${failed ? ' · '+failed+' pendientes' : ''}`, failed ? 'error' : 'success');
+    if (failed) openErrorModal(`${failed} pista(s) de música no se pudieron generar`, ultimoFallo);
   } catch (e) {
     openErrorModal('Error generando música', e.message);
   } finally {
@@ -8125,7 +8162,7 @@ async function renderMusic() {
           <span style="font-size:11px;color:${stored ? '#64dc64' : 'var(--text-dim)'}">${stored ? '✅ lista' : '— sin generar'}</span>
         </div>
         ${brief?.prompt ? `<div style="font-size:11px;color:var(--text-dim);margin-top:6px;line-height:1.45">${brief.prompt}</div>` : ''}
-        ${stored ? `<audio controls preload="none" style="width:100%;margin-top:8px;height:34px" src="data:${stored.slice(0, stored.indexOf('|'))};base64,${stored.slice(stored.indexOf('|') + 1)}"></audio>` : ''}
+        ${stored ? `<audio controls preload="none" style="width:100%;margin-top:8px;height:34px" src="${/^https?:\/\//.test(stored) ? stored : `data:${stored.slice(0, stored.indexOf('|'))};base64,${stored.slice(stored.indexOf('|') + 1)}`}"></audio>` : ''}
       </div>`);
   }
   el.innerHTML = rows.join('') || '<p style="color:var(--text-dim);font-size:12px">Genera el episodio para ver sus actos.</p>';
@@ -8416,10 +8453,9 @@ async function previsualizarMezcla() {
     if (!mus) for (const a of episodeActs()) { mus = await dbGet(musicKey(a)); if (mus) break; }
     if (!mus) throw new Error('Este episodio no tiene música generada');
 
-    const trozo = d => { const i = d.indexOf('|'); return i > 0 ? d.slice(i + 1) : d; };
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const bufVoz = await ctx.decodeAudioData(base64ToArrayBuffer(trozo(voz)));
-    const bufMus = await ctx.decodeAudioData(base64ToArrayBuffer(trozo(mus)));
+    const bufVoz = await ctx.decodeAudioData(await arrayBufferDeAudio(voz));
+    const bufMus = await ctx.decodeAudioData(await arrayBufferDeAudio(mus));
     await ctx.close();
 
     const sr   = Math.max(bufVoz.sampleRate, bufMus.sampleRate);
@@ -8629,11 +8665,26 @@ async function assembleEpisode() {
     const musicVol = volumenDeMusica();
     let hasMusic = false;
     if (usarMusica) {
-      for (const act of episodeActs()) {
-        const stored = await dbGet(musicKey(act));
+      // The montage concatenates mus_*.wav with a shell glob, so the names are
+      // numbered: otherwise the cues played in alphabetical order, which put
+      // the cold open after the climax.
+      const actos = episodeActs();
+      for (let i = 0; i < actos.length; i++) {
+        const act = actos[i];
+        const destino = `mus_${i + 1}_${actoEnClave(act)}.wav`;
+        const stored = await dbGetStored(musicKey(act));
         if (!stored) continue;
-        const sep = stored.indexOf('|');
-        add(`mus_${act.replace(/[^\w]/g, '')}.wav`, sep > 0 ? stored.slice(sep + 1) : stored, 'audio/wav');
+        if (isGcsUri(stored)) {
+          // Already in the bucket: hand Cloud Run the object instead of moving
+          // megabytes through the phone.
+          const rest = stored.slice('gs://'.length), slash = rest.indexOf('/');
+          const objectPath = slash > 0 ? rest.slice(slash + 1) : '';
+          if (!objectPath) continue;
+          descargas.push({ origen: objectPath, destino });
+        } else {
+          const sep = stored.indexOf('|');
+          add(destino, sep > 0 ? stored.slice(sep + 1) : stored, 'audio/wav');
+        }
         hasMusic = true;
       }
       if (!hasMusic) showToast('No hay música generada — se monta sólo con la voz', 'error');

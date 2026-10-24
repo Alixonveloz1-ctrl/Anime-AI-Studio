@@ -39,8 +39,11 @@ function fixtureDB(entries={}) {
 // (failure) or a promise (delay) before the normal conditional write.
 // scriptAnswer({system, prompt, body}) answers /api/script with a string (the
 // model text) or a Response; imageAnswer(body, n) answers /api/image. fastTimers shortens waits of 1 s or more.
-export async function openAnimes(t, {cloud, local={}, idb={}, hooks={}, unreadable=[], confirm=()=>true, signInDelay=0, scriptAnswer=null, imageAnswer=null, audioAnswer=null, fastTimers=false}={}) {
-  const saves = [], errors = [], asked = [], scriptCalls = [], imageCalls = [], audioCalls = [];
+export async function openAnimes(t, {cloud, local={}, idb={}, media={}, hooks={}, unreadable=[], confirm=()=>true, signInDelay=0, scriptAnswer=null, imageAnswer=null, audioAnswer=null, musicAnswer=null, fastTimers=false}={}) {
+  const saves = [], errors = [], asked = [], scriptCalls = [], imageCalls = [], audioCalls = [], musicCalls = [];
+  // Bucket objects: cache entries written by dbSet, and media bodies that a
+  // signed download URL serves, as GCS does.
+  const bucket = new Map(Object.entries(media));
   const virtualConsole = new VirtualConsole(); virtualConsole.on('jsdomError', e=>errors.push(e));
   const dom = new JSDOM(html, {url:'https://fixture.invalid/', runScripts:'outside-only', virtualConsole});
   t.after(()=>dom.window.close());
@@ -53,9 +56,18 @@ export async function openAnimes(t, {cloud, local={}, idb={}, hooks={}, unreadab
   Object.assign(w, {indexedDB:fixtureDB(idb).indexedDB, structuredClone, TextEncoder,
     confirm: message => { asked.push(message); return confirm(message); },
     fetch: async (url, options={}) => {
-      const body = JSON.parse(options.body||'{}');
+      let body = {};
+      try { body = JSON.parse(options.body||'{}'); } catch (_) {}
       if (url==='/api/voices') return json({voices:[]});
-      if (url==='/api/download-url') return json({url:'https://fixture.invalid/unavailable/'+body.gcsUri.split('/').at(-1)});
+      if (url==='/api/download-url') return bucket.has(body.gcsUri)
+        ? json({url:'https://fixture.invalid/object/'+encodeURIComponent(body.gcsUri)})
+        : json({url:'https://fixture.invalid/unavailable/'+body.gcsUri.split('/').at(-1)});
+      if (url.startsWith('https://fixture.invalid/object/')) return new Response(bucket.get(decodeURIComponent(url.slice('https://fixture.invalid/object/'.length))));
+      if (url.startsWith('https://fixture.invalid/asset/')) {
+        const key = decodeURIComponent(url.slice('https://fixture.invalid/asset/'.length));
+        if ((options.method||'GET')==='PUT') { bucket.set('cache:'+key, String(options.body)); return new Response('', {status:200}); }
+        return bucket.has('cache:'+key) ? new Response(bucket.get('cache:'+key)) : new Response('', {status:404});
+      }
       if (url.startsWith('https://fixture.invalid/unavailable/')) return new Response('', {status:503});
       if (url.startsWith('https://fixture.invalid/missing/')) return new Response('', {status:404});
       // Media is out of scope here: reference images simply fail.
@@ -64,6 +76,7 @@ export async function openAnimes(t, {cloud, local={}, idb={}, hooks={}, unreadab
         return imageAnswer ? imageAnswer(body, imageCalls.length) : json({error:'Imagen no disponible en la prueba'}, 400);
       }
       if (url==='/api/audio' && audioAnswer) { audioCalls.push(body); return audioAnswer(body, audioCalls.length); }
+      if (url==='/api/music' && musicAnswer) { musicCalls.push(body); return musicAnswer(body, musicCalls.length); }
       if (url==='/api/script') {
         assert.ok(scriptAnswer, 'Unexpected text generation');
         const call = {system:body.system||'', prompt:body.messages?.[0]?.parts?.[0]?.text||'', body};
@@ -91,7 +104,11 @@ export async function openAnimes(t, {cloud, local={}, idb={}, hooks={}, unreadab
       }
       if (body.action==='projectRecovery') return json({currentGeneration:'1', images:0, imageReferences:0, candidates:[], warnings:[]});
       if (body.action==='assetList') return json({keys:[]});
-      if (body.action==='assetSign') return json({url:'https://fixture.invalid/missing/'+body.key});
+      if (body.action==='assetSign') {
+        // Same key rule as the server: an accented key is refused.
+        if (!/^[a-zA-Z0-9_.-]{3,220}$/.test(String(body.key||''))) return json({error:'projectId/key/method inválidos'}, 400);
+        return json({url:'https://fixture.invalid/asset/'+encodeURIComponent(body.key)});
+      }
       if (body.action==='assetDelete') return json({ok:true, deleted:false});
       assert.fail('Unexpected request: '+JSON.stringify(body));
     }});
@@ -101,7 +118,8 @@ export async function openAnimes(t, {cloud, local={}, idb={}, hooks={}, unreadab
   w.eval(fs.readFileSync(new URL('auth/ready.js', root), 'utf8'));
   w.eval(fs.readFileSync(new URL('animes/recovery.js', root), 'utf8'));
   w.eval(script.replace('(async function init() {', 'window.testInit = (async function init() {')
-    + '\nwindow.testPage={getState:()=>state, getTanda:()=>tanda, ocuparProyecto, nube, esperasDeCuota:ESPERAS_DE_CUOTA};');
+    + '\nwindow.testPage={getState:()=>state, getTanda:()=>tanda, ocuparProyecto, nube, esperasDeCuota:ESPERAS_DE_CUOTA};'
+    + '\nwindow.musicKey=musicKey;window.episodeActs=episodeActs;');
   w.testInit.catch(()=>{});
   // In production the session sync takes a while; nothing may depend on it being instant.
   await wait(signInDelay);
@@ -121,5 +139,5 @@ export async function openAnimes(t, {cloud, local={}, idb={}, hooks={}, unreadab
     await until(() => w.trabajoEnCurso() === '', ms);
     await wait(30);
   };
-  return {w, saves, errors, asked, scriptCalls, imageCalls, audioCalls, narration, edit, modal, press};
+  return {w, saves, errors, asked, scriptCalls, imageCalls, audioCalls, musicCalls, bucket, narration, edit, modal, press};
 }

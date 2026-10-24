@@ -14,6 +14,10 @@ const FIXED_API={
  // continued in a new request; a text-only answer is a refusal, not missing
  // capacity (tests/animes/image-api.test.cjs).
  'image.js':[/^const (LIMITE_MS|MIN_PASO_MS|SIN_TIEMPO) = /,/^async function (callGeminiAtUrl|pedirImagen|callGemini)\(/,/^module\.exports = async function handler\(/],
+ // The cue is written into the bucket and only its pointer is returned: 30 s of
+ // stereo is 7.3 MB as base64, over Vercel's body limit, so the music never
+ // reached the phone (tests/animes/music-api.test.cjs).
+ 'music.js':[/^const LIMITE_MS = /,/^const \{ cfg, auth, vertexUrl.*require\('\.\/_lib\/gcp'\);$/,/^module\.exports = async function handler\(/],
 };
 const minus=(a,b)=>{const left=new Map();for(const u of b)left.set(u,(left.get(u)||0)+1);return a.filter(u=>{const k=left.get(u)||0;if(k){left.set(u,k-1);return false;}return true;});};
 for(const name of fs.readdirSync('api').filter(x=>x.endsWith('.js')&&x!=='shorts.js')){
@@ -48,7 +52,7 @@ function topLevelUnits(code){
  // literal and comment. Column-0 comment lines are not part of the comparison.
  const units=[],stack=[],n=code.length,word=/[A-Za-z0-9_$]/;let start=0,depth=0,i=0,last='';
  const regexAllowed=()=>!last||/[(,=:[!&|?{};+\-*%<>~^]$/.test(last)||/^(return|typeof|case|do|else|in|of|new|delete|void|throw|yield|await)$/.test(last);
- const template=p=>{while(p<n){const d=code[p];if(d==='\\'){p+=2;continue;}if(d==='`')return p+1;if(d==='$'&&code[p+1]==='{'){stack.push({depth:0});depth++;return p+2;}p++;}return p;};
+ const template=p=>{while(p<n){const d=code[p];if(d==='\\'){p+=2;continue;}if(d==='`'){last='str';return p+1;}if(d==='$'&&code[p+1]==='{'){stack.push({depth:0});depth++;last='{';return p+2;}p++;}last='str';return p;};
  const push=end=>{const text=code.slice(start,end).split('\n').filter(l=>!l.startsWith('//')).join('\n').trim();if(text)units.push(text);};
  while(i<n){
   const c=code[i];
@@ -57,10 +61,10 @@ function topLevelUnits(code){
   if(c==='/'&&code[i+1]==='/'){while(i<n&&code[i]!=='\n')i++;continue;}
   if(c==='/'&&code[i+1]==='*'){i=code.indexOf('*/',i+2);i=i<0?n:i+2;continue;}
   if(c==='"'||c==="'"){i++;while(i<n&&code[i]!==c){if(code[i]==='\\')i++;i++;}i++;last='str';continue;}
-  if(c==='`'){i=template(i+1);last='str';continue;}
+  if(c==='`'){i=template(i+1);continue;}
   if(c==='/'&&regexAllowed()){i++;let cls=false;while(i<n&&code[i]!=='\n'){const d=code[i];if(d==='\\'){i+=2;continue;}if(d==='[')cls=true;else if(d===']')cls=false;else if(d==='/'&&!cls)break;i++;}i++;while(i<n&&/[a-z]/.test(code[i]))i++;last='re';continue;}
   if('{(['.includes(c)){depth++;if(stack.length)stack[stack.length-1].depth++;last=c;i++;continue;}
-  if(c==='}'&&stack.length&&stack[stack.length-1].depth===0){stack.pop();depth--;i=template(i+1);last='str';continue;}
+  if(c==='}'&&stack.length&&stack[stack.length-1].depth===0){stack.pop();depth--;i=template(i+1);continue;}
   if('})]'.includes(c)){depth--;if(stack.length)stack[stack.length-1].depth--;last=c;i++;continue;}
   if(word.test(c)){let j=i;while(j<n&&word.test(code[j]))j++;last=code.slice(i,j);i=j;continue;}
   last=c;i++;
@@ -101,6 +105,11 @@ const FIXED=[
  // voiced (tests/shorts/ui/animes-media.test.mjs).
  [/^(async function (generateAudio|generarAudioDeEscena)\(|const lineasDeVozHechas = |window\.generateSceneAudio = )/,'cast voices'],
  [/^document\.getElementById\('btnAllAudio'\)\.addEventListener\('click'/,'cast voices'],
+ // Episode music: ASCII bucket keys (the accented acts were refused), the cue
+ // kept in the bucket instead of 7.3 MB of base64, a readable error, and the
+ // montage reading it from there (tests/shorts/ui/animes-music.test.mjs).
+ [/^(const (actoEnClave|musicKey) = |async function (arrayBufferDeAudio|generateEpisodeMusic|renderMusic|assembleEpisode|previsualizarMezcla)\(|function isMusicDbKey\()/,'episode music'],
+ [/^async function dbGet\(k\) \{/,'episode music reads its pointer'],
  // The length selector shows the format fixed by episode 1 (animes-story.test.mjs).
  [/^function updateEpFormatNote\(\) \{/,'episode format lock'],
  // Episode tabs and the generate buttons are repainted with every render, so
