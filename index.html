@@ -7157,6 +7157,7 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   if (!empezarTanda()) return;
   const btn = document.getElementById('btnAllImages');
   btn.disabled = true;
+  try {
   const bp = document.getElementById('bulkProgress'); bp.style.display = 'block';
   const bt = document.getElementById('bulkText'), bb = document.getElementById('bulkBar');
 
@@ -7248,9 +7249,6 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   }
 
   bb.style.width = '100%';
-  terminarTanda();   // pase lo que pase, el guardia se suelta
-  const freno = document.getElementById('btnDetenerTanda');
-  if (freno) freno.style.display = 'none';
   bt.textContent = detenida
     ? `⏹️ Detenida — ${completed}/${total} hechas. Al darle otra vez retoma donde quedó`
     : failed === 0
@@ -7260,8 +7258,19 @@ document.getElementById('btnAllImages').addEventListener('click', async () => {
   else if (failed > 0) showToast(`${failed} imágenes fallaron — dale de nuevo al botón`, 'error');
   else showToast('¡Todas las imágenes generadas!', 'success');
   renderScenes();
-  btn.disabled = false;
   setTimeout(() => bp.style.display = 'none', 5000);
+  } catch (e) {
+    // Un fallo leyendo del bucket ANTES de empezar (las fichas, qué escenas
+    // faltan) dejaba la tanda marcada como en curso para siempre: todas las
+    // demás tandas contestaban "Ya hay una generación en marcha" hasta recargar.
+    document.getElementById('bulkProgress').style.display = 'none';
+    openErrorModal('No se pudo preparar la tanda de imágenes', e.message);
+  } finally {
+    terminarTanda();   // pase lo que pase, el guardia se suelta
+    const freno = document.getElementById('btnDetenerTanda');
+    if (freno) freno.style.display = 'none';
+    btn.disabled = false;
+  }
 });
 
 // Generate image with cached refs (skip re-compression inside generateImage)
