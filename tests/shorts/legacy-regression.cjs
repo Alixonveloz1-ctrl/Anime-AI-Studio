@@ -109,6 +109,13 @@ const FIXED=[
  // concatenating them: the concat demuxer reads them all with the first file's
  // header, so the episode went out of sync (tests/shorts/ui/animes-montage.test.mjs).
  [/^function buildMontarScript\(scenes, opts\) \{/,'montage audio format'],
+ // Voices: the saved narration language survives a reload (the list arrives
+ // after the settings are restored), "Automática" gives a character a voice
+ // nobody else has, and the bulk reference button uses the selected drawing
+ // style like the single one (tests/shorts/ui/animes-voices.test.mjs).
+ [/^async function cargarVoces\(\) \{/,'saved narration language'],
+ [/^window\.setCharacterVoice = function\(id, voice\) \{/,'distinct automatic voice'],
+ [/^document\.getElementById\('btnAllCharacterRefs'\)\?\.addEventListener\('click'/,'bulk references use the selected style'],
  // Episode music: ASCII bucket keys (the accented acts were refused), the cue
  // kept in the bucket instead of 7.3 MB of base64, a readable error, and the
  // montage reading it from there (tests/shorts/ui/animes-music.test.mjs).

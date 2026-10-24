@@ -3186,7 +3186,7 @@ async function cargarVoces() {
     if (!VOCES_DISPONIBLES.length) throw new Error('el proyecto no tiene ninguna voz disponible');
 
     const idiomas = [...new Set(VOCES_DISPONIBLES.map(v => v.lang))];
-    const previo = selLang.value;
+    const previo = ajustesGuardados().voiceLang || selLang.value;
     selLang.innerHTML = idiomas.map(l => `<option value="${l}">${NOMBRE_IDIOMA[l] || l}</option>`).join('');
     selLang.value = idiomas.includes(previo) ? previo : (idiomas.includes('es-US') ? 'es-US' : idiomas[0]);
     HAY_CHIRP = chirp.length > 0;
@@ -3270,7 +3270,14 @@ function opcionesVozPersonaje(ch) {
 window.setCharacterVoice = function(id, voice) {
   const ch = (state.characters || []).find(x => x.id === id);
   if (!ch) return;
-  ch.voice = voice || vozAutomaticaPara(ch.gender);
+  if (voice) { ch.voice = voice; saveState(); return; }
+  // "Automática" has to skip the voices already in use. Without that it always
+  // returned the first voice of that gender, which the first character of the
+  // same gender already had, so two characters spoke with the identical voice.
+  const narr = document.getElementById('voiceSelect')?.value || '';
+  const usados = new Set([narr, state.universe?.systemVoice,
+    ...(state.characters || []).filter(x => x.id !== id).map(x => x.voice)].filter(Boolean));
+  ch.voice = vozAutomaticaPara(ch.gender, usados);
   saveState();
 };
 
@@ -6015,7 +6022,10 @@ document.getElementById('btnAllCharacterRefs')?.addEventListener('click', async 
       const prompt=`Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, natural neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render clothing exactly as described. No turnaround, no collage, no alternate poses, no expression sheet, no inset faces, no text, no labels, no watermark. Authentic Japanese hand-drawn 2D anime character design, crisp variable linework, hard-edged cel shading, matte skin.`;
       try {
         const img=await conEsperaDeCuota(
-          () => generateImage(prompt, null, null, { charSheet:true, estilo:'japon_2d', storageKey: charImgKey(ch.id) }),
+          // The style comes from "Estilo de animación", like the single
+          // 🎨 button: forcing japon_2d here drew the master references in a
+          // different style from the episode they anchor.
+          () => generateImage(prompt, null, null, { charSheet:true, storageKey: charImgKey(ch.id) }),
           (secs) => { btn.textContent=`Cuota: esperando ${secs}s antes de ${ch.name}...`; }
         );
         await dbSet(charImgKey(ch.id), img);

@@ -39,7 +39,7 @@ function fixtureDB(entries={}) {
 // (failure) or a promise (delay) before the normal conditional write.
 // scriptAnswer({system, prompt, body}) answers /api/script with a string (the
 // model text) or a Response; imageAnswer(body, n) answers /api/image. fastTimers shortens waits of 1 s or more.
-export async function openAnimes(t, {cloud, local={}, idb={}, media={}, hooks={}, unreadable=[], confirm=()=>true, signInDelay=0, scriptAnswer=null, imageAnswer=null, audioAnswer=null, musicAnswer=null, fastTimers=false}={}) {
+export async function openAnimes(t, {cloud, local={}, idb={}, media={}, hooks={}, unreadable=[], confirm=()=>true, signInDelay=0, scriptAnswer=null, imageAnswer=null, audioAnswer=null, musicAnswer=null, voices=[], fastTimers=false}={}) {
   const saves = [], errors = [], asked = [], scriptCalls = [], imageCalls = [], audioCalls = [], musicCalls = [];
   // Bucket objects: cache entries written by dbSet, and media bodies that a
   // signed download URL serves, as GCS does.
@@ -58,7 +58,7 @@ export async function openAnimes(t, {cloud, local={}, idb={}, media={}, hooks={}
     fetch: async (url, options={}) => {
       let body = {};
       try { body = JSON.parse(options.body||'{}'); } catch (_) {}
-      if (url==='/api/voices') return json({voices:[]});
+      if (url==='/api/voices') return json({voices});
       if (url==='/api/download-url') return bucket.has(body.gcsUri)
         ? json({url:'https://fixture.invalid/object/'+encodeURIComponent(body.gcsUri)})
         : json({url:'https://fixture.invalid/unavailable/'+body.gcsUri.split('/').at(-1)});
