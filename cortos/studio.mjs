@@ -12,6 +12,9 @@ let transport=fetch;
 const session=crypto.randomUUID(),device=localStorage.getItem('animeShorts:v2:device')||crypto.randomUUID();localStorage.setItem('animeShorts:v2:device',device);
 const say=(s,error=false)=>{notice.textContent=s;notice.className=error?'error':'';};
 function action(label,fn,secondary=false){const b=document.createElement('button');b.textContent=label;if(secondary)b.className='secondary';b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn();}catch(e){say(e.message,true);}finally{b.disabled=false;if(needsRedraw&&!document.querySelector('dialog[open]')){needsRedraw=false;try{await draw();}catch(e){say('No se pudo actualizar la vista. '+e.message,true);}}}};return b;}
+// A result shown inside the card that asked for it (a preview player, word
+// timings) would be wiped by the full redraw the finished job requests.
+function keepInlineResult(){needsRedraw=false;}
 function card(title,content=''){const e=document.createElement('article');e.className='card';e.innerHTML=`<h3>${esc(title)}</h3>${content}`;return e;}
 const CLOSE_UNCERTAIN='No se sabe si Google llegó a procesar ese envío (pudo cobrarlo). Cerrarlo libera el motor y NO lo vuelve a enviar. ¿Cerrar sin repetir?';
 async function closeUncertain(id){
@@ -564,7 +567,7 @@ async function importAsset(){
 async function previewShots(ids,parent){
  const timeline=await mutate(route('/timeline:compile'),{}),shots=timeline.data.shots.filter(x=>ids.includes(x.id));
  const jobId=await runTask('preview',route('/previews'),{timelineId:timeline.id,startFrame:Math.min(...shots.map(x=>x.startFrame)),endFrame:Math.max(...shots.map(x=>x.startFrame+x.frames))});
- if(jobId){const job=await api('/jobs/'+jobId);if(job.result?.previewId)await playPreview(job.result.previewId,parent);}
+ if(jobId){const job=await api('/jobs/'+jobId);if(job.result?.previewId){await playPreview(job.result.previewId,parent);keepInlineResult();}}
 }
 async function compareShots(shot,parent){
  const d=development(),index=d.shots.findIndex(x=>x.id===shot.id),view=document.createElement('div');view.className='grid';parent.append(view);
@@ -642,7 +645,7 @@ async function uploadSound(r,file,progress){
 async function playPreview(id,parent){const d=await api(route(`/previews/${id}`));if(!d.url)throw new Error('Preview aún no disponible.');if(d.current===false){const stale=document.createElement('p');stale.className='error';stale.textContent='Versión anterior: cambiaron sus dependencias. Puedes compararla, pero no aprobar ajustes nuevos con ella.';parent.append(stale);}if(d.draftIssues?.length){const note=document.createElement('p');note.textContent='Borrador: '+d.draftIssues.map(describeIssue).join(' · ');parent.append(note);}parent.querySelector(':scope > video.preview-player')?.remove();const v=document.createElement('video');v.className='preview-player';v.controls=true;v.playsInline=true;v.src=d.url;parent.append(v);return d;}
 async function preparePreview(parent){
  const t=await mutate(route('/timeline:compile'),{});const id=await runTask('preview',route('/previews'),{timelineId:t.id,startFrame:0,endFrame:t.data.frames});
- if(id){const job=await api('/jobs/'+id);if(job.result?.previewId)await playPreview(job.result.previewId,parent);}
+ if(id){const job=await api('/jobs/'+id);if(job.result?.previewId){await playPreview(job.result.previewId,parent);keepInlineResult();}}
 }
 async function review(){
  pageTitle('Revisión','Escucha, compara y decide qué conservar.');
@@ -748,7 +751,7 @@ async function subtitlesView(){
    const timing=fold(line,'Marcar tiempos y dividir');buttons(timing,[['Inicio en el audio actual',()=>{segment.startSample=Math.round(audio.currentTime*48000);drawRows();},true],['Fin en el audio actual',()=>{segment.endSample=Math.round(audio.currentTime*48000);drawRows();},true],['Dividir aquí',()=>{const at=Math.round(audio.currentTime*48000);if(at<=segment.startSample||at>=segment.endSample)throw new Error('Sitúa el audio dentro del bloque.');const next={text:'',startSample:at,endSample:segment.endSample};segment.endSample=at;segments.splice(i+1,0,next);drawRows();},true],['Eliminar bloque',()=>{if(segments.length===1)throw new Error('Conserva al menos un bloque.');segments.splice(i,1);drawRows();},true]]);list.append(line);
   });}drawRows();
   const warnings=document.createElement('p');warnings.textContent=row.warnings.map(w=>`Bloque ${w.block}: ${w.issues.join(', ')}`).join(' · ');c.append(warnings);
-  const recognition=fold(c,'Ayuda para localizar palabras');buttons(recognition,[['Reconocer japonés y consultar tiempos',async()=>{const jid=await runTask('transcribe',route('/assets:generate'),{operation:'transcribe',entityId:row.utteranceId});if(!jid)return;const job=await api('/jobs/'+jid);if(job.result?.alignmentId){const record=await api(route(`/alignments/${job.result.alignmentId}`));const note=document.createElement('p');note.textContent=record.precisionNotice+' · '+record.words.map(w=>`${w.text}: ${(w.startSample/48000).toFixed(2)}–${(w.endSample/48000).toFixed(2)} s`).join(' · ');c.append(note);}},true]]);buttons(c,[['Guardar subtítulos',async()=>{const result=await mutate(route(`/subtitles/${row.utteranceId}`),{audioRevision:row.audioRevision,audioHash:row.audioHash,segments});row.warnings=result.warnings;drawRows();warnings.textContent=result.warnings.map(w=>`Bloque ${w.block}: ${w.issues.join(', ')}`).join(' · ')||'Sin conflictos de lectura.';say('Texto y tiempos guardados. Revisa la preview de la toma.');}],['Ver toma con subtítulos',async()=>{const t=await mutate(route('/timeline:compile'),{});const shot=t.data.shots.find(s=>s.id===row.shotId);const jid=await runTask('preview',route('/previews'),{timelineId:t.id,startFrame:shot.startFrame,endFrame:shot.startFrame+shot.frames});if(jid){const job=await api('/jobs/'+jid);if(job.result?.previewId)await playPreview(job.result.previewId,c);}}]]);
+  const recognition=fold(c,'Ayuda para localizar palabras');buttons(recognition,[['Reconocer japonés y consultar tiempos',async()=>{const jid=await runTask('transcribe',route('/assets:generate'),{operation:'transcribe',entityId:row.utteranceId});if(!jid)return;const job=await api('/jobs/'+jid);if(job.result?.alignmentId){const record=await api(route(`/alignments/${job.result.alignmentId}`));const note=document.createElement('p');note.textContent=record.precisionNotice+' · '+record.words.map(w=>`${w.text}: ${(w.startSample/48000).toFixed(2)}–${(w.endSample/48000).toFixed(2)} s`).join(' · ');c.append(note);keepInlineResult();}},true]]);buttons(c,[['Guardar subtítulos',async()=>{const result=await mutate(route(`/subtitles/${row.utteranceId}`),{audioRevision:row.audioRevision,audioHash:row.audioHash,segments});row.warnings=result.warnings;drawRows();warnings.textContent=result.warnings.map(w=>`Bloque ${w.block}: ${w.issues.join(', ')}`).join(' · ')||'Sin conflictos de lectura.';say('Texto y tiempos guardados. Revisa la preview de la toma.');}],['Ver toma con subtítulos',async()=>{const t=await mutate(route('/timeline:compile'),{});const shot=t.data.shots.find(s=>s.id===row.shotId);const jid=await runTask('preview',route('/previews'),{timelineId:t.id,startFrame:shot.startFrame,endFrame:shot.startFrame+shot.frames});if(jid){const job=await api('/jobs/'+jid);if(job.result?.previewId)await playPreview(job.result.previewId,c);}}]]);
  }
 }
 

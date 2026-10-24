@@ -418,3 +418,12 @@ test('Visible generators save their selection and character voice assignment sta
   assert.equal(fixture.calls.filter(c=>c.path.endsWith('/assets:generate')).length,0,'Selecting models and voices does not generate paid content');
  }finally{dom.window.close();}
 });
+test('A preview shown inside its card stays on screen after the job finishes',async()=>{
+ const {w,dom,click}=await setup();await click('Exportar');await click('Revisar el corto');await click('Subtítulos');
+ await click('Aprobar subtítulos revisados');
+ const button=[...w.document.querySelectorAll('button')].find(b=>b.textContent==='Preparar vista previa'),card=button.closest('article,.card,section')||button.parentElement.parentElement;
+ await click('Preparar vista previa');
+ assert.ok(card.isConnected,'the card was not rebuilt by a full redraw');
+ assert.ok(card.querySelector('video'),'the player is shown where it was asked for');
+ dom.window.close();
+});

@@ -135,6 +135,9 @@ def entity_page(pid,kind,cursor=None):
             row['hasStory']=bool(row.get('data',{}).get('story') or row.get('data',{}).get('bible',{}).get('dramatic'))
             for field in ('data','raw','stages','review'):row.pop(field,None)
         if kind=='assets':row.pop('waveform',None) # retrieved on demand by its dedicated route
+        # Every preview compiles a timeline; the studio only lists them, so the
+        # manifests (read by id where needed) are not sent on every refresh.
+        if kind=='timelines':row.pop('data',None)
     return {'items':items,'next':docs[49].id if len(docs)>50 else None}
 
 @app.get('/projects/<pid>/entities/<kind>/after/<cursor>')
