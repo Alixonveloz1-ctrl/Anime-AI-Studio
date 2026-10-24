@@ -29,7 +29,12 @@
 // ════════════════════════════════════════════════════════════════
 const { cfg, auth, vertexUrl, begin, fail } = require('./_lib/gcp');
 
-async function callModel(modelId, location, projectId, token, body) {
+// Vercel kills the function at 60 s with a plain-text 504 the app cannot tell
+// apart from a network blip. Stopping at 50 s lets it answer in JSON that the
+// request was too slow, so the client shrinks it instead of resending it.
+const DEADLINE_MS = 50000;
+
+async function callModel(modelId, location, projectId, token, body, signal) {
   const url = vertexUrl(projectId, location, modelId, 'generateContent');
   const r = await fetch(url, {
     method: 'POST',
@@ -39,8 +44,11 @@ async function callModel(modelId, location, projectId, token, body) {
       'X-Goog-User-Project': projectId,
     },
     body: JSON.stringify(body),
+    signal,
   });
-  const d = await r.json();
+  const raw = await r.text();
+  let d;
+  try { d = JSON.parse(raw); } catch (_) { d = { error: { message: raw.slice(0, 200) || `HTTP ${r.status}` } }; }
   return { ok: r.ok, status: r.status, data: d };
 }
 
@@ -52,6 +60,7 @@ function extractText(d) {
 }
 
 module.exports = async function handler(req, res) {
+  const started = Date.now();
   if (await begin(req, res)) return;
 
   try {
@@ -98,11 +107,20 @@ module.exports = async function handler(req, res) {
       ],
     };
 
-    let { ok, status, data: d } = await callModel(MODEL, cfg.scriptLocation, projectId, token, body);
+    let ok, status, d;
+    try {
+      ({ ok, status, data: d } = await callModel(MODEL, cfg.scriptLocation, projectId, token, body,
+        AbortSignal.timeout(Math.max(1000, DEADLINE_MS - (Date.now() - started)))));
+    } catch (e) {
+      if (e.name !== 'TimeoutError' && e.name !== 'AbortError') throw e;
+      return res.status(504).json({ error: `Google tardó más de ${Math.round(DEADLINE_MS / 1000)} s en escribir esta parte (${MODEL}).`, timeout: true });
+    }
 
     if (!ok) {
       const msg = d.error?.message || JSON.stringify(d).slice(0, 200);
-      return res.status(status).json({ error: `Gemini (${MODEL}): ${msg}` });
+      // The status travels with the error: 429 is quota, 500/502/503/504 from
+      // Vertex are worth retrying with backoff, anything else is not.
+      return res.status(status).json({ error: `Gemini (${MODEL}) ${status}: ${msg}`, retryable: [429, 500, 502, 503, 504].includes(status) });
     }
 
     const text = extractText(d);

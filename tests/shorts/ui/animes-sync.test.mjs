@@ -1,95 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import {JSDOM, VirtualConsole} from 'jsdom';
+import {openAnimes as open, pid, other, story, wait, until, cloudWith, cloudText} from './animes-page.mjs';
 
-// The real Animes page against an in-memory project store that follows the
-// same rules as api/_lib/project-store.js: every manifest has a generation and
-// a save based on an older one is answered with 409. No provider is contacted.
-const root = new URL('../../../', import.meta.url);
-const html = fs.readFileSync(new URL('index.html', root), 'utf8');
-const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(x=>x[1]).find(x=>x.includes('let state ='));
-const pid = 'p12345678', other = 'p87654321';
-const story = (title, narration) => ({
-  universe:{title, carpeta:'proyecto', genero:'aventura', demo:'shonen', subgenres:[], storyMode:'cast', aspectRatio:'16:9', escenarios:[]},
-  characters:[], episodes:{1:[{id:'s1', num:1, narration, imagePromptA:'A shot'}]}, currentEpisode:1, episodeDirection:{},
-});
-const wait = ms => new Promise(r=>setTimeout(r,ms));
-async function until(check, ms=6000) {
-  const end = Date.now()+ms;
-  while (!check()) { if (Date.now()>end) throw new Error('Timed out waiting'); await wait(20); }
-}
-function fixtureDB(entries={}) {
-  const store = new Map(Object.entries(entries));
-  const request = value => { const r={result:value}; queueMicrotask(()=>r.onsuccess?.({target:r})); return r; };
-  const db = {transaction() {
-    const tx = {objectStore:()=>({
-      get:k=>request(store.get(k)), getAllKeys:()=>request([...store.keys()]),
-      put:(v,k)=>{store.set(k,v);queueMicrotask(()=>tx.oncomplete?.());},
-      delete:k=>{store.delete(k);queueMicrotask(()=>tx.oncomplete?.());},
-    })}; return tx;
-  }};
-  return {indexedDB:{open:()=>request(db)}};
-}
-
-// cloud: id -> {generation, manifest}. hooks.save(body) may return a Response
-// (failure) or a promise (delay) before the normal conditional write.
-async function open(t, {cloud, local={}, idb={}, hooks={}, unreadable=[], confirm=()=>true, signInDelay=0}={}) {
-  const saves = [], errors = [], asked = [];
-  const virtualConsole = new VirtualConsole(); virtualConsole.on('jsdomError', e=>errors.push(e));
-  const dom = new JSDOM(html, {url:'https://fixture.invalid/', runScripts:'outside-only', virtualConsole});
-  t.after(()=>dom.window.close());
-  const w = dom.window;
-  const json = (value, status=200) => new Response(JSON.stringify(value), {status});
-  Object.assign(w, {indexedDB:fixtureDB(idb).indexedDB, structuredClone, TextEncoder,
-    confirm: message => { asked.push(message); return confirm(message); },
-    fetch: async (url, options={}) => {
-      const body = JSON.parse(options.body||'{}');
-      if (url==='/api/voices') return json({voices:[]});
-      if (url==='/api/download-url') return json({url:'https://fixture.invalid/unavailable/'+body.gcsUri.split('/').at(-1)});
-      if (url.startsWith('https://fixture.invalid/unavailable/')) return new Response('', {status:503});
-      assert.equal(url, '/api/upload-url', 'No generation or unexpected endpoints');
-      if (body.action==='projectList') return json({projects:[...cloud].filter(([id])=>!unreadable.includes(id)).map(([id,o])=>({id, name:o.manifest.name, updated:o.manifest.updated, created:1})), unreadable});
-      if (body.action==='projectGet') {
-        const o = cloud.get(body.id);
-        return o ? json({project:o.manifest, generation:String(o.generation)}) : json({error:'Proyecto no encontrado'}, 404);
-      }
-      if (body.action==='projectSave') {
-        saves.push(body);
-        const injected = await hooks.save?.(body);
-        if (injected instanceof Response) return injected;
-        const o = cloud.get(body.id), current = o ? String(o.generation) : '0';
-        if (!body.force && body.baseGeneration!=null && String(body.baseGeneration)!==current) return json({error:'Este proyecto cambió', conflict:true, generation:current}, 409);
-        const generation = (o?.generation||0)+1;
-        cloud.set(body.id, {generation, manifest:{version:1, id:body.id, name:body.name, created:body.created, updated:body.updated, data:body.data}});
-        return json({ok:true, project:{id:body.id, name:body.name, generation:String(generation)}});
-      }
-      if (body.action==='projectRecovery') return json({currentGeneration:'1', images:0, imageReferences:0, candidates:[], warnings:[]});
-      if (body.action==='assetList') return json({keys:[]});
-      if (body.action==='assetSign') return json({url:'https://fixture.invalid/missing/'+body.key});
-      assert.fail('Unexpected request: '+JSON.stringify(body));
-    }});
-  w.setInterval = () => 0;
-  w.localStorage.setItem('anime_cloud_migrated_v1', '1');
-  for (const [k, v] of Object.entries(local)) w.localStorage.setItem(k, v);
-  w.eval(fs.readFileSync(new URL('auth/ready.js', root), 'utf8'));
-  w.eval(fs.readFileSync(new URL('animes/recovery.js', root), 'utf8'));
-  w.eval(script.replace('(async function init() {', 'window.testInit = (async function init() {')
-    + '\nwindow.testPage={getState:()=>state, getTanda:()=>tanda, ocuparProyecto, nube};');
-  w.testInit.catch(()=>{});
-  // In production the session sync takes a while; nothing may depend on it being instant.
-  await wait(signInDelay);
-  w.protectPage = async callback => callback({uid:'fixture-owner'});
-  w.showSessionError = e => { throw e; };
-  w.eval(fs.readFileSync(new URL('auth/animes.mjs', root), 'utf8').replace(/^import .*;\n/, ''));
-  await w.testInit;
-  const narration = () => w.testPage.getState().scenes[0]?.narration;
-  const edit = text => { w.testPage.getState().scenes[0].narration = text; w.saveState(); };
-  return {w, saves, errors, asked, narration, edit};
-}
-const cloudWith = (...entries) => new Map(entries.map(([id, data, generation=1]) => [id, {generation, manifest:{version:1, id, name:data.universe.title, created:1, updated:2, data}}]));
-const cloudText = (cloud, id=pid) => cloud.get(id).manifest.data.episodes[1][0].narration;
-
+// Project sync, the generation guard and the episode controls on the real
+// Animes page (see animes-page.mjs for the fixture store).
 test('A slow save can never land after a newer one: saves leave one at a time, newest last', async t => {
   const cloud = cloudWith([pid, story('Anime', 'original')]);
   let release;

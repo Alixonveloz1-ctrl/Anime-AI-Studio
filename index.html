@@ -1731,6 +1731,7 @@ function updateEpisodeNav() {
   const cur = state.currentEpisode || 1;
   const curScenes = episodes[cur] || [];
   genBtn.textContent = curScenes.length ? `✨ Generar Episodio ${cur} (reemplazar)` : `✨ Generar Episodio ${cur}`;
+  updateEpFormatNote();
 
   // Show new chars field only for ep 2+
   const newCharsSection = document.getElementById('newCharsSection');
@@ -2598,8 +2599,8 @@ async function callGeminiOnce(prompt, system, options = {}) {
     });
   } catch(e) {
     clearTimeout(timeout);
-    if (e.name === 'AbortError') throw new Error('Tiempo de espera agotado al generar texto.');
-    throw new Error('Fallo de red al contactar /api/script: ' + (e.message || e.name));
+    if (e.name === 'AbortError') throw Object.assign(new Error('Tiempo de espera agotado al generar texto.'), { timeout: true });
+    throw Object.assign(new Error('Fallo de red al contactar /api/script: ' + (e.message || e.name)), { retryable: true });
   }
   clearTimeout(timeout);
 
@@ -2608,9 +2609,16 @@ async function callGeminiOnce(prompt, system, options = {}) {
   try {
     data = JSON.parse(rawText);
   } catch {
-    throw new Error(`Respuesta no-JSON de /api/script [HTTP ${res.status}]: ${rawText ? rawText.slice(0, 300) : '(cuerpo vacío)'}`);
+    // Vercel's own plain-text 504 (FUNCTION_INVOCATION_TIMEOUT): the request
+    // did not fit in 60 s. Sending it again unchanged would only repeat that.
+    const killed = res.status === 504 || /FUNCTION_INVOCATION_TIMEOUT/.test(rawText);
+    throw Object.assign(new Error(`Respuesta no-JSON de /api/script [HTTP ${res.status}]: ${rawText ? rawText.slice(0, 300) : '(cuerpo vacío)'}`),
+      killed ? { timeout: true } : { retryable: res.status >= 500 });
   }
-  if (!res.ok || data.error) throw new Error(data.error || `Script API ${res.status}`);
+  if (!res.ok || data.error) {
+    throw Object.assign(new Error(data.error || `Script API ${res.status}`),
+      { status: res.status, timeout: !!data.timeout, retryable: !!data.retryable });
+  }
   return data.text;
 }
 
@@ -2627,8 +2635,11 @@ async function callGemini(prompt, system, options = {}) {
       return await callGeminiOnce(prompt, system, options);
     } catch(e) {
       const msg = String(e?.message || '');
-      const quota = /\b429\b|resource_exhausted|exhausted|quota|rate.?limit|sin capacidad/i.test(msg);
-      const transient = /\b5\d\d\b|timeout|tiempo de espera|network|red al contactar|respuesta no-json/i.test(msg);
+      // Too slow for the 60 s limit: the CALLER must make the request smaller
+      // (fewer scenes) or give up on it; resending it unchanged repeats it.
+      if (e?.timeout) throw e;
+      const quota = e?.status === 429 || /\b429\b|resource_exhausted|exhausted|quota|rate.?limit|sin capacidad/i.test(msg);
+      const transient = !!e?.retryable;
 
       if (quota && quotaAttempt < quotaWaits.length) {
         const secs = quotaWaits[quotaAttempt++];
@@ -4082,6 +4093,21 @@ document.getElementById('btnGenerarUniverso').addEventListener('click', async ()
   // Rehace el reparto y el universo del proyecto abierto: nada puede estar
   // escribiendo imágenes o voces de ese reparto mientras tanto.
   if (bloqueadoPorTrabajo('generar otro universo')) return;
+  // A new universe is a new anime. Rewritten inside a project that already has
+  // a cast or episodes, the old episodes stayed, the new story was written as
+  // their sequel and the new cast inherited the old reference images (same
+  // c1, c2… ids). So it goes into a new project and this one stays intact.
+  const hasContent = (state.characters?.length || 0) > 0
+    || Object.values(state.episodes || {}).some(rows => rows?.length);
+  if (hasContent) {
+    if (!confirm(`«${state.universe?.title || 'Este anime'}» ya tiene personajes o episodios.\n\nEl universo nuevo se creará en un PROYECTO NUEVO y este quedará intacto en 📁 Proyectos.\n\n¿Continuar?`)) return;
+    try {
+      if (!await newProject()) return;
+    } catch (e) {
+      openErrorModal('No se pudo crear el proyecto nuevo', `${e.message}\n\nNo se generó nada; sigues en el proyecto que tenías abierto.`);
+      return;
+    }
+  }
   const soltarProyecto = ocuparProyecto('la generación del universo');
   try {
   const btn = document.getElementById('btnGenerarUniverso');
@@ -4199,6 +4225,9 @@ Devuelve JSON:
     state.universe.clima = state.universe.clima || 'auto';
     state.characters = [];
     state.scenes = [];
+    state.episodes = { 1: [] };
+    state.currentEpisode = 1;
+    state.episodeDirection = {};
     saveState();
 
     // The creative director writes the series bible right after the universe:
@@ -4280,12 +4309,17 @@ function updateEpFormatNote() {
 
   const legacyOpt = [...sel.options].find(o => o.value === 'legacy_current');
   if (legacyOpt) legacyOpt.remove();
-  sel.disabled = false;
+  // Once episode 1 exists the format is fixed (getEpisodeFormat uses it): the
+  // selector shows it and cannot pretend to change it.
+  const locked = (state.episodes?.[1]?.length || 0) > 0 && !!EPISODE_FORMATS[active.key];
+  if (locked) sel.value = active.key;
+  sel.disabled = locked;
   const f = EPISODE_FORMATS[sel.value] || EPISODE_FORMATS.hora;
   const words = Math.round(f.minutes * WORDS_PER_MINUTE);
   note.textContent = `~${f.minutes} min · ${f.scenes} escenas narrativas · ~${words.toLocaleString('es-ES')} palabras. `
     + `Cada escena recibe sólo los planos que necesita; no se generan tres imágenes por obligación.`
-    + (f.parts > 1 ? ` La historia se escribe en ${f.parts} bloques continuos para conservar el arco sin exceder el tiempo de una llamada.` : '');
+    + (f.parts > 1 ? ` La historia se escribe en ${f.parts} bloques continuos para conservar el arco sin exceder el tiempo de una llamada.` : '')
+    + (locked ? ' 🔒 Duración fijada por el Episodio 1: todos los episodios de este anime la comparten. Para otra duración, crea un proyecto nuevo.' : '');
 }
 document.getElementById('epLengthSelect')?.addEventListener('change', function() {
   if (state.universe && !(state.episodes?.[1]?.length)) { state.universe.epFormat = this.value; saveState(); }
@@ -4713,7 +4747,12 @@ El fan service debe sentirse como anime ecchi, pero nace de la SITUACIÓN: proxi
 La cámara puede usar ángulos sugerentes y timing cómico, pero sigue contando el beat narrativo. Evita inventarios anatómicos, poses de catálogo y cuerpos exagerados que rompen continuidad o empujan el resultado a una ilustración genérica.
 Sin desnudez explícita ni partes íntimas visibles. La identidad japonesa 2D, las proporciones coherentes y la continuidad del personaje tienen prioridad.`
       : '';
-    const episodeInstructions = document.getElementById('episodeInstructions')?.value.trim() || '';
+    // The instructions travel with the draft: after a reload the box comes back
+    // empty, and resuming must use what the saved blocks were written with.
+    const instructionsBox = document.getElementById('episodeInstructions');
+    const savedDraftInstructions = (u.generationDrafts || u.longformDrafts)?.[epNum]?.instructions;
+    if (instructionsBox && !instructionsBox.value.trim() && savedDraftInstructions) instructionsBox.value = savedDraftInstructions;
+    const episodeInstructions = instructionsBox?.value.trim() || '';
 
     const ctx = `Universo: ${u.title}
 Demografía: ${demo}
@@ -4889,6 +4928,10 @@ Responde SOLO JSON válido sin markdown.`;
             asegurarVocesPersonajes();
             saveState();
             renderCharacters();
+            // They exist now. If a later step pauses the episode, pressing
+            // Generar again must resume it, not create them a second time.
+            const nciNow = document.getElementById('newCharsInput');
+            if (nciNow) nciNow.value = '';
 
             // Auto-generate reference images for new characters
             setProg(15, `Generando imágenes de ${newChars.length} personaje(s) nuevo(s)...`);
@@ -4942,7 +4985,7 @@ Responde SOLO JSON válido sin markdown.`;
     let longDraft = u.generationDrafts[epNum];
     if (!longDraft || longDraft.signature !== draftSignature) {
       longDraft = {
-        signature: draftSignature, storyParts: [], sceneChunks: [], visualChunks: [],
+        signature: draftSignature, instructions: episodeInstructionsNow, storyParts: [], sceneChunks: [], visualChunks: [],
         createdAt: Date.now(), updatedAt: Date.now()
       };
       u.generationDrafts[epNum] = longDraft;
@@ -5045,6 +5088,7 @@ Responde SOLO JSON válido sin markdown.`;
     async function generateStoryPart(prompt, minWords, requiredBeat) {
       let lastErr = '';
       let styleFeedback = '';
+      let timeouts = 0;
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const attemptPrompt = prompt + styleFeedback
@@ -5062,12 +5106,19 @@ Responde SOLO JSON válido sin markdown.`;
             }
             if (!problems.length) return story;
             lastErr = 'bloque fuera del motor viral: ' + problems.join('; ');
-            styleFeedback = `\n\nREINTENTO OBLIGATORIO: el bloque anterior fue rechazado porque ${problems.join('; ')}. Mantén LOS MISMOS ACONTECIMIENTOS y continuidad, pero vuelve a escribir DESDE CERO con la cadencia de los guiones de referencia: primera persona cercana, acciones en pasado inmediato, frase típica de 6-10 palabras, más del 80% de frases <=18 palabras, diálogo directo frecuente con raya larga, pensamiento corto y reacción inmediata. Cero párrafos literarios. El hito "${requiredBeat}" debe OCURRIR y después debe CAMBIAR algo observable. Copia 8-30 palabras literales del hito en "viralEvidence" y 8-30 palabras literales de su consecuencia POSTERIOR en "viralConsequence".`;
+            styleFeedback = `\n\nREINTENTO OBLIGATORIO: el bloque anterior fue rechazado porque ${problems.join('; ')}. Mantén LOS MISMOS ACONTECIMIENTOS y continuidad, pero vuelve a escribir DESDE CERO con la cadencia de los guiones de referencia: primera persona cercana, acciones en pasado inmediato, frase típica de 6-10 palabras, más del 80% de frases <=18 palabras, diálogo directo frecuente con raya larga, pensamiento corto y reacción inmediata. Cero párrafos literarios. El hito "${requiredBeat}" debe OCURRIR y después debe CAMBIAR algo observable. Copia 8-30 palabras literales del hito en "viralEvidence" y 8-30 palabras literales de su consecuencia POSTERIOR en "viralConsequence". Sigue escribiendo al menos ${minWords} palabras.`;
           } else {
             lastErr = story ? `demasiado corto (${wc} palabras, mínimo ${minWords})` : 'respuesta vacía o sin campo "story"';
+            // Same request = same short answer. Say exactly how much was missing.
+            styleFeedback = story
+              ? `\n\nREINTENTO OBLIGATORIO: el bloque anterior tenía ${wc} palabras y el MÍNIMO de este bloque es ${minWords}. Escríbelo completo otra vez con AL MENOS ${minWords} palabras: no resumas; desarrolla cada acción, el diálogo directo y las reacciones, sin añadir acontecimientos que no correspondan a este bloque.`
+              : `\n\nREINTENTO OBLIGATORIO: la respuesta anterior no traía el campo "story". Devuelve el JSON pedido con el bloque completo (al menos ${minWords} palabras).`;
           }
         } catch (e) {
           lastErr = e.message;
+          // A block this size normally fits easily; twice over the time limit
+          // means Google is slow right now. Stop instead of paying for more.
+          if (e.timeout && ++timeouts >= 2) break;
         }
         if (attempt < 3) await new Promise(r => setTimeout(r, 1800));
       }
@@ -5133,7 +5184,7 @@ ${soFar}
 ` : ''}
 ESCRIBE AHORA: ${briefs[i]}
 REGLA DE RETENCIÓN: el bloque debe entregar una RECOMPENSA, GIRO o CAMBIO DE ESTATUS reconocible; no basta con "desarrollar personajes". La cercanía a la estructura de las referencias es deliberada.
-Objetivo aproximado de este bloque: ${perPart} palabras.
+Objetivo de este bloque: unas ${perPart} palabras. MÍNIMO OBLIGATORIO: ${minPerPart} palabras (un bloque más corto se rechaza).
 ${i > 0 ? 'Comienza exactamente después de la última acción/decisión previa. No reinicies la premisa.' : ''}
 ${i < briefs.length - 1 ? 'Este bloque NO es el final. Déjalo avanzar hacia el siguiente sin un cliffhanger artificial interno.' : ''}
 
@@ -5196,7 +5247,8 @@ Responde SOLO JSON válido.`;
     }
 
     function splitTextExactly(partText, wanted, startNum) {
-      const sentences = (String(partText).match(/[^.!?…]+[.!?…]+["'»”)]*\s*/g) || [])
+      // A last fragment without final punctuation is still part of the story.
+      const sentences = (String(partText).match(/[^.!?…]+(?:[.!?…]+["'»”)]*|$)\s*/g) || [])
         .map(x => x.trim()).filter(Boolean);
       const chunks = [];
 
@@ -5236,7 +5288,8 @@ Responde SOLO JSON válido.`;
         }
       }
 
-      if (chunks.length !== wanted || chunks.some(x => !x)) {
+      if (chunks.length !== wanted || chunks.some(x => !x)
+          || tokensCronologia(chunks.join(' ')).length !== tokensCronologia(partText).length) {
         throw new Error(`No se pudo segmentar el bloque en ${wanted} escenas completas sin perder texto.`);
       }
 
@@ -5271,20 +5324,29 @@ Responde SOLO JSON válido.`;
 
     async function splitStoryPart(partText, wanted, startNum) {
       const prompt = `BLOQUE A DIVIDIR:\n\n${partText}\n\nDivídelo en EXACTAMENTE ${wanted} escenas consecutivas. No resumas, no repitas y no inventes. Devuelve {"scenes":[${narrationShape},...]} con EXACTAMENTE ${wanted} objetos.`;
+      // The scenes must carry the WHOLE block: the duration guarantee was
+      // checked on the block, and a condensed split would be voiced shorter.
+      const blockWords = tokensCronologia(partText).length;
       let lastErr = null;
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const raw = await callGemini(prompt, splitSysPrompt);
           const arr = safeParseJSON(raw).scenes || [];
           const valid = arr.filter(s => s && String(s.narration || '').trim() && String(s.title || '').trim());
-          if (valid.length === wanted) {
+          const splitWords = tokensCronologia(valid.map(s => s.narration).join(' ')).length;
+          if (valid.length === wanted && Math.abs(splitWords - blockWords) <= Math.max(3, blockWords * 0.03)) {
             return valid.map((s, i) => ({
               ...s, id: `s${startNum + i}`, num: startNum + i,
               interventions: normalizeInterventions(s)
             }));
           }
-          lastErr = new Error(`Google devolvió ${valid.length}/${wanted} escenas`);
-        } catch (e) { lastErr = e; }
+          lastErr = new Error(valid.length === wanted
+            ? `las escenas tienen ${splitWords} palabras y el bloque ${blockWords}`
+            : `Google devolvió ${valid.length}/${wanted} escenas`);
+        } catch (e) {
+          lastErr = e;
+          if (e.timeout) break;   // the exact split below needs no model call for the text
+        }
         if (attempt < 3) await new Promise(r => setTimeout(r, 1800));
       }
 
@@ -5493,67 +5555,71 @@ Responde SOLO JSON válido sin markdown`;
       }
       return -1;
     }
+    // Both validators return WHY a plan was rejected ('' = valid). The reason goes
+    // back to the model on the retry instead of resending the same request.
     function validarAnclasNarrativas(scene, plan) {
       const prompts = (plan?.prompts || []).filter(Boolean);
       const anclas = (plan?.anclasNarrativas || []).slice(0, prompts.length);
-      if (!prompts.length || anclas.length !== prompts.length) return false;
+      if (!prompts.length) return 'no trae prompts';
+      if (anclas.length !== prompts.length) return `"anclasNarrativas" debe tener ${prompts.length} elementos, uno por plano`;
       const narr = tokensCronologia(scene?.narration);
-      if (!narr.length) return false;
+      if (!narr.length) return 'la escena no tiene narración';
       const pos = [];
       let desde = 0;
+      // 4-14 consecutive words copied from the narration: enough to prove
+      // chronology without turning the anchor into another prompt. A scene of
+      // fewer than 4 words is anchored with all of it.
+      const minTok = Math.min(4, narr.length);
       for (const a of anclas) {
         const tok = tokensCronologia(a);
-        // 4-14 consecutive words copied from the narration: enough to prove
-        // chronology without turning the anchor into another prompt.
-        if (tok.length < 4 || tok.length > 14) return false;
+        if (tok.length < minTok || tok.length > 14) return `cada ancla debe copiar entre ${minTok} y 14 palabras seguidas de la narración ("${String(a).slice(0, 60)}")`;
         const p = buscarSecuencia(narr, tok, desde);
-        if (p < 0) return false;
+        if (p < 0) return `el ancla "${String(a).slice(0, 60)}" no aparece literalmente y en orden en la narración`;
         pos.push(p);
         desde = p + tok.length;
       }
       if (prompts.length >= 2) {
         // Shot 1 must genuinely cover the beginning, not jump to a later state.
-        if (pos[0] > narr.length * 0.38) return false;
+        if (pos[0] > narr.length * 0.38) return 'el plano 1 no cubre el inicio de la narración';
         // The last shot must reach the later half of the scene rather than
         // spending every composition on the same opening beat.
-        if (pos[pos.length - 1] < narr.length * 0.45) return false;
+        if (pos[pos.length - 1] < narr.length * 0.45) return 'el último plano no llega a la segunda mitad de la narración';
       }
-      return true;
+      return '';
     }
 
     function validarPuestaEnEscena(scene, plan) {
       const prompts = (plan?.prompts || []).filter(Boolean);
       const n = prompts.length;
-      if (!n) return false;
-      if (String(plan?.layoutEscena || '').trim().length < 40) return false;
-      if (String(plan?.estadoEscenaInicial || '').trim().length < 20) return false;
+      if (!n) return 'no trae prompts';
+      if (String(plan?.layoutEscena || '').trim().length < 40) return '"layoutEscena" falta o es demasiado breve';
+      if (String(plan?.estadoEscenaInicial || '').trim().length < 20) return '"estadoEscenaInicial" falta o es demasiado breve';
 
       const funciones = (plan?.funciones || []).slice(0, n);
       const visibles = (plan?.personajesVisibles || []).slice(0, n);
       const cambios = (plan?.cambios || []).slice(0, n);
       const estados = (plan?.estadosDespues || []).slice(0, n);
-      if ([funciones, visibles, cambios, estados].some(a => a.length !== n)) return false;
+      if ([funciones, visibles, cambios, estados].some(a => a.length !== n)) return `"funciones", "personajesVisibles", "cambios" y "estadosDespues" deben tener ${n} elementos`;
 
       const permitidas = new Set(['establishing','interaction','action','speaker','reaction','insert','consequence']);
-      if (funciones.some(f => !permitidas.has(String(f || '').toLowerCase()))) return false;
-      if (visibles.some(v => !Array.isArray(v) || v.length > 3)) return false;
-      if (cambios.some(x => String(x || '').trim().length < 8)) return false;
-      if (estados.some(x => String(x || '').trim().length < 20)) return false;
+      if (funciones.some(f => !permitidas.has(String(f || '').toLowerCase()))) return '"funciones" sólo admite establishing, interaction, action, speaker, reaction, insert o consequence';
+      if (visibles.some(v => !Array.isArray(v) || v.length > 3)) return 'cada "personajesVisibles" es una lista de hasta 3 nombres';
+      if (cambios.some(x => String(x || '').trim().length < 8)) return 'cada "cambios" debe describir un cambio visible';
+      if (estados.some(x => String(x || '').trim().length < 20)) return 'cada "estadosDespues" debe describir el estado acumulado';
 
       if (n > 1 && new Set(funciones.map(f => String(f).toLowerCase())).size === 1
-          && ['speaker','reaction'].includes(String(funciones[0]).toLowerCase())) return false;
+          && ['speaker','reaction'].includes(String(funciones[0]).toLowerCase())) return 'todos los planos repiten la misma función de diálogo/reacción';
 
-      const narr = String(scene?.narration || '').toLowerCase();
-      const mentioned = (state.characters || []).filter(ch => {
-        const parts = String(ch.name || '').toLowerCase().split(/\s+/).filter(p => p.length >= 3);
-        return parts.some(p => narr.includes(p));
-      });
+      // Names are matched as whole words: "Ren" is not in "frente", nor "Ana" in "ventana".
+      const narr = new Set(tokensCronologia(scene?.narration));
+      const mentioned = (state.characters || []).filter(ch =>
+        tokensCronologia(ch.name).filter(part => part.length >= 3).some(part => narr.has(part)));
       if (mentioned.length >= 2) {
         const shared = visibles.some(v => v.length >= 2)
           || funciones.some(f => ['establishing','interaction'].includes(String(f).toLowerCase()));
-        if (!shared) return false;
+        if (!shared) return `en la escena aparecen ${mentioned.map(ch => ch.name).join(' y ')}: algún plano debe mostrarlos juntos (establishing o interaction)`;
       }
-      return true;
+      return '';
     }
 
     // Shot prompts + the motion of each shot, onto the scene.
@@ -5611,11 +5677,26 @@ Responde SOLO JSON válido sin markdown`;
       };
     }
 
-    async function generateImagePromptsBatch(scenesForPrompt, prevContext = '') {
+    // Every plan that passes is saved in the draft right away, keyed by scene
+    // number and tied to that exact narration, so a retry or a new press of
+    // "Generar Episodio" only asks for the scenes that are still missing.
+    if (!longDraft.visualAccepted || typeof longDraft.visualAccepted !== 'object') longDraft.visualAccepted = {};
+    const huellaTexto = t => { let h = 5381; for (const c of String(t || '')) h = ((h * 33) ^ c.codePointAt(0)) >>> 0; return h.toString(36); };
+    const planAceptado = s => {
+      const saved = longDraft.visualAccepted[s.num];
+      return saved && saved.huella === huellaTexto(s.narration) ? saved.plan : null;
+    };
+    function aceptarPlan(s, plan) {
+      longDraft.visualAccepted[s.num] = { huella: huellaTexto(s.narration), plan };
+      longDraft.updatedAt = Date.now();
+      saveState();
+    }
+
+    function promptDireccion(scenesForPrompt, prevContext) {
       const scenesText = scenesForPrompt.map(s =>
         `Escena ${s.num} [${s.act}] "${s.title}" — MÍNIMO ${minPlanosPorTexto(s.narration)} plano(s): ${s.narration}`
       ).join('\n\n');
-      const prompt = `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales. El texto ya te indica el MÍNIMO permitido por su duración estimada. Genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":3,"continuarAnterior":false,"layoutEscena":"physical blocking in English","estadoEscenaInicial":"cumulative physical state before shot 1","anclasNarrativas":["4-14 palabras consecutivas COPIADAS de la narración para el plano 1","...plano 2","...plano 3"],"funciones":["establishing","interaction","reaction"],"personajesVisibles":[["Nombre A","Nombre B"],["Nombre A","Nombre B"],["Nombre C"]],"cambios":["visible change during shot 1","visible change during shot 2","visible change during shot 3"],"estadosDespues":["cumulative state after shot 1","cumulative state after shot 2","cumulative state after shot 3"],"prompts":["Scene with...","Scene with...","Scene with..."],"tamanos":["general","medio","cerca"],"pesos":[2,2,1],"videoRecomendado":[false,false,false],"movimientos":["...","...","..."],"continuos":[false,false,false]},...]} con EXACTAMENTE ${scenesForPrompt.length} objetos. Todos los arrays por plano llevan EXACTAMENTE la cantidad de planos elegida.
+      return `PERSONAJES (referencia visual):\n${charRef}\n\n${scenarioListText}\n${prevContext ? `\nCONTEXTO DE LA ESCENA ANTERIOR — sirve para recordar estado, ropa y lugar; NO significa continuidad física automática:\n${prevContext}\n` : ''}\nESCENAS YA ESCRITAS — para cada escena decide 1, 2 o 3 planos según sus beats visuales reales. El texto ya te indica el MÍNIMO permitido por su duración estimada. Genera el campo "escenario" + esos prompts:\n\n${scenesText}\n\nDevuelve SOLO: {"imagePrompts":[{"num":1,"escenario":"loc1","planos":3,"continuarAnterior":false,"layoutEscena":"physical blocking in English","estadoEscenaInicial":"cumulative physical state before shot 1","anclasNarrativas":["4-14 palabras consecutivas COPIADAS de la narración para el plano 1","...plano 2","...plano 3"],"funciones":["establishing","interaction","reaction"],"personajesVisibles":[["Nombre A","Nombre B"],["Nombre A","Nombre B"],["Nombre C"]],"cambios":["visible change during shot 1","visible change during shot 2","visible change during shot 3"],"estadosDespues":["cumulative state after shot 1","cumulative state after shot 2","cumulative state after shot 3"],"prompts":["Scene with...","Scene with...","Scene with..."],"tamanos":["general","medio","cerca"],"pesos":[2,2,1],"videoRecomendado":[false,false,false],"movimientos":["...","...","..."],"continuos":[false,false,false]},...]} con EXACTAMENTE ${scenesForPrompt.length} objetos. Todos los arrays por plano llevan EXACTAMENTE la cantidad de planos elegida.
 
 ⚠️ "anclasNarrativas": para CADA plano copia literalmente 4-14 PALABRAS CONSECUTIVAS de la narración que ese plano ilustra. Deben aparecer EN ORDEN y sin solaparse. Es una prueba mecánica de cronología: plano 1 usa palabras del inicio real; el último llega a la mitad/final real. Si el personaje cae al suelo más tarde, el plano 1 NO puede mostrarlo en el suelo.
 ⚠️ "layoutEscena", "estadoEscenaInicial", "cambios" y "estadosDespues" son el contrato físico. Los prompts DEBEN obedecerlos. Un corte cambia la cámara, no la realidad. "personajesVisibles" usa sólo nombres exactos del reparto y NO significa que los demás abandonaron el lugar.
@@ -5623,52 +5704,67 @@ Responde SOLO JSON válido sin markdown`;
 ⚠️ "tamanos": general | medio | cerca | escorzo | detalle. Elige el tamaño por FUNCIÓN DRAMÁTICA.
 ⚠️ "pesos": enteros 1–5 y representan DURACIÓN RELATIVA EN PANTALLA, no calidad. 1 = insert/reacción muy corta; 2–3 = frase o beat normal; 4–5 = beat dominante. Úsalos para que el corte visual caiga donde cambia la frase/acción, no en tercios matemáticos.
 "videoRecomendado" es true SÓLO cuando el movimiento temporal necesita Veo; false cuando una ilustración con montaje de cámara es suficiente. Esto es una recomendación del director, no un bloqueo: el usuario puede animar cualquier plano manualmente. Sólo cuando "continuos" sea true, dos fotogramas deben describir estados físicamente compatibles para una interpolación corta.`;
+    }
 
-      const accumulated = new Map();
-      let lastErr = null;
-      for (let attempt = 0; attempt < 4; attempt++) {
+    async function generateImagePromptsBatch(scenesForPrompt, prevContext = '') {
+      const missing = () => scenesForPrompt.filter(s => !planAceptado(s));
+      // Context for a subset: the scene right before it, if its plan exists.
+      const contextoAntes = first => {
+        const prev = scenesForPrompt[scenesForPrompt.indexOf(first) - 1];
+        const plan = prev && planAceptado(prev);
+        if (!plan) return prevContext;
+        const p = aplicarPlanos(prev, plan);
+        return `Escena ${p.num}: ${p.narration}\nEstado visual final: ${p.imagePromptC || p.imagePromptB || p.imagePromptA || ''}`;
+      };
+      let lastErr = null, feedback = '', fallback = null;
+      for (let attempt = 0; attempt < 4 && missing().length; attempt++) {
+        const asked = missing();
         try {
-          const raw = await callGemini(prompt, imageSysPrompt);
+          const raw = await callGemini(promptDireccion(asked, contextoAntes(asked[0])) + feedback, imageSysPrompt);
           const arr = safeParseJSON(raw).imagePrompts || [];
+          const rejected = [];
           for (const p of arr) {
-            const scene = scenesForPrompt.find(s => Number(s.num) === Number(p?.num));
-            const min = scene ? minPlanosPorTexto(scene.narration) : 1;
-            if (p && p.num && Array.isArray(p.prompts)
-                && p.prompts.filter(Boolean).length >= min
-                && validarAnclasNarrativas(scene, p)
-                && validarPuestaEnEscena(scene, p)) {
-              accumulated.set(Number(p.num), p);
-            } else if (scene && p?.num) {
-              console.warn(`Dirección visual rechazada en escena ${scene.num}: cronología o puesta en escena física inválida`);
-            }
+            const scene = asked.find(s => Number(s.num) === Number(p?.num));
+            if (!scene || planAceptado(scene)) continue;
+            const min = minPlanosPorTexto(scene.narration);
+            const problema = !Array.isArray(p.prompts) || p.prompts.filter(Boolean).length < min
+              ? `necesita al menos ${min} plano(s)`
+              : (validarAnclasNarrativas(scene, p) || validarPuestaEnEscena(scene, p));
+            if (!problema) { aceptarPlan(scene, p); continue; }
+            rejected.push(`- Escena ${scene.num}: ${problema}`);
+            console.warn(`Dirección visual rechazada en escena ${scene.num}: ${problema}`);
+            // A complete plan that only failed a heuristic check is kept as the
+            // last resort for a scene that keeps failing on its own.
+            if (asked.length === 1 && !/plano\(s\)|no trae prompts/.test(problema)) fallback = p;
           }
-          if (scenesForPrompt.every(s => accumulated.has(Number(s.num)))) {
-            return scenesForPrompt.map(s => aplicarPlanos(s, accumulated.get(Number(s.num))));
-          }
-          lastErr = new Error(`Dirección visual incompleta: ${accumulated.size}/${scenesForPrompt.length}`);
-          console.warn(`Dirección visual intento ${attempt+1}: ${accumulated.size}/${scenesForPrompt.length}`);
+          if (!missing().length) break;
+          const absent = missing().filter(s => !arr.some(p => Number(p?.num) === Number(s.num))).map(s => s.num);
+          if (absent.length) rejected.push(`- Faltaron las escenas ${absent.join(', ')}`);
+          lastErr = new Error(`Dirección visual incompleta: ${scenesForPrompt.length - missing().length}/${scenesForPrompt.length}`);
+          feedback = `\n\nREINTENTO: la comprobación automática rechazó lo siguiente. Devuelve SÓLO las escenas pedidas arriba y corrige exactamente esto:\n${rejected.join('\n')}`;
         } catch(e) {
           lastErr = e;
           console.error(`Dirección visual intento ${attempt+1}:`, e.message);
+          // Too slow for the time limit: ask for fewer scenes instead of
+          // sending the same request again.
+          if (e.timeout && asked.length > 1) break;
         }
-        if (attempt < 3) await new Promise(r => setTimeout(r, 1800));
+        if (attempt < 3 && missing().length) await new Promise(r => setTimeout(r, 1800));
       }
 
-      // Output truncation is different from a creative failure. If a five-scene
-      // response stays partial, automatically shrink the request instead of
-      // committing blanks and exposing a Repair button.
-      if (scenesForPrompt.length > 1) {
-        const mid = Math.ceil(scenesForPrompt.length / 2);
-        const left = await generateImagePromptsBatch(scenesForPrompt.slice(0, mid), prevContext);
-        const leftLast = left[left.length - 1];
-        const rightContext = leftLast
-          ? `Escena ${leftLast.num}: ${leftLast.narration}\nEstado visual final: ${leftLast.imagePromptC || leftLast.imagePromptB || leftLast.imagePromptA || ''}`
-          : prevContext;
-        const right = await generateImagePromptsBatch(scenesForPrompt.slice(mid), rightContext);
-        return [...left, ...right];
+      const left = missing();
+      if (left.length > 1) {
+        // Smaller requests answer faster and fail less: only the missing scenes, in halves.
+        const mid = Math.ceil(left.length / 2);
+        await generateImagePromptsBatch(left.slice(0, mid), contextoAntes(left[0]));
+        await generateImagePromptsBatch(left.slice(mid), contextoAntes(left[mid]));
+      } else if (left.length === 1 && fallback) {
+        console.warn(`Escena ${left[0].num}: se usa el último plan completo aunque no pasó la comprobación automática.`);
+        aceptarPlan(left[0], fallback);
+      } else if (left.length === 1) {
+        throw new Error(`Google no completó la dirección visual de la escena ${left[0].num}. Las escenas ya dirigidas quedan guardadas y se reanudará en esta misma escena. ${lastErr?.message || ''}`);
       }
-
-      throw new Error(`Google no completó la dirección visual de la escena ${scenesForPrompt[0]?.num || '?'}. La generación queda pausada y reanudará esta misma escena. ${lastErr?.message || ''}`);
+      return scenesForPrompt.map(s => aplicarPlanos(s, planAceptado(s)));
     }
 
     // Visual direction is generated in chunks of 5 scenes. Each scene may
@@ -5694,6 +5790,7 @@ Responde SOLO JSON válido sin markdown`;
           const { correcciones } = await revisarPlanos(done);
           if (correcciones.length) console.log('Puesta en escena corregida:', aplicarCorrecciones(done, correcciones).motivos);
           longDraft.visualChunks[chunkIndex] = { version: 2, nums: expectedNums, scenes: done };
+          for (const sc of chunk) delete longDraft.visualAccepted[sc.num];
           longDraft.updatedAt = Date.now();
           saveState();
         }
@@ -5996,6 +6093,7 @@ async function extractScenariosFromStory(storyText) {
     try { raw = await callGemini(prompt, sys); break; }
     catch(err) {
       lastErr = err;
+      if (err.timeout) break;
       const isRL = /429|exhaust|quota|rate/i.test(err.message || '');
       if (attempt < 3) {
         const w = isRL ? [20, 45, 75][attempt] : 4;
@@ -6003,6 +6101,15 @@ async function extractScenariosFromStory(storyText) {
         await new Promise(r => setTimeout(r, w * 1000));
       }
     }
+  }
+  if (raw == null && lastErr?.timeout && storyText.length > 6000) {
+    // A long story does not fit in one 60 s call: read it in two halves. The
+    // second half sees the places the first one added, so nothing duplicates.
+    const middle = storyText.indexOf('\n', Math.floor(storyText.length / 2));
+    const cut = middle > 0 ? middle : Math.floor(storyText.length / 2);
+    const first = await extractScenariosFromStory(storyText.slice(0, cut));
+    const second = await extractScenariosFromStory(storyText.slice(cut));
+    return first || second;
   }
   if (raw == null) {
     console.warn('Extracción de escenarios falló tras 4 intentos:', lastErr?.message);
@@ -6061,6 +6168,7 @@ async function assignScenariosToScenes() {
   for (let attempt = 0; attempt < 4; attempt++) {
     try { raw = await callGemini(prompt, sys); break; }
     catch(err) {
+      if (err.timeout) break;   // not blocking; the same request would time out again
       const isRL = /429|exhaust|quota|rate/i.test(err.message || '');
       if (attempt < 3) await new Promise(r => setTimeout(r, (isRL ? [20,45,75][attempt] : 4) * 1000));
     }
@@ -6162,6 +6270,7 @@ async function revisarPlanos(scenesSubset) {
       const parsed = safeParseJSON(await callGemini(prompt, SUPERVISOR_SYS));
       return { ok: true, correcciones: Array.isArray(parsed.correcciones) ? parsed.correcciones : [] };
     } catch(e) {
+      if (e.timeout) break;   // the same five shots would time out again
       const isRL = /429|exhaust|quota|rate/i.test(e.message || '');
       if (intento < 3) await new Promise(r => setTimeout(r, (isRL ? [20, 45, 75][intento] : 4) * 1000));
     }

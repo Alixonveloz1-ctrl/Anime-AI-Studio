@@ -5,6 +5,13 @@ const old=f=>execFileSync('git',['show',`${base}:${f}`],{encoding:'utf8'});
 // generation and montage bodies must remain identical. Storage adds only the
 // separately tested recovery actions and immutable backup-before-save hook. U006 also
 // permits one counts-only log at the successful project read boundary.
+// Generation APIs with deliberate, tested fixes: only these statements may differ.
+const FIXED_API={
+ // 50 s deadline answered as JSON {timeout:true}; Vertex status and
+ // retryability travel with the error (tests/animes/script-api.test.cjs).
+ 'script.js':[/^const DEADLINE_MS = /,/^async function callModel\(/,/^module\.exports = async function handler\(/],
+};
+const minus=(a,b)=>{const left=new Map();for(const u of b)left.set(u,(left.get(u)||0)+1);return a.filter(u=>{const k=left.get(u)||0;if(k){left.set(u,k-1);return false;}return true;});};
 for(const name of fs.readdirSync('api').filter(x=>x.endsWith('.js')&&x!=='shorts.js')){
  const source=fs.readFileSync('api/'+name,'utf8');
  assert.ok(source.includes('if (await begin(req, res'),`Missing access boundary: ${name}`);
@@ -12,7 +19,10 @@ for(const name of fs.readdirSync('api').filter(x=>x.endsWith('.js')&&x!=='shorts
  // api/_lib/project-store.js and project-recovery.js, tested in tests/recovery.
  const normalized=source.replace(/      \/\/ Project manifests: listing, reading and conditional saves[\s\S]*?(?=      if \(action === 'projectDelete'\))/, '').replace('if (await begin(req, res','if (begin(req, res').replace("  if (await require('./_lib/access').handleSession(req, res)) return;\n",'');
  const previous=old('api/'+name).replace(/      if \(action === 'projectList'\) \{[\s\S]*?(?=      if \(action === 'projectDelete'\))/, '');
- assert.equal(normalized,previous,`Legacy API body changed: ${name}`);
+ if(FIXED_API[name]){
+  const changed=[...minus(topLevelUnits(previous),topLevelUnits(normalized)),...minus(topLevelUnits(normalized),topLevelUnits(previous))].map(u=>u.split('\n')[0]);
+  assert.deepEqual([...new Set(changed.filter(head=>!FIXED_API[name].some(pattern=>pattern.test(head))))],[],`Legacy API body changed outside the listed fixes: ${name}`);
+ }else assert.equal(normalized,previous,`Legacy API body changed: ${name}`);
 }
 const helper=fs.readFileSync('api/_lib/gcp.js','utf8'),oldHelper=old('api/_lib/gcp.js');
 assert.equal(helper.split('const CORS =')[0],oldHelper.split('const CORS =')[0],'Google/model/storage helpers changed');
@@ -73,6 +83,14 @@ const FIXED=[
  [/^document\.getElementById\('(btnGenerarUniverso|btnGenerarEpisodio|btnNextEpisode)'\)\.addEventListener\('click'/,'generation guard'],
  // The image batch always releases its lock (tests/shorts/ui/animes-sync.test.mjs).
  [/^document\.getElementById\('btnAllImages'\)\.addEventListener\('click'/,'image batch lock'],
+ // Text generation: a request over the time limit is made smaller instead of
+ // resent unchanged, real Vertex blips are retried, long stories are read in
+ // halves (tests/shorts/ui/animes-story.test.mjs, tests/animes/script-api.test.cjs).
+ // The episode handler itself (story blocks, split, visual direction, new
+ // characters, instructions) is listed above under the generation guard.
+ [/^async function (callGeminiOnce|callGemini|extractScenariosFromStory|assignScenariosToScenes|revisarPlanos)\(/,'text generation limits'],
+ // The length selector shows the format fixed by episode 1 (animes-story.test.mjs).
+ [/^function updateEpFormatNote\(\) \{/,'episode format lock'],
  // Episode tabs and the generate buttons are repainted with every render, so
  // they always describe the open project (tests/shorts/ui/animes-sync.test.mjs).
  [/^function updateEpisodeNav\(\) \{/,'episode navigation'],
@@ -81,7 +99,6 @@ const FIXED=[
 {
  const units=source=>scripts(source).flatMap(topLevelUnits);
  const now=units(current),before=units(original);
- const minus=(a,b)=>{const left=new Map();for(const u of b)left.set(u,(left.get(u)||0)+1);return a.filter(u=>{const k=left.get(u)||0;if(k){left.set(u,k-1);return false;}return true;});};
  const changed=[...minus(before,now),...minus(now,before)].map(u=>u.split('\n')[0]);
  const unexplained=[...new Set(changed.filter(head=>!FIXED.some(([pattern])=>pattern.test(head))))];
  assert.deepEqual(unexplained,[],'Animes logic changed outside the listed, tested fixes');
