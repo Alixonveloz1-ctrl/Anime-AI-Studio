@@ -1758,6 +1758,7 @@ function updateEpisodeNav() {
 
 window.switchEpisode = function(ep) {
   if (!state.episodes[ep]) return;
+  if (ep !== state.currentEpisode && bloqueadoPorTrabajo('cambiar de episodio')) return;
   state.currentEpisode = ep;
   state.scenes = state.episodes[ep];
   saveState();
@@ -2010,6 +2011,7 @@ async function pruneDeviceCacheExcept(projectId) {
 }
 
 async function newProject() {
+  if (bloqueadoPorTrabajo('crear otro proyecto')) return false;
   const pid = 'p' + Date.now();
   const now = Date.now();
   projects.unshift({ id: pid, name: 'Nuevo proyecto', created:now, updated:now });
@@ -2025,6 +2027,7 @@ async function newProject() {
 }
 
 async function switchProject(pid) {
+  if (pid !== state.projectId && bloqueadoPorTrabajo('abrir otro proyecto')) return;
   try {
     showToast('Abriendo el proyecto…');
     const fromCloud = await loadStateFor(pid);
@@ -2043,6 +2046,9 @@ async function switchProject(pid) {
 }
 
 async function deleteProject(pid) {
+  // Borrar el proyecto abierto obliga a abrir otro, y eso no puede pasar con
+  // material del abierto todavía en camino.
+  if (pid === state.projectId && bloqueadoPorTrabajo('borrar el proyecto abierto')) return;
   if (!confirm('¿Eliminar este proyecto de Google Cloud y de todos tus dispositivos?')) return;
   try {
     const r = await fetch('/api/upload-url', {
@@ -2609,6 +2615,48 @@ function empezarTanda() {
   return true;
 }
 function terminarTanda() { tanda.enCurso = false; tanda.detener = false; }
+
+// ─── El proyecto abierto no se cambia mientras algo escribe en él ───
+// Cada flujo de generación vuelve a leer state.projectId y el episodio activo
+// después de cada espera para construir las claves de sus archivos. Si en medio
+// se abre otro anime u otro episodio, la imagen o la voz que estaba en camino se
+// guarda en el proyecto equivocado y pisa sus archivos en Google Cloud. Por eso
+// cambiar de proyecto o de episodio se bloquea mientras haya trabajo en curso.
+const ocupaciones = new Map();
+let ocupacionSeq = 0;
+function ocuparProyecto(etiqueta) {
+  const id = ++ocupacionSeq;
+  ocupaciones.set(id, etiqueta);
+  return () => { ocupaciones.delete(id); };
+}
+
+// Red de seguridad para lo que no esté marcado a mano: cualquier petición de
+// generación en vuelo cuenta como trabajo en curso.
+let peticionesDeGeneracion = 0;
+const RUTAS_DE_GENERACION = /\/api\/(?:image|audio|video-start|video-status|music|script|transcribe|assemble)(?:[/?]|$)/;
+const fetchSinVigilar = window.fetch.bind(window);
+window.fetch = function(input, init) {
+  const url = typeof input === 'string' ? input : (input && input.url) || '';
+  if (!RUTAS_DE_GENERACION.test(url)) return fetchSinVigilar(input, init);
+  peticionesDeGeneracion++;
+  return fetchSinVigilar(input, init).finally(() => { peticionesDeGeneracion--; });
+};
+
+function trabajoEnCurso() {
+  if (tanda.enCurso) return 'la tanda de generación en marcha';
+  for (const etiqueta of ocupaciones.values()) return etiqueta;
+  if (peticionesDeGeneracion > 0) return 'la generación en curso';
+  return '';
+}
+
+// true = hay que NO seguir. Avisa de qué está ocupando el proyecto.
+function bloqueadoPorTrabajo(accion) {
+  const t = trabajoEnCurso();
+  if (!t) return false;
+  showToast(`Espera a que termine ${t} antes de ${accion}${tanda.enCurso ? ' (o pulsa ⏹️ Detener)' : ''}.`, 'error');
+  return true;
+}
+
 document.addEventListener('click', (e) => {
   if (e.target?.id !== 'btnDetenerTanda') return;
   tanda.detener = true;
@@ -3851,6 +3899,11 @@ function getEnvSuffix(s) {
 // UNIVERSE GENERATOR (auto)
 // ════════════════════════════════════════════════════════════════
 document.getElementById('btnGenerarUniverso').addEventListener('click', async () => {
+  // Rehace el reparto y el universo del proyecto abierto: nada puede estar
+  // escribiendo imágenes o voces de ese reparto mientras tanto.
+  if (bloqueadoPorTrabajo('generar otro universo')) return;
+  const soltarProyecto = ocuparProyecto('la generación del universo');
+  try {
   const btn = document.getElementById('btnGenerarUniverso');
   const demo = document.getElementById('demoSelect').value;
   const genero = document.getElementById('generoSelect').value;
@@ -3988,6 +4041,9 @@ Devuelve JSON:
   } finally {
     btn.disabled = false;
     btn.innerHTML = '🌌 Generar Universo';
+  }
+  } finally {
+    soltarProyecto();
   }
 });
 
@@ -4189,6 +4245,11 @@ function renderUniverse() {
 // ════════════════════════════════════════════════════════════════
 document.getElementById('btnGenerarEpisodio').addEventListener('click', async () => {
   if (!state.universe) { showToast('Crea un universo primero', 'error'); return; }
+  // Reescribe y borra el material del episodio: no puede arrancar encima de una
+  // tanda que está escribiendo imágenes o voces de ese mismo episodio.
+  if (bloqueadoPorTrabajo('generar el episodio')) return;
+  const soltarProyecto = ocuparProyecto('la generación del episodio');
+  try {
   const epNum = state.currentEpisode || 1;   // ← define early, used throughout
 
   // Old material is kept until the NEW story is completely ready. The warning
@@ -5506,6 +5567,9 @@ Responde SOLO JSON válido sin markdown`;
     progress.style.display = 'none';
   } finally {
     btn.disabled = false;
+  }
+  } finally {
+    soltarProyecto();
   }
 });
 
@@ -7333,6 +7397,7 @@ document.getElementById('btnAllAudio').addEventListener('click', async () => {
 // ════════════════════════════════════════════════════════════════
 document.getElementById('btnNextEpisode').addEventListener('click', async () => {
   if (!state.universe) { showToast('No hay universo activo', 'error'); return; }
+  if (bloqueadoPorTrabajo('empezar otro episodio')) return;
   const nextEp = (state.currentEpisode || 1) + 1;
   const confirmed = confirm(`¿Generar Episodio ${nextEp}?\nEl Episodio ${nextEp} continuará la historia del Episodio ${state.currentEpisode}.`);
   if (!confirmed) return;
@@ -8874,6 +8939,27 @@ function renderAll() {
 // ════════════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════════════
+// Las generaciones sueltas (una imagen, una voz, un clip…) también ocupan el
+// proyecto mientras duran. Se envuelven aquí, una vez definidas todas: las
+// llamadas internas por nombre resuelven a la versión envuelta.
+for (const [clave, etiqueta] of Object.entries({
+  generateSceneImageAB: 'una imagen',
+  generateSceneImage: 'las imágenes de una escena',
+  generateSceneAudio: 'una narración',
+  generateSceneVideo: 'un clip de video',
+  generateSceneVideos: 'los clips de una escena',
+  generateCharImage: 'la ficha de un personaje',
+  generateUniverseScenarios: 'los escenarios',
+  regenerateBible: 'la biblia de la serie',
+})) {
+  const original = window[clave];
+  if (typeof original !== 'function') continue;
+  window[clave] = async function(...args) {
+    const soltar = ocuparProyecto(etiqueta);
+    try { return await original.apply(this, args); } finally { soltar(); }
+  };
+}
+
 (async function init() {
   await window.studioAccessReady;
   await initDB();
