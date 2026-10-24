@@ -11,21 +11,37 @@ from shorts.service.cloud import Cloud
 from shorts.service.app import app
 
 class Snapshot:
-    def __init__(self,data):self.data=copy.deepcopy(data);self.exists=data is not None
+    def __init__(self,data,key=''):self.data=copy.deepcopy(data);self.exists=data is not None;self.id=key.rsplit('/',1)[-1]
     def to_dict(self):return copy.deepcopy(self.data)
+class Collection:
+    """Documents under one path. Keys are 'collection/doc[/collection/doc...]'."""
+    def __init__(self,db,prefix):self.db,self.prefix=db,prefix
+    def document(self,key):return Ref(self.db,self.prefix+'/'+key)
+    def stream(self):
+        return [Snapshot(value,key) for key,value in sorted(self.db.data.items())
+                if key.startswith(self.prefix+'/') and '/' not in key[len(self.prefix)+1:]]
+    def where(self,**kwargs):return self
+    def limit(self,count):return self
 class Ref:
     def __init__(self,db,key):self.db,self.key=db,key
+    @property
+    def id(self):return self.key.rsplit('/',1)[-1]
+    def collection(self,name):return Collection(self.db,self.key+'/'+name)
     def get(self,transaction=None):
         if transaction and transaction.written:raise AssertionError('Firestore read after write')
-        return Snapshot(self.db.data.get(self.key))
-    def update(self,values):self.db.data[self.key].update(copy.deepcopy(values))
+        return Snapshot(self.db.data.get(self.key),self.key)
+    def set(self,values):self.db.data[self.key]=copy.deepcopy(values)
+    def create(self,values):
+        assert self.key not in self.db.data,'create over an existing document'
+        self.db.data[self.key]=copy.deepcopy(values)
+    def update(self,values):self.db.data.setdefault(self.key,{}).update(copy.deepcopy(values))
 class Tx:
     def __init__(self,db):self.db=db;self.written=False
     def set(self,ref,values):self.written=True;self.db.data[ref.key]=copy.deepcopy(values)
     def update(self,ref,values):self.written=True;ref.update(values)
 class DB:
     def __init__(self,data):self.data=copy.deepcopy(data)
-    def collection(self,name):return Mock(document=lambda key:Ref(self,name+'/'+key))
+    def collection(self,name):return Collection(self,name)
     def transaction(self):return Tx(self)
 
 class DispatchRecoveryTests(unittest.TestCase):
