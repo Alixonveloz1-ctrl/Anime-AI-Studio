@@ -96,6 +96,11 @@ const FIXED=[
  // /api/image answers are read safely and rescue continuations are followed
  // (tests/shorts/ui/animes-media.test.mjs).
  [/^async function (pedirImagenAlServidor|generateImage|generateImageRaw)\(/,'image requests'],
+ // Cast-mode voices: the quota wait is per line and finished lines are kept,
+ // so a pause never pays again for the lines already made; one-word lines are
+ // voiced (tests/shorts/ui/animes-media.test.mjs).
+ [/^(async function (generateAudio|generarAudioDeEscena)\(|const lineasDeVozHechas = |window\.generateSceneAudio = )/,'cast voices'],
+ [/^document\.getElementById\('btnAllAudio'\)\.addEventListener\('click'/,'cast voices'],
  // The length selector shows the format fixed by episode 1 (animes-story.test.mjs).
  [/^function updateEpFormatNote\(\) \{/,'episode format lock'],
  // Episode tabs and the generate buttons are repainted with every render, so

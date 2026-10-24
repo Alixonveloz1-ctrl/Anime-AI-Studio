@@ -39,8 +39,8 @@ function fixtureDB(entries={}) {
 // (failure) or a promise (delay) before the normal conditional write.
 // scriptAnswer({system, prompt, body}) answers /api/script with a string (the
 // model text) or a Response; imageAnswer(body, n) answers /api/image. fastTimers shortens waits of 1 s or more.
-export async function openAnimes(t, {cloud, local={}, idb={}, hooks={}, unreadable=[], confirm=()=>true, signInDelay=0, scriptAnswer=null, imageAnswer=null, fastTimers=false}={}) {
-  const saves = [], errors = [], asked = [], scriptCalls = [], imageCalls = [];
+export async function openAnimes(t, {cloud, local={}, idb={}, hooks={}, unreadable=[], confirm=()=>true, signInDelay=0, scriptAnswer=null, imageAnswer=null, audioAnswer=null, fastTimers=false}={}) {
+  const saves = [], errors = [], asked = [], scriptCalls = [], imageCalls = [], audioCalls = [];
   const virtualConsole = new VirtualConsole(); virtualConsole.on('jsdomError', e=>errors.push(e));
   const dom = new JSDOM(html, {url:'https://fixture.invalid/', runScripts:'outside-only', virtualConsole});
   t.after(()=>dom.window.close());
@@ -63,6 +63,7 @@ export async function openAnimes(t, {cloud, local={}, idb={}, hooks={}, unreadab
         imageCalls.push(body);
         return imageAnswer ? imageAnswer(body, imageCalls.length) : json({error:'Imagen no disponible en la prueba'}, 400);
       }
+      if (url==='/api/audio' && audioAnswer) { audioCalls.push(body); return audioAnswer(body, audioCalls.length); }
       if (url==='/api/script') {
         assert.ok(scriptAnswer, 'Unexpected text generation');
         const call = {system:body.system||'', prompt:body.messages?.[0]?.parts?.[0]?.text||'', body};
@@ -100,7 +101,7 @@ export async function openAnimes(t, {cloud, local={}, idb={}, hooks={}, unreadab
   w.eval(fs.readFileSync(new URL('auth/ready.js', root), 'utf8'));
   w.eval(fs.readFileSync(new URL('animes/recovery.js', root), 'utf8'));
   w.eval(script.replace('(async function init() {', 'window.testInit = (async function init() {')
-    + '\nwindow.testPage={getState:()=>state, getTanda:()=>tanda, ocuparProyecto, nube};');
+    + '\nwindow.testPage={getState:()=>state, getTanda:()=>tanda, ocuparProyecto, nube, esperasDeCuota:ESPERAS_DE_CUOTA};');
   w.testInit.catch(()=>{});
   // In production the session sync takes a while; nothing may depend on it being instant.
   await wait(signInDelay);
@@ -120,5 +121,5 @@ export async function openAnimes(t, {cloud, local={}, idb={}, hooks={}, unreadab
     await until(() => w.trabajoEnCurso() === '', ms);
     await wait(30);
   };
-  return {w, saves, errors, asked, scriptCalls, imageCalls, narration, edit, modal, press};
+  return {w, saves, errors, asked, scriptCalls, imageCalls, audioCalls, narration, edit, modal, press};
 }

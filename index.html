@@ -3535,8 +3535,11 @@ window.probarVoz = async function() {
 };
 
 async function generateAudio(text, voice, act) {
-  const cleanText = cleanTextForTTS(text);
-  if (!cleanText || cleanText.length < 3) throw new Error('Texto vacío para audio');
+  let cleanText = cleanTextForTTS(text);
+  // A one-word line ("Sí", "No", "Ya") is real dialogue: only text with no
+  // letters or digits at all is empty.
+  if (!cleanText || !/[\p{L}\p{N}]/u.test(cleanText)) throw new Error('Texto vacío para audio');
+  if (cleanText.length < 3 && !/[.!?…]$/.test(cleanText)) cleanText += '.';
 
   // Everything goes through the proxy — credentials live in Vercel env vars.
   // The server picks the engine from the voice prefix: gcp_* → Cloud TTS,
@@ -7103,7 +7106,11 @@ function vozParaIntervencion(intervention) {
   return ch?.voice || vozAutomaticaPara(ch?.gender) || narrator;
 }
 
-async function generarAudioDeEscena(s) {
+// Cast-mode lines already synthesized for a scene that has not finished yet.
+// A quota pause or a failure on line k must not pay again for lines 1..k-1.
+const lineasDeVozHechas = new Map();
+
+async function generarAudioDeEscena(s, aviso) {
   const narrator = document.getElementById('voiceSelect')?.value || '';
   if (state.universe?.storyMode !== 'cast') return generateAudio(s.narration, narrator, s.act);
 
@@ -7114,16 +7121,22 @@ async function generarAudioDeEscena(s) {
   if (!interventions.length) throw new Error('La escena no tiene texto para voz');
 
   const entries = [];
+  const prefix = `${state.projectId}|${s.id}|`;
   for (let i = 0; i < interventions.length; i++) {
     const line = interventions[i];
     const voice = vozParaIntervencion(line);
-    const a = await generateAudio(line.text, voice, s.act);
+    const key = `${prefix}${i}|${voice}|${getVoiceSpeed()}|${line.text}`;
+    // The quota wait is per line, so it resumes on the line that hit it.
+    const a = lineasDeVozHechas.get(key)
+      || await conEsperaDeCuota(() => generateAudio(line.text, voice, s.act), aviso);
+    lineasDeVozHechas.set(key, a);
     const gapAfter = line.type === 'system' ? 0.16
       : line.type === 'thought' ? 0.13
       : line.type === 'dialogue' ? 0.11 : 0.08;
     entries.push({ idx:i, data:a.audioData, mime:a.mimeType || 'audio/wav', gapAfter });
   }
   const { wav } = await combineAudiosToWav(entries);
+  for (const key of [...lineasDeVozHechas.keys()]) if (key.startsWith(prefix)) lineasDeVozHechas.delete(key);
   return { audioData: bytesToBase64(wav), mimeType:'audio/wav' };
 }
 
@@ -7132,7 +7145,7 @@ window.generateSceneAudio = async function(sceneId) {
   if (!s) return;
   showToast(`Generando audio escena ${s.num}...`, 'success');
   try {
-    const result = await generarAudioDeEscena(s);
+    const result = await generarAudioDeEscena(s, seg => showToast(`⏳ Cuota de voz de Google — sigo en ${seg}s con la línea pendiente…`, 'error'));
     // Save audio with its mime type prefix so we know how to play it back
     const mime = result.mimeType || 'audio/wav';
     await dbSet(sceneAudKey(s.id), `${mime}|${result.audioData}`);
@@ -7682,10 +7695,8 @@ document.getElementById('btnAllAudio').addEventListener('click', async () => {
       }
 
       try {
-        const result = await conEsperaDeCuota(
-          () => generarAudioDeEscena(s),
-          (seg) => { bt.textContent = `⏳ Cuota de audio de Google — reanudando en ${seg}s…`; }
-        );
+        const aviso = (seg) => { bt.textContent = `⏳ Cuota de audio de Google — reanudando en ${seg}s…`; };
+        const result = await conEsperaDeCuota(() => generarAudioDeEscena(s, aviso), aviso);
         const mime = result.mimeType || 'audio/wav';
         await dbSet(sceneAudKey(s.id), `${mime}|${result.audioData}`);
         completed++;
