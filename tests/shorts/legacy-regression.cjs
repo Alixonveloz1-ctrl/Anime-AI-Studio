@@ -105,6 +105,10 @@ const FIXED=[
  // voiced (tests/shorts/ui/animes-media.test.mjs).
  [/^(async function (generateAudio|generarAudioDeEscena)\(|const lineasDeVozHechas = |window\.generateSceneAudio = )/,'cast voices'],
  [/^document\.getElementById\('btnAllAudio'\)\.addEventListener\('click'/,'cast voices'],
+ // The montage brings every narration and music cue to one format before
+ // concatenating them: the concat demuxer reads them all with the first file's
+ // header, so the episode went out of sync (tests/shorts/ui/animes-montage.test.mjs).
+ [/^function buildMontarScript\(scenes, opts\) \{/,'montage audio format'],
  // Episode music: ASCII bucket keys (the accented acts were refused), the cue
  // kept in the bucket instead of 7.3 MB of base64, a readable error, and the
  // montage reading it from there (tests/shorts/ui/animes-music.test.mjs).
@@ -124,7 +128,12 @@ const FIXED=[
  const unexplained=[...new Set(changed.filter(head=>!FIXED.some(([pattern])=>pattern.test(head))))];
  assert.deepEqual(unexplained,[],'Animes logic changed outside the listed, tested fixes');
 }
-assert.deepEqual([...current.matchAll(/<style>([\s\S]*?)<\/style>/g)].map(x=>x[1]),[...original.matchAll(/<style>([\s\S]*?)<\/style>/g)].map(x=>x[1]),'Original Animes design changed');
+// The one design change allowed: the scroll container reserves the iPhone's
+// bottom safe area, or the last control of each panel ends under the tab bar
+// (tests/shorts/ui/animes-layout.test.mjs).
+const styles=source=>[...source.matchAll(/<style>([\s\S]*?)<\/style>/g)]
+  .map(x=>x[1].replace('padding:16px 14px calc(110px + env(safe-area-inset-bottom));','padding:16px 14px 110px;'));
+assert.deepEqual(styles(current),styles(original),'Original Animes design changed');
 assert.equal(fs.readFileSync('tests/static-check.mjs','utf8'),old('tests/static-check.mjs'));
 const config=JSON.parse(fs.readFileSync('vercel.json')),previous=JSON.parse(old('vercel.json'));
 for(const [route,value] of Object.entries(previous.functions))assert.deepEqual(config.functions[route],value);

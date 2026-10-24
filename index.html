@@ -53,7 +53,7 @@
   .app {
     position:relative; z-index:1;
     width:100%; height:100dvh; max-height:100dvh;
-    padding:16px 14px 110px; max-width:720px; margin:0 auto;
+    padding:16px 14px calc(110px + env(safe-area-inset-bottom)); max-width:720px; margin:0 auto;
     overflow-x:hidden; overflow-y:auto;
     -webkit-overflow-scrolling:touch;
     overscroll-behavior-y:contain;
@@ -317,7 +317,6 @@
 </style>
 </head>
 <body>
-<nav aria-label="Secciones" style="padding:8px 16px;text-align:right"><button type="button" data-studio-signout style="margin-right:24px;background:none;border:0;color:inherit;font:inherit;cursor:pointer">Salir</button><a href="/cortos/" style="color:inherit">Cortos de anime →</a></nav>
 <script src="/auth/ready.js"></script>
 <script src="/animes/recovery.js"></script>
 <script type="module" src="/auth/animes.mjs"></script>
@@ -326,6 +325,7 @@
 <div id="starfield"></div>
 
 <div class="app">
+<nav aria-label="Secciones" style="padding:8px 16px;text-align:right"><button type="button" data-studio-signout style="margin-right:24px;background:none;border:0;color:inherit;font:inherit;cursor:pointer">Salir</button><a href="/cortos/" style="color:inherit">Cortos de anime →</a></nav>
   <div class="header">
     <div class="brand">
       <h1>Anime AI Studio</h1>
@@ -8256,7 +8256,14 @@ function buildMontarScript(scenes, opts) {
     '',
     '# ─── narración: se concatena y da la duración de cada escena ───',
     ': > narr.txt');
-  scenes.forEach(s => { if (s.audio) p(`echo "file '$PWD/${s.audio}'" >> narr.txt`); });
+  // The cues can differ in sample rate: Chirp at 1.0x is stored at 24 kHz and
+  // a changed speed is re-rendered at the device's rate (44.1/48 kHz). The
+  // concat demuxer reads EVERY file with the first one's header, so from the
+  // first different scene the voice played about twice as slow, lost sync with
+  // the pictures and the end was cut by -shortest.
+  scenes.forEach(s => { if (s.audio) p(
+    `ffmpeg -y -v error -i ${s.audio} -ar 48000 -ac 1 -c:a pcm_s16le n_${s.audio}`,
+    `echo "file '$PWD/n_${s.audio}'" >> narr.txt`); });
   p('ffmpeg -y -f concat -safe 0 -i narr.txt -c copy narracion.wav',
     'TOTAL=$(dur narracion.wav)',
     '',
@@ -8355,7 +8362,7 @@ function buildMontarScript(scenes, opts) {
   if (hasMusic) {
     p('# ─── música: se encadenan las pistas de cada acto y se repiten ───',
       ': > mus.txt',
-      'for m in mus_*.wav; do echo "file \'$PWD/$m\'" >> mus.txt; done',
+      'for m in mus_*.wav; do ffmpeg -y -v error -i "$m" -ar 48000 -ac 2 -c:a pcm_s16le "n_$m"; echo "file \'$PWD/n_$m\'" >> mus.txt; done',
       'ffmpeg -y -f concat -safe 0 -i mus.txt -c copy musica.wav',
       // The comparison goes in an `if`, never inside the printf. awk reads a
       // `>` in a print/printf argument list as OUTPUT REDIRECTION, so the old
