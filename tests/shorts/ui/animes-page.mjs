@@ -65,7 +65,11 @@ export async function openAnimes(t, {cloud, local={}, idb={}, media={}, hooks={}
       if (url.startsWith('https://fixture.invalid/object/')) return new Response(bucket.get(decodeURIComponent(url.slice('https://fixture.invalid/object/'.length))));
       if (url.startsWith('https://fixture.invalid/asset/')) {
         const key = decodeURIComponent(url.slice('https://fixture.invalid/asset/'.length));
-        if ((options.method||'GET')==='PUT') { bucket.set('cache:'+key, String(options.body)); return new Response('', {status:200}); }
+        if ((options.method||'GET')==='PUT') {
+          const injected = await hooks.assetPut?.(key, options);
+          if (injected instanceof Response) return injected;
+          bucket.set('cache:'+key, String(options.body)); return new Response('', {status:200});
+        }
         return bucket.has('cache:'+key) ? new Response(bucket.get('cache:'+key)) : new Response('', {status:404});
       }
       if (url.startsWith('https://fixture.invalid/unavailable/')) return new Response('', {status:503});
@@ -103,13 +107,13 @@ export async function openAnimes(t, {cloud, local={}, idb={}, media={}, hooks={}
         return json({ok:true, project:{id:body.id, name:body.name, generation:String(generation)}});
       }
       if (body.action==='projectRecovery') return json({currentGeneration:'1', images:0, imageReferences:0, candidates:[], warnings:[]});
-      if (body.action==='assetList') return json({keys:[]});
+      if (body.action==='assetList') return await hooks.assetList?.(body) || json({keys:[]});
       if (body.action==='assetSign') {
         // Same key rule as the server: an accented key is refused.
         if (!/^[a-zA-Z0-9_.-]{3,220}$/.test(String(body.key||''))) return json({error:'projectId/key/method inválidos'}, 400);
         return json({url:'https://fixture.invalid/asset/'+encodeURIComponent(body.key)});
       }
-      if (body.action==='assetDelete') return json({ok:true, deleted:false});
+      if (body.action==='assetDelete') return await hooks.assetDelete?.(body) || json({ok:true, deleted:true});
       assert.fail('Unexpected request: '+JSON.stringify(body));
     }});
   w.setInterval = () => 0;
@@ -119,7 +123,7 @@ export async function openAnimes(t, {cloud, local={}, idb={}, media={}, hooks={}
   w.eval(fs.readFileSync(new URL('animes/recovery.js', root), 'utf8'));
   w.eval(script.replace('(async function init() {', 'window.testInit = (async function init() {')
     + '\nwindow.testPage={getState:()=>state, getTanda:()=>tanda, ocuparProyecto, nube, esperasDeCuota:ESPERAS_DE_CUOTA};'
-    + '\nwindow.musicKey=musicKey;window.episodeActs=episodeActs;');
+    + '\nwindow.musicKey=musicKey;window.episodeActs=episodeActs;window.mediosPendientes=mediosPendientes;');
   w.testInit.catch(()=>{});
   // In production the session sync takes a while; nothing may depend on it being instant.
   await wait(signInDelay);

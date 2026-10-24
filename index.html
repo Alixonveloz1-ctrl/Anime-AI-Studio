@@ -878,6 +878,28 @@ async function persistImagePointer(k, value) {
   return d.gcsUri;
 }
 
+// A file whose bucket copy failed exists only on this device. Until it is
+// confirmed its key stays listed here, so the device cache is not pruned away
+// and the upload is retried when the app opens or the connection comes back.
+const CLAVE_MEDIOS_PENDIENTES = 'anime_media_pendientes';
+function mediosPendientes() {
+  try { const v = JSON.parse(localStorage.getItem(CLAVE_MEDIOS_PENDIENTES) || '[]'); return Array.isArray(v) ? v : []; }
+  catch (_) { return []; }
+}
+function marcarMedioPendiente(k, pendiente) {
+  const lista = mediosPendientes().filter(x => x !== k);
+  if (pendiente) lista.push(k);
+  try { localStorage.setItem(CLAVE_MEDIOS_PENDIENTES, JSON.stringify(lista.slice(-500))); } catch (_) {}
+}
+async function subirMediosPendientes() {
+  for (const k of mediosPendientes()) {
+    const v = await localDbGet(k);
+    if (v == null) { marcarMedioPendiente(k, false); continue; }
+    try { await cloudPutDbValue(k, v); marcarMedioPendiente(k, false); }
+    catch (e) { console.warn('Medio pendiente:', k, e.message); return; }   // sigue sin conexión
+  }
+}
+
 // Device storage is a cache only. Image entries now store a tiny gs:// pointer;
 // the binary lives in GCS. Old base64 entries remain readable for compatibility.
 async function dbSet(k, v) {
@@ -890,7 +912,10 @@ async function dbSet(k, v) {
   }
   await localDbSet(k, canonical);
   const pid = projectIdFromDbKey(k);
-  if (pid) await cloudPutDbValue(k, canonical);
+  if (!pid) return;
+  marcarMedioPendiente(k, true);
+  await cloudPutDbValue(k, canonical);
+  marcarMedioPendiente(k, false);
 }
 async function dbGet(k) {
   const v = await dbGetStored(k);
@@ -904,31 +929,42 @@ async function dbGet(k) {
 }
 async function dbDel(k) {
   await localDbDel(k);
-  cloudMissingKeys.add(k);
   const projectId = projectIdFromDbKey(k);
-  if (!projectId) return;
-  try {
-    await fetch('/api/upload-url', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ action:'assetDelete', projectId, key:k }),
-    });
-  } catch (e) {
-    console.warn('Borrado cloud:', k, e.message);
+  if (!projectId) { cloudMissingKeys.add(k); return; }
+  // The bucket copy is the real one, so a delete that did not happen must not
+  // be reported as done: that is what left the previous story's images and
+  // voices under a new story, and the new scenes reuse the same ids.
+  let last = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const r = await fetch('/api/upload-url', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ action:'assetDelete', projectId, key:k }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) throw new Error(d.error || `upload-url ${r.status}`);
+      cloudMissingKeys.add(k);
+      return;
+    } catch (e) {
+      last = e;
+      if (attempt < 2) await new Promise(r => setTimeout(r, 600 * (attempt + 1)));
+    }
   }
+  throw new Error(`No se pudo borrar ${k} del bucket: ${last?.message || 'error'}`);
 }
 async function dbKeys() {
   const local = await localDbKeys();
   const projectId = state.projectId;
   if (!projectId) return local;
-  try {
-    const r = await fetch('/api/upload-url', {
-      method:'POST', headers:{'Content-Type':'application/json'}, cache:'no-store',
-      body:JSON.stringify({ action:'assetList', projectId }),
-    });
-    const d = await r.json();
-    if (r.ok && Array.isArray(d.keys)) return [...new Set([...local, ...d.keys])];
-  } catch (_) {}
-  return local;
+  const r = await fetch('/api/upload-url', {
+    method:'POST', headers:{'Content-Type':'application/json'}, cache:'no-store',
+    body:JSON.stringify({ action:'assetList', projectId }),
+  });
+  const d = await r.json().catch(() => ({}));
+  // A failed listing is not an empty bucket. Choosing what to clean from a
+  // short list is what left the previous episode's files in place.
+  if (!r.ok || !Array.isArray(d.keys)) throw new Error(`No se pudo leer la lista de archivos del proyecto: ${d.error || r.status}`);
+  return [...new Set([...local, ...d.keys])];
 }
 
 const charImgKey   = id => `ci_${state.projectId}_${id}`;
@@ -977,7 +1013,13 @@ async function materialDelEpisodio() {
 // clips — new narration under old pictures, silently. Regenerating clears them.
 async function borrarMaterialDelEpisodio() {
   const claves = await materialDelEpisodio();
-  for (const k of claves) await dbDel(k);
+  const fallidas = [];
+  for (const k of claves) {
+    try { await dbDel(k); } catch (e) { console.error('Borrado del episodio:', k, e.message); fallidas.push(k); }
+  }
+  if (fallidas.length) {
+    throw new Error(`No se pudieron borrar ${fallidas.length} archivo(s) del episodio anterior, así que la historia nueva no se guarda encima de ellos. El borrador se conserva: vuelve a pulsar “Generar Episodio” cuando haya conexión.`);
+  }
   return claves.length;
 }
 
@@ -1905,6 +1947,7 @@ async function enviarGuardado(pid, opciones = {}) {
 // ya, sin esperar la pausa ni el reintento programado.
 function sincronizarPendientes() {
   for (const pid of nube.keys()) enviarGuardado(pid);
+  subirMediosPendientes();
 }
 document.addEventListener('visibilitychange', sincronizarPendientes);
 window.addEventListener('pagehide', sincronizarPendientes);
@@ -2168,10 +2211,13 @@ async function pruneDeviceCacheExcept(projectId) {
     for (const k of stale) localStorage.removeItem(k);
   } catch (_) {}
   const keys = await localDbKeys();
+  const pendientes = new Set(mediosPendientes());
   for (const k0 of keys) {
     const k = String(k0);
     const pid = projectIdFromDbKey(k);
-    if (pid && pid !== projectId) await localDbDel(k);
+    // A file that never reached the bucket is only here: pruning it threw away
+    // a voice or an image that had already been paid for.
+    if (pid && pid !== projectId && !pendientes.has(k)) await localDbDel(k);
   }
 }
 
@@ -9383,6 +9429,7 @@ for (const [clave, etiqueta] of Object.entries({
     if (fromCloud && !window.animeRecovery?.hasRetained(projects[0].id)) await pruneDeviceCacheExcept(projects[0].id);
   }
   subirCambiosPendientesDeOtros();
+  subirMediosPendientes();
   updateApiDot();
   // Antes de dibujar nada: el formato (9:16 / 16:9) decide cómo se recortan las
   // miniaturas de cada escena.

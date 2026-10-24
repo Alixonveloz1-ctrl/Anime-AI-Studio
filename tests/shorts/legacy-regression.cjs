@@ -109,6 +109,12 @@ const FIXED=[
  // concatenating them: the concat demuxer reads them all with the first file's
  // header, so the episode went out of sync (tests/shorts/ui/animes-montage.test.mjs).
  [/^function buildMontarScript\(scenes, opts\) \{/,'montage audio format'],
+ // Generated media: a bucket write or delete that did not happen is never
+ // reported as done, an unuploaded file is kept and retried instead of pruned,
+ // and a failed listing is not an empty project
+ // (tests/shorts/ui/animes-media-cache.test.mjs).
+ [/^(const CLAVE_MEDIOS_PENDIENTES = |function (mediosPendientes|marcarMedioPendiente)\(|async function (subirMediosPendientes|dbSet|dbDel|dbKeys|borrarMaterialDelEpisodio)\()/,'media cache honesty'],
+ [/^function sincronizarPendientes\(\) \{/,'media cache honesty'],
  // Voices: the saved narration language survives a reload (the list arrives
  // after the settings are restored), "Automática" gives a character a voice
  // nobody else has, and the bulk reference button uses the selected drawing
