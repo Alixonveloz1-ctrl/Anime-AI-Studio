@@ -30,8 +30,13 @@ window.animeRecovery=(()=>{
   let report;
   try{report=await request({action:'projectRecovery',id});}catch(e){if(current!==sequence)return;host.replaceChildren(heading);note(host,e.message);button(host,'Volver a comprobar',()=>present(state,openProject));return;}
   if(current!==sequence)return;
-  const meaningful=report.images||report.imageReferences||report.candidates?.some(x=>x.counts?.scenes||x.unreadableUntilRestore)||record?.local||report.warnings?.length;
-  if(!meaningful){host.remove();return;}
+  // Images alone cannot rebuild a script — the dialog says so itself. Raising
+  // this on a project whose episode simply has not been written yet (a new
+  // universe with its character references already drawn, or a first episode
+  // paused halfway) told the owner their anime was damaged when nothing was
+  // missing at all.
+  const recuperable=record?.local||report.candidates?.some(x=>x.counts?.scenes||x.unreadableUntilRestore);
+  if(!recuperable&&!report.warnings?.length){host.remove();return;}
   host.replaceChildren(heading);
   note(host,n.scenes?`Hay una copia del teléfono con contenido adicional.`:'La copia abierta no contiene escenas. No es una recuperación completa.');
   if(report.images||report.imageReferences)note(host,`${report.images} imágenes y ${report.imageReferences} referencias de imagen encontradas en la carpeta del proyecto. No se regenerará ninguna.`);

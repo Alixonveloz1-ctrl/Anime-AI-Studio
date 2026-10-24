@@ -23,3 +23,21 @@ test('A new project invalidates a delayed recovery lookup for the previous proje
  const {w,open}=setup(t);let release;const original=w.fetch;w.fetch=async(...args)=>{await new Promise(r=>release=r);return original(...args);};
  const pending=w.animeRecovery.present(state,open);w.animeRecovery.invalidate('p87654321');release();await pending;assert.equal(w.document.querySelector('#animes-recovery'),null);
 });
+// Nothing is missing: the owner made a universe and its character references
+// and has not written the episode yet. The banner used to announce that the
+// open copy «no contiene escenas. No es una recuperación completa».
+test('A project whose episode is not written yet raises no recovery notice',async t=>{
+ const {w,report,open,calls}=setup(t);
+ report.candidates=[];                      // nothing recoverable in the bucket
+ await w.animeRecovery.present(state,open); // 2 images and 2 references do exist
+ assert.equal(w.document.querySelector('#animes-recovery'),null,'no notice at all');
+ assert.deepEqual(calls.map(c=>c.action),['projectRecovery'],'and nothing else was asked for');
+});
+test('A warning or a recoverable copy still raises it',async t=>{
+ const conAviso=setup(t);conAviso.report.candidates=[];conAviso.report.warnings=['Una copia no se pudo leer.'];
+ await conAviso.w.animeRecovery.present(state,conAviso.open);
+ assert.match(conAviso.w.document.querySelector('#animes-recovery').textContent,/no contiene escenas/);
+ const conCopia=setup(t);
+ await conCopia.w.animeRecovery.present(state,conCopia.open);
+ assert.ok(conCopia.w.document.querySelector('#animes-recovery'),'a previous version with scenes is worth telling');
+});
