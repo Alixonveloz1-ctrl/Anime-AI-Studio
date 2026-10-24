@@ -154,6 +154,21 @@ class Cloud:
         apply(self.db.transaction())
 
 
+def lease_taken_over(project,job):
+    """True only when ANOTHER session holds the production lease.
+
+    A lease that merely ran out — same session, the phone locked the screen and
+    its 10 s heartbeat stopped — must not kill a job that is already running:
+    nobody took over, it still holds its engine slot and its calls are already
+    paid for. Expiry is what lets a NEW session take the lease over (claim and
+    acquire still check it), not a reason to abandon work in flight. Without
+    this, the shared 60 s spacing between text calls always outlived the 30 s
+    lease, so the second text step of a session could never finish.
+    """
+    lease=project.get('lease') or {}
+    return bool(lease.get('session')) and lease['session']!=job['session']
+
+
 class RequestJournal:
     """Journal every generation request before transport, with an independent lease check."""
     def __init__(self,cloud,jid):self.cloud,self.jid=cloud,jid
@@ -167,7 +182,7 @@ class RequestJournal:
             job=ref.get().to_dict()
             p=self.cloud.project_ref(job['projectId']).get().to_dict()
             require(job['state'] not in ('cancel_requested','cancelled'),'CANCELLED','Se canceló la espera; no se envió otra generación.',409)
-            require(p.get('lease',{}).get('session')==job['session'] and p['lease']['expires']>time.time(),'LEASE','Se pausó la espera al perder la sesión; lo terminado sigue guardado.',409)
+            require(not lease_taken_over(p,job),'LEASE','Otro dispositivo tomó la producción; se detuvo la espera. Lo terminado sigue guardado.',409)
             remaining=deadline-time.monotonic()
             if remaining<=0:break
             time.sleep(min(5,remaining))
@@ -189,7 +204,7 @@ class RequestJournal:
             job=ref.get(transaction=tx).to_dict()
             p=self.cloud.project_ref(job['projectId']).get(transaction=tx).to_dict()
             require(job['state'] not in ('cancel_requested','cancelled'),'CANCELLED','Se detuvieron nuevas llamadas',409)
-            require(p.get('lease',{}).get('session')==job['session'] and p['lease']['expires']>time.time(),'LEASE','Sesión pausada antes de llamar al proveedor',409)
+            require(not lease_taken_over(p,job),'LEASE','Otro dispositivo tomó la producción antes de llamar al proveedor',409)
             verify_models(self.cloud.c)
             calls=job.get('providerCalls',[])
             check_call_scope(job['operation'],calls,kind)

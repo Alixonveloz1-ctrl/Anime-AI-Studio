@@ -72,11 +72,26 @@ class QuotaTests(unittest.TestCase):
         with patch('shorts.service.cloud.firestore.transactional',side_effect=lambda fn:fn),patch('shorts.service.cloud.time.time',return_value=100):journal.pace_text()
         c.db.transaction.return_value.set.assert_called_once_with(ref,{'nextAt':210})
         journal.wait_for_provider.assert_called_once_with(50,'spacing')
-    def test_wait_checks_cancel_and_session_loss(self):
-        for state,expiry,code in [('cancel_requested',200,'CANCELLED'),('running',99,'LEASE')]:
+    def test_wait_stops_on_cancel_or_a_real_takeover(self):
+        for state,session,code in [('cancel_requested','s','CANCELLED'),('running','otra','LEASE')]:
             c=Mock();ref=c.db.collection.return_value.document.return_value;ref.get.return_value.to_dict.return_value={'state':state,'projectId':'p','session':'s'}
-            c.project_ref.return_value.get.return_value.to_dict.return_value={'lease':{'session':'s','expires':expiry}}
+            c.project_ref.return_value.get.return_value.to_dict.return_value={'lease':{'session':session,'expires':99}}
             with patch('shorts.service.cloud.time.time',return_value=100),patch('shorts.service.cloud.time.sleep') as sleep,self.assertRaises(ContractError) as error:RequestJournal(c,'j').wait_for_provider(60,'quota',1)
             self.assertEqual(error.exception.code,code);sleep.assert_not_called()
+    def test_only_another_session_counts_as_losing_the_production(self):
+        from shorts.service.cloud import lease_taken_over
+        job={'session':'s'}
+        self.assertFalse(lease_taken_over({'lease':{'session':'s','expires':0}},job),'ran out, nobody took it')
+        self.assertFalse(lease_taken_over({},job),'no lease recorded')
+        self.assertTrue(lease_taken_over({'lease':{'session':'otra','expires':10**9}},job),'another device took over')
+    def test_a_lease_that_only_ran_out_does_not_abandon_a_running_job(self):
+        # The 60 s spacing between text calls outlives the 30 s lease, so a
+        # phone that locked its screen would otherwise lose the whole step.
+        c=Mock();ref=c.db.collection.return_value.document.return_value
+        ref.get.return_value.to_dict.return_value={'state':'running','projectId':'p','session':'s'}
+        c.project_ref.return_value.get.return_value.to_dict.return_value={'lease':{'session':'s','expires':99}}
+        with patch('shorts.service.cloud.time.time',return_value=100),patch('shorts.service.cloud.time.monotonic',side_effect=[0,60]),patch('shorts.service.cloud.time.sleep') as sleep:
+            RequestJournal(c,'j').wait_for_provider(60,'spacing')
+        sleep.assert_not_called();ref.update.assert_any_call({'providerWait':None})
 
 if __name__=='__main__':unittest.main()
