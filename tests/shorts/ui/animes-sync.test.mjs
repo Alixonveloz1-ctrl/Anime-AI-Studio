@@ -34,7 +34,7 @@ function fixtureDB(entries={}) {
 
 // cloud: id -> {generation, manifest}. hooks.save(body) may return a Response
 // (failure) or a promise (delay) before the normal conditional write.
-async function open(t, {cloud, local={}, idb={}, hooks={}, unreadable=[], confirm=()=>true}={}) {
+async function open(t, {cloud, local={}, idb={}, hooks={}, unreadable=[], confirm=()=>true, signInDelay=0}={}) {
   const saves = [], errors = [], asked = [];
   const virtualConsole = new VirtualConsole(); virtualConsole.on('jsdomError', e=>errors.push(e));
   const dom = new JSDOM(html, {url:'https://fixture.invalid/', runScripts:'outside-only', virtualConsole});
@@ -77,6 +77,8 @@ async function open(t, {cloud, local={}, idb={}, hooks={}, unreadable=[], confir
   w.eval(script.replace('(async function init() {', 'window.testInit = (async function init() {')
     + '\nwindow.testPage={getState:()=>state, getTanda:()=>tanda, ocuparProyecto, nube};');
   w.testInit.catch(()=>{});
+  // In production the session sync takes a while; nothing may depend on it being instant.
+  await wait(signInDelay);
   w.protectPage = async callback => callback({uid:'fixture-owner'});
   w.showSessionError = e => { throw e; };
   w.eval(fs.readFileSync(new URL('auth/animes.mjs', root), 'utf8').replace(/^import .*;\n/, ''));
@@ -204,4 +206,21 @@ test('A storage error while preparing the image batch releases the batch lock', 
   await until(() => /No se pudo preparar la tanda de imágenes/.test(w.document.querySelector('#modalContainer').textContent));
   assert.equal(w.testPage.getTanda().enCurso, false, 'other batches are not blocked');
   assert.equal(w.document.getElementById('btnAllImages').disabled, false);
+});
+
+test('Episode tabs and buttons always describe the open project, even when sign-in is slow', async t => {
+  const twoEpisodes = story('Anime', 'ep1');
+  twoEpisodes.episodes[2] = [{id:'s1', num:1, narration:'ep2', imagePromptA:'A shot'}];
+  twoEpisodes.currentEpisode = 2;
+  const cloud = cloudWith([pid, twoEpisodes], [other, story('Otro', 'otro')]);
+  cloud.get(other).manifest.updated = 1;
+  const {w} = await open(t, {cloud, signInDelay:800});
+  const nav = () => ({
+    shown: w.document.getElementById('episodeNav').style.display,
+    tabs: [...w.document.querySelectorAll('#episodeTabs button')].map(b=>b.textContent.trim()),
+    label: w.document.getElementById('btnGenerarEpisodio').textContent,
+  });
+  assert.deepEqual(nav(), {shown:'block', tabs:['Ep 1','Ep 2'], label:'✨ Generar Episodio 2 (reemplazar)'});
+  await w.switchProject(other);
+  assert.deepEqual(nav(), {shown:'block', tabs:['Ep 1'], label:'✨ Generar Episodio 1 (reemplazar)'});
 });

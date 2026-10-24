@@ -73,6 +73,10 @@ const FIXED=[
  [/^document\.getElementById\('(btnGenerarUniverso|btnGenerarEpisodio|btnNextEpisode)'\)\.addEventListener\('click'/,'generation guard'],
  // The image batch always releases its lock (tests/shorts/ui/animes-sync.test.mjs).
  [/^document\.getElementById\('btnAllImages'\)\.addEventListener\('click'/,'image batch lock'],
+ // Episode tabs and the generate buttons are repainted with every render, so
+ // they always describe the open project (tests/shorts/ui/animes-sync.test.mjs).
+ [/^function updateEpisodeNav\(\) \{/,'episode navigation'],
+ [/^window\.addEventListener\('load', \(\) => setTimeout\(updateEpisodeNav, 500\)\);$/,'episode navigation (replaced by renderAll)'],
 ];
 {
  const units=source=>scripts(source).flatMap(topLevelUnits);

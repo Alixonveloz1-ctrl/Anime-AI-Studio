@@ -1725,13 +1725,25 @@ function updateEpisodeNav() {
   const tabs     = document.getElementById('episodeTabs');
   const nextBtn  = document.getElementById('btnNextEpisode');
   const genBtn   = document.getElementById('btnGenerarEpisodio');
-  if (!state.episodes) return;
-
-  const epNums = Object.keys(state.episodes).map(Number).sort((a,b)=>a-b);
-  if (epNums.length === 0) { nav.style.display = 'none'; return; }
-
-  nav.style.display = 'block';
+  // Always repainted from the open project (renderAll calls it): after opening
+  // the app or another project, nothing here may describe a previous state.
+  const episodes = state.episodes || {};
   const cur = state.currentEpisode || 1;
+  const curScenes = episodes[cur] || [];
+  genBtn.textContent = curScenes.length ? `✨ Generar Episodio ${cur} (reemplazar)` : `✨ Generar Episodio ${cur}`;
+
+  // Show new chars field only for ep 2+
+  const newCharsSection = document.getElementById('newCharsSection');
+  if (newCharsSection) newCharsSection.style.display = cur > 1 ? 'block' : 'none';
+
+  const epNums = Object.keys(episodes).map(Number).sort((a,b)=>a-b);
+  if (!epNums.some(n => (episodes[n] || []).length)) {
+    nav.style.display = 'none';
+    tabs.innerHTML = '';
+    nextBtn.style.display = 'none';
+    return;
+  }
+  nav.style.display = 'block';
 
   // Render episode tabs
   tabs.innerHTML = epNums.map(n => `
@@ -1742,18 +1754,10 @@ function updateEpisodeNav() {
       Ep ${n}
     </button>`).join('');
 
-  // Show new chars field only for ep 2+
-  const newCharsSection = document.getElementById('newCharsSection');
-  if (newCharsSection) newCharsSection.style.display = cur > 1 ? 'block' : 'none';
-
   // Show "Generar siguiente episodio" if current is complete
-  const curScenes = state.episodes[cur] || [];
   const isComplete = curScenes.length >= getEpisodeFormat().scenes && curScenes.every(s => s.narration && s.imagePromptA);
   nextBtn.style.display = isComplete ? 'block' : 'none';
   nextBtn.textContent = `➕ Generar Episodio ${cur + 1}`;
-
-  // Update main generate button label
-  genBtn.textContent = `✨ Generar Episodio ${cur} (reemplazar)`;
 }
 
 window.switchEpisode = function(ep) {
@@ -7597,8 +7601,6 @@ document.getElementById('btnNextEpisode').addEventListener('click', async () => 
   document.getElementById('btnGenerarEpisodio').click();
 });
 
-// Call updateEpisodeNav after load
-window.addEventListener('load', () => setTimeout(updateEpisodeNav, 500));
 
 // Scene repair was intentionally removed.
 // Generation is transactional: incomplete story/scene/visual batches are never
@@ -9118,6 +9120,7 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
 function renderAll() {
   window.animeRecovery?.invalidate(state.projectId);
   renderUniverse();
+  updateEpisodeNav();
   return Promise.all([renderCharacters(), renderScenes()]);
 }
 
