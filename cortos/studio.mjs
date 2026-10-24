@@ -13,6 +13,12 @@ const session=crypto.randomUUID(),device=localStorage.getItem('animeShorts:v2:de
 const say=(s,error=false)=>{notice.textContent=s;notice.className=error?'error':'';};
 function action(label,fn,secondary=false){const b=document.createElement('button');b.textContent=label;if(secondary)b.className='secondary';b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn();}catch(e){say(e.message,true);}finally{b.disabled=false;if(needsRedraw&&!document.querySelector('dialog[open]')){needsRedraw=false;try{await draw();}catch(e){say('No se pudo actualizar la vista. '+e.message,true);}}}};return b;}
 function card(title,content=''){const e=document.createElement('article');e.className='card';e.innerHTML=`<h3>${esc(title)}</h3>${content}`;return e;}
+const CLOSE_UNCERTAIN='No se sabe si Google llegó a procesar ese envío (pudo cobrarlo). Cerrarlo libera el motor y NO lo vuelve a enviar. ¿Cerrar sin repetir?';
+async function closeUncertain(id){
+ if(!confirm(CLOSE_UNCERTAIN))return false;
+ const latest=await api('/jobs/'+id);const result=await api('/jobs/'+id+':close','POST',{}, {'If-Match':String(latest.revision)});
+ say(result.message);await refresh();return true;
+}
 function buttons(parent,items){const row=document.createElement('div');row.className='actions';items.forEach(([label,fn,secondary])=>row.append(action(label,fn,secondary)));parent.append(row);return row;}
 async function api(path,method='GET',data,headers={},signal){
   // Bound the entire request, including token refresh and reading its body.
@@ -120,6 +126,7 @@ function showJob(job){
   const latest=await api('/jobs/'+job.id);await api('/jobs/'+job.id+':cancel','POST',{}, {'If-Match':String(latest.revision)});
   ++watchVersion;await draw();say('Cancelación solicitada. Lo ya generado se conserva.');
  },true]);
+ if(available.close)controls.push(['Cerrar sin repetir',async()=>{if(await closeUncertain(job.id)){++watchVersion;await draw();}},true]);
  if(['awaiting_review','succeeded'].includes(job.state))controls.push(['Ver resultado',()=>go(['ideas','develop','revise'].includes(job.operation)?'Historia':'Escenas'),true]);
  buttons(panel,controls);
 }
@@ -376,6 +383,7 @@ async function activityList(){
  if(a.recover)items.push(['Continuar',async()=>{if(!active)await lease(true);const j=await api('/jobs/'+job.id);await api('/jobs/'+job.id+':resume','POST',{session},{'If-Match':String(j.revision)});await watch(job.id);await draw();},true]);
  if(a.cancel)items.push(['Cancelar',async()=>{const j=await api('/jobs/'+job.id);await api('/jobs/'+job.id+':cancel','POST',{}, {'If-Match':String(j.revision)});await draw();},true]);
  if(a.inspect)items.push(['Comprobar estado',async()=>{const j=await api('/jobs/'+job.id);const result=await api('/jobs/'+job.id+':inspect','POST',{}, {'If-Match':String(j.revision)});say(result.message);await draw();},true]);
+ if(a.close)items.push(['Cerrar sin repetir',async()=>{if(await closeUncertain(job.id))await draw();},true]);
  if(job.result?.previewId)items.push(['Reproducir',()=>playPreview(job.result.previewId,row),true]);
  if(items.length)buttons(row,items);if(job.result?.error){const message=document.createElement('p');message.className='muted';message.textContent=describeIssue(job.result.error);row.append(message);}box.append(row);
  }

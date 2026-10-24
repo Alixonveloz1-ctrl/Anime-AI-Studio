@@ -51,7 +51,7 @@ class MediaTests(unittest.TestCase):
         self.assertGreater(raw[45*160+80],240);self.assertLess(raw[5*160+5],10)
         raw=ff(['-i',clip,'-vf','select=eq(n\\,30)','-frames:v',1,'-f','rawvideo','-pix_fmt','gray','pipe:1'])
         self.assertLess(raw[45*160+80],10)
-        shot['layers'][0]['intervals']=[[12,16],[20,24]]
+        shot['layers'][0]['intervals']=[{'start':12,'end':16},{'start':20,'end':24}]
         visual_clip(shot,{'base':self.image,'variant':variant},clip,160,90,0,48)
         raw=ff(['-i',clip,'-vf','select=eq(n\\,18)','-frames:v',1,'-f','rawvideo','-pix_fmt','gray','pipe:1'])
         self.assertLess(raw[45*160+80],10)

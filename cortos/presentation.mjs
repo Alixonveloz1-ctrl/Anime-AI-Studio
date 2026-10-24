@@ -30,9 +30,14 @@ export function versions(rows,selectedId){
 export function taskActions(job){
  if(['queued','running','waiting_provider','cancel_requested'].includes(job.state)){
   const recover=job.state==='queued'&&!job.dispatchState||job.state==='waiting_provider'&&['VEO_PENDING','SPEECH_PENDING'].includes(job.errorCode);
-  return {cancel:job.state!=='cancel_requested',recover:!!recover&&!job.dispatchUnknown,inspect:!!(job.dispatchUnknown||job.workerOperation||job.workerExecution)};
+  // A job running inside the service can also be checked: past Cloud Run's
+  // request limit the server knows it stopped and closes or releases it.
+  return {cancel:job.state!=='cancel_requested',recover:!!recover&&!job.dispatchUnknown,inspect:!!(job.dispatchUnknown||job.workerOperation||job.workerExecution||job.executionMode==='service'),close:false};
  }
- return {cancel:false,recover:false,inspect:job.state==='submitted_unknown'};
+ // An uncertain job is never resent by itself; the owner can close it so the
+ // engine is free again (POST /jobs/<id>:close).
+ const uncertain=job.state==='submitted_unknown'&&!job.settled;
+ return {cancel:false,recover:false,inspect:uncertain,close:uncertain};
 }
 export function entityName(data,id){
  if(!data)return 'Recurso';

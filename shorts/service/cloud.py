@@ -8,7 +8,7 @@ from google.auth import default
 from google.auth.transport.requests import AuthorizedSession, Request
 from google.oauth2 import id_token
 from shorts.core.contracts import require, ident, revision, digest, ContractError
-from shorts.core.jobs import create_job, claim, settle
+from shorts.core.jobs import create_job, claim, settle, close_uncertain
 from shorts.core.requests import check_call_scope, verify_models
 from shorts.core.dispatch import resource_class, acquire
 
@@ -121,6 +121,27 @@ class Cloud:
                 if execution:out['workerExecution']=f'projects/{self.c["project"]}/locations/{self.c["region"]}/jobs/{self.c["job"]}/executions/{ident(execution)}'
             tx.set(ref,out)
             return out,p,dispatch
+        return apply(self.db.transaction())
+    def release_slot(self,jid):
+        """Free the engine once a job's execution is over, even when its outcome is
+        uncertain: nothing runs for it any more. The job stays open for the owner."""
+        ref=self.db.collection('animeShortsJobs').document(ident(jid))
+        @firestore.transactional
+        def apply(tx):
+            j=ref.get(transaction=tx).to_dict()
+            if not j:return
+            sr=self.db.collection('animeShortsCapacity').document(resource_class(j['operation']));slot=sr.get(transaction=tx).to_dict()
+            if slot and slot.get('jobId')==j['id']:tx.set(sr,{'jobId':None})
+        apply(self.db.transaction())
+    def close_uncertain(self,jid):
+        ref=self.db.collection('animeShortsJobs').document(ident(jid))
+        @firestore.transactional
+        def apply(tx):
+            j=ref.get(transaction=tx).to_dict();require(j,'JOB','Trabajo inexistente',404)
+            sr=self.db.collection('animeShortsCapacity').document(resource_class(j['operation']));slot=sr.get(transaction=tx).to_dict()
+            out=close_uncertain(j);tx.set(ref,out)
+            if slot and slot.get('jobId')==j['id']:tx.set(sr,{'jobId':None})
+            return out
         return apply(self.db.transaction())
     def finish(self,jid,state,result):
         ref=self.db.collection('animeShortsJobs').document(jid)

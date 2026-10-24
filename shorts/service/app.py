@@ -567,6 +567,9 @@ def exports(pid,rid):
     owned(pid);r=cloud().entity(pid,'previews',rid);require(r.get('final') and r['state']=='ready','EXPORT','Exportación pendiente')
     return jsonify(files=[{'name':n,'url':cloud().url(pid,path)} for n,path in r['files'].items()])
 
+# Cloud Run request timeout of the service (infra/shorts/install.py --timeout=1800s), plus margin.
+SERVICE_REQUEST_LIMIT=1800+60
+
 def public_job(j):
     result={k:v for k,v in j.items() if k not in ('payload','session')}
     from shorts.core.jobs import service_startable
@@ -595,6 +598,17 @@ def job_action(jid,action):
         revision(j,expected())
         if j.get('settled'):return jsonify(state=j['state'],message='Trabajo cerrado; no se repitió.')
         if j.get('executionMode')=='service':
+            # A service job runs inside one request, which Cloud Run ends after
+            # 30 minutes: past that, it is certainly not running any more.
+            if j['state'] in ('running','cancel_requested') and time.time()-j.get('started',time.time())>SERVICE_REQUEST_LIMIT:
+                if any(c['state']=='submitted_unknown' for c in j.get('providerCalls',[])):
+                    update_job_review(ref,j['revision'],{'state':'submitted_unknown','errorCode':'SERVICE_STOPPED_UNKNOWN'})
+                    cloud().release_slot(jid)
+                    return jsonify(state='submitted_unknown',message='La generación se detuvo con un envío sin confirmar. Puedes cerrarla sin repetir.')
+                cloud().finish(jid,'failed',{'code':'SERVICE_STOPPED','error':'La generación se detuvo sin publicar resultado. No se repitió ninguna llamada.'})
+                return jsonify(state='failed',message='Trabajo cerrado sin repetir llamadas.')
+            if j['state']=='submitted_unknown':
+                return jsonify(state=j['state'],message='No se confirmó si Google procesó el envío. «Cerrar sin repetir» libera el motor y no vuelve a enviarlo.')
             return jsonify(state=j['state'],message='Estado de generación: '+j['state']+'. No se envió otra llamada.')
         path=j.get('workerExecution') or j.get('workerOperation')
         require(path and path.startswith('projects/') and '..' not in path and '://' not in path,'INSPECT_PENDING','No existe identificador de ejecución confirmado; consulta su estado antes de continuar.',409)
@@ -615,9 +629,16 @@ def job_action(jid,action):
             return jsonify(state=state,message='Operación conocida recuperable. Continuar consultará el mismo identificador.')
         if any(c['state']=='submitted_unknown' for c in j.get('providerCalls',[])):
             update_job_review(ref,j['revision'],{'state':'submitted_unknown','errorCode':'WORKER_STOPPED_UNKNOWN'})
-            return jsonify(state='submitted_unknown',message='Worker detenido con envío incierto. No se repetirá automáticamente.')
+            cloud().release_slot(jid)
+            return jsonify(state='submitted_unknown',message='Worker detenido con envío incierto. No se repetirá automáticamente; puedes cerrarlo sin repetir.')
         cloud().finish(jid,'failed',{'code':'WORKER_STOPPED','error':'El worker terminó sin publicar resultado. Se conservan los recursos ya guardados.'})
         return jsonify(state='failed',message='Trabajo cerrado sin repetir llamadas. Revisa los recursos conservados.')
+    if action=='close':
+        # Explicit owner decision for an uncertain job: settle it without any
+        # new provider call and free its engine (shorts.core.jobs.close_uncertain).
+        revision(j,expected())
+        cloud().close_uncertain(jid)
+        return jsonify(state='failed',message='Cerrado sin repetir. El motor queda libre; puedes pedirlo otra vez cuando quieras.')
     require(action in ('pause','cancel','resume','start'),'ACTION','Acción inválida')
     from google.cloud import firestore
     @firestore.transactional

@@ -96,10 +96,14 @@ class EditorialIntegrationTests(unittest.TestCase):
         from shorts.core.mouth import activity_intervals,mouth_frames
         energy=[0]*40+[.1]*40+[0]*40+[.1]*40+[0]*40
         intervals=activity_intervals(energy)
-        self.assertEqual(intervals,[[9600,19200],[28800,38400]])
+        # Maps, not pairs: Firestore rejects an array inside an array.
+        self.assertEqual(intervals,[{'start':9600,'end':19200},{'start':28800,'end':38400}])
         audio={'samples':48000,'waveform':{'voiceActivity':intervals}}
-        self.assertEqual(mouth_frames(audio,48000,72),[[28,34],[38,44]])
-        self.assertEqual(mouth_frames(audio,48000,72,30,40),[[30,34],[38,40]])
+        self.assertEqual(mouth_frames(audio,48000,72),[{'start':28,'end':34},{'start':38,'end':44}])
+        self.assertEqual(mouth_frames(audio,48000,72,30,40),[{'start':30,'end':34},{'start':38,'end':40}])
+        # Pairs written by older code are still read.
+        legacy={'samples':48000,'waveform':{'voiceActivity':[[9600,19200],[28800,38400]]}}
+        self.assertEqual(mouth_frames(legacy,48000,72),mouth_frames(audio,48000,72))
     def test_A077_known_operation_resume_without_financial_gate(self):
         from shorts.core.recovery import resume_known
         job={'state':'waiting_provider','providerOperation':'known','operation':'veo','started':100,'providerCalls':[]}

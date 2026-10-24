@@ -34,6 +34,18 @@ def settle(job,state,result=None):
     j=copy.deepcopy(job);j.update(state=state,result=result,settled=True,revision=j['revision']+1)
     return j
 
+def close_uncertain(job):
+    """The owner's explicit decision on a job whose provider call has no
+    confirmed outcome: close it WITHOUT sending anything again. The call keeps
+    its journal entry (Google may have billed it); its state records that the
+    owner abandoned it, which is what lets the job settle and free its engine."""
+    require(not job.get('settled'),'JOB_FINISHED','El trabajo ya terminó',409)
+    require(job.get('state')=='submitted_unknown','JOB_STATE','Solo se cierra un trabajo pendiente de comprobar',409)
+    j=copy.deepcopy(job)
+    for call in j.get('providerCalls',[]):
+        if call['state']=='submitted_unknown':call.update(state='abandoned_unknown')
+    return settle(j,'failed',{'code':'CLOSED_UNCERTAIN','error':'Cerrado sin repetir. Si Google llegó a procesar ese envío pudo cobrarlo; no se volvió a enviar.'})
+
 def service_startable(job):
     return (job.get('operation') in ('image','tts','music') and job.get('state')=='queued'
             and not job.get('settled') and not job.get('started') and not job.get('providerCalls')

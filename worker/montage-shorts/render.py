@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import wave
 from shorts.core.contracts import compile_timeline, require, FPS, RATE, SAMPLES, TRACKS
+from shorts.core.mouth import span
 from media import ff, probe, checksum
 
 def local_asset(root, asset):
@@ -127,8 +128,9 @@ def visual_clip(s, files, target, w, h, offset, length):
             else:
                 for field in ('x','y','width','height'):require(type(layer[field])is int and 0<=layer[field]<=max(w,h),'LAYER','Capa inválida')
                 lx,ly,lw,lh=[layer[k] for k in ('x','y','width','height')];crop=''
-            intervals=layer.get('intervals',[[layer['startFrame'],layer['endFrame']]])
+            intervals=layer.get('intervals',[{'start':layer['startFrame'],'end':layer['endFrame']}])
             require(isinstance(intervals,list) and len(intervals)<=500,'LAYER_INTERVALS','Intervalos inválidos')
+            intervals=[span(x) for x in intervals]
             for first,last in intervals:require(type(first)is int and type(last)is int and 0<=first<last<=s['frames'],'LAYER_INTERVALS','Intervalo fuera de toma')
             enabled='+'.join(f'between(n\\,{first-offset}\\,{last-offset-1})' for first,last in intervals) or '0'
             graph+=f';[{li}:v]{crop}scale={lw}:{lh}[l{li}];[{previous}][l{li}]overlay={lx}:{ly}:enable={enabled}[b{li}]';previous=f'b{li}'

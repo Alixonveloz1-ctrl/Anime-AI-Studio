@@ -111,4 +111,7 @@ def assemble_plan(cloud,p,cue_overrides=None):
         cues.append({'id':'music_'+r['id'],'track':'music','audioRevision':a['id'],'anchorSample':r['startFrame']*2000,'sourceSyncSample':source,'trimInSample':source,'trimOutSample':source+duration,'gainDb':r.get('gainDb',-18),'fadeInSamples':r.get('fadeInSamples',0),'fadeOutSamples':r.get('fadeOutSamples',0),'approvalState':'approved'})
     events={x.id:x.to_dict() for x in cloud.project_ref(pid).collection('events').stream()}
     used_events={c['eventId'] for c in cues if c.get('eventId')}
+    # Waveforms (1600 peaks per audio) were already used above for subtitles and
+    # mouths; copied into every timeline they pushed it past Firestore's 1 MB.
+    assets={k:{field:value for field,value in a.items() if field!='waveform'} for k,a in assets.items()}
     return {'schemaVersion':2,'projectId':pid,'format':p['format'],'fps':FPS,'sampleRate':RATE,'frames':target,'assets':assets,'shots':shots,'cues':cues,'events':{k:v for k,v in events.items() if k in used_events},'subtitles':subtitles,'developmentId':dev['id'],'globalGainDb':0,'draftIssues':issues,'cueOverrides':cue_overrides or {},'mixPolicy':p.get('mixPolicy',{})}

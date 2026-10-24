@@ -15,7 +15,17 @@ def execute_job(cloud,jid):
         cloud.finish(jid,'awaiting_review',result)
     except UnknownSubmission:
         ref.update({'state':'submitted_unknown','errorCode':'SUBMITTED_UNKNOWN'})
+        # Nothing runs for this job any more: the engine is free for other work,
+        # and the uncertain job waits for the owner (never resent by itself).
+        cloud.release_slot(jid)
     except ContractError as error:
         cloud.finish(jid,'cancelled' if error.code=='CANCELLED' else 'failed',{'code':error.code,'error':str(error)})
     except Exception as error:
-        ref.update({'state':'submitted_unknown','errorCode':'WORKER_EXCEPTION','errorType':type(error).__name__})
+        calls=(ref.get().to_dict() or {}).get('providerCalls',[])
+        if any(c.get('state')=='submitted_unknown' for c in calls):
+            ref.update({'state':'submitted_unknown','errorCode':'WORKER_EXCEPTION','errorType':type(error).__name__})
+            cloud.release_slot(jid)
+        else:
+            # Every provider call has a known outcome, so the failure came after
+            # it (saving the result). That is a plain failure, not an unknown.
+            cloud.finish(jid,'failed',{'code':'SAVE_FAILED','error':f'La generación terminó pero no se pudo guardar su resultado ({type(error).__name__}). No se repitió ninguna llamada.'})
