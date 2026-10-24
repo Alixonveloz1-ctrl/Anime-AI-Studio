@@ -38,8 +38,8 @@ function fixtureDB(entries={}) {
 // cloud: id -> {generation, manifest}. hooks.save(body) may return a Response
 // (failure) or a promise (delay) before the normal conditional write.
 // scriptAnswer({system, prompt, body}) answers /api/script with a string (the
-// model text) or a Response. fastTimers shortens waits of 1 s or more.
-export async function openAnimes(t, {cloud, local={}, idb={}, hooks={}, unreadable=[], confirm=()=>true, signInDelay=0, scriptAnswer=null, fastTimers=false}={}) {
+// model text) or a Response; imageAnswer(body, n) answers /api/image. fastTimers shortens waits of 1 s or more.
+export async function openAnimes(t, {cloud, local={}, idb={}, hooks={}, unreadable=[], confirm=()=>true, signInDelay=0, scriptAnswer=null, imageAnswer=null, fastTimers=false}={}) {
   const saves = [], errors = [], asked = [], scriptCalls = [], imageCalls = [];
   const virtualConsole = new VirtualConsole(); virtualConsole.on('jsdomError', e=>errors.push(e));
   const dom = new JSDOM(html, {url:'https://fixture.invalid/', runScripts:'outside-only', virtualConsole});
@@ -59,7 +59,10 @@ export async function openAnimes(t, {cloud, local={}, idb={}, hooks={}, unreadab
       if (url.startsWith('https://fixture.invalid/unavailable/')) return new Response('', {status:503});
       if (url.startsWith('https://fixture.invalid/missing/')) return new Response('', {status:404});
       // Media is out of scope here: reference images simply fail.
-      if (url==='/api/image') { imageCalls.push(body); return json({error:'Imagen no disponible en la prueba'}, 400); }
+      if (url==='/api/image') {
+        imageCalls.push(body);
+        return imageAnswer ? imageAnswer(body, imageCalls.length) : json({error:'Imagen no disponible en la prueba'}, 400);
+      }
       if (url==='/api/script') {
         assert.ok(scriptAnswer, 'Unexpected text generation');
         const call = {system:body.system||'', prompt:body.messages?.[0]?.parts?.[0]?.text||'', body};

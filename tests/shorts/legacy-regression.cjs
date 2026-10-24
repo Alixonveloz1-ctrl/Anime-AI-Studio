@@ -10,6 +10,10 @@ const FIXED_API={
  // 50 s deadline answered as JSON {timeout:true}; Vertex status and
  // retryability travel with the error (tests/animes/script-api.test.cjs).
  'script.js':[/^const DEADLINE_MS = /,/^async function callModel\(/,/^module\.exports = async function handler\(/],
+ // One 52 s budget for every Vertex call; a rescue step that would not fit is
+ // continued in a new request; a text-only answer is a refusal, not missing
+ // capacity (tests/animes/image-api.test.cjs).
+ 'image.js':[/^const (LIMITE_MS|MIN_PASO_MS|SIN_TIEMPO) = /,/^async function (callGeminiAtUrl|pedirImagen|callGemini)\(/,/^module\.exports = async function handler\(/],
 };
 const minus=(a,b)=>{const left=new Map();for(const u of b)left.set(u,(left.get(u)||0)+1);return a.filter(u=>{const k=left.get(u)||0;if(k){left.set(u,k-1);return false;}return true;});};
 for(const name of fs.readdirSync('api').filter(x=>x.endsWith('.js')&&x!=='shorts.js')){
@@ -89,6 +93,9 @@ const FIXED=[
  // The episode handler itself (story blocks, split, visual direction, new
  // characters, instructions) is listed above under the generation guard.
  [/^async function (callGeminiOnce|callGemini|extractScenariosFromStory|assignScenariosToScenes|revisarPlanos)\(/,'text generation limits'],
+ // /api/image answers are read safely and rescue continuations are followed
+ // (tests/shorts/ui/animes-media.test.mjs).
+ [/^async function (pedirImagenAlServidor|generateImage|generateImageRaw)\(/,'image requests'],
  // The length selector shows the format fixed by episode 1 (animes-story.test.mjs).
  [/^function updateEpFormatNote\(\) \{/,'episode format lock'],
  // Episode tabs and the generate buttons are repainted with every render, so

@@ -2855,6 +2855,36 @@ document.addEventListener('click', (e) => {
   e.target.innerHTML = '⏹️ Deteniendo — se para al acabar la imagen en curso';
 });
 
+// One /api/image request as the app sees it. Vercel's own 60 s page is plain
+// text, and reading it as JSON produced "The string did not match the expected
+// pattern" on the iPhone. When the server ran out of time between rescue steps
+// it says from which step to go on, and that continues in a new request.
+async function pedirImagenAlServidor(bodyObj) {
+  let body = bodyObj;
+  for (let vuelta = 0; ; vuelta++) {
+    const res = await fetch('/api/image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const raw = await res.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = { error: res.status === 504 || /FUNCTION_INVOCATION_TIMEOUT/.test(raw)
+        ? 'Google tardó más de 60 s con esta imagen y el servidor cortó la petición. Vuelve a intentarlo en un momento.'
+        : `Respuesta inesperada del servidor de imágenes (HTTP ${res.status}).` };
+    }
+    const siguiente = Number(data.siguienteNivel);
+    if (Number.isInteger(siguiente) && siguiente > (body.desdeNivel || 0) && vuelta < 2) {
+      body = { ...body, desdeNivel: siguiente };
+      continue;
+    }
+    return { res, data };
+  }
+}
+
 async function generateImage(prompt, characterRefs = null, forceModel = null, opts = {}) {
   const modelSel = document.getElementById('imageModelSelect');
   const model = forceModel || (modelSel ? modelSel.value : 'auto');
@@ -2922,12 +2952,7 @@ async function generateImage(prompt, characterRefs = null, forceModel = null, op
   const bodyStr = JSON.stringify(bodyObj);
   console.log(`/api/image body: ${(bodyStr.length/1024).toFixed(0)}KB, refs:${cleanRefs?.length||0}, ecchi:${isEcchi}`);
 
-  const res = await fetch('/api/image', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: bodyStr,
-  });
-  const data = await res.json();
+  const { res, data } = await pedirImagenAlServidor(bodyObj);
 
   // If Gemini rejects the reference image, retry without refs
   if (!res.ok || data.error) {
@@ -7606,12 +7631,7 @@ async function generateImageRaw(prompt, preCompressedRefs, env = {}) {
       studioProjectId: env.storageKey ? state.projectId : undefined,
       storageKey: env.storageKey || undefined,
     };
-    const res = await fetch('/api/image', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(bodyObj),
-    });
-    const data = await res.json();
+    const { res, data } = await pedirImagenAlServidor(bodyObj);
     if (res.ok && !data.error && (data.imageData || data.imageUri)) {
       avisarRescate(data);
       if (data.imageUri) {

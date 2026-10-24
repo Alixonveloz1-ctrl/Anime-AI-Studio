@@ -23,20 +23,37 @@ function sinAcceso(msg) {
 // un clip bloqueado cuesta mucho más que una imagen bloqueada.
 const { enfriar, quitarRedundante, limpiarPrompt } = require('./_lib/texto');
 
-async function callGeminiAtUrl(url, parts, projectId, token, aspectRatio) {
+// Vercel kills this function at 60 s. Every Vertex call shares one budget,
+// measured from the start of the request, that leaves room for the GCS upload;
+// a rescue step is not started without time for a whole generation. When time
+// runs out the answer says from which step to continue, and the app asks for
+// it in a new request instead of the whole thing dying at 60 s.
+const LIMITE_MS = 52000;
+const MIN_PASO_MS = 15000;
+
+async function callGeminiAtUrl(url, parts, projectId, token, aspectRatio, limite) {
   const safeRatio = ['9:16','16:9'].includes(aspectRatio) ? aspectRatio : '9:16';
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, 'X-Goog-User-Project':projectId },
-    body: JSON.stringify({
-      contents: [{ role:'user', parts }],
-      generationConfig: {
-        responseModalities: ['IMAGE','TEXT'],
-        imageConfig: { aspectRatio: safeRatio },
-      },
-    }),
-  });
-  const d = await r.json();
+  let r;
+  try {
+    r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, 'X-Goog-User-Project':projectId },
+      body: JSON.stringify({
+        contents: [{ role:'user', parts }],
+        generationConfig: {
+          responseModalities: ['IMAGE','TEXT'],
+          imageConfig: { aspectRatio: safeRatio },
+        },
+      }),
+      signal: AbortSignal.timeout(Math.max(1000, limite - Date.now())),
+    });
+  } catch (e) {
+    if (e.name !== 'TimeoutError' && e.name !== 'AbortError') throw e;
+    return { ok: false, timeout: true, data: {} };
+  }
+  const raw = await r.text();
+  let d;
+  try { d = JSON.parse(raw); } catch (_) { d = { error: { message: raw.slice(0, 200) || `HTTP ${r.status}` } }; }
   const msg = (d.error?.message || '').toLowerCase();
   const shouldRotate = !r.ok && (
     r.status === 429 || r.status === 503 || r.status === 404 ||
@@ -51,7 +68,9 @@ async function callGeminiAtUrl(url, parts, projectId, token, aspectRatio) {
   return { ok: r.ok, shouldRotate: shouldRotate && !isNoAccess, isNoAccess, isSafetyBlock, status: r.status, data: d };
 }
 
-async function pedirImagen(model, cleanPrompt, characterRefs, projectId, token, isEcchi, aspectRatio, continuityRef, styleSpec, sinCortes, segundosEntre, planoPrevio, planoNuevo) {
+const SIN_TIEMPO = { error: 'Google tardó más de 50 s en dibujar esta imagen y se cortó antes del límite del servidor. Vuelve a intentarlo en un momento.', timeout: true };
+
+async function pedirImagen(model, cleanPrompt, characterRefs, projectId, token, isEcchi, aspectRatio, continuityRef, styleSpec, sinCortes, segundosEntre, planoPrevio, planoNuevo, limite) {
 
   const parts = [];
   const aspectStyle = aspectRatio === '16:9' ? '16:9 horizontal widescreen' : '9:16 vertical';
@@ -132,7 +151,8 @@ ${cleanPrompt}` });
   if (location === 'global') {
     // Global models: single endpoint, no rotation
     const url = vertexUrl(projectId, 'global', model, 'generateContent');
-    const { ok, shouldRotate, isNoAccess, isSafetyBlock, data } = await callGeminiAtUrl(url, parts, projectId, token, aspectRatio);
+    const { ok, timeout, isNoAccess, isSafetyBlock, data } = await callGeminiAtUrl(url, parts, projectId, token, aspectRatio, limite);
+    if (timeout) return SIN_TIEMPO;
     if (isNoAccess) return { error: data.error?.message || `Sin acceso a ${model}` };
     if (isSafetyBlock) {
       const finishReason = data.candidates?.[0]?.finishReason || 'SAFETY';
@@ -154,7 +174,10 @@ ${cleanPrompt}` });
   for (const region of regions) {
     const url = vertexUrl(projectId, region, model, 'generateContent');
 
-    const { ok, shouldRotate, isNoAccess, isSafetyBlock, data } = await callGeminiAtUrl(url, parts, projectId, token, aspectRatio);
+    // No time for another region: say so instead of starting a call Vercel would cut.
+    if (lastError && limite - Date.now() < MIN_PASO_MS) return { ...SIN_TIEMPO, error: `${SIN_TIEMPO.error} ${lastError}` };
+    const { ok, timeout, shouldRotate, isNoAccess, isSafetyBlock, data } = await callGeminiAtUrl(url, parts, projectId, token, aspectRatio, limite);
+    if (timeout) return SIN_TIEMPO;
 
     // Stop at the first region: the model is not available to this project
     // anywhere, so the other regions would fail identically.
@@ -187,8 +210,11 @@ ${cleanPrompt}` });
       const safety = cand?.safetyRatings?.filter(s => s.blocked)?.map(s => s.category.replace('HARM_CATEGORY_',''))?.join(', ');
       return { error: `bloqueado [${finishReason}]${safety ? ' — ' + safety : ''}`, bloqueado: true };
     }
-    lastError = `${region}: respuesta vacía [${finishReason}]`;
-    continue;
+    // Text and no image with STOP is a soft refusal too. It repeats in every
+    // region, so rotating only paid three times and then reported it as "sin
+    // capacidad", which made the app wait for quota for ten minutes.
+    const textPart = cand?.content?.parts?.find(p => p.text)?.text;
+    return { error: `bloqueado [${finishReason}: respondió sólo con texto]${textPart ? ` — "${textPart.slice(0,80)}"` : ''}`, bloqueado: true };
   }
   // Sin recortar: el mensaje de Google dice QUÉ cuota se agotó y cada cuánto se
   // repone, y cortarlo a sesenta caracteres se llevaba justo esa parte.
@@ -199,7 +225,7 @@ ${cleanPrompt}` });
 // Escalera de rescate. Un bloqueo NO es el final: se vuelve a pedir la misma
 // escena con el texto enfriado. Se devuelve en qué escalón salió, para poder
 // decírselo al usuario en vez de cambiarle el prompt a sus espaldas.
-async function callGemini(model, prompt, characterRefs, projectId, token, isEcchi = false, aspectRatio = '9:16', continuityRef = null, styleSpec = '', sinCortes = false, segundosEntre = 8, planoPrevio = '', planoNuevo = '', desdeNarracion = false) {
+async function callGemini(model, prompt, characterRefs, projectId, token, isEcchi = false, aspectRatio = '9:16', continuityRef = null, styleSpec = '', sinCortes = false, segundosEntre = 8, planoPrevio = '', planoNuevo = '', desdeNarracion = false, limite = Date.now() + LIMITE_MS, desdeNivel = 0) {
   // Limpieza de entrada: palabras que bloquean seguro, frases que sólo señalan lo
   // que hay bajo la ropa (redundantes: la ficha del personaje ya viaja dibujada),
   // y la narración enfriada cuando es lo único que hay — no está escrita para ser
@@ -220,10 +246,15 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
 
   let ultimo = null;
   for (const e of escalones) {
+    // A continuation request starts at the step the previous one could not reach.
+    if (e.nivel < desdeNivel) continue;
     // Un escalón que no cambió NADA respecto del anterior no se paga dos veces.
     if (ultimo && e.texto === ultimo.texto && e.ecchi === ultimo.ecchi && e.cont === ultimo.cont) continue;
+    if (ultimo && limite - Date.now() < MIN_PASO_MS) {
+      return { error: `${ultimo.error} — se sigue rescatando en otra petición`, bloqueado: true, siguienteNivel: e.nivel };
+    }
     const r = await pedirImagen(model, e.texto, characterRefs, projectId, token, e.ecchi,
-      aspectRatio, e.cont, styleSpec, sinCortes, segundosEntre, planoPrevio, planoNuevo);
+      aspectRatio, e.cont, styleSpec, sinCortes, segundosEntre, planoPrevio, planoNuevo, limite);
     if (r.imageData) return e.nivel ? { ...r, rescate: e.nivel } : r;
     // Sólo los bloqueos se enfrían. Un 429 o un modelo sin acceso no mejora
     // cambiando palabras, y reintentarlo tres veces sólo tarda más.
@@ -237,6 +268,7 @@ async function callGemini(model, prompt, characterRefs, projectId, token, isEcch
 
 // ─────────────────────────────────────────────
 module.exports = async function handler(req, res) {
+  const limite = Date.now() + LIMITE_MS;
   if (await begin(req, res)) return;
   try {
     const body = req.body || {};
@@ -285,7 +317,8 @@ module.exports = async function handler(req, res) {
     // user did not ask for.
     const result = await callGemini(model, prompt, characterRefs, projectId, token, isEcchi === true,
       aspectRatio, continuityRef, body.styleSpec || '', body.sinCortes === true, Number(body.segundosEntre) || 8,
-      String(body.planoPrevio || ''), String(body.planoNuevo || ''), body.desdeNarracion === true);
+      String(body.planoPrevio || ''), String(body.planoNuevo || ''), body.desdeNarracion === true,
+      limite, Math.max(0, Math.min(2, Math.floor(Number(body.desdeNivel) || 0))));
 
     // Production images never need to come back through Safari as multi-megabyte
     // base64 strings. When the client supplies its lightweight storage key, save

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {openAnimes, pid} from './animes-page.mjs';
+import {openAnimes, pid, until} from './animes-page.mjs';
 import {scriptedModel, storyAnswer, splitAnswer, visualScenes, planFor, words, VERCEL_TIMEOUT} from './animes-script-mock.mjs';
 
 // The episode generator on the real page with a scripted model: what it asks
@@ -92,7 +92,7 @@ test('Episode instructions survive a reload, so the saved blocks are resumed wit
   a.w.document.getElementById('episodeInstructions').value = 'El episodio termina con una lluvia inesperada';
   await a.press('btnGenerarEpisodio');
   assert.match(a.modal(), /Generación pausada/);
-  await new Promise(r => setTimeout(r, 500));   // the draft reaches the cloud
+  await until(() => a.w.localStorage.getItem('anime_unsynced_' + a.state().projectId) === null);   // the draft reached the cloud
   failSecondBlock = false;
   // Same anime opened again (reload or another phone): the box starts empty.
   const b = await openAnimes(t, {cloud, fastTimers:true, scriptAnswer:scriptedModel({story})});
@@ -108,7 +108,10 @@ test('A new universe on an anime that already has episodes goes to a new project
   const a = await newAnime(t);
   await a.press('btnGenerarEpisodio');
   const firstId = a.state().projectId;
+  // Saves are debounced: compare once the episode has reached the cloud.
+  await until(() => a.w.localStorage.getItem('anime_unsynced_' + firstId) === null);
   const before = JSON.stringify(a.cloud.get(firstId).manifest.data.episodes);
+  assert.equal(JSON.parse(before)[1].length, 12);
   await a.press('btnGenerarUniverso');
   assert.match(a.asked.at(-1), /se creará en un PROYECTO NUEVO/);
   assert.notEqual(a.state().projectId, firstId);
