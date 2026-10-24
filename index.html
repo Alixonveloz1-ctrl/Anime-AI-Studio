@@ -1782,11 +1782,43 @@ function stateDataSnapshot() {
   };
 }
 
-let cloudSaveTimer = null;
-let pendingCloudSave = null;
-let cloudSyncWarningShown = false;
+// ── Sincronización del proyecto con Google Cloud ──
+// Un solo guardado en vuelo por proyecto: al terminar se envía la copia más
+// nueva que haya quedado pendiente, así una respuesta lenta nunca deja en la
+// nube una versión anterior. Cada guardado lleva la versión (generation de GCS)
+// que este dispositivo vio por última vez; si otro dispositivo o pestaña guardó
+// después, el servidor contesta 409 y aquí se pregunta en vez de pisar nada.
+// Mientras un cambio no ha llegado a la nube, "anime_unsynced_<id>" protege la
+// copia del dispositivo: no se poda y al abrir el proyecto se sube.
+const nube = new Map();
+const claveVersion = pid => `anime_gen_${pid}`;
+const claveSinSubir = pid => `anime_unsynced_${pid}`;
+function syncDe(pid) {
+  let s = nube.get(pid);
+  if (!s) {
+    let generation = null;
+    try { generation = localStorage.getItem(claveVersion(pid)); } catch (_) {}
+    s = { generation, job: null, enVuelo: false, timer: null, reintento: null, intentos: 0, conflicto: false, avisado: false };
+    nube.set(pid, s);
+  }
+  return s;
+}
+function recordarVersion(pid, generation) {
+  if (!generation) return;
+  syncDe(pid).generation = String(generation);
+  try { localStorage.setItem(claveVersion(pid), String(generation)); } catch (_) {}
+}
+function tieneCambiosSinSubir(pid) {
+  try { return localStorage.getItem(claveSinSubir(pid)) === '1'; } catch (_) { return false; }
+}
+function marcarSinSubir(pid, pendiente) {
+  try {
+    if (pendiente) localStorage.setItem(claveSinSubir(pid), '1');
+    else localStorage.removeItem(claveSinSubir(pid));
+  } catch (_) {}
+}
 
-async function cloudSaveProject(projectId, data, meta = {}) {
+async function cloudSaveProject(projectId, data, meta = {}, opciones = {}) {
   const r = await fetch('/api/upload-url', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -1796,39 +1828,120 @@ async function cloudSaveProject(projectId, data, meta = {}) {
       name:meta.name || data?.universe?.title || 'Proyecto',
       created:meta.created || Date.now(),
       updated:meta.updated || Date.now(),
+      baseGeneration:opciones.baseGeneration ?? undefined,
+      force:opciones.force || undefined,
       data,
     }),
   });
   const d = await r.json().catch(() => ({}));
-  if (!r.ok || !d.ok) throw new Error(d.error || `upload-url ${r.status}`);
+  if (!r.ok || !d.ok) throw Object.assign(new Error(d.error || `upload-url ${r.status}`), { status:r.status, conflict:!!d.conflict });
   return d.project;
 }
 
 function queueCloudProjectSave(projectId, data, meta) {
-  // Only the newest snapshot matters. localStorage is a cache; GCS receives the
-  // latest canonical JSON after a short debounce so one generation step does
-  // not produce dozens of writes while state fields are being filled.
-  pendingCloudSave = {
-    projectId,
-    data: JSON.parse(JSON.stringify(data)),
-    meta: { ...meta },
-  };
-  clearTimeout(cloudSaveTimer);
-  cloudSaveTimer = setTimeout(async () => {
-    const job = pendingCloudSave;
-    pendingCloudSave = null;
-    if (!job) return;
-    try {
-      await cloudSaveProject(job.projectId, job.data, job.meta);
-      cloudSyncWarningShown = false;
-    } catch (e) {
-      console.error('Sincronización GCS:', e);
-      if (!cloudSyncWarningShown) {
-        cloudSyncWarningShown = true;
-        showToast('⚠️ No se pudo sincronizar el proyecto con Google Cloud. Se reintentará al abrir la app.', 'error');
+  // Solo importa la copia más nueva: se envía tras una pausa corta para que un
+  // paso de generación no produzca decenas de escrituras.
+  const s = syncDe(projectId);
+  s.job = { data: JSON.parse(JSON.stringify(data)), meta: { ...meta } };
+  marcarSinSubir(projectId, true);
+  clearTimeout(s.timer);
+  s.timer = setTimeout(() => enviarGuardado(projectId), 350);
+}
+
+async function enviarGuardado(pid, opciones = {}) {
+  const s = syncDe(pid);
+  // El guardado en vuelo enviará lo pendiente al terminar; en conflicto se espera
+  // a que el usuario decida.
+  if (s.enVuelo || (s.conflicto && !opciones.force) || !s.job) return;
+  clearTimeout(s.timer); clearTimeout(s.reintento);
+  const job = s.job;
+  s.job = null;
+  s.enVuelo = true;
+  let reintentarEn = 0;
+  try {
+    const project = await cloudSaveProject(pid, job.data, job.meta, { baseGeneration: s.generation, force: opciones.force });
+    recordarVersion(pid, project.generation);
+    s.intentos = 0;
+    s.conflicto = false;
+    if (!s.job) marcarSinSubir(pid, false);
+    if (s.avisado) {
+      s.avisado = false;
+      showToast('✅ Cambios guardados en Google Cloud', 'success');
+    }
+  } catch (e) {
+    console.error('Sincronización GCS:', e);
+    if (!s.job) s.job = job;  // un cambio más nuevo sustituye a este
+    if (e.conflict) {
+      s.conflicto = true;
+    } else if (e.status === 400 || e.status === 413) {
+      // Repetir no lo arreglaría: se avisa y la copia sigue en el dispositivo.
+      openErrorModal('No se pudo guardar el proyecto en Google Cloud', `${e.message}. Los cambios siguen guardados en este dispositivo.`);
+    } else {
+      s.intentos++;
+      reintentarEn = Math.min(60000, 2000 * 2 ** (s.intentos - 1));
+      if (!s.avisado) {
+        s.avisado = true;
+        showToast('⚠️ No se pudo guardar en Google Cloud. Los cambios siguen en este dispositivo y se reintentará solo.', 'error');
       }
     }
-  }, 350);
+  } finally {
+    s.enVuelo = false;
+  }
+  if (reintentarEn) s.reintento = setTimeout(() => enviarGuardado(pid), reintentarEn);
+  else if (s.conflicto) resolverConflicto(pid);
+  else if (s.job) enviarGuardado(pid);
+}
+
+// Al salir de la app, al volver y al recuperar la conexión: enviar lo pendiente
+// ya, sin esperar la pausa ni el reintento programado.
+function sincronizarPendientes() {
+  for (const pid of nube.keys()) enviarGuardado(pid);
+}
+document.addEventListener('visibilitychange', sincronizarPendientes);
+window.addEventListener('pagehide', sincronizarPendientes);
+window.addEventListener('online', sincronizarPendientes);
+
+// Other projects with changes that never reached the cloud (the app was closed
+// offline) are uploaded in the background. If the cloud copy changed too, the
+// question is asked when that project is opened.
+function subirCambiosPendientesDeOtros() {
+  let keys = [];
+  try { keys = Object.keys(localStorage).filter(k => k.startsWith('anime_unsynced_')); } catch (_) {}
+  for (const k of keys) {
+    const pid = k.slice('anime_unsynced_'.length);
+    const sync = syncDe(pid);
+    if (pid === state.projectId || sync.job || sync.enVuelo) continue;
+    let data = null;
+    try { data = JSON.parse(localStorage.getItem(`proj_${pid}`) || 'null'); } catch (_) {}
+    if (!data) { marcarSinSubir(pid, false); continue; }
+    const meta = projects.find(p => p.id === pid) || {};
+    sync.job = { data, meta: { name: data.universe?.title || meta.name, created: meta.created, updated: Date.now() } };
+    enviarGuardado(pid);
+  }
+}
+
+async function resolverConflicto(pid) {
+  const s = syncDe(pid);
+  if (s.preguntando) return;
+  s.preguntando = true;
+  try {
+    // Con una generación en marcha no se puede recargar el proyecto: lo nuevo
+    // sigue guardándose en el dispositivo y se pregunta al terminar.
+    while (trabajoEnCurso()) await new Promise(done => setTimeout(done, 2000));
+    if (pid !== state.projectId || !s.conflicto) return;  // se pregunta al abrirlo
+    const nombre = state.universe?.title || 'este proyecto';
+    const conservar = confirm(`«${nombre}» se guardó desde otro dispositivo o pestaña después de abrirlo aquí.\n\nAceptar: guardar la versión de ESTE dispositivo (la otra queda en «Revisar copias guardadas»).\nCancelar: abrir la versión más reciente de Google Cloud y descartar los cambios hechos aquí.`);
+    if (conservar) {
+      enviarGuardado(pid, { force: true });
+      return;
+    }
+    s.job = null;
+    s.conflicto = false;
+    marcarSinSubir(pid, false);
+    await switchProject(pid);
+  } finally {
+    s.preguntando = false;
+  }
 }
 
 function saveState() {
@@ -1875,23 +1988,56 @@ async function cloudLoadProject(pid) {
   if (r.status === 404) return null;
   const d = await r.json().catch(() => ({}));
   if (!r.ok || !d.project) throw new Error(d.error || `upload-url ${r.status}`);
-  return d.project;
+  return { ...d.project, generation: d.generation ? String(d.generation) : null };
 }
 
 async function loadStateFor(pid) {
-  // Cloud FIRST. The device copy is only an offline/emergency cache.
+  // Cloud FIRST. The device copy is only an offline/emergency cache, except
+  // when it holds changes that never reached the cloud: then it is uploaded
+  // instead of being overwritten.
   let failure;
   const usable = data => data && typeof data === 'object' && !Array.isArray(data)
     && ['universe','characters','episodes','scenes'].some(key => Object.hasOwn(data,key))
     && (data.characters === undefined || Array.isArray(data.characters))
     && (data.scenes === undefined || Array.isArray(data.scenes))
     && (data.episodes === undefined || (data.episodes && typeof data.episodes === 'object'));
+  const deviceCopy = () => {
+    try {
+      const raw = localStorage.getItem(`proj_${pid}`);
+      const cached = raw ? JSON.parse(raw) : null;
+      return usable(cached) ? cached : null;
+    } catch (_) { return null; }
+  };
+  const sync = syncDe(pid);
   try {
     const remote = await cloudLoadProject(pid);
     if (remote?.data) {
       if (!usable(remote.data)) throw new Error('El archivo guardado no tiene el formato esperado. No se modificó el proyecto abierto.');
+      const unsynced = tieneCambiosSinSubir(pid) ? deviceCopy() : null;
+      if (unsynced) {
+        // If the cloud is still the version this device last saw, the device
+        // copy is simply newer. If not, both changed: the owner decides.
+        const cloudUnchanged = !!remote.generation && remote.generation === sync.generation;
+        const keepDevice = cloudUnchanged || confirm(`«${unsynced.universe?.title || remote.name || 'Este proyecto'}» tiene cambios en este dispositivo que no llegaron a Google Cloud, y también se guardó desde otro dispositivo.\n\nAceptar: quedarte con los de ESTE dispositivo (la otra versión queda en «Revisar copias guardadas»).\nCancelar: usar la versión de Google Cloud y descartar los de este dispositivo.`);
+        if (keepDevice) {
+          applyStateData(pid, unsynced);
+          recordarVersion(pid, remote.generation);
+          const meta = projects.find(p => p.id === pid) || remote;
+          sync.conflicto = false;
+          sync.job = {
+            data: JSON.parse(JSON.stringify(unsynced)),
+            meta: { name: unsynced.universe?.title || meta.name, created: meta.created, updated: Date.now() },
+          };
+          enviarGuardado(pid);
+          return true;
+        }
+        sync.job = null;
+        sync.conflicto = false;
+        marcarSinSubir(pid, false);
+      }
       window.animeRecovery?.remember(pid, remote.data);
       applyStateData(pid, remote.data);
+      recordarVersion(pid, remote.generation);
       try { localStorage.setItem(`proj_${pid}`, JSON.stringify(remote.data)); } catch (_) {}
       return true;
     }
@@ -1900,14 +2046,11 @@ async function loadStateFor(pid) {
     console.warn('Carga desde bucket:', e.message);
   }
 
-  try {
-    const raw = localStorage.getItem(`proj_${pid}`);
-    const cached = raw ? JSON.parse(raw) : null;
-    if (usable(cached)) {
-      applyStateData(pid, cached);
-      return false;
-    }
-  } catch (_) {}
+  const cached = deviceCopy();
+  if (cached) {
+    applyStateData(pid, cached);
+    return false;
+  }
   // A failed read is not an empty project. Keep the current project and caches.
   throw failure || new Error('No se encontró una copia disponible del proyecto. No se modificó el proyecto abierto.');
 }
@@ -1930,7 +2073,8 @@ async function cloudListProjects() {
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok || !Array.isArray(d.projects)) throw new Error(d.error || `upload-url ${r.status}`);
-  return d.projects;
+  // `unreadable`: manifests that exist but could not be read right now.
+  return { projects: d.projects, unreadable: Array.isArray(d.unreadable) ? d.unreadable : [] };
 }
 
 async function migrateThisBrowserToCloud() {
@@ -1939,7 +2083,12 @@ async function migrateThisBrowserToCloud() {
 
   const locals = Array.isArray(projects) ? projects.slice() : [];
   let remote = [];
-  try { remote = await cloudListProjects(); } catch (e) {
+  try {
+    const listed = await cloudListProjects();
+    // Comparing against a partial list could overwrite a newer cloud copy.
+    if (listed.unreadable.length) throw new Error(`${listed.unreadable.length} proyecto(s) sin leer`);
+    remote = listed.projects;
+  } catch (e) {
     console.warn('No se pudo iniciar migración cloud:', e.message);
     return;
   }
@@ -1986,7 +2135,11 @@ async function migrateThisBrowserToCloud() {
 }
 
 async function refreshProjectsFromCloud() {
-  const remote = await cloudListProjects();
+  const { projects: remote, unreadable } = await cloudListProjects();
+  // A manifest that could not be read right now has not disappeared: it stays
+  // in the list with what this device already knew about it.
+  const known = new Map(projects.map(p => [p.id, p]));
+  for (const id of unreadable) remote.push({ ...(known.get(id) || { name:'Proyecto', created:0, updated:0 }), id, unreadable:true });
   projects = remote;
   saveProjects();
   return remote;
@@ -1994,13 +2147,16 @@ async function refreshProjectsFromCloud() {
 
 async function pruneDeviceCacheExcept(projectId) {
   // Once migration succeeded, browser storage must not grow with the number of
-  // animes. Keep only the active project's state/media on this device.
+  // animes. Keep only the active project's state/media on this device, plus
+  // any project whose latest changes have not reached the cloud yet.
   if (localStorage.getItem('anime_cloud_migrated_v1') !== '1') return;
   try {
-    for (let i = localStorage.length - 1; i >= 0; i--) {
+    const stale = [];
+    for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k?.startsWith('proj_') && k !== `proj_${projectId}`) localStorage.removeItem(k);
+      if (k?.startsWith('proj_') && k !== `proj_${projectId}` && !tieneCambiosSinSubir(k.slice(5))) stale.push(k);
     }
+    for (const k of stale) localStorage.removeItem(k);
   } catch (_) {}
   const keys = await localDbKeys();
   for (const k0 of keys) {
@@ -2014,20 +2170,33 @@ async function newProject() {
   if (bloqueadoPorTrabajo('crear otro proyecto')) return false;
   const pid = 'p' + Date.now();
   const now = Date.now();
-  projects.unshift({ id: pid, name: 'Nuevo proyecto', created:now, updated:now });
+  const meta = { id: pid, name: 'Nuevo proyecto', created:now, updated:now };
+  const data = { universe: null, characters: [], episodes:{1:[]}, currentEpisode:1, episodeDirection: {} };
+  // The project exists in Google Cloud BEFORE it is opened here: if creation
+  // fails, the app stays on the project that was open (and says so).
+  const saved = await cloudSaveProject(pid, data, meta, { baseGeneration: '0' });
+  recordarVersion(pid, saved.generation);
+  projects.unshift(meta);
   saveProjects();
-  state = { projectId: pid, universe: null, characters: [], episodes:{1:[]}, currentEpisode:1, scenes: [], episodeDirection: {} };
-  // Create the cloud manifest immediately: even an empty new project exists on
-  // every device from the moment it is created.
-  const data = stateDataSnapshot();
-  await cloudSaveProject(pid, data, projects[0]);
+  applyStateData(pid, data);
   try { localStorage.setItem(`proj_${pid}`, JSON.stringify(data)); } catch (_) {}
   await pruneDeviceCacheExcept(pid);
-  renderAll();
+  await renderAll();
+  return true;
+}
+
+async function crearProyecto() {
+  try {
+    if (!await newProject()) return;
+    closeModal();
+    showToast('Proyecto creado en Google Cloud', 'success');
+  } catch (e) {
+    openErrorModal('No se pudo crear el proyecto', `${e.message}\n\nSigues en el proyecto que tenías abierto.`);
+  }
 }
 
 async function switchProject(pid) {
-  if (pid !== state.projectId && bloqueadoPorTrabajo('abrir otro proyecto')) return;
+  if (bloqueadoPorTrabajo(pid === state.projectId ? 'volver a cargar el proyecto' : 'abrir otro proyecto')) return;
   try {
     showToast('Abriendo el proyecto…');
     const fromCloud = await loadStateFor(pid);
@@ -2063,6 +2232,10 @@ async function deleteProject(pid) {
   }
 
   localStorage.removeItem(`proj_${pid}`);
+  const sync = nube.get(pid);
+  if (sync) { clearTimeout(sync.timer); clearTimeout(sync.reintento); sync.job = null; nube.delete(pid); }
+  marcarSinSubir(pid, false);
+  try { localStorage.removeItem(claveVersion(pid)); } catch (_) {}
   // local media for this project is cache and can now be dropped.
   for (const k0 of await localDbKeys()) if (projectIdFromDbKey(String(k0)) === pid) await localDbDel(k0);
   projects = projects.filter(p => p.id !== pid);
@@ -2070,7 +2243,10 @@ async function deleteProject(pid) {
 
   if (state.projectId === pid) {
     if (projects.length) await switchProject(projects[0].id);
-    else await newProject();
+    else {
+      try { await newProject(); }
+      catch (e) { openErrorModal('No se pudo crear un proyecto nuevo', e.message); return; }
+    }
   }
   await openProjectsModal();
 }
@@ -2382,7 +2558,7 @@ async function openProjectsModal() {
     <div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
       <div style="flex:1;cursor:pointer" onclick="switchProject('${p.id}')">
         <div style="font-weight:600;font-size:14px">☁️ ${p.name}</div>
-        <div style="font-size:11px;color:var(--text-dim)">Google Cloud · ${new Date(p.updated).toLocaleString()}</div>
+        <div style="font-size:11px;color:var(--text-dim)">${p.unreadable ? 'Google Cloud no lo pudo leer ahora · ábrelo para reintentar' : `Google Cloud · ${new Date(p.updated).toLocaleString()}`}</div>
       </div>
       <button class="btn-sec btn-danger" style="width:auto;padding:6px 10px;font-size:11px" onclick="deleteProject('${p.id}')">🗑️</button>
     </div>
@@ -2392,7 +2568,7 @@ async function openProjectsModal() {
     <h3>📁 Proyectos</h3>
     <p style="font-size:11px;color:var(--text-dim);margin:-4px 0 12px;line-height:1.5">Esta lista viene del bucket de Google Cloud. Es la misma en cualquier teléfono o computadora.</p>
     ${list}
-    <button class="btn" style="margin-top:10px" onclick="newProject();closeModal();showToast('Proyecto creado en Google Cloud','success')">➕ Nuevo Proyecto</button>
+    <button class="btn" style="margin-top:10px" onclick="crearProyecto()">➕ Nuevo Proyecto</button>
   `);
 }
 document.getElementById('btnProjects').addEventListener('click', () => openProjectsModal());
@@ -8995,6 +9171,7 @@ for (const [clave, etiqueta] of Object.entries({
     const fromCloud = await loadStateFor(projects[0].id);
     if (fromCloud && !window.animeRecovery?.hasRetained(projects[0].id)) await pruneDeviceCacheExcept(projects[0].id);
   }
+  subirCambiosPendientesDeOtros();
   updateApiDot();
   // Antes de dibujar nada: el formato (9:16 / 16:9) decide cómo se recortan las
   // miniaturas de cada escena.

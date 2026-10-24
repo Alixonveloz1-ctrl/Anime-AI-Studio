@@ -65,12 +65,12 @@ test('Backup is content-addressed and repeated saves cannot overwrite that backu
 test('Recovery rejects object paths and foreign identifiers before storage access',async t=>{
  const s=storage(t);for(const key of ['../secret','backup:../../other','deleted:x','version:2:other'])await assert.rejects(restoreProject('fixture',id,key,'4'));await assert.rejects(inspectProject('fixture','../other',empty));assert.equal(s.calls.length,0);
 });
-test('Legacy projectSave preserves the previous manifest before its existing upload',async()=>{
- const fs=require('node:fs'),vm=require('node:vm'),order=[];
- const module={exports:{}};
- vm.runInNewContext(fs.readFileSync('api/upload-url.js','utf8'),{module,Buffer,console,require:path=>path==='./_lib/gcp'?{cfg:{bucket:'fixture',prefix:'anime-studio'},begin:async()=>false,auth:async()=>({token:'fixture'}),gcsReadText:async()=>JSON.stringify(full),gcsUpload:async()=>order.push('upload'),fail:(res,e)=>res.status(500).json({error:e.message})}:{preserveManifest:async(token,pid,old)=>{assert.equal(token,'fixture');assert.equal(pid,id);assert.equal(JSON.stringify(old),JSON.stringify(full));order.push('backup');}}});
- const res={status(n){this.code=n;return this;},json(data){this.data=data;return this;}};
- await module.exports({body:{action:'projectSave',id,data:empty.data}},res);assert.equal(res.code,200,JSON.stringify(res.data));assert.deepEqual(order,['backup','upload']);
+test('projectSave preserves the previous manifest before its conditional upload',async t=>{
+ const s=storage(t);await require('../../api/_lib/project-store').saveProject('fixture',id,{id,data:full.data,baseGeneration:'4'});
+ const writes=s.calls.filter(c=>c.method==='POST');assert.equal(writes.length,2);
+ assert.ok(writes[0].u.searchParams.get('name').startsWith(root+'history/'));assert.equal(writes[0].body,JSON.stringify(empty));
+ assert.equal(writes[1].u.searchParams.get('name'),name);assert.equal(writes[1].u.searchParams.get('ifGenerationMatch'),'4');
+ assert.deepEqual(JSON.parse(s.objects.get(name)).data,full.data);
 });
 test('A null legacy read is verified and backed up, not mistaken for a new project',async t=>{
  const s=storage(t);await preserveManifest('fixture',id,null);const writes=s.calls.filter(c=>c.method==='POST');assert.equal(writes.length,1);assert.equal(writes[0].body,JSON.stringify(empty));

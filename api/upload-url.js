@@ -56,37 +56,26 @@ module.exports = async function handler(req, res) {
     if (action) {
       if (!cfg.bucket) return res.status(500).json({ error: 'GCS_OUTPUT_BUCKET no configurado en Vercel', configError: true });
 
-      if (action === 'projectList') {
+      // Project manifests: listing, reading and conditional saves live in
+      // _lib/project-store.js (tests/recovery/project-store.test.cjs).
+      if (action === 'projectList' || action === 'projectGet' || action === 'projectSave') {
+        const store = require('./_lib/project-store');
         const { token } = await auth();
-        const objects = await gcsList(token, cfg.bucket, manifestRoot() + '/');
-        const ids = [...new Set(objects
-          .map(x => String(x.name || ''))
-          .filter(n => n.startsWith(manifestRoot() + '/') && /\.json$/.test(n))
-          .map(n => n.slice((manifestRoot() + '/').length, -5))
-          .filter(safeProjectId))];
-        const projects = [];
-        for (let i = 0; i < ids.length; i += 10) {
-          const found = await Promise.all(ids.slice(i, i + 10).map(id => readProjectManifest(token, id)));
-          for (const m of found) if (m) projects.push({
-            id:m.id,
-            name:m.name || m.data?.universe?.title || 'Proyecto',
-            updated:Number(m.updated || 0) || 0,
-            created:Number(m.created || 0) || 0,
-          });
+        try {
+          if (action === 'projectList') return res.status(200).json(await store.listProjects(token));
+          if (action === 'projectGet') {
+            const found = await store.getProject(token, safeProjectId(body.id) || '');
+            const project = found.project;
+            // Load diagnostics contain counts only, never story text or media URLs.
+            console.info('[animes:project-load]', JSON.stringify({id:project.id, dataType:typeof project.data, universe:!!project.data?.universe, characters:Array.isArray(project.data?.characters)?project.data.characters.length:0, currentEpisode:project.data?.currentEpisode||1, episodes:Object.fromEntries(Object.entries(project.data?.episodes||{}).map(([key,value])=>[key,Array.isArray(value)?value.length:0])), legacyScenes:Array.isArray(project.data?.scenes)?project.data.scenes.length:0}));
+            return res.status(200).json(found);
+          }
+          const project = await store.saveProject(token, safeProjectId(body.id) || '', body);
+          return res.status(200).json({ ok:true, project });
+        } catch (e) {
+          if (!e.status) throw e;
+          return res.status(e.status).json({ error:e.message, conflict:!!e.conflict, generation:e.generation, updated:e.updated });
         }
-        projects.sort((a,b) => (b.updated || 0) - (a.updated || 0));
-        return res.status(200).json({ projects });
-      }
-
-      if (action === 'projectGet') {
-        const id = safeProjectId(body.id);
-        if (!id) return res.status(400).json({ error:'project id inválido' });
-        const { token } = await auth();
-        const project = await readProjectManifest(token, id);
-        if (!project) return res.status(404).json({ error:'Proyecto no encontrado en el bucket' });
-        // Load diagnostics contain counts only, never story text or media URLs.
-        console.info('[animes:project-load]', JSON.stringify({id, dataType:typeof project.data, universe:!!project.data?.universe, characters:Array.isArray(project.data?.characters)?project.data.characters.length:0, currentEpisode:project.data?.currentEpisode||1, episodes:Object.fromEntries(Object.entries(project.data?.episodes||{}).map(([key,value])=>[key,Array.isArray(value)?value.length:0])), legacyScenes:Array.isArray(project.data?.scenes)?project.data.scenes.length:0}));
-        return res.status(200).json({ project });
       }
 
       // Owner-only metadata recovery; existing generation endpoints are unchanged.
@@ -104,29 +93,6 @@ module.exports = async function handler(req, res) {
           if (!project) return res.status(404).json({ error:'Proyecto no encontrado en el bucket' });
           return res.status(200).json(await recovery.inspectProject(token, id, project));
         } catch (e) { return res.status(e.status === 412 ? 409 : e.status || 500).json({ error:e.message }); }
-      }
-
-      if (action === 'projectSave') {
-        const id = safeProjectId(body.id);
-        const data = body.data;
-        if (!id || !data || typeof data !== 'object') return res.status(400).json({ error:'id/data inválidos' });
-        const { token } = await auth();
-        const existing = await readProjectManifest(token, id);
-        const now = Date.now();
-        const manifest = {
-          version:1, id,
-          name:String(body.name || data?.universe?.title || existing?.name || 'Proyecto').slice(0,200),
-          created:Number(body.created || existing?.created || now) || now,
-          updated:Number(body.updated || now) || now,
-          data,
-        };
-        const raw = JSON.stringify(manifest);
-        if (Buffer.byteLength(raw, 'utf8') > 3.5 * 1024 * 1024) {
-          return res.status(413).json({ error:'project.json demasiado grande; el estado no debe contener medios binarios' });
-        }
-        await require('./_lib/project-recovery').preserveManifest(token, id, existing);
-        await gcsUpload(token, cfg.bucket, manifestPath(id), raw, 'application/json; charset=utf-8');
-        return res.status(200).json({ ok:true, project:{ id, name:manifest.name, created:manifest.created, updated:manifest.updated } });
       }
 
       if (action === 'projectDelete') {
