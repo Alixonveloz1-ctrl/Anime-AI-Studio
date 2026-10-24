@@ -123,6 +123,10 @@ const FIXED=[
  // by scene id, and scene ids repeat in every episode
  // (tests/shorts/ui/animes-media-cache.test.mjs).
  [/^async function sceneAudioSeconds\(s\) \{/,'clip length per episode'],
+ // ⏹️ Detener was inside a block three of the five batches never showed, so a
+ // batch of Veo clips could not be stopped at all
+ // (tests/shorts/ui/animes-batches.test.mjs).
+ [/^(let hogarDeLaTanda = |function (prestarFrenoDeTanda|devolverFrenoDeTanda|empezarTanda|terminarTanda)\(|window\.generateAllVideos = async function\()/,'every batch can be stopped'],
  // Voices: the saved narration language survives a reload (the list arrives
  // after the settings are restored), "Automática" gives a character a voice
  // nobody else has, and the bulk reference button uses the selected drawing

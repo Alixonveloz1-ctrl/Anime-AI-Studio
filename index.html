@@ -2884,14 +2884,40 @@ Por orden, lo que destraba un plano:
 // la mitad de tiempo.
 const tanda = { enCurso: false, detener: false };
 
-function empezarTanda() {
+// ⏹️ Detener lives inside #bulkProgress, in the Escenas panel. Three of the
+// five batches never showed that block, so their stop button was on screen
+// nowhere: a batch of Veo clips — the most expensive thing here — could not be
+// stopped, and the blocking toast pointed at a button nobody could see. The
+// block is lent to the panel in use and returned when the batch ends, so the
+// batches that already showed it look exactly as before.
+let hogarDeLaTanda = null;
+function prestarFrenoDeTanda(etiqueta) {
+  const progreso = document.getElementById('bulkProgress');
+  if (!progreso) return;
+  const panel = document.querySelector('.panel.active');
+  if (panel && !panel.contains(progreso)) {
+    hogarDeLaTanda = hogarDeLaTanda || document.createComment('bulkProgress');
+    progreso.before(hogarDeLaTanda);
+    panel.append(progreso);
+  }
+  const texto = document.getElementById('bulkText');
+  if (texto && etiqueta) texto.textContent = etiqueta;
+  progreso.style.display = 'block';
+}
+function devolverFrenoDeTanda() {
+  const progreso = document.getElementById('bulkProgress');
+  if (progreso) progreso.style.display = 'none';
+  if (progreso && hogarDeLaTanda) { hogarDeLaTanda.replaceWith(progreso); hogarDeLaTanda = null; }
+}
+function empezarTanda(etiqueta = '') {
   if (tanda.enCurso) { showToast('Ya hay una generación en marcha', 'error'); return false; }
   tanda.enCurso = true; tanda.detener = false;
   const b = document.getElementById('btnDetenerTanda');
   if (b) { b.disabled = false; b.style.display = 'block'; b.innerHTML = '⏹️ Detener'; }
+  prestarFrenoDeTanda(etiqueta);
   return true;
 }
-function terminarTanda() { tanda.enCurso = false; tanda.detener = false; }
+function terminarTanda() { tanda.enCurso = false; tanda.detener = false; devolverFrenoDeTanda(); }
 
 // ─── El proyecto abierto no se cambia mientras algo escribe en él ───
 // Cada flujo de generación vuelve a leer state.projectId y el episodio activo
@@ -6091,7 +6117,7 @@ window.generateCharImage = async function(charId) {
 
 document.getElementById('btnAllCharacterRefs')?.addEventListener('click', async function() {
   if (!state.characters.length) return;
-  if (!empezarTanda()) return;
+  if (!empezarTanda('Generando las referencias que faltan...')) return;
   const btn=this, original=btn.innerHTML;
   btn.disabled=true;
   let made=0, skipped=0, failed=0;
@@ -7538,7 +7564,7 @@ window.generateSceneVideos = async function(sceneId) {
 window.generateAllVideos = async function() {
   const scenes = state.scenes.filter(s => s.narration && s.imagePromptA);
   if (!scenes.length) { showToast('Genera las escenas primero', 'error'); return; }
-  if (!empezarTanda()) return;
+  if (!empezarTanda('Generando los videos recomendados...')) return;
 
   let generated = 0, existing = 0, notRecommended = 0, errors = 0;
   try {
@@ -8165,7 +8191,7 @@ async function generateEpisodeMusic() {
   const txt  = document.getElementById('musicProgressText');
   if (!state.universe) { showToast('Crea un universo primero', 'error'); return; }
   if (!(state.scenes || []).some(s => s.narration)) { showToast('Genera el episodio primero', 'error'); return; }
-  if (!empezarTanda()) return;
+  if (!empezarTanda('Componiendo la música del episodio...')) return;
 
   const acts = episodeActs();
   btn.disabled = true;
