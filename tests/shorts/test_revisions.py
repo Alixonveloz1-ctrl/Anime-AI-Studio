@@ -31,3 +31,26 @@ class RevisionTests(unittest.TestCase):
         self.assertEqual(result['bible'],self.d['bible'])
         self.assertEqual(result['utterances'][0]['acting'],'whisper')
         with self.assertRaises(ContractError):replace_scope(self.d,{'group':'utterances','entityId':'u'},{'id':'other'})
+
+class ReorderWithEditTests(unittest.TestCase):
+    """A reorder and a field edit in the same dialog must both land correctly."""
+    def setUp(self):
+        self.d={'shots':[{'id':'a','prompt':'uno','frames':48},{'id':'b','prompt':'dos','frames':48}],
+                'utterances':[],'soundRequests':[],'musicRequests':[],'subtitles':[],'beats':[],
+                'bible':{'characters':[],'locations':[],'props':[]}}
+    def reorder(self):return {'path':['shots'],'value':[self.d['shots'][1],self.d['shots'][0]]}
+
+    def test_the_edit_follows_the_shot_the_owner_edited(self):
+        # Move the first shot down, then edit what was the second one (index 1).
+        for patches in ([self.reorder(),{'path':['shots',1,'prompt'],'value':'editado'}],
+                        [{'path':['shots',1,'prompt'],'value':'editado'},self.reorder()]):
+            with self.subTest(patches=len(patches)):
+                out=apply_edits(self.d,patches)
+                self.assertEqual([s['id'] for s in out['shots']],['b','a'],'the reorder was applied')
+                self.assertEqual({s['id']:s['prompt'] for s in out['shots']},{'a':'uno','b':'editado'},
+                                 'the edit stayed on the shot it was typed into')
+
+    def test_a_reorder_alone_still_works_and_cannot_rewrite_a_shot(self):
+        self.assertEqual([s['id'] for s in apply_edits(self.d,[self.reorder()])['shots']],['b','a'])
+        rewritten=copy.deepcopy(self.d['shots']);rewritten[0]['prompt']='otro'
+        with self.assertRaises(ContractError):apply_edits(self.d,[{'path':['shots'],'value':rewritten}])

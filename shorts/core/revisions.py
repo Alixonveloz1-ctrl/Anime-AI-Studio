@@ -17,7 +17,21 @@ def idea_scope(idea,scope,replacement=None):
 def apply_edits(original, patches):
     require(isinstance(patches,list) and 0<len(patches)<=500,'EDITS','Selecciona al menos un cambio')
     result=copy.deepcopy(original)
+    # A reorder is a permutation of the SAME shots, recorded as the order of
+    # their ids and applied LAST. Applied in sequence with the field edits of
+    # the same dialog, it either overwrote them (its value is the shots as they
+    # were before the edits) or made them land on whichever shot had moved into
+    # that index, so one shot silently got the other one's new description.
+    order=None
+    fields=[]
     for patch in patches:
+        if patch.get('path')==['shots']:
+            shots=patch.get('value')
+            require(isinstance(shots,list) and sorted(digest(x) for x in shots)==sorted(digest(x) for x in result.get('shots',[])),'EDIT_STRUCTURE','Solo se admite reordenar las tomas existentes')
+            order=[x.get('id') for x in shots]
+            continue
+        fields.append(patch)
+    for patch in fields:
         path=patch.get('path',[])
         require(isinstance(path,list) and 0<len(path)<=12 and path[0] in ROOTS,'EDIT_PATH','Campo no editable')
         require('id' not in path and all(type(p) in (str,int) for p in path),'EDIT_ID','Los identificadores se conservan')
@@ -29,11 +43,15 @@ def apply_edits(original, patches):
         require((isinstance(node,dict) and key in node) or (isinstance(node,list) and type(key)is int and 0<=key<len(node)),'EDIT_PATH','Campo inexistente')
         old=node[key];new=patch.get('value')
         require(type(new)==type(old) or (type(old) in (int,float) and type(new) in (int,float)),'EDIT_TYPE','El tipo del campo cambió')
-        if isinstance(new,(list,dict)):
-            # Structural edits go through dedicated commands; never accept a hidden rewrite.
-            require(path==['shots'] and isinstance(new,list) and sorted(digest(x) for x in new)==sorted(digest(x) for x in old),'EDIT_STRUCTURE','Solo se admite reordenar las tomas existentes')
+        # Structural edits go through dedicated commands; never accept a hidden rewrite.
+        require(not isinstance(new,(list,dict)),'EDIT_STRUCTURE','Solo se admite reordenar las tomas existentes')
         if isinstance(new,str):require(len(new)<=12000,'EDIT_SIZE','Texto demasiado largo')
         node[key]=copy.deepcopy(new)
+    if order is not None:
+        shots=result.get('shots',[])
+        by_id={s.get('id'):s for s in shots}
+        require(len(by_id)==len(shots) and sorted(map(str,order))==sorted(map(str,by_id)),'EDIT_STRUCTURE','Solo se admite reordenar las tomas existentes')
+        result['shots']=[by_id[i] for i in order]
     digest(result)  # rejects NaN/Infinity
     return result
 

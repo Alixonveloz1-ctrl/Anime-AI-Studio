@@ -134,6 +134,27 @@ test('Subtitle approval, automatic preview preparation and final export are conn
  assert.equal([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Compilar montaje'),false);dom.window.close();
 });
 
+// Approving records the audio hashes of the voices, not the blocks on screen:
+// an edited but unsaved block was silently dropped and the export carried the
+// old subtitles.
+test('Approving subtitles with an unsaved block is refused until it is saved',async()=>{
+ const {fixture,w,dom,click}=await setup();
+ try{
+  await click('Exportar');await click('Revisar el corto');await click('Subtítulos');
+  const text=w.document.querySelector('textarea');
+  text.value='Todavia estamos a tiempo, de verdad.';text.onchange();
+  const approve=[...w.document.querySelectorAll('button')].find(b=>b.textContent==='Aprobar subtítulos revisados');
+  await approve.onclick();
+  assert.match(w.document.querySelector('#notice').textContent,/Guarda primero los cambios de 1 bloque/);
+  assert.equal(w.document.querySelector('#notice').className,'error');
+  assert.equal(fixture.calls.some(c=>c.path.endsWith('/subtitles:approve')),false,'nothing was approved');
+  await click('Guardar subtítulos');
+  assert.equal(fixture.calls.findLast(c=>c.path.includes('/subtitles/')).body.segments[0].text,'Todavia estamos a tiempo, de verdad.');
+  await click('Aprobar subtítulos revisados');
+  assert.ok(fixture.project.subtitleApproval,'the approval goes through once the edit is saved');
+ }finally{dom.window.close();}
+});
+
 test('Cortos reads never carry a write precondition; writes retain the expected revision',async()=>{
  const {fixture,dom,click}=await setup({empty:true});
  try {
