@@ -83,3 +83,41 @@ class EngineReleaseTests(unittest.TestCase):
         self.assertEqual(r.json['state'],'running');self.assertEqual(self.slot['jobId'],'j');self.assertEqual(self.job['state'],'running')
 
 if __name__=='__main__':unittest.main()
+
+class WaitingQueueTests(unittest.TestCase):
+    """A job refused for CAPACITY_BUSY starts on its own when the engine frees."""
+    def setUp(self):
+        self.c=Cloud.__new__(Cloud);self.c.c={'project':'project','region':'region','queue':'queue','job':'worker'};self.c.http=Mock()
+        self.enqueued=[];self.c.enqueue=lambda row:self.enqueued.append(row['id']) or True
+        self.c.db=DB({'animeShortsJobs/running':{'id':'running','owner':'u','projectId':'p','operation':'ideas','state':'running','session':'s','revision':1},
+                      'animeShortsJobs/waiting':{'id':'waiting','owner':'u','projectId':'p','operation':'revise','state':'queued','session':'s','revision':1,'dispatchAttempt':0},
+                      'animeShortsProjects/p':{'id':'p','owner':'u','lease':{'session':'s','expires':NOW+100}},
+                      'animeShortsCapacity/text-analysis':{'jobId':'running'}})
+        patcher=patch('google.cloud.firestore.transactional',side_effect=lambda fn:fn);patcher.start();self.addCleanup(patcher.stop)
+        patcher=patch('shorts.service.cloud.time.time',return_value=NOW);patcher.start();self.addCleanup(patcher.stop)
+    @property
+    def slot(self):return self.c.db.data['animeShortsCapacity/text-analysis']
+
+    def test_a_busy_refusal_is_remembered_and_started_when_the_engine_frees(self):
+        job,dispatch=self.c.acquire_dispatch('waiting')
+        self.assertFalse(dispatch);self.assertEqual(job['dispatchError']['code'],'CAPACITY_BUSY')
+        self.assertEqual(self.slot['waiting'],['waiting'],'the engine remembers who is waiting')
+        self.c.finish('running','awaiting_review',{})
+        self.assertIsNone(self.slot['jobId']);self.assertEqual(self.slot['waiting'],[])
+        self.assertEqual(self.enqueued,['waiting'],'it starts without the owner pressing anything')
+
+    def test_closing_an_uncertain_job_also_starts_what_was_waiting(self):
+        self.c.db.data['animeShortsJobs/running'].update(state='submitted_unknown',providerCalls=[{'kind':'text','state':'submitted_unknown'}])
+        self.c.acquire_dispatch('waiting')
+        self.c.close_uncertain('running')
+        self.assertEqual(self.enqueued,['waiting'])
+
+    def test_a_job_already_dispatched_or_settled_is_not_started_again(self):
+        self.c.acquire_dispatch('waiting')
+        self.c.db.data['animeShortsJobs/waiting'].update(state='cancelled',settled=True)
+        self.c.finish('running','awaiting_review',{})
+        self.assertEqual(self.enqueued,[])
+
+    def test_the_queue_is_bounded_and_never_repeats_a_job(self):
+        for _ in range(3):self.c.acquire_dispatch('waiting')
+        self.assertEqual(self.slot['waiting'],['waiting'])

@@ -98,7 +98,13 @@ class Cloud:
             except ContractError as error:
                 if error.code not in ('CAPACITY_BUSY','LEASE'):raise
                 out={**j,'dispatchError':{'code':error.code,'message':str(error),'at':time.time()}}
-                if error.code=='CAPACITY_BUSY':out['dispatchError']['blockingJobId']=slot.get('jobId')
+                if error.code=='CAPACITY_BUSY':
+                    out['dispatchError']['blockingJobId']=slot.get('jobId')
+                    # Its Cloud Task finishes with 200, so nothing would retry
+                    # it. The engine remembers who is waiting and starts the
+                    # first of them as soon as it is free.
+                    queue=[x for x in (slot.get('waiting') or []) if x!=j['id']][:19]+[j['id']]
+                    tx.set(sr,{**slot,'waiting':queue})
                 tx.set(ref,out)
                 # A known pre-dispatch pause is resumable by the owner. Do not
                 # silently exhaust Cloud Tasks' three retries and abandon it.
@@ -131,8 +137,17 @@ class Cloud:
             j=ref.get(transaction=tx).to_dict()
             if not j:return
             sr=self.db.collection('animeShortsCapacity').document(resource_class(j['operation']));slot=sr.get(transaction=tx).to_dict()
-            if slot and slot.get('jobId')==j['id']:tx.set(sr,{'jobId':None})
-        apply(self.db.transaction())
+            if slot and slot.get('jobId')==j['id']:return self._free(tx,sr,slot,j['id'])
+        self.wake(apply(self.db.transaction()))
+    def _free(self,tx,sr,slot,jid):
+        """Release the engine and return the job that was waiting for it."""
+        queue=[x for x in (slot.get('waiting') or []) if x!=jid]
+        tx.set(sr,{'jobId':None,'waiting':queue[1:]})
+        return queue[0] if queue else None
+    def wake(self,jid):
+        if not jid:return
+        row=self.db.collection('animeShortsJobs').document(ident(jid)).get().to_dict()
+        if row and row.get('state')=='queued' and not row.get('settled') and not row.get('dispatchState'):self.enqueue(row)
     def close_uncertain(self,jid):
         ref=self.db.collection('animeShortsJobs').document(ident(jid))
         @firestore.transactional
@@ -140,9 +155,9 @@ class Cloud:
             j=ref.get(transaction=tx).to_dict();require(j,'JOB','Trabajo inexistente',404)
             sr=self.db.collection('animeShortsCapacity').document(resource_class(j['operation']));slot=sr.get(transaction=tx).to_dict()
             out=close_uncertain(j);tx.set(ref,out)
-            if slot and slot.get('jobId')==j['id']:tx.set(sr,{'jobId':None})
-            return out
-        return apply(self.db.transaction())
+            woken=self._free(tx,sr,slot,j['id']) if slot and slot.get('jobId')==j['id'] else None
+            return out,woken
+        out,woken=apply(self.db.transaction());self.wake(woken);return out
     def finish(self,jid,state,result):
         ref=self.db.collection('animeShortsJobs').document(jid)
         @firestore.transactional
@@ -150,8 +165,8 @@ class Cloud:
             j=ref.get(transaction=tx).to_dict()
             sr=self.db.collection('animeShortsCapacity').document(resource_class(j['operation']));slot=sr.get(transaction=tx).to_dict()
             j=settle(j,state,result);tx.set(ref,j)
-            if slot and slot.get('jobId')==jid:tx.set(sr,{'jobId':None})
-        apply(self.db.transaction())
+            return self._free(tx,sr,slot,jid) if slot and slot.get('jobId')==jid else None
+        self.wake(apply(self.db.transaction()))
 
 
 def lease_taken_over(project,job):

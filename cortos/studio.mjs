@@ -78,7 +78,20 @@ async function mutate(path,data,method='POST'){
  mutationQueue=task.catch(()=>{});return task;
 }
 async function lease(enable){if(!p)return;await refresh();const v=await api(route('/lease'),'POST',{session,device,active:enable});p={...p,revision:v.revision,lease:v.lease};active=enable;}
-setInterval(async()=>{if(!active||busy||heartbeatBusy||!p)return;heartbeatBusy=true;try{const v=await api(route('/lease'),'POST',{session,device,heartbeat:true,active:true});p.revision=v.revision;p.lease=v.lease;}catch{active=false;say('Lote pausado por pérdida de sesión. Puedes continuar sin rehacer lo terminado.',true);}finally{heartbeatBusy=false;}},10000);
+let heartbeatFallos=0;
+setInterval(async()=>{
+ if(!active||busy||heartbeatBusy||!p)return;
+ heartbeatBusy=true;
+ try{const v=await api(route('/lease'),'POST',{session,device,heartbeat:true,active:true});p.revision=v.revision;p.lease=v.lease;heartbeatFallos=0;}
+ catch(e){
+  // Only the server saying the session was replaced means it was lost. Any
+  // blip — an app switch, a cold start, a 30 s timeout — used to stop the
+  // lease for good and kill whatever was running about 30 s later.
+  if(e.status===409||e.code==='LEASE_REPLACED'){active=false;say('Otro dispositivo tomó la producción. Lo que terminó sigue guardado.',true);}
+  else if(++heartbeatFallos>=3)say('La conexión va mal; se sigue intentando mantener la sesión abierta.',true);
+ }
+ finally{heartbeatBusy=false;}
+},10000);
 function fold(parent,title,open=false){const d=document.createElement('details');d.className='disclosure';const summary=document.createElement('summary');summary.textContent=title;d.append(summary);d.open=open;parent.append(d);return d;}
 function pageTitle(title,subtitle=''){const h=document.createElement('div');h.className='section-heading';h.innerHTML=`<div><p class="eyebrow">${esc(p?.title||'TU ESTUDIO')}</p><h2>${esc(title)}</h2>${subtitle?`<p class="muted">${esc(subtitle)}</p>`:''}</div>`;screen.append(h);return h;}
 function empty(title,text){screen.append(card(title,`<p class="muted">${esc(text)}</p>`));}
@@ -88,17 +101,32 @@ function describeIssue(text){const d=development();if(!d)return text;let value=S
 async function runTask(operation,path,data={}){
  if(generatorSave)await generatorSave;
  await mutationQueue;
+ // Another job of the same kind may be running for a DIFFERENT shot, line or
+ // piece. Watching that one instead meant this request was never sent, while
+ // the dialog closed saying it had been. Submit it and let the server queue it
+ // behind the engine it needs; the same request is deduped by its key below.
  if(['ideas','develop','image','veo','tts','music'].includes(operation)){
   const {jobs}=await api(route('/jobs'));knownJobs=jobs;
-  const existing=jobs.find(j=>j.operation===operation&&unresolved(j));
-  if(existing){say('Ya existe una solicitud pendiente. Comprobamos esa misma solicitud.');await watch(existing.id);needsRedraw=true;return existing.id;}
  }
  if(!active)await lease(true);
  await refresh();const projectId=p.id,currentStage=stage;
  const bytes=new TextEncoder().encode(JSON.stringify([projectId,operation,path,data]));
  const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');
- const storageKey='animeShorts:request:'+hash,key=localStorage.getItem(storageKey)||crypto.randomUUID();localStorage.setItem(storageKey,key);
+ const storageKey='animeShorts:request:'+hash;
+ // The key is what stops a lost answer from paying twice for the SAME request,
+ // so it is kept while its job may still be running. Once that job is over the
+ // next tap is a NEW request: reusing the key answered it with the old job, so
+ // "Generar otras tres ideas" or "Crear otra imagen" appeared to do nothing.
+ let saved=null;
+ try{const raw=localStorage.getItem(storageKey),value=raw?JSON.parse(raw):null;saved=typeof value==='string'?{key:value,jobId:null}:value;}catch{}
+ if(saved?.jobId){
+  const previous=await api('/jobs/'+saved.jobId).catch(()=>null);
+  if(previous&&!unresolved(previous)){localStorage.removeItem(storageKey);saved=null;}
+ }
+ const key=saved?.key||crypto.randomUUID();
+ localStorage.setItem(storageKey,JSON.stringify({key,jobId:saved?.jobId||null}));
  let job;try{job=await api(path,'POST',{...data,session},{'Idempotency-Key':key});}catch(e){if(e.confirmedRejected)localStorage.removeItem(storageKey);throw e;}
+ localStorage.setItem(storageKey,JSON.stringify({key,jobId:job.jobId}));
  say('Solicitud guardada. Comprobando su estado…');
  const result=await watch(job.jobId,projectId);
  if(result&&terminal(result.state)&&result.state!=='submitted_unknown')localStorage.removeItem(storageKey);
@@ -137,8 +165,16 @@ async function watch(id,projectId=p?.id){
  const version=++watchVersion;
  // Cold Cloud Run jobs can start after the old three-minute window. Keep
  // reading the same ID for twelve minutes; never turn a slow read into a POST.
+ let fallos=0;
  for(let n=0;n<240;n++){
-  let j;try{j=await api('/jobs/'+id);}catch(error){say('No se pudo comprobar el trabajo. '+error.message,true);return;}
+  let j;
+  try{j=await api('/jobs/'+id);fallos=0;}
+  catch(error){
+   // A single failed read — a brief app switch, a cold start — is not a lost
+   // job, and giving up here also left its idempotency key behind.
+   if(++fallos>=4){say('No se pudo comprobar el trabajo. '+error.message,true);return;}
+   await new Promise(r=>setTimeout(r,3000));continue;
+  }
   if(version!==watchVersion||p?.id!==projectId)return j;
   knownJobs=[j,...knownJobs.filter(x=>x.id!==j.id)];showJob(j);
   if(terminal(j.state)){

@@ -31,6 +31,7 @@ async function setup(options={}){
  if(options.pendingAfterSubmit&&path.endsWith('/ideas:generate')){const r=await baseTransport(url,request);const job=fixture.jobs.at(-1);Object.assign(job,{state:'queued',settled:false});options.savedIdeas=fixture.project.ideas;fixture.project.ideas=[];return r;}
  if(options.jobSequence&&path.startsWith('/jobs/')&&!path.includes(':')){const job=fixture.jobs.find(j=>j.id===path.split('/').at(-1));const next=options.jobSequence.shift();if(next)Object.assign(job,next);if(next?.state==='awaiting_review')fixture.project.ideas=options.savedIdeas;}
  if(options.pendingJob&&path.endsWith('/jobs')&&!fixture.jobs.length)fixture.jobs.push(structuredClone(options.pendingJob));
+ if(options.failJobPolls&&path.startsWith('/jobs/')&&!path.includes(':'))return new Response(JSON.stringify({error:'Lectura no disponible'}),{status:503});
  if(options.nonJsonError&&decodeURIComponent(url).endsWith('/ideas:generate')){options.errorRequests=(options.errorRequests||0)+1;return new Response('',{status:502});}if(new Headers(request.headers).has('If-Match'))return new Response('',{status:412});return baseTransport(url,request);};
  const dom=new JSDOM(html,{url:'https://fixture.invalid/cortos/',runScripts:'outside-only'}),w=dom.window;
  Object.assign(w,{...catalogue,steps:presentation.steps,titleFor:presentation.label,terminal:presentation.terminal,unresolved:presentation.unresolved,jobMessage:presentation.jobMessage,versions:presentation.versions,taskActions:presentation.taskActions,entityName:presentation.entityName,fieldLabel:presentation.fieldLabel,TextEncoder,structuredClone,fetch:fixture.transport,confirm:()=>{throw new Error('Unexpected confirmation')},prompt:()=>null});
@@ -426,4 +427,24 @@ test('A preview shown inside its card stays on screen after the job finishes',as
  assert.ok(card.isConnected,'the card was not rebuilt by a full redraw');
  assert.ok(card.querySelector('video'),'the player is shown where it was asked for');
  dom.window.close();
+});
+// The idempotency key stops a lost answer from paying twice for the SAME
+// request. Once its job is over, the next tap is a new request.
+const ideasKeys=fixture=>fixture.calls.filter(c=>c.path.endsWith('/ideas:generate')).map(c=>c.headers['Idempotency-Key']);
+const tap=async(w,name)=>{const b=[...w.document.querySelectorAll('button')].find(x=>x.textContent===name);assert.ok(b,'button: '+name);await b.onclick();};
+
+test('After an interrupted poll the next tap generates again instead of showing the old job',async()=>{
+ const options={empty:true,fastPoll:true,failJobPolls:true};
+ const {fixture,w,dom}=await setup(options);
+ try{
+  await tap(w,'Generar tres ideas');
+  assert.equal(ideasKeys(fixture).length,1);
+  const finished=fixture.jobs.at(-1);
+  assert.match(w.document.querySelector('#notice').textContent,/No se pudo comprobar el trabajo/);
+  // The reads work again and that job did finish on the server.
+  options.failJobPolls=false;
+  await tap(w,'Generar otras tres ideas');
+  assert.equal(ideasKeys(fixture).length,2,'the request was sent again');
+  assert.notEqual(fixture.jobs.at(-1).id,finished.id,'a new generation, not the finished one again');
+ }finally{dom.window.close();}
 });
