@@ -9,7 +9,15 @@ let knownJobs=[],watchVersion=0;
 let generatorCatalog,generatorSave=null,mutationQueue=Promise.resolve();
 const projectTitle=item=>item.title?.trim()||'Corto sin título';
 let transport=fetch;
-const session=crypto.randomUUID(),device=localStorage.getItem('animeShorts:v2:device')||crypto.randomUUID();localStorage.setItem('animeShorts:v2:device',device);
+// A reload of the same tab is the SAME production session. Minting a new id
+// made the server see another session, which released the lease of the
+// generation still running and stopped it ('Otro dispositivo tomó la
+// producción') — on a phone, where the browser discards and restores the page
+// on its own, that was most of the time.
+const guardado=key=>{try{return sessionStorage.getItem(key)}catch{return null}};
+const session=guardado('animeShorts:v2:session')||crypto.randomUUID();
+try{sessionStorage.setItem('animeShorts:v2:session',session)}catch{}
+const device=localStorage.getItem('animeShorts:v2:device')||crypto.randomUUID();localStorage.setItem('animeShorts:v2:device',device);
 const say=(s,error=false)=>{
  notice.textContent=s;notice.className=error?'error':'';
  // #notice sits at the top of the page, under any open dialog and scrolled
@@ -240,6 +248,20 @@ async function renderStage(){
  if(stage==='Revisión')return review();
  return exportsView();
 }
+// Opening a project the browser had discarded: its generation is still running
+// on the server. Releasing the lease here stopped it, and nobody was reading
+// it any more, so a finished step stayed invisible until the next tap.
+async function reanudar(){
+ let pendiente=null;
+ try{const {jobs}=await api(route('/jobs'));knownJobs=jobs;pendiente=jobs.find(unresolved)||null;}catch{}
+ if(!pendiente||p.lease?.session!==session){await lease(false);return;}
+ await lease(true);
+ say('Se recuperó la generación en curso. Su estado se sigue aquí.');
+ void watch(pendiente.id,p.id).then(async()=>{
+  if(needsRedraw&&!document.querySelector('dialog[open]')){needsRedraw=false;await draw();}
+ }).catch(e=>say(e.message,true));
+}
+
 async function openProject(id){
  const next=await getProject(id);
  if(active)await lease(false);
@@ -833,7 +855,7 @@ export async function mountStudio(identity,options={}){
  if(!user){p=null;active=false;return;}
  say('');
  const match=location.hash.match(/^#\/proyectos\/([a-zA-Z0-9_-]+)$/);
- if(options.projectId||match){p=await getProject(options.projectId||match[1]);await lease(false);stage='Historia';}
+ if(options.projectId||match){p=await getProject(options.projectId||match[1]);stage='Historia';await reanudar();}
  await draw();
 }
 export {api,say};

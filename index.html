@@ -840,8 +840,32 @@ async function imageUriToBase64(uri) {
   return btoa(out);
 }
 
+// Knowing WHETHER something was generated must not cost its download. Every
+// cache entry of a narration carries the whole audio in base64, so drawing a
+// twelve-scene episode pulled megabytes over mobile data just to choose
+// between «Audio» and «Reproducir» — and one signed request per image too.
+// One listing of the project answers all of them.
+const VIDA_DE_LA_LISTA = 30_000;
+let listaDeClaves = null;
+function listaDelProyecto(projectId) {
+  if (listaDeClaves?.projectId === projectId && listaDeClaves.pedidaEn > Date.now() - VIDA_DE_LA_LISTA) return listaDeClaves.claves;
+  const claves = (async () => new Set(await cloudListDbKeys(projectId)))();
+  listaDeClaves = { projectId, pedidaEn:Date.now(), claves };
+  claves.catch(() => { if (listaDeClaves?.claves === claves) listaDeClaves = null; });
+  return claves;
+}
+// What this device writes or deletes is known at once; nothing waits 30 s.
+function anotarClave(k, existe) {
+  const projectId = projectIdFromDbKey(k);
+  if (!projectId || listaDeClaves?.projectId !== projectId) return;
+  listaDeClaves.claves.then(claves => existe ? claves.add(k) : claves.delete(k), () => {});
+}
 async function dbHas(k) {
-  return (await dbGetStored(k)) != null;
+  if ((await localDbGet(k)) != null) return true;
+  const projectId = projectIdFromDbKey(k);
+  if (!projectId) return false;
+  if (cloudMissingKeys.has(k)) return false;
+  return (await listaDelProyecto(projectId)).has(k);
 }
 
 async function dbGetImageSrc(k) {
@@ -916,6 +940,7 @@ async function dbSet(k, v) {
   marcarMedioPendiente(k, true);
   await cloudPutDbValue(k, canonical);
   marcarMedioPendiente(k, false);
+  anotarClave(k, true);
 }
 async function dbGet(k) {
   const v = await dbGetStored(k);
@@ -952,10 +977,7 @@ async function dbDel(k) {
   }
   throw new Error(`No se pudo borrar ${k} del bucket: ${last?.message || 'error'}`);
 }
-async function dbKeys() {
-  const local = await localDbKeys();
-  const projectId = state.projectId;
-  if (!projectId) return local;
+async function cloudListDbKeys(projectId) {
   const r = await fetch('/api/upload-url', {
     method:'POST', headers:{'Content-Type':'application/json'}, cache:'no-store',
     body:JSON.stringify({ action:'assetList', projectId }),
@@ -964,7 +986,17 @@ async function dbKeys() {
   // A failed listing is not an empty bucket. Choosing what to clean from a
   // short list is what left the previous episode's files in place.
   if (!r.ok || !Array.isArray(d.keys)) throw new Error(`No se pudo leer la lista de archivos del proyecto: ${d.error || r.status}`);
-  return [...new Set([...local, ...d.keys])];
+  return d.keys;
+}
+// Deciding what to delete always reads the bucket again: a list from a moment
+// ago could miss what another phone has just written.
+async function dbKeys() {
+  const local = await localDbKeys();
+  const projectId = state.projectId;
+  if (!projectId) return local;
+  const remote = await cloudListDbKeys(projectId);
+  listaDeClaves = { projectId, pedidaEn:Date.now(), claves:Promise.resolve(new Set(remote)) };
+  return [...new Set([...local, ...remote])];
 }
 
 const charImgKey   = id => `ci_${state.projectId}_${id}`;
@@ -1039,10 +1071,14 @@ async function sceneSlots(s) {
 // character keep moving after the moment is over.
 const audioSecCache = new Map();
 async function sceneAudioSeconds(s) {
-  if (audioSecCache.has(s.id)) return audioSecCache.get(s.id);
+  // Keyed by the audio's own bucket key: scene ids repeat across episodes and
+  // projects, so a cache by scene id gave the new episode the length of the
+  // PREVIOUS episode's narration, and every clip was cut to the wrong shot.
+  const clave = sceneAudKey(s.id);
+  if (audioSecCache.has(clave)) return audioSecCache.get(clave);
   let secs = 0;
   try {
-    const stored = await dbGet(sceneAudKey(s.id));
+    const stored = await dbGet(clave);
     if (stored) {
       const sep = stored.indexOf('|');
       const b64 = sep > 0 ? stored.slice(sep + 1) : stored;
@@ -1059,7 +1095,7 @@ async function sceneAudioSeconds(s) {
   // No audio yet: estimate from the narration. ~13 characters per second is
   // close for Spanish narration at the pace these voices read.
   if (!secs) secs = Math.max(3, (s.narration || '').length / 13);
-  audioSecCache.set(s.id, secs);
+  audioSecCache.set(clave, secs);
   return secs;
 }
 
@@ -7209,6 +7245,7 @@ window.generateSceneAudio = async function(sceneId) {
     // Save audio with its mime type prefix so we know how to play it back
     const mime = result.mimeType || 'audio/wav';
     await dbSet(sceneAudKey(s.id), `${mime}|${result.audioData}`);
+    audioSecCache.delete(sceneAudKey(s.id));   // the estimate gives way to the real length
     renderScenes();
     showToast(`Audio ${s.num} listo`, 'success');
   } catch(e) {
@@ -7759,6 +7796,7 @@ document.getElementById('btnAllAudio').addEventListener('click', async () => {
         const result = await conEsperaDeCuota(() => generarAudioDeEscena(s, aviso), aviso);
         const mime = result.mimeType || 'audio/wav';
         await dbSet(sceneAudKey(s.id), `${mime}|${result.audioData}`);
+        audioSecCache.delete(sceneAudKey(s.id));
         completed++;
         if (completed % 3 === 0) await renderScenes();
       } catch(e) {

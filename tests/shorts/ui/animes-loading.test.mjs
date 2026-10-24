@@ -56,6 +56,8 @@ async function setup(t, {rejectList=false, data=saved}={}) {
     if(body.action==='projectRecovery') return json({currentGeneration:'7',images:2,imageReferences:2,candidates:[],warnings:[]});
     if(body.action==='projectGet') return network.rejectGet ? json({error:'Lectura no disponible'},503) : json({project:{id:body.id,data}});
     if(body.action==='assetSign' && body.method==='GET') return json({url:'https://fixture.invalid/missing/'+body.key});
+    // Nothing of this project is in the bucket: every signed read is a 404.
+    if(body.action==='assetList') return json({keys:[]});
     assert.fail('Unexpected write or generation: '+JSON.stringify(body));
   }});
   w.setInterval=()=>0;

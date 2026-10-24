@@ -157,7 +157,16 @@ def lease(pid):
         old=p.get('lease',{})
         if d.get('heartbeat'):
             require(old.get('session')==session and old.get('device')==device,'LEASE_REPLACED','La sesión fue reemplazada',409)
-        p['lease']={'device':device,'session':session,'expires':time.time()+(30 if d.get('active',True) else 0)}
+        # Releasing is only ever about THIS session's lease. Merely opening the
+        # studio used to overwrite whatever was there with an expired lease, so
+        # a second tab (or a reload that lost its session) stopped the
+        # generation already running: a provider call refuses a lease held by
+        # another session, and a queued job refuses to start without a live
+        # one. Taking production over is still a press of a generation button,
+        # which asks for an active lease.
+        active=d.get('active',True)
+        if not active and old.get('session') and old.get('session')!=session:return
+        p['lease']={'device':device,'session':session,'expires':time.time()+(30 if active else 0)}
     _,p=cloud().mutate(pid,expected(),update);return jsonify(p)
 
 @app.post('/projects/<pid>/ideas:generate')
@@ -241,6 +250,12 @@ def produce_draft(pid,eid):
         require(row and row.get('ideaId')==current.get('selectedIdea',{}).get('id'),'IDEA_CHANGED','Cambió la idea seleccionada.',409)
         require(current.get('activeDraft')==eid,'STAGE_CHANGED','Abre producción desde el paso aprobado vigente.',409)
         data=apply_voice_assignments(production_draft(row),current)
+        # Production may already be open with this same step CORRECTED by hand
+        # (an edited candidate, approved). Re-opening it rewound production to
+        # the version from before those corrections without saying so.
+        in_use=cloud().entity_ref(pid,'developments',current['activeDevelopment']).get(transaction=tx).to_dict() if current.get('activeDevelopment') else None
+        require(not(in_use and in_use.get('sourceDraftId')==eid and in_use.get('data')!=data),'SCRIPT_EDITED',
+                'La producción ya usa este paso con tus correcciones. Reemplazarlo por la versión anterior perdería esos cambios.',409)
         production_key=digest([key,current['voiceAssignments']]) if current.get('voiceAssignments') else key
         ref=cloud().entity_ref(pid,'developments',production_key)
         existing=ref.get(transaction=tx).to_dict()
@@ -281,8 +296,12 @@ def development_edit(pid,eid):
     report=impact(old['data'],candidate,available,eid)
     if request.path.endswith(':preview'):return jsonify(report=report,impactHash=digest(report))
     require(d.get('impactHash')==digest(report),'EDIT_IMPACT','Revisa las dependencias actualizadas antes de guardar',409)
+    # An edited script keeps the lineage of the step it came from. Without it
+    # the studio offered to "use this script in production" again and silently
+    # replaced the corrected version with the one before the corrections.
     record={'id':new_id(),'revision':1,'approvalState':'candidate','data':candidate,'previousId':eid,
-            'created':time.time(),'source':'manual','impact':report,'ideaId':old.get('ideaId'),'editorialStage':old.get('editorialStage',4)}
+            'created':time.time(),'source':'manual','impact':report,'ideaId':old.get('ideaId'),
+            'sourceDraftId':old.get('sourceDraftId'),'editorialStage':old.get('editorialStage',4)}
     def save(tx,current):
         tx.create(cloud().entity_ref(pid,'developments',record['id']),record)
         return record

@@ -2,6 +2,10 @@
 import math
 from .contracts import require,integer
 
+# The studio sends hundredths of the image; a fraction that lands on the edge
+# must not be refused for the last bit of a float.
+EDGE=1e-9
+
 
 def validate_visual(shot, assets):
     require(shot['treatment'] in ('hold','camera2d','localized','veo'),'TREATMENT','Tratamiento no válido')
@@ -18,7 +22,12 @@ def validate_visual(shot, assets):
             require(a and a.get('approvalState')=='approved' and a.get('variantOf')==shot['id'],'LAYER_ASSET','Aprueba una variante de esta toma')
             mask=layer.get('mask',{});require(set(mask)=={'x','y','width','height'},'MASK','Marca una máscara rectangular')
             require(all(type(v) in (int,float) and math.isfinite(v) for v in mask.values()),'MASK','Coordenadas inválidas')
-            require(0<=mask['x']<1 and 0<=mask['y']<1 and 0<mask['width']<=1-mask['x'] and 0<mask['height']<=1-mask['y'],'MASK','La región sale de la imagen')
+            # A region that ends exactly at the right or bottom edge is inside
+            # the image. Comparing the fractions exactly refused one in five of
+            # the whole-percent pairs the studio sends (0.67 is not <= 1-0.33),
+            # with no way to tell which number the owner had to change.
+            require(0<=mask['x']<1 and 0<=mask['y']<1 and 0<mask['width']<=1-mask['x']+EDGE and 0<mask['height']<=1-mask['y']+EDGE,'MASK','La región sale de la imagen')
+            mask['width']=min(mask['width'],1-mask['x']);mask['height']=min(mask['height'],1-mask['y'])
             start=integer(layer.get('startFrame'),'entrada de capa',0,shot['frames']-1);end=integer(layer.get('endFrame'),'salida de capa',1,shot['frames'])
             require(start<end and layer.get('approved') is True,'LAYER_APPROVAL','Revisa máscara e intervalo')
             if layer.get('voiceBinding'):

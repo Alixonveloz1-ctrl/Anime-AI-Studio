@@ -38,6 +38,7 @@ class Ref:
 class Tx:
     def __init__(self,db):self.db=db;self.written=False
     def set(self,ref,values):self.written=True;self.db.data[ref.key]=copy.deepcopy(values)
+    def create(self,ref,values):self.written=True;ref.create(values)
     def update(self,ref,values):self.written=True;ref.update(values)
 class DB:
     def __init__(self,data):self.data=copy.deepcopy(data)

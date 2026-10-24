@@ -92,6 +92,35 @@ class SessionContinuityTests(unittest.TestCase):
         self.assertFalse([c for c in self.http.post.call_args_list if 'generateContent' in c.args[0]])
         self.assertIsNone(self.c.db.data['animeShortsCapacity/text-analysis']['jobId'],'the engine is free again')
 
+    def lease_call(self,session,active,device='d'):
+        with patch('shorts.service.app.cloud',return_value=self.c),patch('shorts.service.app.uid',return_value='u'):
+            return self.client.post('/projects/p/lease',json={'session':session,'device':device,'active':active},
+                                    headers={'If-Match':str(self.c.db.data['animeShortsProjects/p']['revision'])})
+
+    def test_releasing_only_releases_the_lease_of_the_session_that_holds_it(self):
+        # Merely opening the studio releases nothing it does not hold; pressing
+        # a generation button on another phone still takes production over.
+        self.assertEqual(self.lease_call('otra',False).json['lease'],{'session':'s','device':'d','expires':NOW+10})
+        self.assertEqual(self.lease_call('s',False).json['lease'],{'session':'s','device':'d','expires':NOW})
+        self.assertEqual(self.lease_call('otra',True,'otro').json['lease'],{'session':'otra','device':'otro','expires':NOW+30})
+
+    def test_opening_the_studio_again_does_not_stop_the_step_already_running(self):
+        self.seed_story_job()
+        # The page was discarded and opened again without its session (another
+        # tab, or private browsing): it has no lease of its own to release.
+        opened=[]
+        def reopen(seconds):
+            self.clock[0]+=seconds
+            opened.append(self.lease_call('nueva',False))
+        with patch('shorts.service.cloud.time.sleep',side_effect=reopen):
+            self.run_job('j')
+        self.assertTrue(opened,'the studio was opened again during the step')
+        self.assertEqual(opened[0].status_code,200,opened[0].json)
+        self.assertEqual(opened[0].json['lease']['session'],'s','the running session keeps its lease')
+        settled=self.job('j')
+        self.assertEqual(settled['state'],'awaiting_review',settled.get('result'))
+        self.assertGreater(len(self.c.db.data['animeShortsProjects/p/developmentDrafts/j']['data']['story']),500)
+
     def test_a_step_is_never_started_without_a_live_session(self):
         self.seed_story_job()
         self.c.db.data['animeShortsProjects/p']['lease']={'session':'s','device':'d','expires':NOW-1}

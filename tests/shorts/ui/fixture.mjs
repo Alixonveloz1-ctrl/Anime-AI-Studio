@@ -25,7 +25,13 @@ export function createFixture({empty=false}={}){
    result={choices,voices:['Kore','Puck','Aoede'],selected:p.generators||Object.fromEntries(Object.entries(choices).map(([k,v])=>[k,v[0].id]))};
   }
   else if(path.includes('/characters/')&&path.endsWith('/voice')){const dev=p.developments.find(x=>x.id===p.activeDevelopment);dev.data.bible.characters.find(x=>x.id===path.split('/')[4]).voice={...body,languageCode:'ja-JP'};result=dev;}
-  else if(path.endsWith('/lease')){p.revision++;p.lease={session:body.session,expires:Date.now()/1000+30};result=p;}
+  else if(path.endsWith('/lease')){
+   // Same rule as the service: releasing only ever releases the lease of the
+   // session that holds it, and an inactive lease is already expired.
+   p.revision++;const old=p.lease||{};const live=body.active!==false;
+   if(live||!old.session||old.session===body.session)p.lease={session:body.session,device:body.device,expires:Date.now()/1000+(live?30:0)};
+   result=p;
+  }
   else if(path.endsWith('/jobs'))result={jobs};
   else if(path.startsWith('/jobs/'))result=jobs.find(j=>j.id===path.split('/')[2]);
   else if(path.endsWith('/ideas:generate')){p.ideas=clone(initialIdeas);result=job('ideas',{});}

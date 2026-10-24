@@ -38,6 +38,8 @@ async function setup(options={}){
  Object.defineProperty(w.crypto,'subtle',{value:webcrypto.subtle});w.setInterval=()=>0;if(options.fastPoll){const timeout=w.setTimeout.bind(w);w.setTimeout=(fn,ms,...args)=>timeout(fn,ms===3000?0:ms,...args);}
  w.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','')};w.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open')};w.HTMLMediaElement.prototype.pause=function(){};
  w.HTMLCanvasElement.prototype.getContext=()=>({clearRect(){},beginPath(){},moveTo(){},lineTo(){},stroke(){}});
+ if(options.session)w.sessionStorage.setItem('animeShorts:v2:session',options.session);
+ if(options.lease)fixture.project.lease=options.lease;
  w.eval(source+'\nwindow.testMount=mountStudio;');await Promise.all(Array.from({length:options.mounts||1},()=>w.testMount(fixture.identity,{transport:fixture.transport,...(options.projectList?{}:{projectId:'fixture'})})));
  async function click(name,parent=w.document){const buttons=[...parent.querySelectorAll('button')].filter(b=>b.textContent===name);assert.equal(buttons.length,1,'Unique button: '+name);await buttons[0].onclick();assert.equal(w.document.querySelector('#notice').className,'',w.document.querySelector('#notice').textContent);}
  return {fixture,w,dom,click};
@@ -449,6 +451,29 @@ test('A preview shown inside its card stays on screen after the job finishes',as
  assert.ok(card.querySelector('video'),'the player is shown where it was asked for');
  dom.window.close();
 });
+// A phone browser discards and restores the page on its own. The restored page
+// used to mint a new production session and release the lease, which stopped
+// the generation that was still running and left nobody reading it.
+test('A restored page keeps its production session, never releases the lease and resumes watching',async()=>{
+ const {fixture,w,dom}=await setup({
+  session:'sesion-anterior',
+  lease:{session:'sesion-anterior',device:'dispositivo',expires:Date.now()/1000+30},
+  pendingJob:{id:'job-previo',operation:'develop',state:'running',created:9,revision:1,settled:false,progress:{stage:1,total:2,label:'Historia'}},
+  fastPoll:true});
+ try{
+  const leases=fixture.calls.filter(c=>c.path.endsWith('/lease'));
+  assert.ok(leases.length,'the lease was addressed at all');
+  assert.deepEqual([...new Set(leases.map(c=>c.body.session))],['sesion-anterior'],'the session survived the reload');
+  assert.equal(leases.some(c=>c.body.active===false),false,'the lease of a running generation is never released');
+  assert.equal(fixture.project.lease.session,'sesion-anterior');
+  assert.ok(fixture.project.lease.expires>Date.now()/1000,'and it is kept alive');
+  const polls=async()=>{for(let n=0;n<200&&fixture.calls.filter(c=>c.path==='/jobs/job-previo').length<2;n++)await new Promise(r=>setTimeout(r,5));return fixture.calls.filter(c=>c.path==='/jobs/job-previo').length;};
+  assert.ok(await polls()>=2,'the restored page keeps reading the same job');
+  assert.match(w.document.querySelector('#activity').textContent,/Historia/);
+  assert.equal(fixture.calls.some(c=>c.path.endsWith('/develop')&&c.method==='POST'),false,'nothing is generated again');
+ }finally{dom.window.close();}
+});
+
 // The idempotency key stops a lost answer from paying twice for the SAME
 // request. Once its job is over, the next tap is a new request.
 const ideasKeys=fixture=>fixture.calls.filter(c=>c.path.endsWith('/ideas:generate')).map(c=>c.headers['Idempotency-Key']);

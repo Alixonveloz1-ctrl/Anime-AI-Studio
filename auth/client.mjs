@@ -35,28 +35,43 @@ export function loginPath() {
 }
 export async function protectPage(onUser = () => {}, onError = showSessionError) {
   const { auth, sdk } = await getClient();
-  let mounted, mounting;
+  let mounted, mounting, retry;
+  // The page works only once the server session cookie exists AND the studio
+  // has mounted, in that order.
+  const start = async user => {
+    await syncSession(user);
+    if (mounted === user.uid) return;
+    // getIdToken can notify again while the first mount is awaiting its
+    // project list. Share that mount; token refresh must preserve the form.
+    if (!mounting || mounting.uid !== user.uid) {
+      const current = { uid:user.uid };
+      current.promise = Promise.resolve().then(() => onUser(user)).then(() => { mounted = user.uid; })
+        .finally(() => { if (mounting === current) mounting = undefined; });
+      mounting = current;
+    }
+    await mounting.promise;
+  };
+  // One failed sync — a blip, a cold start, a tunnel — used to leave the page
+  // empty for good: the studio was never mounted and nothing tried again until
+  // the next token refresh, an hour later.
+  const attempt = async (user, wait = 2000) => {
+    clearTimeout(retry);
+    try { await start(user); }
+    catch (e) {
+      onError(e);
+      if (e.status >= 400 && e.status < 500) return;   // access denied is an answer, not a blip
+      retry = setTimeout(() => attempt(user, Math.min(wait * 2, 30000)), wait);
+    }
+  };
   sdk.onIdTokenChanged(auth, async user => {
-    try {
-      if (!user) { await sessionRequest('logout'); location.replace(loginPath()); return; }
-      await syncSession(user);
-      if (mounted !== user.uid) {
-        // getIdToken can notify again while the first mount is awaiting its
-        // project list. Share that mount; token refresh must preserve the form.
-        if (!mounting || mounting.uid !== user.uid) {
-          const current = { uid:user.uid };
-          current.promise = Promise.resolve().then(() => onUser(user)).then(() => { mounted = user.uid; })
-            .finally(() => { if (mounting === current) mounting = undefined; });
-          mounting = current;
-        }
-        await mounting.promise;
-      }
-    } catch (e) { onError(e); }
+    if (!user) { await sessionRequest('logout').catch(() => {}); location.replace(loginPath()); return; }
+    await attempt(user);
   });
-  // Safari can suspend refresh timers in the background. Renew on return;
-  // never replay a generation or reload an in-progress Animes project.
+  // Safari can suspend refresh timers in the background. Renew on return, and
+  // finish a mount an earlier failure left undone; never replay a generation
+  // or reload an in-progress Animes project.
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && auth.currentUser) syncSession(auth.currentUser).catch(onError);
+    if (!document.hidden && auth.currentUser) attempt(auth.currentUser);
   });
   const button = document.querySelector('[data-studio-signout]');
   if (button) button.onclick = () => signOut().catch(onError);

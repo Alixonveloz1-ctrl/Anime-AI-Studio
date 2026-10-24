@@ -115,6 +115,14 @@ const FIXED=[
  // (tests/shorts/ui/animes-media-cache.test.mjs).
  [/^(const CLAVE_MEDIOS_PENDIENTES = |function (mediosPendientes|marcarMedioPendiente)\(|async function (subirMediosPendientes|dbSet|dbDel|dbKeys|borrarMaterialDelEpisodio)\()/,'media cache honesty'],
  [/^function sincronizarPendientes\(\) \{/,'media cache honesty'],
+ // Asking whether a scene already has its narration downloaded the whole
+ // audio: one listing of the project answers for the entire episode
+ // (tests/shorts/ui/animes-media-cache.test.mjs).
+ [/^(const VIDA_DE_LA_LISTA = |let listaDeClaves = |function (listaDelProyecto|anotarClave)\(|async function (dbHas|cloudListDbKeys)\()/,'existence without downloading'],
+ // Each clip is cut to its share of ITS narration: the measurement was cached
+ // by scene id, and scene ids repeat in every episode
+ // (tests/shorts/ui/animes-media-cache.test.mjs).
+ [/^async function sceneAudioSeconds\(s\) \{/,'clip length per episode'],
  // Voices: the saved narration language survives a reload (the list arrives
  // after the settings are restored), "Automática" gives a character a voice
  // nobody else has, and the bulk reference button uses the selected drawing

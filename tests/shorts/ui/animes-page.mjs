@@ -40,7 +40,7 @@ function fixtureDB(entries={}) {
 // scriptAnswer({system, prompt, body}) answers /api/script with a string (the
 // model text) or a Response; imageAnswer(body, n) answers /api/image. fastTimers shortens waits of 1 s or more.
 export async function openAnimes(t, {cloud, local={}, idb={}, media={}, hooks={}, unreadable=[], confirm=()=>true, signInDelay=0, scriptAnswer=null, imageAnswer=null, audioAnswer=null, musicAnswer=null, voices=[], fastTimers=false}={}) {
-  const saves = [], errors = [], asked = [], scriptCalls = [], imageCalls = [], audioCalls = [], musicCalls = [];
+  const saves = [], errors = [], asked = [], scriptCalls = [], imageCalls = [], audioCalls = [], musicCalls = [], assetLists = [], assetGets = [];
   // Bucket objects: cache entries written by dbSet, and media bodies that a
   // signed download URL serves, as GCS does.
   const bucket = new Map(Object.entries(media));
@@ -65,6 +65,7 @@ export async function openAnimes(t, {cloud, local={}, idb={}, media={}, hooks={}
       if (url.startsWith('https://fixture.invalid/object/')) return new Response(bucket.get(decodeURIComponent(url.slice('https://fixture.invalid/object/'.length))));
       if (url.startsWith('https://fixture.invalid/asset/')) {
         const key = decodeURIComponent(url.slice('https://fixture.invalid/asset/'.length));
+        if ((options.method||'GET')==='GET') assetGets.push(key);
         if ((options.method||'GET')==='PUT') {
           const injected = await hooks.assetPut?.(key, options);
           if (injected instanceof Response) return injected;
@@ -107,7 +108,13 @@ export async function openAnimes(t, {cloud, local={}, idb={}, media={}, hooks={}
         return json({ok:true, project:{id:body.id, name:body.name, generation:String(generation)}});
       }
       if (body.action==='projectRecovery') return json({currentGeneration:'1', images:0, imageReferences:0, candidates:[], warnings:[]});
-      if (body.action==='assetList') return await hooks.assetList?.(body) || json({keys:[]});
+      if (body.action==='assetList') {
+        assetLists.push(body);
+        const injected = await hooks.assetList?.(body);
+        if (injected instanceof Response) return injected;
+        // Same answer as the server: the cache keys this project has in the bucket.
+        return json({keys:[...bucket.keys()].filter(k => k.startsWith('cache:')).map(k => k.slice(6)).filter(k => k.includes(body.projectId))});
+      }
       if (body.action==='assetSign') {
         // Same key rule as the server: an accented key is refused.
         if (!/^[a-zA-Z0-9_.-]{3,220}$/.test(String(body.key||''))) return json({error:'projectId/key/method inválidos'}, 400);
@@ -143,5 +150,5 @@ export async function openAnimes(t, {cloud, local={}, idb={}, media={}, hooks={}
     await until(() => w.trabajoEnCurso() === '', ms);
     await wait(30);
   };
-  return {w, saves, errors, asked, scriptCalls, imageCalls, audioCalls, musicCalls, bucket, narration, edit, modal, press};
+  return {w, saves, errors, asked, scriptCalls, imageCalls, audioCalls, musicCalls, assetLists, assetGets, bucket, narration, edit, modal, press};
 }
