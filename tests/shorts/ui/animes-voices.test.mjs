@@ -41,7 +41,11 @@ test('"Automática" gives a character a voice none of the others has', async t =
 test('The bulk reference button draws in the selected style, like the single one', async t => {
   const p = await withVoices(t, {});
   const {w, imageCalls} = p;
-  w.document.getElementById('estiloAnime').value = 'realista';
+  // Choosing a style is a tap on the selector, and with an anime open that
+  // records it in the anime itself (animes-style.test.mjs).
+  const estilo = w.document.getElementById('estiloAnime');
+  estilo.value = 'realista';
+  estilo.dispatchEvent(new w.Event('change'));
   const bulk = w.document.getElementById('btnAllCharacterRefs');
   await bulk.onclick?.() ?? bulk.click();
   await until(() => imageCalls.length > 0, 20000);

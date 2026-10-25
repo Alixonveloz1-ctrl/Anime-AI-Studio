@@ -40,7 +40,15 @@ const scripts=s=>[...s.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].ma
 // Keep the exact character/scene markup and generation controls. Only their
 // read scheduling changes; failing media cannot hide every character or scene.
 const section=(source,start,end)=>source.slice(source.indexOf(start),source.indexOf(end,source.indexOf(start)));
-const charMarkup=source=>section(source,'    const defaultPrompt = `Single clean character reference',source.includes('const markup = ({ ch, imgSrc })')?'  };\n  return renderStoredCards':'  }).join(\'\');');
+// The one change inside the frozen character markup: the editable prompt no
+// longer names a drawing style of its own. The style of the open anime is the
+// only one, and generateImage appends it as the binding contract
+// (tests/shorts/ui/animes-style.test.mjs).
+const SIN_ESTILO_FIJO=[
+ [' no text, no labels, no watermark.`;',' no text, no labels, no watermark. Authentic Japanese hand-drawn 2D anime character design with crisp linework and hard-edged cel shading.`;'],
+];
+const charMarkup=source=>SIN_ESTILO_FIJO.reduce((text,[ahora,antes])=>text.replace(ahora,antes),
+ section(source,'    const defaultPrompt = `Single clean character reference',source.includes('const markup = ({ ch, imgSrc })')?'  };\n  return renderStoredCards':'  }).join(\'\');'));
 const sceneMarkup=source=>section(source,"  const selRatio = document.getElementById('aspectRatio')",source.includes('const markup = ({ s, imgA')?'  `;};':'  `;}).join(\'\');').replace('const markup = ({ s, imgA, imgB, imgC, audData, vids }) => {','c.innerHTML = items.map(({ s, imgA, imgB, imgC, audData, vids }) => {');
 assert.equal(charMarkup(current),charMarkup(original),'Character prompts/markup changed');
 assert.equal(sceneMarkup(current),sceneMarkup(original),'Scene generation controls/markup changed');
@@ -123,6 +131,12 @@ const FIXED=[
  // by scene id, and scene ids repeat in every episode
  // (tests/shorts/ui/animes-media-cache.test.mjs).
  [/^async function sceneAudioSeconds\(s\) \{/,'clip length per episode'],
+ // The chosen drawing style is the anime's, decided before generating it and
+ // kept with the project, and it is the ONLY style any prompt names: the
+ // character prompts, the Veo prompt and the server's reference instruction
+ // used to say "Japanese hand-drawn 2D anime" over it, which contradicted
+ // Realista and Donghua (tests/shorts/ui/animes-style.test.mjs).
+ [/^(function (estiloDelSelector|estiloElegido|llenarEstilos|buildVideoPrompt)\(|window\.generateCharImage = async function\(|function renderAll\(\) \{)/,'the chosen style is the only style'],
  // ⏹️ Detener was inside a block three of the five batches never showed, so a
  // batch of Veo clips could not be stopped at all
  // (tests/shorts/ui/animes-batches.test.mjs).

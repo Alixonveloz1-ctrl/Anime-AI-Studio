@@ -169,6 +169,9 @@ class Cloud:
         self.wake(apply(self.db.transaction()))
 
 
+# Seconds between the start of two consecutive Cortos text calls. See pace_text.
+TEXT_SPACING_SECONDS=5
+
 def lease_taken_over(project,job):
     """True only when ANOTHER session holds the production lease.
 
@@ -204,11 +207,22 @@ class RequestJournal:
         ref.update({'providerWait':None})
     def pace_text(self):
         # Shared across Cortos text jobs in this GCP project, not just a browser.
+        #
+        # It used to reserve a WHOLE MINUTE before every text call. Every text
+        # operation (ideas, develop, revise, analyze, review, transcribe) shares
+        # one engine, so there is only ever one Cortos text call in flight: that
+        # minute bought no protection from anyone and turned a full script —
+        # eight to ten calls in a row — into eight to ten minutes of waiting,
+        # while Animes writes a long episode with far more calls, back to back,
+        # on the same project and the same model. What actually protects the
+        # quota is the 429 back-off below (Google's own retryDelay, 60/120/240
+        # with jitter and a ten-minute budget), which is untouched. This is only
+        # an anti-burst space between consecutive calls.
         ref=self.cloud.db.collection('animeShortsCapacity').document('text-pacing')
         @firestore.transactional
         def reserve(tx):
             row=ref.get(transaction=tx).to_dict() or {};now=time.time()
-            start=max(now,row.get('nextAt',0));tx.set(ref,{'nextAt':start+60})
+            start=max(now,row.get('nextAt',0));tx.set(ref,{'nextAt':start+TEXT_SPACING_SECONDS})
             return max(0,start-now)
         delay=reserve(self.cloud.db.transaction())
         if delay:self.wait_for_provider(delay,'spacing')

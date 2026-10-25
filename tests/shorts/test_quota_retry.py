@@ -66,12 +66,30 @@ class QuotaTests(unittest.TestCase):
         c=Mock();c.claim.return_value=({'id':'j'}, {}, True)
         with patch('shorts.service.production.run_job',side_effect=ContractError('CANCELLED','cancel')):execute_job(c,'j')
         self.assertEqual(c.finish.call_args.args[1],'cancelled')
-    def test_shared_pacing_reserves_minute_between_jobs(self):
+    def test_shared_pacing_spaces_calls_without_costing_a_minute_each(self):
+        from shorts.service.cloud import TEXT_SPACING_SECONDS
         c=Mock();ref=c.db.collection.return_value.document.return_value;ref.get.return_value.to_dict.return_value={'nextAt':150}
         journal=RequestJournal(c,'j');journal.wait_for_provider=Mock()
         with patch('shorts.service.cloud.firestore.transactional',side_effect=lambda fn:fn),patch('shorts.service.cloud.time.time',return_value=100):journal.pace_text()
-        c.db.transaction.return_value.set.assert_called_once_with(ref,{'nextAt':210})
+        c.db.transaction.return_value.set.assert_called_once_with(ref,{'nextAt':150+TEXT_SPACING_SECONDS})
+        # The reservation another call already took is still respected.
         journal.wait_for_provider.assert_called_once_with(50,'spacing')
+
+    def test_a_whole_script_does_not_spend_minutes_waiting_for_its_own_turn(self):
+        # Every text operation shares one engine, so these calls are the same
+        # job's, one after another. A minute each turned a full script into ten
+        # minutes of waiting; Animes writes a longer one with more calls.
+        c=Mock();row={};waits=[]
+        ref=c.db.collection.return_value.document.return_value
+        ref.get.return_value.to_dict.side_effect=lambda transaction=None:dict(row)
+        c.db.transaction.return_value.set.side_effect=lambda r,value:row.update(value)
+        journal=RequestJournal(c,'j');journal.wait_for_provider=lambda delay,reason,*a:waits.append(delay)
+        clock=[1000.0]
+        with patch('shorts.service.cloud.firestore.transactional',side_effect=lambda fn:fn),patch('shorts.service.cloud.time.time',side_effect=lambda:clock[0]):
+            for _ in range(10):
+                journal.pace_text()
+                clock[0]+=sum(waits[-1:])+2   # the call itself takes a couple of seconds
+        self.assertLess(sum(waits),60,f'a ten-call script waited {sum(waits)}s for its own spacing')
     def test_wait_stops_on_cancel_or_a_real_takeover(self):
         for state,session,code in [('cancel_requested','s','CANCELLED'),('running','otra','LEASE')]:
             c=Mock();ref=c.db.collection.return_value.document.return_value;ref.get.return_value.to_dict.return_value={'state':state,'projectId':'p','session':'s'}

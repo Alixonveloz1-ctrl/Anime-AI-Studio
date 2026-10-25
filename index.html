@@ -416,6 +416,10 @@
       <label>Concepto semilla (opcional)</label>
       <textarea id="conceptoInput" placeholder="Una idea base que quieras explorar..."></textarea>
 
+      <label>Estilo de animación</label>
+      <select id="estiloAnime"></select>
+      <p id="estiloNota" style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.5"></p>
+
       <button class="btn" id="btnGenerarUniverso" style="margin-top:14px">🌌 Generar Universo Automático</button>
 
 
@@ -535,10 +539,6 @@
         <option value="gemini-2.5-flash-image">⚡ Nano Banana — estable y rápido</option>
         <option value="gemini-3-pro-image">👑 Nano Banana Pro — caro, solo emergencias</option>
       </select>
-
-      <label>Estilo de animación</label>
-      <select id="estiloAnime"></select>
-      <p id="estiloNota" style="font-size:11px;color:var(--text-dim);margin:6px 0 0;line-height:1.5"></p>
 
       <label style="margin-top:12px">Modelo de video (Veo)</label>
       <select id="veoModelSelect">
@@ -1546,8 +1546,18 @@ for (const e of Object.values(ESTILOS_ANIME)) e.core += NO_ES_3D;
 
 const ESTILO_POR_DEFECTO = 'japon_2d';
 
-function estiloElegido() {
+// El estilo es del ANIME, no del teléfono. Antes vivía sólo en los ajustes del
+// dispositivo: abrir el mismo proyecto en otro teléfono lo devolvía al estilo
+// por defecto y las imágenes siguientes ya no pegaban con las hechas, y dos
+// animes del mismo teléfono tenían que compartir estilo. Un proyecto anterior
+// a esto no guarda ninguno: se queda con el que se dibujó, el de por defecto.
+function estiloDelSelector() {
   const v = document.getElementById('estiloAnime')?.value;
+  return ESTILOS_ANIME[v] ? v : ESTILO_POR_DEFECTO;
+}
+function estiloElegido() {
+  if (!state.universe) return estiloDelSelector();
+  const v = state.universe.estilo;
   return ESTILOS_ANIME[v] ? v : ESTILO_POR_DEFECTO;
 }
 // `forzado` deja pedir un estilo concreto: el corto guarda con cuál se escribió
@@ -1706,7 +1716,9 @@ function buildVideoPrompt(s, slot = 'A', opts = {}) {
   // rain inside the corridor was not only the model hallucinating: we were asking
   // for it. Dropped on the video path only; the images keep the style intact.
   const estiloVideo = estiloParaVideo();
-  const animeStyle = `STYLE — ABSOLUTELY MANDATORY: preserve the exact Japanese hand-drawn 2D anime drawing of the first frame. ${estiloVideo} Do not upgrade it into 3D, CGI, realistic rendering or a videogame cinematic while moving.`;
+  // El primer fotograma YA está dibujado en el estilo del anime. Nombrar aquí
+  // otro estilo le pedía al generador de video cambiarlo a mitad del clip.
+  const animeStyle = `STYLE — ABSOLUTELY MANDATORY: preserve the exact drawing of the first frame, line for line. ${estiloVideo} Do not upgrade it into 3D, CGI, photorealistic rendering or a videogame cinematic while moving.`;
 
   // With a director-written motion the clip has an explicit destination, so the
   // generic "stay in place" rule would fight it. Without one, keep the old
@@ -3508,7 +3520,17 @@ function llenarEstilos() {
   if (!sel || sel.options.length) return;
   sel.innerHTML = Object.entries(ESTILOS_ANIME)
     .map(([k, v]) => `<option value="${k}">${v.nombre}</option>`).join('');
-  sel.addEventListener('change', pintarNotaDeEstilo);
+  sel.addEventListener('change', () => {
+    // Con un anime abierto, el selector es SU estilo: cambiarlo aquí lo cambia
+    // para él y para cualquier teléfono donde se abra. Lo ya dibujado se queda
+    // como está; sólo lo que se genere a partir de ahora usa el nuevo.
+    if (state.universe && state.universe.estilo !== sel.value) {
+      state.universe.estilo = sel.value;
+      saveState();
+      showToast(`Estilo de «${state.universe.title || 'este anime'}»: ${ESTILOS_ANIME[sel.value]?.nombre || sel.value}. Lo ya generado conserva su dibujo.`, 'success');
+    }
+    pintarNotaDeEstilo();
+  });
 }
 
 function restaurarAjustes() {
@@ -4360,6 +4382,9 @@ Devuelve JSON:
     state.universe.creativeVersion = 2;
     state.universe.epFormat  = document.getElementById('epLengthSelect')?.value || 'hora';
     state.universe.storyMode = document.getElementById('storyModeSelect')?.value || 'narrated';
+    // Elegido ANTES de generar, junto al género: es la escuela de dibujo de
+    // este anime y viaja con él a cualquier teléfono.
+    state.universe.estilo    = estiloDelSelector();
     state.universe.endingMode = document.getElementById('endingModeSelect')?.value || 'complete';
     // Fixed now, from the title the model just produced, so it never moves.
     state.universe.carpeta   = slugCarpeta(state.universe.title, state.projectId);
@@ -5084,7 +5109,7 @@ Responde SOLO JSON válido sin markdown.`;
             setProg(15, `Generando imágenes de ${newChars.length} personaje(s) nuevo(s)...`);
             for (const ch of newChars) {
               try {
-                const prompt = `Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render clothing exactly as described. No turnaround, no collage, no alternate poses, no expression sheet, no text, no watermark. Authentic Japanese hand-drawn 2D anime, crisp linework, hard-edged cel shading.`;
+                const prompt = `Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render clothing exactly as described. No turnaround, no collage, no alternate poses, no expression sheet, no text, no watermark.`;
                 const imgB64 = await generateImage(prompt, null, null, { charSheet: true, storageKey: charImgKey(ch.id) });
                 await dbSet(charImgKey(ch.id), imgB64);
                 renderCharacters();
@@ -6053,7 +6078,7 @@ async function renderCharacters() {
   }
   const items = state.characters.map(ch => ({ ch, imgSrc:null, key:charImgKey(ch.id) }));
   const markup = ({ ch, imgSrc }) => {
-    const defaultPrompt = `Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, natural neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render the clothing's fabric, colors and CONDITION exactly as described; do not beautify or upgrade it. No turnaround, no collage, no alternate poses, no expression sheet, no inset faces, no text, no labels, no watermark. Authentic Japanese hand-drawn 2D anime character design with crisp linework and hard-edged cel shading.`;
+    const defaultPrompt = `Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, natural neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render the clothing's fabric, colors and CONDITION exactly as described; do not beautify or upgrade it. No turnaround, no collage, no alternate poses, no expression sheet, no inset faces, no text, no labels, no watermark.`;
     return `
     <div class="char-card">
       <div class="char-header">
@@ -6088,7 +6113,7 @@ window.generateCharImage = async function(charId) {
     // Use editable prompt from textarea if available, else build default
     const textarea = document.getElementById('charPrompt_' + charId);
     const prompt = textarea?.value.trim() ||
-      `Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, natural neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render clothing exactly as described. No turnaround, no collage, no alternate poses, no expression sheet, no text, no watermark. Authentic Japanese hand-drawn 2D anime character design, crisp linework, hard-edged cel shading.`;
+      `Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, natural neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render clothing exactly as described. No turnaround, no collage, no alternate poses, no expression sheet, no text, no watermark.`;
 
     // Never pass existing image as reference — it prevents the prompt from taking effect
     let imgB64 = null, lastErr = null;
@@ -6127,7 +6152,7 @@ document.getElementById('btnAllCharacterRefs')?.addEventListener('click', async 
       const ch=state.characters[i];
       if (await dbHas(charImgKey(ch.id))) { skipped++; continue; }
       btn.innerHTML=`<div class="spinner"></div> Referencia ${i+1}/${state.characters.length}: ${ch.name}`;
-      const prompt=`Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, natural neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render clothing exactly as described. No turnaround, no collage, no alternate poses, no expression sheet, no inset faces, no text, no labels, no watermark. Authentic Japanese hand-drawn 2D anime character design, crisp variable linework, hard-edged cel shading, matte skin.`;
+      const prompt=`Single clean character reference image of ${ch.name}${ch.age ? ', age ' + ch.age : ''}, ${ch.role || 'character'}. ${ch.appearance}. ONE character only, full body, natural neutral standing pose, three-quarter front view, face clearly readable, hands visible, simple light neutral background. Render clothing exactly as described. No turnaround, no collage, no alternate poses, no expression sheet, no inset faces, no text, no labels, no watermark.`;
       try {
         const img=await conEsperaDeCuota(
           // The style comes from "Estilo de animación", like the single
@@ -9437,6 +9462,11 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
 
 function renderAll() {
   window.animeRecovery?.invalidate(state.projectId);
+  // El selector muestra el estilo del anime abierto, no el del teléfono: si no
+  // lo siguiera, cambiar de proyecto dejaría a la vista el estilo de otro.
+  const selEstilo = document.getElementById('estiloAnime');
+  if (selEstilo && state.universe) selEstilo.value = estiloElegido();
+  pintarNotaDeEstilo();
   renderUniverse();
   updateEpisodeNav();
   return Promise.all([renderCharacters(), renderScenes()]);
