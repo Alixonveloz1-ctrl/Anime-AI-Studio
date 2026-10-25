@@ -185,6 +185,23 @@ function showJob(job){
   ++watchVersion;await draw();say('Cancelación solicitada. Lo ya generado se conserva.');
  },true]);
  if(available.close)controls.push(['Cerrar sin repetir',async()=>{if(await closeUncertain(job.id)){++watchVersion;await draw();}},true]);
+ // «Otro trabajo usa este motor» no decía cuál, y desde Personajes no había
+ // ninguna lista donde encontrarlo: la espera no se podía resolver desde aquí.
+ const bloqueante=job.dispatchError?.blockingJobId;
+ if(bloqueante&&bloqueante!==job.id)controls.push(['Comprobar el trabajo que lo bloquea',async()=>{
+  const otro=await api('/jobs/'+bloqueante).catch(()=>null);
+  if(!otro){say('El trabajo que ocupaba el motor ya no existe. Pulsa Continuar para seguir con éste.');return;}
+  const acciones=taskActions(otro);
+  if(acciones.inspect){const r=await api('/jobs/'+bloqueante+':inspect','POST',{},{'If-Match':String(otro.revision)});say(r.message);}
+  else if(acciones.close){if(!await closeUncertain(bloqueante))return;}
+  else{say('El motor lo ocupa ahora mismo: '+titleFor(otro.operation)+' · '+titleFor(otro.state)+'. Esta tarea arrancará sola al quedar libre.');return;}
+  // Liberado el motor, esta generación se reanuda aquí mismo: dejarla esperando
+  // obligaba a buscar otro botón después de haber resuelto el bloqueo.
+  if(!active)await lease(true);
+  const actual=await api('/jobs/'+job.id);
+  await api('/jobs/'+job.id+':resume','POST',{session},{'If-Match':String(actual.revision)});
+  ++watchVersion;await watch(job.id);await draw();
+ },true]);
  if(['awaiting_review','succeeded'].includes(job.state))controls.push(['Ver resultado',()=>go(['ideas','develop','revise'].includes(job.operation)?'Historia':'Escenas'),true]);
  buttons(panel,controls);
 }
@@ -433,6 +450,10 @@ async function script(parent=screen){
   for(let vueltas=12;vueltas>0;vueltas--){
    const estado=estadoDelGuion();
    if(estado.paso>4)return abrirProduccion();
+   // El paso 4 no deja un borrador aprobable: deja una VERSIÓN candidata del
+   // guion. Pedir su aprobación como borrador siempre respondía «el paso no
+   // está listo para aprobar», así que el botón no servía nunca.
+   if(estado.paso===4&&estado.ultimo?.status==='ready')return abrirProduccion();
    // Ya escrita y sin aprobar: se aprueba, no se vuelve a pagar por ella.
    if(estado.ultimo?.status==='ready'){await mutate(route('/drafts/'+estado.ultimo.id+':approve'),{});continue;}
    const escrito=estado.paso===2
@@ -452,6 +473,9 @@ async function script(parent=screen){
  // es lo que deja las tomas listas para pedir imagen, video y voz.
  async function abrirProduccion(){
   const candidata=(p.developments||[]).filter(d=>d.approvalState==='candidate').sort((a,b)=>(a.created||0)-(b.created||0)).at(-1);
+  // Sin candidata y con un guion ya en uso, el texto está terminado: se entra
+  // a producción en vez de dejar al usuario mirando un aviso.
+  if(!candidata&&p.activeDevelopment){say('El texto está completo. Genera las imágenes y las voces desde cada toma.');return go('Escenas');}
   if(!candidata){say('Texto completo. Abre producción con este guion para trabajar las tomas.');return;}
   try{
    await approve('developments',candidata.id);
@@ -500,7 +524,7 @@ async function script(parent=screen){
   const faltan=checkpoint?checkpoint.scriptProgress.total-checkpoint.scriptProgress.completed:0;
   const escribirLabel=next===1&&!latest?'Escribir toda la historia'
    :checkpoint?(latest?.status==='invalid'?`Reintentar y seguir (faltan ${faltan} tramos)`:`Seguir escribiendo (faltan ${faltan} tramos)`)
-   :latest?.status==='ready'?`Aprobar y seguir desde «${stages[next-1]}»`
+   :latest?.status==='ready'?(next===4?'Aprobar el guion y abrir producción':`Aprobar y seguir desde «${stages[next-1]}»`)
    :`Seguir desde «${stages[next-1]}»`;
   buttons(nextControls,[[escribirLabel,()=>escribirTodoElTexto(instruction.value)]]);
   sueltas.push([`Generar sólo «${stages[next-1]}»`,()=>runStage(next,instruction.value,null),true]);
@@ -706,6 +730,9 @@ async function references(){
   }
  }
  const importBox=fold(screen,'Reutilizar de otra historia');buttons(importBox,[['Importar referencia o música',()=>importAsset(),true]]);
+ // Aquí se piden referencias y voces, así que lo que espera una decisión
+ // —incluido el trabajo que tiene ocupado un motor— se ve aquí también.
+ await activityList();
 }
 async function shots(){
  const d=development();

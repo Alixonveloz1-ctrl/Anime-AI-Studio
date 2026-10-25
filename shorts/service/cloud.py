@@ -93,7 +93,11 @@ class Cloud:
             # a running or uncertain submission based only on its age.
             if slot and slot.get('jobId') and slot['jobId']!=j['id']:
                 previous=self.db.collection('animeShortsJobs').document(slot['jobId']).get(transaction=tx).to_dict()
-                if previous and previous.get('settled'):slot=None
+                # A slot pointing at a job record that is no longer there cannot
+                # be protecting a running submission: nothing exists that could
+                # report its outcome or free it, so it blocked that engine for
+                # good and every later request waited behind a ghost.
+                if not previous or previous.get('settled'):slot=None
             try:out,slot,dispatch=acquire(j,p,slot,time.time())
             except ContractError as error:
                 if error.code not in ('CAPACITY_BUSY','LEASE'):raise

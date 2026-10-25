@@ -558,6 +558,46 @@ test('The script reads as a story: no shot techniques, frame counts or internal 
  }finally{dom.window.close();}
 });
 
+test('With the script already approved, step 4 opens production instead of asking for an impossible approval',async()=>{
+ const {fixture,w,dom,click}=await setup({empty:true});
+ try{
+  await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
+  await click('Escribir toda la historia');
+  await click('Historia');
+  // El paso 4 deja una VERSIÓN candidata del guion, no un borrador aprobable:
+  // su entrega se queda en «lista» para siempre, y pedir esa aprobación se
+  // rechaza siempre. El botón tiene que llevar a las tomas, no a ese error.
+  const paso4=fixture.project.developmentDrafts.filter(d=>d.stage===4).at(-1);
+  assert.equal(paso4.status,'ready');assert.notEqual(paso4.approvalState,'approved');
+  await click('Aprobar el guion y abrir producción');
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith(paso4.id+':approve')).length,0,
+   'no se pide aprobar el paso 4 como borrador');
+  assert.equal(w.document.querySelectorAll('.shot-section').length,2,'lleva a las tomas');
+ }finally{dom.window.close();}
+});
+
+test('A job waiting for a busy engine can be resolved from the card that is waiting',async()=>{
+ const {fixture,w,dom,click}=await setup();
+ try{
+  // «Otro trabajo usa este motor» no decía cuál era, y en Personajes no había
+  // ninguna lista donde encontrarlo: la espera no tenía salida.
+  fixture.jobs.push({id:'bloqueante',operation:'tts',state:'submitted_unknown',created:98,revision:1,settled:false,
+   providerCalls:[{kind:'tts',state:'submitted_unknown'}]});
+  fixture.jobs.push({id:'enEspera',operation:'tts',state:'queued',created:99,revision:1,settled:false,
+   dispatchError:{code:'CAPACITY_BUSY',message:'Otro trabajo usa este motor. La tarea sigue pendiente.',blockingJobId:'bloqueante'}});
+  await click('Personajes');
+  const panel=w.document.querySelector('#activity');
+  assert.match(panel.textContent,/Otro trabajo usa este motor/);
+  await click('Comprobar el trabajo que lo bloquea',panel);
+  assert.equal(fixture.jobs.find(j=>j.id==='bloqueante').settled,true,'el trabajo que ocupaba el motor queda cerrado');
+  // Y la generación que esperaba continúa aquí mismo: resolver el bloqueo no
+  // puede dejarte buscando otro botón.
+  const espera=fixture.jobs.find(j=>j.id==='enEspera');
+  assert.equal(espera.dispatchError,null,'deja de estar bloqueada');
+  assert.equal(w.document.querySelector('#notice').className,'','sin error al final');
+ }finally{dom.window.close();}
+});
+
 test('A preview shown inside its card stays on screen after the job finishes',async()=>{
  const {w,dom,click}=await setup();await click('Exportar');await click('Revisar el corto');await click('Subtítulos');
  await click('Aprobar subtítulos revisados');

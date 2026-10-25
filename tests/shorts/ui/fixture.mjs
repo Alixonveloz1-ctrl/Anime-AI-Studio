@@ -33,6 +33,15 @@ export function createFixture({empty=false}={}){
    result=p;
   }
   else if(path.endsWith('/jobs'))result={jobs};
+  else if(path.startsWith('/jobs/')&&path.split('/')[2].includes(':')){
+   // Comprobar o cerrar un trabajo incierto lo cierra y libera su motor.
+   const [id,action]=path.split('/')[2].split(':');const j=jobs.find(x=>x.id===id);
+   if(!j)return new Response(JSON.stringify({error:'Trabajo no disponible'}),{status:404});
+   if(['inspect','close'].includes(action)){Object.assign(j,{state:'failed',settled:true});result={state:j.state,message:'Trabajo cerrado sin repetir llamadas.'};}
+   // Reanudar vuelve a encolarlo: con el motor libre arranca y entrega.
+   else if(action==='resume'){Object.assign(j,{state:'awaiting_review',settled:true,dispatchError:null});result=j;}
+   else result=j;
+  }
   else if(path.startsWith('/jobs/'))result=jobs.find(j=>j.id===path.split('/')[2]);
   else if(path.endsWith('/ideas:generate')){p.ideas=clone(initialIdeas);result=job('ideas',{});}
   else if(path.includes('/ideas/')&&path.endsWith(':select')){p.selectedIdea={id:path.split('/')[4].split(':')[0]};result=p;}
@@ -44,7 +53,11 @@ export function createFixture({empty=false}={}){
    if(step===4)p.developments.push({id:'dev',data:current,created:n,revision:1,approvalState:'candidate'});
    result=job('develop',{draftId:id,stage:step});
   }
-  else if(path.includes('/drafts/')&&path.endsWith(':approve')){const id=path.split('/').at(-1).split(':')[0];const row=p.developmentDrafts.find(x=>x.id===id);row.approvalState='approved';p.activeDraft=id;result=row;}
+  else if(path.includes('/drafts/')&&path.endsWith(':approve')){const id=path.split('/').at(-1).split(':')[0];const row=p.developmentDrafts.find(x=>x.id===id);
+   // Como el servicio real: el paso 4 no deja un borrador aprobable, deja una
+   // versión candidata del guion. Pedir su aprobación siempre se rechaza.
+   if(!(row&&row.status==='ready'&&[1,2,3].includes(row.stage)))return new Response(JSON.stringify({error:'El paso no está listo para aprobar.'}),{status:409});
+   row.approvalState='approved';p.activeDraft=id;result=row;}
   else if(path.includes('/drafts/')&&path.endsWith(':produce')){const id=path.split('/').at(-1).split(':')[0],row=p.developmentDrafts.find(x=>x.id===id);const record={id:'production-'+id,data:{soundRequests:[],musicRequests:[],subtitles:[],...clone(row.data)},sourceDraftId:id,editorialStage:row.stage,approvalState:'approved',created:++n};p.developments.push(record);p.activeDevelopment=record.id;result=record;}
   else if(path.includes('/drafts/')&&path.endsWith(':recover')){const row={id:'recovered'+(++n),ideaId:p.selectedIdea.id,stage:1,data:{title:data.title,story:data.story,beats:data.beats},created:n,status:'ready',approvalState:'candidate'};p.developmentDrafts.push(row);result=row;}
   else if(path.includes('/drafts/'))result=p.developmentDrafts.find(x=>x.id===path.split('/').at(-1));

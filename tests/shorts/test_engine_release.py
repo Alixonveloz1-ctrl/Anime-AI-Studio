@@ -121,3 +121,22 @@ class WaitingQueueTests(unittest.TestCase):
     def test_the_queue_is_bounded_and_never_repeats_a_job(self):
         for _ in range(3):self.c.acquire_dispatch('waiting')
         self.assertEqual(self.slot['waiting'],['waiting'])
+
+    def test_an_engine_held_by_a_job_that_is_not_there_any_more_is_freed(self):
+        # The slot pointed at a job record that no longer exists. Nothing could
+        # ever report its outcome or free it, so every later request queued
+        # behind a ghost — «Otro trabajo usa este motor» with no way out.
+        self.c.db.data['animeShortsCapacity/text-analysis']={'jobId':'desaparecido'}
+        job,dispatch=self.c.acquire_dispatch('waiting')
+        self.assertTrue(dispatch,'el motor se libera y el trabajo arranca')
+        self.assertEqual(self.slot['jobId'],'waiting')
+        self.assertIsNone(job.get('dispatchError'))
+
+    def test_an_engine_held_by_a_job_that_is_still_open_keeps_protecting_it(self):
+        # The opposite case must not change: a submission that may be running
+        # keeps its engine, however old it looks.
+        self.c.db.data['animeShortsJobs/running'].update(state='submitted_unknown')
+        job,dispatch=self.c.acquire_dispatch('waiting')
+        self.assertFalse(dispatch)
+        self.assertEqual(job['dispatchError']['code'],'CAPACITY_BUSY')
+        self.assertEqual(job['dispatchError']['blockingJobId'],'running')
