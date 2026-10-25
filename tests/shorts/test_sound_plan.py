@@ -1,6 +1,7 @@
 """Sounds a person can actually obtain, and voices you can tell apart."""
 import importlib.util
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 from shorts.core.contracts import ContractError,AMBIENCE_LOOP_SECONDS,SFX_MAX_SECONDS,sound_group_uses
 from shorts.core.requests import VOICES,VOICE_GENDERS
@@ -8,6 +9,10 @@ from shorts.service.development import plan_sound,validate_stage
 from shorts.service.director import validate_development
 from shorts.service.timeline import ambience_placements
 from test_manual_development import complete
+
+# The Cloud Run image ships shorts/, the worker and the tests — not the Animes
+# page. The cross-table check is a repository check and skips inside the image.
+ANIMES_PAGE=Path(__file__).resolve().parents[2]/'index.html'
 
 
 def request(**fields):
@@ -80,6 +85,28 @@ class SoundPlanTests(unittest.TestCase):
         self.assertTrue(saved['soundGroup'])
 
 
+    def test_an_ai_correction_repairs_a_plan_made_under_the_old_rules(self):
+        # A story already in production keeps the plan it was given. Asking for
+        # a correction has to repair it too, or the 315-second «effect» stays
+        # there forever.
+        from unittest.mock import Mock
+        from shorts.service.production import run_job
+        data=complete()
+        data['soundRequests']=[request(seconds=315,shotId=data['shots'][0]['id'])]
+        cloud=Mock();cloud.c={'models':{'text':{'model':'m','region':'global'}}}
+        cloud.entity.return_value={'id':'dev','data':data}
+        cloud.project_ref.return_value.collection.return_value.stream.return_value=[]
+        corrected={**data['soundRequests'][0],'seconds':315}
+        with patch('shorts.service.production.Providers') as provider:
+            provider.return_value.text.return_value={'replacement':corrected,'changeSummary':[]}
+            run_job(cloud,{'id':'job','operation':'revise','models':cloud.c['models'],
+                           'payload':{'kind':'developments','entityId':'dev','instruction':'Menos efectos',
+                                      'scope':{'group':'soundRequests','entityId':corrected['id']}}},
+                    {'id':'p','owner':'u','format':'16:9','activeDevelopment':'dev'})
+        saved=cloud.put_entity.call_args.args[2]['data']['soundRequests'][0]
+        self.assertEqual(saved['type'],'ambience');self.assertEqual(saved['seconds'],AMBIENCE_LOOP_SECONDS)
+
+
 class AmbienceLoopTests(unittest.TestCase):
     shots=[{'id':'t1','startFrame':0,'frames':120,'locationId':'casa'},
            {'id':'t2','startFrame':120,'frames':240,'locationId':'casa'},
@@ -121,14 +148,13 @@ class VoiceCatalogueTests(unittest.TestCase):
         self.assertEqual(list(VOICE_GENDERS),VOICES)
         self.assertEqual({g for g in VOICE_GENDERS.values()},{'female','male'})
 
+    @unittest.skipUnless(ANIMES_PAGE.exists(),'La página de Animes no viaja en la imagen de Cloud Run')
     def test_animes_and_cortos_never_disagree_about_who_is_female(self):
         # Both halves of the product classify the SAME thirty Gemini TTS voices.
         # If one table is edited alone, the app calls a voice female on one side
         # and male on the other.
         import re
-        from pathlib import Path
-        root=Path(__file__).resolve().parents[2]
-        page=(root/'index.html').read_text(encoding='utf-8')
+        page=ANIMES_PAGE.read_text(encoding='utf-8')
         table=page.split('const GENERO_POR_NOMBRE = {',1)[1].split('}',1)[0]
         animes={name.lower():gender for name,gender in re.findall(r"([A-Za-z]+)\s*:\s*'(female|male)'",table)}
         self.assertEqual(len(animes),len(VOICE_GENDERS),'Animes clasifica otro número de voces')

@@ -187,7 +187,9 @@ Qué cambia:
 - El prompt se lee dentro de la tarjeta del efecto, con «Copiar prompt», y también en el plan de sonido que se aprueba —que antes sólo mostraba el nombre del efecto—. La dirección musical de cada pieza se lee igual.
 - Las instrucciones del paso de sonido piden entre tres y seis sonidos distintos para cinco minutos, repetir el prompt palabra por palabra cuando el sonido se repite, y no pedir efectos para lo que ya cuentan la voz o la música.
 
-Las historias guardadas antes de este cambio siguen siendo válidas: sin `type` ni `soundGroup` no se les aplica el límite de duración y cada solicitud sigue siendo su propia tarjeta.
+Las historias guardadas antes de este cambio siguen siendo válidas: sin `type` ni `soundGroup` no se les aplica el límite de duración y cada solicitud sigue siendo su propia tarjeta. Un plan ya producido conserva lo que se le encargó; pedirle una corrección con IA lo normaliza como si fuera nuevo, y el informe de impacto dice qué cambió. Una edición manual no se normaliza: si escribes 400 segundos a mano, el guardado lo rechaza explicando por qué, en vez de cambiar tu número en silencio.
+
+La autoprueba de la imagen de Cloud Run —el paso que decide si una instalación recibe tráfico— incluye estas pruebas. La que compara las tablas de voz de Animes y Cortos se salta dentro de la imagen, porque la página de Animes no viaja en ella.
 
 Pruebas (`tests/shorts/test_sound_plan.py`, `tests/shorts/ui/studio.test.mjs`): el efecto de 315 segundos se convierte en bucle de ambiente obtenible; un golpe dentro de su límite se deja intacto; el mismo sonido en dos tomas comparte archivo y la repetición en la misma toma se descarta; los márgenes imposibles se encogen en vez de tumbar el paso; el bucle cubre su lugar y para cuando el lugar cambia; una historia guardada sin los campos nuevos sigue validando; y el prompt del efecto se lee en su tarjeta con su botón de copiar.
 

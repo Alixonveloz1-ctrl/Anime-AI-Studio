@@ -74,7 +74,12 @@ def run_job(cloud,j,p):
         revised=provider.text(RULES+'\nCorrige únicamente el objeto target. Devuelve {replacement:objeto editado,changeSummary:[]}. Conserva su id. El contexto solo sirve para continuidad, no lo reescribas.\n'+json.dumps({'target':target,'context':original.get('bible',original) if scope and scope.get('group')!='whole' else None,'correction':data['instruction']},ensure_ascii=False))
         require(isinstance(revised.get('replacement'),dict),'REVISION_SCHEMA','Corrección incompleta')
         if data['kind']=='developments':
-            candidate=validate_development(replace_scope(original,scope,revised['replacement']))
+            # A corrected sound plan goes through the same normalisation as a
+            # new one, so a story planned under the old rules — one 315-second
+            # «effect» for the whole film — is repaired by asking for a
+            # correction, and the impact report says what changed.
+            from shorts.service.development import plan_sound
+            candidate=validate_development(plan_sound(replace_scope(original,scope,revised['replacement'])))
             available=[x.to_dict() for x in cloud.project_ref(pid).collection('assets').stream()]
             report=impact(original,candidate,available,old['id'],p.get('assetSelections'))
         else:
