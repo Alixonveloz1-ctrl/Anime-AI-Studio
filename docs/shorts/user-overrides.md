@@ -140,3 +140,13 @@ El usuario pregunta por qué un guion de Cortos tarda diez minutos cuando Animes
 El espaciado entre comienzos de llamadas de texto baja de 60 a 5 segundos (`TEXT_SPACING_SECONDS` en `shorts/service/cloud.py`). Lo demás de U017 queda intacto y es la protección real ante cuota: ante 429, hasta tres reintentos con las esperas que pide Google (Retry-After y google.rpc.RetryInfo, 60/120/240 con jitter), presupuesto acumulado de diez minutos, límite temporal interno, y el preflight gratuito countTokens que también admite esperas. Siguen registrándose los envíos pagados y sólo un 429 confirmado puede reenviarse con el mismo hash.
 
 Este cambio no autoriza llamadas en paralelo ni quita el motor único de texto: sigue habiendo una sola generación de texto de Cortos a la vez en el proyecto. Las pruebas (`tests/shorts/test_quota_retry.py`) miden el espaciado de un guion de diez llamadas y comprueban que la reserva ya tomada por otra llamada se sigue respetando; no verifican la cuota real de la cuenta del usuario.
+
+## U019 — El guion completo con una sola pulsación (2026-10-25)
+
+El usuario señala que el paso Guion le pide aprobar diez tramos uno por uno y pregunta por qué no se genera entero, como en Animes. Tiene razón en la distinción: los tramos de U016 son el tamaño máximo de UNA respuesta del modelo (hasta 48 segundos previstos), no pasos editoriales. Pedir una pulsación por tramo convertía un guion de cinco minutos en diez pulsaciones.
+
+Una sola pulsación encadena los tramos que falten. Cada respuesta correcta se sigue guardando como punto de control inmutable, así que detener la generación, perder la sesión o recibir un 429 conservan lo escrito y la siguiente pulsación continúa desde el último tramo bueno. Un tramo inválido detiene la cadena y muestra su error; «Generar otra versión de esta parte» sigue rehaciendo un solo tramo.
+
+Esto NO sustituye U013: los cuatro pasos editoriales —Historia; Guion, biblias y planos; Sonido, música y subtítulos; Revisión de continuidad— siguen pidiendo su pulsación y su lectura, y aprobar un paso no genera el siguiente. Las biblias se siguen entregando aparte, para leerlas antes de que se escriba el guion. Una entrega parcial sigue sin poder aprobarse para producción.
+
+Pruebas (`tests/shorts/ui/studio.test.mjs`): una pulsación escribe los tramos restantes uno tras otro, un fallo detiene la cadena sin seguir gastando y conserva el último punto de control, y la pulsación siguiente continúa desde ahí hasta el guion completo. El fixture marca el trabajo como fallido cuando su tramo es inválido, igual que el servicio.

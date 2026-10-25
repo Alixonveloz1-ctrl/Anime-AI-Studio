@@ -3,11 +3,11 @@
 Implementa U013 y U016. Sustituye la secuencia automática documentada en staged-text-generation.md y la recuperación completa descrita en reference-recovery.md.
 
 1. Historia: título, relato completo legible y momentos dramáticos.
-2. Guion, biblias y planos: primero genera las biblias; después desarrolla tramos de hasta 48 segundos previstos, uno por pulsación. Cada parte usa la historia completa y los tramos previos. Conserva japonés, español, actuación, silencios y referencias visuales.
+2. Guion, biblias y planos: primero genera las biblias; después, una sola pulsación escribe el guion entero en tramos de hasta 48 segundos previstos, encadenados y guardados uno a uno. Cada parte usa la historia completa y los tramos previos. Conserva japonés, español, actuación, silencios y referencias visuales.
 3. Sonido, música y subtítulos: recibe el guion aprobado y define la producción sonora.
 4. Revisión de continuidad: recibe el conjunto aprobado; produce observaciones y una candidata final que todavía requiere aprobación.
 
-Cada botón genera solo su entrega. Aprobar un paso completo es una operación sin modelos. Dentro del guion, «Aprobar tramo y continuar» solicita explícitamente la generación del tramo siguiente. Las entregas parciales no se pueden aprobar como guion completo. Los pasos posteriores requieren la versión anterior aprobada, de la misma idea y con su hash intacto. Los borradores son independientes de las versiones activas de producción.
+Cada botón genera solo su entrega: los cuatro pasos editoriales siguen pidiendo su pulsación. Aprobar un paso completo es una operación sin modelos. Dentro del guion, la pulsación encadena los tramos que falten; detenerla o un fallo conservan el último tramo guardado, y la siguiente pulsación sigue desde ahí. «Generar otra versión de esta parte» rehace un solo tramo. Las entregas parciales no se pueden aprobar como guion completo. Los pasos posteriores requieren la versión anterior aprobada, de la misma idea y con su hash intacto. Los borradores son independientes de las versiones activas de producción.
 
 La aplicación calcula referencias visuales desde IDs existentes, conserva la duración provisional entre 6840 y 7560 frames (285–315 segundos), exclusivamente dentro de los intervalos del guion y respetando pausas, y deriva la duración musical de entradas/salidas. Las piezas que exceden 184 segundos se separan en encargos consecutivos. No se fabrican medidas de audio, medios, aprobaciones ni voces. Si los intervalos son imposibles, se conserva la historia y se pide corregir únicamente el guion. La compilación final con audio medido mantiene sus validaciones.
 

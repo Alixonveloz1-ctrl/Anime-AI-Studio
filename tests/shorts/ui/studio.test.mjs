@@ -19,7 +19,10 @@ async function setup(options={}){
   if(body.stage===2){
    const previous=fixture.project.developmentDrafts.find(d=>d.id===body.checkpointId),completed=previous?previous.scriptProgress.completed+1:0;
    row.checkpointId=body.checkpointId;row.scriptProgress={completed,total:2,frames:completed*3600};
-   if(options.failSegment&&completed===1){row.status='invalid';row.error={message:'429'};row.scriptProgress={...previous.scriptProgress};options.failSegment=false;}
+   // Como el servicio real: un tramo inválido hace fallar su trabajo, no lo
+   // deja en revisión, y conserva el último punto bueno.
+   if(options.failSegment&&completed===1){row.status='invalid';row.error={message:'429'};row.scriptProgress={...previous.scriptProgress};options.failSegment=false;
+    Object.assign(fixture.jobs.at(-1),{state:'failed',settled:true,result:{code:'SEGMENT',error:'Google mantiene el límite de cuota (429).'}});}
    else if(completed<2){row.status='partial';row.approvalState='incomplete';}
   }
   return result;
@@ -367,25 +370,37 @@ test('Legacy recovery reads only the story and sends no generation request',asyn
  }finally{dom.window.close();}
 });
 
-test('Screenplay chunks require individual clicks and retry keeps the prior checkpoint',async()=>{
+// A five-minute screenplay is about ten segments: one model answer each. They
+// are the size of an answer, not editorial steps, so asking for a press per
+// segment meant ten presses to write what Animes writes in one.
+test('One press writes the whole screenplay; a failure stops it keeping what was written',async()=>{
  const {fixture,w,dom,click}=await setup({empty:true,segmented:true,failSegment:true});
+ const develops=()=>fixture.calls.filter(c=>c.path.endsWith('/develop'));
+ const botón=name=>[...w.document.querySelectorAll('button')].find(b=>b.textContent===name);
  try{
   await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));await click('Generar historia');await click('Aprobar este paso');await click('Generar guion, biblias y planos');
   const bible=fixture.project.developmentDrafts.at(-1).id;
-  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).length,2,'Bible call stops until next click');
-  assert.ok(![...w.document.querySelectorAll('button')].some(b=>b.textContent==='Aprobar este paso'));
-  await click('Aprobar biblias y generar primer tramo');
-  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).at(-1).body.checkpointId,bible);
-  await click('Reintentar este tramo');
-  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).at(-1).body.checkpointId,bible,'Retry uses last successful checkpoint');
-  const segment=fixture.project.developmentDrafts.at(-1).id;
-  assert.ok(w.document.body.textContent.includes('1 de 2 tramos · 150.0 segundos'));
-  assert.equal(w.document.querySelectorAll('.story-content .script-shot').length,2,'The saved shots remain visible after a failed later request');
+  assert.equal(develops().length,2,'the bible is its own delivery, read before writing');
+  assert.ok(!botón('Aprobar este paso'),'a partial screenplay cannot be approved');
+  // This run fails on its first segment: the press stops there, not silently.
+  const escribir=botón('Aprobar biblias y escribir el guion completo');
+  assert.ok(escribir,'one press writes the screenplay');
+  await escribir.onclick();
+  assert.equal(w.document.querySelector('#notice').className,'error');
+  assert.match(w.document.querySelector('#notice').textContent,/429/);
+  assert.equal(develops().length,3,'it did not keep spending after the failure');
+  assert.equal(develops().at(-1).body.checkpointId,bible,'from the last good checkpoint');
+  assert.ok(w.document.body.textContent.includes('0 de 2 tramos'),'and what was saved is what is reported');
+  // Pressing again continues from there and writes the rest with no more presses.
+  await click('Reintentar y seguir (faltan 2 tramos)');
+  assert.equal(develops().length,5,'the two remaining segments went in one press');
+  assert.deepEqual(develops().slice(3).map(c=>c.body.checkpointId),
+   [bible,fixture.project.developmentDrafts.find(d=>d.scriptProgress?.completed===1).id],
+   'each segment continues the one before');
+  assert.equal(w.document.querySelectorAll('.story-content .script-shot').length,2,'the written shots are on screen');
   assert.match(w.document.querySelector('.story-content .script-shot .voice-row').textContent,/Todavía estamos a tiempo/);
-  await click('Aprobar tramo y continuar');
-  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).at(-1).body.checkpointId,segment);
   await click('Aprobar este paso');
-  assert.ok(w.document.body.textContent.includes('Generar sonido, música y subtítulos'));
+  assert.ok(w.document.body.textContent.includes('Generar sonido, música y subtítulos'),'the four editorial steps still ask for their press');
  }finally{dom.window.close();}
 });
 
