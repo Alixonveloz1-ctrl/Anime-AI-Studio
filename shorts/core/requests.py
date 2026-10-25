@@ -52,4 +52,8 @@ def check_call_scope(operation,calls,kind):
     require(operation in CALLS,'OPERATION','Acción desconocida')
     require(not any(c['state']=='submitted_unknown' for c in calls),'SUBMITTED_UNKNOWN','Hay un envío sin confirmar; no se repetirá automáticamente',409)
     require(sum(c['kind']==kind and c['state']=='quota_rejected' for c in calls)<=3,'RETRY_LIMIT','Se agotaron los reintentos por cuota')
-    require(sum(c['kind']==kind and not (kind=='text' and c['state']=='quota_rejected') for c in calls)<CALLS[operation].get(kind,0),'CALL_LIMIT','La acción solicitada ya realizó sus llamadas')
+    # Un rechazo por cuota no gastó una llamada: Google no generó nada y no
+    # cobró nada. Se perdonaba sólo al texto, así que una imagen, una voz o una
+    # música agotaban su presupuesto con el primer 429 y no podían reintentar.
+    # El tope de reintentos de la línea anterior sigue acotándolo.
+    require(sum(c['kind']==kind and c['state']!='quota_rejected' for c in calls)<CALLS[operation].get(kind,0),'CALL_LIMIT','La acción solicitada ya realizó sus llamadas')

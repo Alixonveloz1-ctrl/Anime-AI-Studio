@@ -111,7 +111,11 @@ class Providers:
     def __init__(self,c,session,meter=None):
         verify_models(c);self.c,self.session,self.meter=c,session,meter;self.quota_waited=0;self.retry_deadline=time.monotonic()+1200
     def post(self,url,payload,kind=None,retry_quota=False,read_only=False):
-        retry_enabled=self.meter is not None and (kind=='text' or retry_quota)
+        # Un 429 es un rechazo: Google no generó nada y no cobró nada, así que
+        # esperar y reintentar no puede cobrar dos veces. Sólo el texto
+        # esperaba; una imagen, una voz o una música se daban por fracasadas al
+        # primer límite, cuando bastaba con esperar el minuto que pide Google.
+        retry_enabled=self.meter is not None and (bool(kind) or retry_quota)
         for attempt in range(4 if retry_enabled else 1):
             if kind=='text' and self.meter:self.meter.pace_text()
             call=self.meter.begin_call(kind,url,payload) if self.meter and kind else None

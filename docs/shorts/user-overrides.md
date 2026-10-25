@@ -244,3 +244,15 @@ Ahora la resolución depende de lo que se previsualiza: hasta 45 segundos se ve 
 Y debajo del reproductor aparecía la lista de pendientes del borrador una por una: treinta veces «Falta voz aprobada» con la frase entera de cada intervención, un muro de texto que no decía más que «faltan treinta voces». Ahora se agrupan y se cuentan: «Falta voz aprobada: 30 pendientes».
 
 Pruebas (`tests/shorts/ui/studio.test.mjs`): los pendientes de una vista previa se resumen por tipo y no se enumeran uno a uno.
+
+## U027 — El límite de Google se espera también en imagen, voz y música (2026-10-25)
+
+«Si hay rate limit, pues se espera y a los 60 segundos reintenta la imagen y se genera sin ningún problema.» Eso es lo que el dueño espera, y es lo que hacía sólo el texto.
+
+Un 429 de Google es un rechazo: no generó nada y no cobró nada. El texto esperaba lo que Google pide y reintentaba la misma solicitud, hasta tres veces, con un presupuesto total de espera. Una imagen, una voz o una música se daban por fracasadas en el primer 429, aunque bastara esperar un minuto.
+
+Eran dos frenos encadenados. El reintento estaba habilitado sólo para `kind=='text'`. Y aunque se habilitara, el control de presupuesto de llamadas (`check_call_scope`) sólo perdonaba el rechazo por cuota al texto: para los demás, el intento rechazado contaba como llamada gastada, así que el reintento se rechazaba al instante por «la acción solicitada ya realizó sus llamadas». Ahora un rechazo por cuota no cuenta como llamada gastada en ningún tipo, que es lo que ya decía su propio nombre.
+
+Lo que no cambia: el tope de tres reintentos por cuota, el presupuesto acumulado de espera, el plazo interno, y que un envío cuyo resultado no se conoce nunca se reenvía. Un 429 no es un envío incierto: es un rechazo confirmado.
+
+Pruebas (`tests/shorts/test_quota_retry.py`): una voz, una imagen, una música y un video esperan el minuto que pide Google y reintentan la misma solicitud, sin espaciado de texto y sin gastar su presupuesto en el intento rechazado.

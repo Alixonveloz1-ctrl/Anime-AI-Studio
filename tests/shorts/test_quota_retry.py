@@ -14,10 +14,10 @@ def response(status,headers=None,data=None):
     return Mock(status_code=status,ok=status==200,headers=headers or {},json=lambda:data or {'ok':True})
 
 class Meter:
-    def __init__(self):self.calls=[];self.waits=[];self.paces=0
+    def __init__(self,operation='develop'):self.calls=[];self.waits=[];self.paces=0;self.operation=operation
     def pace_text(self):self.paces+=1
     def begin_call(self,kind,url,payload):
-        check_call_scope('develop',self.calls,kind)
+        check_call_scope(self.operation,self.calls,kind)
         self.calls.append({'kind':kind,'state':'submitted_unknown'});return len(self.calls)
     def end_call(self,cid,state):self.calls[cid-1]['state']=state
     def wait_for_provider(self,*args):self.waits.append(args)
@@ -31,6 +31,21 @@ class QuotaTests(unittest.TestCase):
         self.assertEqual([c['state'] for c in meter.calls],['quota_rejected','quota_rejected','completed'])
         self.assertTrue(all(c.kwargs['json']=={'prompt':'same'} for c in session.post.call_args_list))
         with self.assertRaises(ContractError):check_call_scope('develop',meter.calls,'text')
+    def test_a_voice_or_an_image_waits_out_the_limit_like_text_does(self):
+        # Sólo el texto esperaba. Una voz, una imagen o una música se daban por
+        # fracasadas al primer 429, cuando un 429 es un rechazo —no se generó
+        # ni se cobró nada— y basta con esperar lo que pide Google.
+        for kind in ('tts','image','music','veo'):
+            session=Mock();session.post.side_effect=[response(429),response(200)]
+            meter=Meter(kind)
+            with patch('shorts.service.providers.random.uniform',return_value=0):
+                self.assertEqual(Providers(config(),session,meter).post('url',{'p':kind},kind),{'ok':True},kind)
+            self.assertEqual([w[0] for w in meter.waits],[60],kind)
+            self.assertEqual(session.post.call_count,2,kind)
+            self.assertEqual([c['state'] for c in meter.calls],['quota_rejected','completed'],kind)
+            self.assertTrue(all(c.kwargs['json']=={'p':kind} for c in session.post.call_args_list),kind)
+            self.assertEqual(meter.paces,0,'sólo el texto se espacia entre llamadas')
+
     def test_quota_exhaustion_is_finite(self):
         session=Mock();session.post.return_value=response(429);meter=Meter()
         with patch('shorts.service.providers.random.uniform',return_value=0),self.assertRaises(ContractError) as error:Providers(config(),session,meter).post('url',{},'text')
