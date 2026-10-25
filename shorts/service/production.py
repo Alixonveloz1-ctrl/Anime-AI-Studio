@@ -6,7 +6,7 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
-from shorts.core.contracts import require, digest, validate_ideas, ContractError
+from shorts.core.contracts import require, digest, validate_ideas, ContractError, sound_group_uses
 from shorts.core.requests import IDEAS_OUTPUT_LIMIT
 from shorts.service.providers import Providers, UnknownSubmission
 from shorts.service.cloud import RequestJournal
@@ -168,12 +168,27 @@ def run_job(cloud,j,p):
             anchor={'anchorShotId':req['shotId'],'anchorFrameOffset':0} if ambience else {'eventId':'event_'+ident_new()}
             cue=entity('cues',{'audioRevision':a['id'],'requestId':req['id'],'track':'ambience' if ambience else 'sfx','shotId':req['shotId'],'sourceSyncSample':0 if ambience else (attacks[0] if attacks else 0),'trimInSample':0,'trimOutSample':meta['samples'],'offsetSamples':0,'gainDb':0,**anchor,'correctionSource':'detector','manualLock':False,'eventDescription':req['eventDescription'],'requestFingerprint':digest(req),'analysisAttempts':0})
             cloud.entity_ref(pid,'uploads',u['id']).update({'state':'decoded','assetId':a['id'],'cueId':cue['id']})
+            # The same sound in several shots is one file, not one upload per
+            # shot. The plan gives those requests the same group, so this file
+            # is placed in each of them; each placement keeps its own sync,
+            # because a hit lands on its own frame.
+            shared=[]
+            if req.get('soundGroup'):
+                taken={c.to_dict().get('requestId') for c in cloud.project_ref(pid).collection('cues').stream()}
+                for other in sound_group_uses(dev['data']['soundRequests'],req['id'],taken):
+                    bed=other.get('type')=='ambience'
+                    place={'anchorShotId':other['shotId'],'anchorFrameOffset':0} if bed else {'eventId':'event_'+ident_new()}
+                    shared.append(entity('cues',{'audioRevision':a['id'],'requestId':other['id'],'track':'ambience' if bed else 'sfx','shotId':other['shotId'],'sourceSyncSample':0 if bed else (attacks[0] if attacks else 0),'trimInSample':0,'trimOutSample':meta['samples'],'offsetSamples':0,'gainDb':0,**place,'correctionSource':'detector','manualLock':False,'eventDescription':other['eventDescription'],'requestFingerprint':digest(other),'analysisAttempts':0}))
             auto_job=None
             try:
                 current=cloud.project(pid,p['owner'])
                 if not ambience:auto_job=cloud.submit(current,'analyze',{'cueId':cue['id'],'reason':'Sincronización tras carga','developmentId':p['activeDevelopment'],'approvedAssetIds':data.get('approvedAssetIds',[])},j['id']+'-analysis',current['revision'],j['session'])['id']
+                for extra in shared:
+                    if extra['track']=='ambience':continue
+                    current=cloud.project(pid,p['owner'])
+                    cloud.submit(current,'analyze',{'cueId':extra['id'],'reason':'Sincronización del mismo sonido en otra toma','developmentId':p['activeDevelopment'],'approvedAssetIds':data.get('approvedAssetIds',[])},j['id']+'-analysis-'+extra['id'],current['revision'],j['session'])
             except ContractError:pass
-            return {'analysisJobId':auto_job,'assetId':a['id'],'cueId':cue['id'],'requiresVisualAnchor':True,'requestedSeconds':req['seconds'],'receivedSeconds':meta['samples']/48000}
+            return {'analysisJobId':auto_job,'assetId':a['id'],'cueId':cue['id'],'sharedCueIds':[x['id'] for x in shared],'requiresVisualAnchor':True,'requestedSeconds':req['seconds'],'receivedSeconds':meta['samples']/48000}
         if op=='analyze':
             from google.cloud import firestore
             @firestore.transactional

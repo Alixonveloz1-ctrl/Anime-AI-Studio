@@ -9,6 +9,13 @@ FPS, RATE, FRAMES, SAMPLES = 24, 48000, 7200, 14400000
 MIN_FRAMES, MAX_FRAMES = 285*FPS, 315*FPS
 MAX_SAMPLES = MAX_FRAMES*(RATE//FPS)
 TRACKS = ('dialogue', 'thought', 'narration', 'system', 'music', 'ambience', 'sfx')
+# A sound the user has to obtain somewhere and upload has to be a length that
+# can actually be obtained. A 315-second "effect" could not: the plan asked for
+# a whole room tone as one file. An ambience is a short bed the montage repeats
+# for as long as its place lasts, and a continuous musical background belongs to
+# Lyria, which writes it as music.
+AMBIENCE_LOOP_SECONDS = 20
+SFX_MAX_SECONDS = 15
 GENRES = ('acción','aventura','fantasía','isekai','drama','psicológico','terror','misterio','romance','comedia','comedia romántica','vida cotidiana','ciencia ficción','mecha','sobrenatural','supervivencia','deportes','videojuego/sistema')
 
 class ContractError(ValueError):
@@ -129,6 +136,19 @@ def stale_on_change(cue, old_shot, new_shot, audio_revision):
     if any(old_shot.get(k)!=new_shot.get(k) for k in ('assetRevision','trimSeconds','speed','frames')) or cue['audioRevision']!=audio_revision:
         out['approvalState']='stale'
     return out
+
+def sound_group_uses(requests,request_id,taken=()):
+    """The other shots where this same sound happens, and still have no cue.
+
+    The plan gives every request for the same sound one group, so the file the
+    user obtains and uploads once is placed in all of them. Each placement keeps
+    its own sync, because a hit lands on its own frame.
+    """
+    mine=next((r for r in requests if r.get('id')==request_id),None)
+    group=(mine or {}).get('soundGroup')
+    if not group:return []
+    done=set(taken)
+    return [r for r in requests if r.get('id')!=request_id and r.get('soundGroup')==group and r.get('id') not in done]
 
 def cue_render_data(cue):
     # Analysis proposals and attempts are workflow metadata, not changes to a

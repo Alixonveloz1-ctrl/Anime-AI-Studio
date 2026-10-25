@@ -7,6 +7,43 @@ def approved_assets(cloud,pid):
     assets=[x.to_dict() for x in cloud.project_ref(pid).collection('assets').stream()]
     return sorted([a for a in assets if a.get('approvalState')=='approved'],key=lambda a:a.get('created',0))
 
+AMBIENCE_REPEAT_LIMIT=64
+
+def ambience_placements(shots,cue,audio_samples):
+    """Lay a short ambience loop down as many times as its place lasts.
+
+    An ambience used to be asked for as one file covering the whole short — 315
+    seconds nobody can obtain. Now the plan asks for a loop of up to twenty
+    seconds, and the montage repeats it from its shot until the location
+    changes. Each copy is an ordinary cue, so gain, trims and approval travel
+    with it; only the first fades in and only the last fades out.
+    """
+    anchor=cue.get('anchorShotId') or cue.get('shotId')
+    index=next((i for i,s in enumerate(shots) if s['id']==anchor),None)
+    if index is None:return [cue_render_data(cue)],False
+    place=shots[index].get('locationId')
+    end=shots[index]['startFrame']+shots[index]['frames']
+    for later in shots[index+1:]:
+        if later.get('locationId')!=place:break
+        end=later['startFrame']+later['frames']
+    start=(shots[index]['startFrame']+cue.get('anchorFrameOffset',0))*2000
+    span=end*2000-start
+    trim_in=cue.get('trimInSample',0);length=max(1,cue.get('trimOutSample',audio_samples)-trim_in)
+    if span<=0:return [cue_render_data(cue)],False
+    out=[];cursor=start
+    while cursor<start+span and len(out)<AMBIENCE_REPEAT_LIMIT:
+        piece=min(length,start+span-cursor)
+        last=cursor+piece>=start+span
+        repeat={**cue_render_data(cue),'anchorSample':cursor,'trimInSample':trim_in,'trimOutSample':trim_in+piece,
+                'fadeInSamples':min(cue.get('fadeInSamples',0),piece) if not out else 0,
+                'fadeOutSamples':min(cue.get('fadeOutSamples',0),piece) if last else 0}
+        # Each repetition carries its own exact instant, so it must not keep the
+        # shot anchor or the contact event the first placement was resolved by.
+        for field in ('anchorShotId','anchorFrameOffset','eventId'):repeat.pop(field,None)
+        if out:repeat['id']=cue['id']+'_bucle'+str(len(out)+1)
+        out.append(repeat);cursor+=piece
+    return out,cursor<start+span
+
 def assemble_plan(cloud,p,cue_overrides=None):
     pid=p['id'];dev=cloud.entity(pid,'developments',p['activeDevelopment'])
     require(dev['approvalState']=='approved','SCRIPT_APPROVAL','Guion sin aprobar')
@@ -97,7 +134,12 @@ def assemble_plan(cloud,p,cue_overrides=None):
             issues.append('Revisar ancla tras cambiar material: '+c['id']);continue
         req=next(r for r in d['soundRequests'] if r['id']==c['requestId'])
         if c.get('requestFingerprint') and c['requestFingerprint']!=digest(req):issues.append('Revisar efecto tras cambiar solicitud: '+c['id'])
-        assets[a['id']]=a;cues.append(cue_render_data(c))
+        assets[a['id']]=a
+        if c['track']=='ambience':
+            placements,incomplete=ambience_placements(shots,c,a['samples'])
+            if incomplete:issues.append('El ambiente «'+req['name']+'» es demasiado corto para cubrir su lugar; sube un bucle más largo.')
+            cues.extend(placements)
+        else:cues.append(cue_render_data(c))
     for req in d['soundRequests']:
         if not any(c.get('requestId')==req['id'] for c in stored) and req.get('required',True) and req['id'] not in omitted:issues.append('Falta efecto obligatorio: '+req['name'])
     for r in d['musicRequests']:

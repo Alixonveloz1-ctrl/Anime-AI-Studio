@@ -34,6 +34,15 @@ function action(label,fn,secondary=false){const b=document.createElement('button
 // timings) would be wiped by the full redraw the finished job requests.
 function keepInlineResult(){needsRedraw=false;}
 function card(title,content=''){const e=document.createElement('article');e.className='card';e.innerHTML=`<h3>${esc(title)}</h3>${content}`;return e;}
+// El prompt de un efecto estaba escondido tras un desplegable que acabó
+// mostrando sólo el nombre: hace falta a la vista, porque es lo que se lleva a
+// otra herramienta para generar el sonido.
+function promptBox(parent,texto){
+ if(!texto)return null;
+ const caja=document.createElement('p');caja.className='prompt-text';caja.textContent=texto;parent.append(caja);
+ buttons(parent,[['Copiar prompt',async()=>{try{await navigator.clipboard.writeText(texto);say('Prompt copiado.');}catch{say('Tu navegador no deja copiar solo. Mantén pulsado el texto para seleccionarlo.',true);}},true]]);
+ return caja;
+}
 const CLOSE_UNCERTAIN='No se sabe si Google llegó a procesar ese envío (pudo cobrarlo). Cerrarlo libera el motor y NO lo vuelve a enviar. ¿Cerrar sin repetir?';
 async function closeUncertain(id){
  if(!confirm(CLOSE_UNCERTAIN))return false;
@@ -342,9 +351,18 @@ async function revise(kind,e){
  buttons(dialog,[['Crear candidata',async()=>{if(!instruction.value.trim())throw new Error('Describe la corrección.');await runTask('revise',route(`/revisions/${kind}/${e.id}:revise`),{instruction:instruction.value,scope:options[Number(select.value)]});dialog.close();dialog.remove();await draw();}],['Cerrar',()=>{dialog.close();dialog.remove();},true]]);dialog.showModal();
 }
 async function approve(kind,id,reviewed=false){await mutate(route(`/revisions/${kind}/${id}:approve`),{reviewed});needsRedraw=true;say('Versión aprobada y conservada.');}
+// Lo que decide el director, no el usuario: identificadores internos, encuadre,
+// fotogramas y fontanería del sonido. Volcarlo en las pantallas de lectura
+// llenaba la pantalla de datos que no se deciden ahí (el editor manual sigue
+// mostrando y permitiendo cambiar todos los campos).
+const TECNICO=['id','hash','sha256','developmentId','assetId','audioHash','nativeQualityGuaranteed','assetRevision','audioRevision','voiceBinding',
+ 'beatId','shotId','locationId','speakerId','utteranceId','referenceEntityIds','soundGroup','previousId','sourceDraftId',
+ 'camera','treatment','frames','minFrames','maxFrames','preferredFrames','leadFrames','tailFrames','pauseBeforeFrames','pauseAfterFrames',
+ 'timingReason','startFrame','endFrame','sourceInSample','fadeInSamples','fadeOutSamples','gainDb','preparationSeconds','tailSeconds',
+ 'before','after','visibleCharacters','offscreenCharacters','eventDescription','required','type'];
 function readable(parent,value){
  const labels={story:'Historia',beats:'Momentos dramáticos',shots:'Planos',utterances:'Voces del guion',soundRequests:'Efectos de sonido',musicRequests:'Música',subtitles:'Subtítulos',dramatic:'Dirección dramática',visual:'Estilo visual',characters:'Personajes',locations:'Lugares',props:'Objetos',name:'Nombre',japaneseReading:'Lectura japonesa',age:'Edad',objective:'Objetivo',relationships:'Relaciones',speech:'Forma de hablar',voice:'Voz',languageCode:'Idioma',direction:'Actuación',costumes:'Vestuario',description:'Descripción',referencePrompt:'Referencia visual',layout:'Distribución',entrances:'Entradas',windows:'Ventanas',furniture:'Mobiliario',light:'Luz',soundZones:'Zonas sonoras',owner:'Poseedor',state:'Estado'};
- for(const [key,item] of Object.entries(value)){if(['id','hash','sha256','developmentId','assetId','audioHash','nativeQualityGuaranteed','assetRevision','audioRevision','voiceBinding'].includes(key))continue;if(item&&typeof item==='object'){const group=document.createElement('details'),title=document.createElement('summary');title.textContent=item.name||labels[key]||(/^[0-9]+$/.test(key)?'Elemento '+(Number(key)+1):fieldLabel(key));group.append(title);readable(group,item);parent.append(group);}else{const line=document.createElement('p'),label=document.createElement('strong');label.textContent=(labels[key]||fieldLabel(key))+': ';line.append(label,document.createTextNode(typeof item==='boolean'?(item?'Sí':'No'):String(item??'')));parent.append(line);}}
+ for(const [key,item] of Object.entries(value)){if(TECNICO.includes(key))continue;if(item&&typeof item==='object'){const group=document.createElement('details'),title=document.createElement('summary');title.textContent=item.name||labels[key]||(/^[0-9]+$/.test(key)?'Elemento '+(Number(key)+1):fieldLabel(key));group.append(title);readable(group,item);parent.append(group);}else{const line=document.createElement('p'),label=document.createElement('strong');label.textContent=(labels[key]||fieldLabel(key))+': ';line.append(label,document.createTextNode(typeof item==='boolean'?(item?'Sí':'No'):String(item??'')));parent.append(line);}}
 }
 function scriptBreakdown(parent,data){
  const shots=data?.shots||[],voices=data?.utterances||[],characters=data?.bible?.characters||[];
@@ -352,7 +370,7 @@ function scriptBreakdown(parent,data){
  const title=document.createElement('h4');title.textContent=`Desglose de tomas · ${shots.length} · ${(shots.reduce((n,s)=>n+s.frames,0)/24).toFixed(1)} s escritos`;parent.append(title);
  const names=new Map(characters.map(c=>[c.id,c.name]));
  for(const [index,shot] of shots.entries()){
-  const scene=card(`Toma ${index+1} · ${(shot.frames/24).toFixed(1)} s`,`<p class="badge">${esc(titleFor(shot.treatment))}</p>`);scene.classList.add('scene-card','script-shot');parent.append(scene);
+  const scene=card(`Toma ${index+1} · ${(shot.frames/24).toFixed(1)} s`);scene.classList.add('scene-card','script-shot');parent.append(scene);
   const location=data.bible?.locations?.find(x=>x.id===shot.locationId);
   if(location){const place=document.createElement('p');place.className='muted';place.textContent='Lugar: '+location.name;scene.append(place);}
   const purpose=document.createElement('p');purpose.textContent=shot.function;scene.append(purpose);
@@ -519,10 +537,16 @@ async function production(){
 }
 async function activityList(){
  const {jobs}=await api(route('/jobs'));if(!jobs.length)return;
- const pending=jobs.filter(j=>!j.settled&&!terminal(j.state)),attention=jobs.filter(j=>j.state==='submitted_unknown'||j.state==='failed');
- const box=fold(screen,'Historial de actividad · '+pending.length+' en curso',pending.length>0);
- const ordered=[...jobs].sort((a,b)=>(b.created||0)-(a.created||0));
- for(const job of ordered.slice(0,30)){const row=document.createElement('div');row.className='activity-row';row.innerHTML=`<p><strong>${esc(titleFor(job.operation))}</strong><span class="muted">${esc(titleFor(job.state))}</span></p>`;const a=taskActions(job),items=[];
+ // Antes listaba las últimas treinta generaciones, terminadas incluidas: un
+ // historial permanente debajo de la música que no se usa para nada. Sólo
+ // aparece lo que espera una decisión: lo que sigue en curso y lo que falló o
+ // quedó sin confirmar.
+ const pending=jobs.filter(j=>!j.settled&&!terminal(j.state));
+ const attention=jobs.filter(j=>j.state==='submitted_unknown'||j.state==='failed');
+ const ordered=[...new Set([...pending,...attention])].sort((a,b)=>(b.created||0)-(a.created||0));
+ if(!ordered.length)return;
+ const box=fold(screen,pending.length?'Generaciones en curso · '+pending.length:'Generaciones con aviso · '+attention.length,pending.length>0);
+ for(const job of ordered.slice(0,10)){const row=document.createElement('div');row.className='activity-row';row.innerHTML=`<p><strong>${esc(titleFor(job.operation))}</strong><span class="muted">${esc(titleFor(job.state))}</span></p>`;const a=taskActions(job),items=[];
  if(a.recover)items.push(['Continuar',async()=>{if(!active)await lease(true);const j=await api('/jobs/'+job.id);await api('/jobs/'+job.id+':resume','POST',{session},{'If-Match':String(j.revision)});await watch(job.id);await draw();},true]);
  if(a.cancel)items.push(['Cancelar',async()=>{const j=await api('/jobs/'+job.id);await api('/jobs/'+job.id+':cancel','POST',{}, {'If-Match':String(j.revision)});await draw();},true]);
  if(a.inspect)items.push(['Comprobar estado',async()=>{const j=await api('/jobs/'+job.id);const result=await api('/jobs/'+job.id+':inspect','POST',{}, {'If-Match':String(j.revision)});say(result.message);await draw();},true]);
@@ -608,16 +632,34 @@ async function generatorControls(parent){
 }
 function voiceControls(parent,character){
  if(!generatorCatalog)return;
- const projectId=p.id,names=[...generatorCatalog.voices];
+ // El catálogo pasó a traer el sexo de cada voz; una web desplegada antes que
+ // el servidor sigue recibiendo sólo nombres.
+ const catalogo=(generatorCatalog.voices||[]).map(v=>typeof v==='string'?{name:v,gender:''}:v);
+ const projectId=p.id,names=catalogo.map(v=>v.name);
  let saved={name:character.voice?.name||'',direction:character.voice?.direction||''},saving=null;
- const label=document.createElement('label');label.textContent='Voz de '+character.name;const select=document.createElement('select');select.setAttribute('aria-label','Voz de '+character.name);
+ const heading=document.createElement('h4');heading.className='voice-heading';heading.textContent='Voz de '+character.name;parent.append(heading);
+ const femeninas=catalogo.filter(v=>v.gender==='female').length,masculinas=catalogo.filter(v=>v.gender==='male').length;
+ // Antes eran treinta nombres propios sin más: para saber quién era quién
+ // había que generarlas una por una y escucharlas.
+ const ayuda=document.createElement('p');ayuda.textContent=femeninas&&masculinas?`Elige quién la dobla: ${femeninas} voces femeninas y ${masculinas} masculinas.`:'Elige quién la dobla entre las voces del catálogo.';parent.append(ayuda);
+ const label=document.createElement('label');label.textContent='Voz';const select=document.createElement('select');select.setAttribute('aria-label','Voz de '+character.name);
  if(!names.includes(saved.name)){const option=document.createElement('option');option.value='';option.textContent='Elige una voz válida del catálogo';option.disabled=true;select.append(option);}
- for(const name of names){const option=document.createElement('option');option.value=name;option.textContent=name;select.append(option);}
+ const sexos=[['female','Voces femeninas'],['male','Voces masculinas'],['','Otras voces']];
+ const presentes=sexos.filter(([gender])=>catalogo.some(v=>(v.gender||'')===gender));
+ for(const [gender,titulo] of presentes){
+  let destino=select;
+  if(presentes.length>1){destino=document.createElement('optgroup');destino.label=titulo;select.append(destino);}
+  for(const voz of catalogo.filter(v=>(v.gender||'')===gender)){
+   const option=document.createElement('option');option.value=voz.name;
+   option.textContent=voz.gender==='female'?voz.name+' · femenina':voz.gender==='male'?voz.name+' · masculina':voz.name;
+   destino.append(option);
+  }
+ }
  select.value=names.includes(saved.name)?saved.name:'';label.append(select);parent.append(label);
  const directionLabel=document.createElement('label');directionLabel.textContent='Cómo habla';const direction=document.createElement('textarea');direction.value=saved.direction;direction.maxLength=1000;directionLabel.append(direction);parent.append(directionLabel);
  const note=document.createElement('p');note.className='muted';note.textContent='Se aplica a todas sus frases en japonés. Al escuchar se guardan primero tus cambios. Los audios anteriores se conservan como versiones.';parent.append(note);
  const status=document.createElement('p');status.className='muted';status.setAttribute('role','status');parent.append(status);
- const describe=()=>{status.textContent=!names.includes(select.value)?'La voz guardada no pertenece al catálogo. Elige una voz antes de generar.':select.value!==saved.name||direction.value!==saved.direction?'Cambios pendientes. Puedes guardar o generar la primera frase.':'Voz guardada: '+saved.name+'.';};
+ const describe=()=>{const falta=!names.includes(select.value);status.className=falta?'error':'muted';status.textContent=falta?'Esta voz no está en el catálogo, así que el personaje no puede hablar. Elige una de la lista y guarda.':select.value!==saved.name||direction.value!==saved.direction?'Cambios pendientes. Puedes guardar o generar la primera frase.':'Voz guardada: '+saved.name+'.';};
  select.onchange=describe;direction.oninput=describe;describe();
  const saveVoice=async()=>{
   if(saving)return saving;
@@ -654,10 +696,12 @@ async function references(){
   for(const e of d.bible[group]){
    const section=card(e.name);section.classList.add('char-card');screen.append(section);
    const description=document.createElement('p');description.className='char-detail';description.textContent=e.description||e.objective||e.layout||e.state||'';section.append(description);
+   // La voz va primero en la ficha: estaba debajo de la imagen y de sus
+   // botones, y al fallar la generación («elige una voz») no se encontraba.
+   if(group==='characters')voiceControls(section,e);
    const rows=p.assets.filter(a=>a.entityId===e.id);await assetVersions(section,rows);
    if(!rows.length){const placeholder=document.createElement('div');placeholder.className='scene-img media-empty';placeholder.textContent='Referencia por generar';section.append(placeholder);}
    buttons(section,[[rows.length?'Crear otra referencia':'Generar referencia',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:e.id}),rows.length>0]]);
-   if(group==='characters')voiceControls(section,e);
    const details=fold(section,'Ficha y dirección visual');readable(details,e);
   }
  }
@@ -726,8 +770,14 @@ async function sounds(){
   const recoverable=p.developmentDrafts.filter(x=>x.stage===3&&x.status==='invalid'&&x.sourceDraftId===p.activeDraft&&['MUSIC_COVERAGE','MUSIC_DURATION','MUSIC_FADE'].includes(x.error?.code)).at(-1);
   if(candidate){
    const draft=await api(route('/drafts/'+candidate.id));
-   for(const [i,m] of draft.data.musicRequests.entries()){const line=document.createElement('p');line.textContent=`Pieza ${i+1} · ${m.seconds} segundos · ${m.prompt}`;c.append(line);}
-   for(const effect of draft.data.soundRequests){const line=document.createElement('p');line.textContent='Efecto: '+effect.name;c.append(line);}
+   for(const [i,m] of draft.data.musicRequests.entries()){const line=document.createElement('p');line.textContent=`Pieza ${i+1} · ${m.seconds} segundos`;c.append(line);promptBox(c,m.prompt);}
+   const planeados=new Map();
+   for(const effect of draft.data.soundRequests){const clave=effect.soundGroup||effect.id;if(!planeados.has(clave))planeados.set(clave,[]);planeados.get(clave).push(effect);}
+   for(const usos of planeados.values()){
+    const effect=usos[0],line=document.createElement('p');
+    line.textContent=[effect.name,effect.type==='ambience'?`ambiente · bucle de ${effect.seconds} s`:`efecto · ${effect.seconds} s`,usos.length>1?`${usos.length} tomas, un solo archivo`:''].filter(Boolean).join(' · ');
+    c.append(line);promptBox(c,effect.prompt);
+   }
    buttons(c,[['Aprobar sonido y abrir sus generadores',async()=>{await mutate(route('/drafts/'+candidate.id+':approve'),{});await mutate(route('/drafts/'+candidate.id+':produce'),{});await draw();}]]);
   }else if(activeDraft?.stage===3&&activeDraft.approvalState==='approved'){
    buttons(c,[['Abrir el sonido aprobado',async()=>{await mutate(route('/drafts/'+activeDraft.id+':produce'),{});await draw();}]]);
@@ -737,21 +787,37 @@ async function sounds(){
   }else buttons(c,[['Revisar el guion',()=>go('Historia')]]);
  }
 
- if(d.musicRequests.length){const music=fold(screen,'Música',true);for(const [index,m] of d.musicRequests.entries()){const c=card('Pieza '+(index+1),`<p class="muted">${m.seconds} segundos</p>`);const description=fold(c,'Dirección musical');description.append(document.createTextNode(m.prompt));const rows=p.assets.filter(a=>a.entityId===m.id);buttons(c,[[rows.length?'Crear otra pieza':'Generar música',()=>runTask('music',route('/assets:generate'),{operation:'music',entityId:m.id}),rows.length>0]]);await assetVersions(c,rows);music.append(c);}}
- const effects=d.soundRequests.length?fold(screen,'Efectos · ajustes avanzados'):null;
- for(const r of d.soundRequests){const c=card(r.name,`<p>${esc(r.description)}</p><p class="muted">${r.seconds} s · ${esc(r.perspective)}</p>`);effects.append(c);
-  const request=fold(c,'Prompt y preparación');request.innerHTML+=`<p>${esc(r.prompt)}</p><p>Preparación: ${r.preparationSeconds} s · Cola: ${r.tailSeconds} s</p>`;buttons(request,[['Copiar prompt',()=>navigator.clipboard.writeText(r.prompt),true]]);
+ if(d.musicRequests.length){const music=fold(screen,'Música',true);for(const [index,m] of d.musicRequests.entries()){const c=card('Pieza '+(index+1),`<p class="muted">${m.seconds} segundos</p>`);promptBox(c,m.prompt);const rows=p.assets.filter(a=>a.entityId===m.id);buttons(c,[[rows.length?'Crear otra pieza':'Generar música',()=>runTask('music',route('/assets:generate'),{operation:'music',entityId:m.id}),rows.length>0]]);await assetVersions(c,rows);music.append(c);}}
+ // Un sonido que se repite es UNA tarjeta: el plan agrupa las solicitudes que
+ // son el mismo sonido y subir su archivo una vez lo coloca en todas sus tomas.
+ const grupos=new Map();
+ for(const r of d.soundRequests){const clave=r.soundGroup||r.id;if(!grupos.has(clave))grupos.set(clave,[]);grupos.get(clave).push(r);}
+ const effects=d.soundRequests.length?fold(screen,'Efectos de sonido · '+grupos.size):null;
+ for(const usos of grupos.values()){
+  const r=usos[0];
+  const c=card(r.name,`<p>${esc(r.description)}</p>`);effects.append(c);
+  const resumen=document.createElement('p');resumen.className='muted';
+  resumen.textContent=[r.type==='ambience'?`Ambiente · bucle de ${r.seconds} s que se repite mientras dure el lugar`:`Efecto · ${r.seconds} s`,
+   r.perspective,usos.length>1?`El mismo sonido en ${usos.length} tomas: súbelo una vez`:''].filter(Boolean).join(' · ');
+  c.append(resumen);
+  promptBox(c,r.prompt);
+  if(r.type!=='ambience'&&(r.preparationSeconds||r.tailSeconds)){const margen=document.createElement('p');margen.className='muted';margen.textContent=`Preparación: ${r.preparationSeconds} s · Cola: ${r.tailSeconds} s`;c.append(margen);}
   const label=document.createElement('label');label.className='upload';label.textContent='Subir tu efecto';const input=document.createElement('input');input.type='file';input.accept='audio/*';label.append(input);c.append(label);const progress=document.createElement('progress');progress.max=1;progress.value=0;progress.hidden=true;c.append(progress);
   input.onchange=async()=>{progress.hidden=false;try{await uploadSound(r,input.files[0],progress);await draw();}catch(e){say(e.message,true);}finally{progress.hidden=true;}};
-  const cues=p.cues.filter(x=>x.requestId===r.id),v=versions(cues,p.cueSelections?.[r.id]);
-  const showCue=(parent,cue)=>{const box=document.createElement('div');box.className='cue-controls';const state=document.createElement('p');state.className='badge';state.textContent=cue.manualLock?'Ajuste manual fijado':titleFor(cue.approvalState);box.append(state);buttons(box,[['Ajustar sincronización',()=>openEditor(cue)]]);const options=fold(box,'Ayuda con IA');
-   if(cue.manualLock){options.append(document.createTextNode('Tu ajuste está protegido. Puedes crear una nueva corrección manual o permitir una nueva propuesta.'));buttons(options,[['Permitir nueva propuesta',async()=>{await mutate(route(`/cues/${cue.id}`),{cueRevision:cue.revision,patch:{reason:'Solicito una nueva propuesta de sincronización'}},'PATCH');await draw();},true]]);}
-   else{if((cue.analysisAttempts||0)<2)buttons(options,[['Localizar contacto',()=>runTask('analyze',route(`/cues/${cue.id}:analyze`)),true],['Corregir con IA',async()=>{const reason=prompt('¿Qué debe cambiar en este sonido?');if(reason)await runTask('analyze',route(`/cues/${cue.id}:correct`),{reason});},true]]);else options.append(document.createTextNode('El análisis no resolvió el contacto. El ajuste manual sigue disponible.'));
-   if(cue.proposedEventId)buttons(options,[['Usar propuesta',async()=>{await mutate(route(`/cues/${cue.id}/proposal:apply`),{});await draw();},true]]);}
-   if(cue.analysisScan?.options.length>1&&(cue.analysisAttempts||0)<2)for(const [index,option] of cue.analysisScan.options.entries())buttons(options,[[`Contacto ${index+1} · ${option.description}`,()=>runTask('analyze',route(`/cues/${cue.id}:analyze`),{occurrenceIndex:index,reason:'Usar el contacto elegido'}),true]]);
-   parent.append(box);};
-  v.visible.forEach(cue=>showCue(c,cue));if(v.history.length){const history=fold(c,'Ajustes anteriores · '+v.history.length);v.history.forEach(cue=>showCue(history,cue));}
-  await assetVersions(c,p.assets.filter(a=>a.requestId===r.id));const omit=fold(c,'Opciones del efecto');buttons(omit,[['Omitir este efecto',async()=>{const reason=prompt('¿Por qué quieres omitirlo?');if(reason){await mutate(route(`/sound-requests/${r.id}/omit`),{reason});await draw();}},true]]);
+  // Un archivo para todo el grupo, y una sincronización por toma.
+  await assetVersions(c,p.assets.filter(a=>usos.some(u=>u.id===a.requestId)));
+  for(const uso of usos){
+   const destino=usos.length>1?fold(c,'Ajuste en «'+entityName(d,uso.shotId)+'»'):c;
+   const cues=p.cues.filter(x=>x.requestId===uso.id),v=versions(cues,p.cueSelections?.[uso.id]);
+   const showCue=(parent,cue)=>{const box=document.createElement('div');box.className='cue-controls';const state=document.createElement('p');state.className='badge';state.textContent=cue.manualLock?'Ajuste manual fijado':titleFor(cue.approvalState);box.append(state);buttons(box,[['Ajustar sincronización',()=>openEditor(cue)]]);const options=fold(box,'Ayuda con IA');
+    if(cue.manualLock){options.append(document.createTextNode('Tu ajuste está protegido. Puedes crear una nueva corrección manual o permitir una nueva propuesta.'));buttons(options,[['Permitir nueva propuesta',async()=>{await mutate(route(`/cues/${cue.id}`),{cueRevision:cue.revision,patch:{reason:'Solicito una nueva propuesta de sincronización'}},'PATCH');await draw();},true]]);}
+    else{if((cue.analysisAttempts||0)<2)buttons(options,[['Localizar contacto',()=>runTask('analyze',route(`/cues/${cue.id}:analyze`)),true],['Corregir con IA',async()=>{const reason=prompt('¿Qué debe cambiar en este sonido?');if(reason)await runTask('analyze',route(`/cues/${cue.id}:correct`),{reason});},true]]);else options.append(document.createTextNode('El análisis no resolvió el contacto. El ajuste manual sigue disponible.'));
+    if(cue.proposedEventId)buttons(options,[['Usar propuesta',async()=>{await mutate(route(`/cues/${cue.id}/proposal:apply`),{});await draw();},true]]);}
+    if(cue.analysisScan?.options.length>1&&(cue.analysisAttempts||0)<2)for(const [index,option] of cue.analysisScan.options.entries())buttons(options,[[`Contacto ${index+1} · ${option.description}`,()=>runTask('analyze',route(`/cues/${cue.id}:analyze`),{occurrenceIndex:index,reason:'Usar el contacto elegido'}),true]]);
+    parent.append(box);};
+   v.visible.forEach(cue=>showCue(destino,cue));if(v.history.length){const history=fold(destino,'Ajustes anteriores · '+v.history.length);v.history.forEach(cue=>showCue(history,cue));}
+  }
+  const omit=fold(c,'Opciones del efecto');buttons(omit,[['Omitir este sonido',async()=>{const reason=prompt('¿Por qué quieres omitirlo?');if(reason){for(const uso of usos)await mutate(route(`/sound-requests/${uso.id}/omit`),{reason});await draw();}},true]]);
  }
 }
 
@@ -846,12 +912,14 @@ document.addEventListener('play',e=>{if(e.target.matches('video,audio'))document
 $('#back').onclick=async e=>{if(active){e.preventDefault();if(confirm('¿Pausar nuevas generaciones y volver a Animes?')){await lease(false);location.href='/';}}};
 async function editDevelopment(entity){
  const dialog=document.createElement('dialog'),box=document.createElement('div');dialog.append(box);document.body.append(dialog);
- const patches=new Map(),labels={title:'Título',bible:'Biblias',story:'Historia',beats:'Momentos dramáticos',shots:'Planos',utterances:'Voces del guion',soundRequests:'Efectos de sonido',musicRequests:'Música',subtitles:'Subtítulos',dramatic:'Dirección dramática',visual:'Dirección visual',characters:'Personajes',locations:'Lugares',props:'Objetos',beats:'Unidades dramáticas',shots:'Tomas',utterances:'Intervenciones',soundRequests:'Efectos y ambientes',musicRequests:'Música',subtitles:'Subtítulos',spanish:'Español',japanese:'Japonés',acting:'Actuación',prompt:'Instrucción',frames:'Duración (fotogramas)',before:'Estado antes',after:'Estado después',treatment:'Tratamiento visual',camera:'Cámara',name:'Nombre',description:'Descripción',seconds:'Duración (segundos)',preparationSeconds:'Preparación',tailSeconds:'Cola',perspective:'Perspectiva',text:'Texto',layout:'Distribución',referencePrompt:'Referencia visual',voice:'Voz',direction:'Dirección de voz',japaneseReading:'Lectura japonesa',minFrames:'Mínimo de fotogramas',maxFrames:'Máximo de fotogramas',leadFrames:'Acción inicial (frames)',tailFrames:'Acción final (frames)',pauseBeforeFrames:'Pausa antes (frames)',pauseAfterFrames:'Pausa después (frames)',timingReason:'Razón de la duración',gainDb:'Ganancia (dB)',sourceInSample:'Recorte de entrada (muestras)',fadeInSamples:'Fundido de entrada (muestras)',fadeOutSamples:'Fundido de salida (muestras)'};
+ const patches=new Map(),labels={title:'Título',bible:'Biblias',story:'Historia',beats:'Momentos dramáticos',shots:'Planos',utterances:'Voces del guion',soundRequests:'Efectos de sonido',musicRequests:'Música',subtitles:'Subtítulos',dramatic:'Dirección dramática',visual:'Dirección visual',characters:'Personajes',locations:'Lugares',props:'Objetos',beats:'Unidades dramáticas',shots:'Tomas',utterances:'Intervenciones',soundRequests:'Efectos y ambientes',musicRequests:'Música',subtitles:'Subtítulos',spanish:'Español',japanese:'Japonés',acting:'Actuación',prompt:'Instrucción',type:'Tipo de sonido',frames:'Duración (fotogramas)',before:'Estado antes',after:'Estado después',treatment:'Tratamiento visual',camera:'Cámara',name:'Nombre',description:'Descripción',seconds:'Duración (segundos)',preparationSeconds:'Preparación',tailSeconds:'Cola',perspective:'Perspectiva',text:'Texto',layout:'Distribución',referencePrompt:'Referencia visual',voice:'Voz',direction:'Dirección de voz',japaneseReading:'Lectura japonesa',minFrames:'Mínimo de fotogramas',maxFrames:'Máximo de fotogramas',leadFrames:'Acción inicial (frames)',tailFrames:'Acción final (frames)',pauseBeforeFrames:'Pausa antes (frames)',pauseAfterFrames:'Pausa después (frames)',timingReason:'Razón de la duración',gainDb:'Ganancia (dB)',sourceInSample:'Recorte de entrada (muestras)',fadeInSamples:'Fundido de entrada (muestras)',fadeOutSamples:'Fundido de salida (muestras)'};
  const heading=document.createElement('h2');heading.textContent='Editar guion y biblias';box.append(heading);
  const explanation=document.createElement('p');explanation.textContent='Los cambios crean una candidata. Antes de guardar verás qué recursos necesitan revisión. Las versiones aprobadas se conservan.';box.append(explanation);
  function fields(parent,value,path=[]){
   for(const [key,current] of Object.entries(value)){
-   if(['id','hash','sha256','developmentId','assetId','audioHash','nativeQualityGuaranteed','assetRevision','audioRevision','voiceBinding'].includes(key))continue;
+   // soundGroup lo calcula el plan a partir del prompt: editar su huella a
+   // mano reagruparía sonidos sin decirlo.
+   if(['id','hash','sha256','developmentId','assetId','audioHash','nativeQualityGuaranteed','assetRevision','audioRevision','voiceBinding','soundGroup'].includes(key))continue;
    const part=Array.isArray(value)?Number(key):key,next=[...path,part],name=labels[key]||fieldLabel(key);
    if(current!==null&&typeof current==='object'){
     const group=document.createElement('details'),summary=document.createElement('summary');summary.textContent=Array.isArray(value)?(current.name||(current.id?entityName(entity.data,current.id):`Elemento ${Number(key)+1}`)):name;group.append(summary);parent.append(group);fields(group,current,next);continue;
@@ -861,6 +929,7 @@ async function editDevelopment(entity){
    const relation=['locationId','speakerId','shotId','beatId'].includes(key)?key:['visibleCharacters','offscreenCharacters','referenceEntityIds','props'].includes(path.at(-1))?path.at(-1):null;
    if(relation&&typeof current==='string'){input=document.createElement('select');const d=entity.data;const rows=relation==='locationId'?d.bible.locations:relation==='shotId'?d.shots:relation==='beatId'?d.beats:relation==='props'?d.bible.props:relation==='referenceEntityIds'?[...d.bible.characters,...d.bible.locations,...d.bible.props]:d.bible.characters;for(const row of rows){const option=document.createElement('option');option.value=row.id;option.textContent=row.name||row.change||entityName(d,row.id);input.append(option);}input.value=current;}
    else if(key==='treatment'){input=document.createElement('select');for(const item of ['hold','camera2d','localized','veo']){const option=document.createElement('option');option.value=item;option.textContent={hold:'Ilustración sostenida',camera2d:'Cámara 2D',localized:'Animación localizada',veo:'Veo'}[item];input.append(option);}input.value=current;}
+   else if(key==='type'&&['sfx','ambience'].includes(current)){input=document.createElement('select');for(const item of ['sfx','ambience']){const option=document.createElement('option');option.value=item;option.textContent={sfx:'Efecto con instante de contacto',ambience:'Ambiente en bucle'}[item];input.append(option);}input.value=current;}
    else{input=document.createElement(typeof current==='string'?'textarea':'input');if(typeof current==='boolean'){input.type='checkbox';input.checked=current;}else if(typeof current==='number'){input.type='number';input.step='any';input.value=current;}else input.value=current;}
    input.onchange=()=>{const v=typeof current==='boolean'?input.checked:typeof current==='number'?Number(input.value):input.value;const k=JSON.stringify(next);if(v===current)patches.delete(k);else patches.set(k,{path:next,value:v});};label.append(input);parent.append(label);
   }

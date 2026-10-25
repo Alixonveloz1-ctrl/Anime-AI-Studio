@@ -3,7 +3,7 @@ import copy
 import json
 import math
 import time
-from shorts.core.contracts import require, ContractError, digest, ident, integer, duration_target
+from shorts.core.contracts import require, ContractError, digest, ident, integer, duration_target, AMBIENCE_LOOP_SECONDS, SFX_MAX_SECONDS
 from shorts.service.director import develop_prompt, validate_development
 from shorts.service.development_schema import development_schema
 from shorts.service.references import link_references
@@ -154,10 +154,76 @@ def plan_music(data):
     out['musicRequests']=pieces
     return out
 
+def plan_sound(data):
+    """Effects you can actually obtain, and the same sound asked for only once.
+
+    The plan for a five-minute short arrived with thirteen effects, several of
+    them the same sound in different shots, and one 315-second «effect» that was
+    really the room tone of the whole film: nothing anybody can go and fetch as
+    a file. Here each request is cut back to a length that exists, and the ones
+    that are the same sound share a group, so one upload serves all of them.
+    """
+    out=copy.deepcopy(data);rows=out.get('soundRequests')
+    require(isinstance(rows,list),'SOUND','Falta el plan de efectos.')
+    kept=[];seen=set()
+    for row in rows:
+        require(isinstance(row,dict),'SOUND','Solicitud de sonido inválida')
+        prompt=' '.join(str(row.get('prompt') or '').split()).lower()
+        # The same sound in the same shot twice is not two sounds.
+        key=(str(row.get('shotId') or ''),prompt)
+        if prompt and key in seen:continue
+        seen.add(key)
+        kind=row.get('type') if row.get('type') in ('sfx','ambience') else 'sfx'
+        seconds=row.get('seconds')
+        seconds=float(seconds) if type(seconds) in (int,float) and seconds>0 else 2.0
+        # Past a hit's length it is a bed, whatever it was labelled, and a bed
+        # only ever needs a loop: the montage repeats it for as long as its
+        # place lasts.
+        if seconds>SFX_MAX_SECONDS:kind='ambience'
+        seconds=min(seconds,AMBIENCE_LOOP_SECONDS if kind=='ambience' else SFX_MAX_SECONDS)
+        row['type']=kind;row['seconds']=seconds
+        for field in ('preparationSeconds','tailSeconds'):
+            value=row.get(field)
+            row[field]=float(value) if type(value) in (int,float) and value>0 else 0.0
+        if kind=='ambience':row['preparationSeconds']=row['tailSeconds']=0.0
+        margin=row['preparationSeconds']+row['tailSeconds']
+        if margin>=seconds:
+            share=max(0.0,(seconds-0.1)/2)
+            row['preparationSeconds']=min(row['preparationSeconds'],share);row['tailSeconds']=min(row['tailSeconds'],share)
+        # One group per distinct sound: uploading its file once gives it to every
+        # shot where that same sound happens.
+        row['soundGroup']=digest([kind,prompt])
+        kept.append(row)
+    out['soundRequests']=kept
+    return out
+
+def plan_voices(data):
+    """A voice name the catalogue does not have cannot speak; map it, never dead-end.
+
+    The response schema lists the thirty Gemini TTS names, and the model still
+    answers now and then with the Cloud spelling ('ja-JP-Chirp3-HD-Kore'),
+    another casing, or a name nobody has. The screenplay was accepted anyway and
+    every single voice generation failed afterwards with 'the saved voice is not
+    in the catalogue' — a finished story that could not say a word.
+    """
+    from shorts.core.requests import VOICES
+    out=copy.deepcopy(data);known={name.lower():name for name in VOICES}
+    for person in out.get('bible',{}).get('characters',[]):
+        if not isinstance(person,dict):continue
+        voice=person['voice'] if isinstance(person.get('voice'),dict) else {}
+        asked=str(voice.get('name') or '').strip()
+        name=known.get(asked.lower()) or known.get(asked.split('-')[-1].strip().lower())
+        # Nothing recognisable: the story still has to be able to speak, so one
+        # catalogue voice comes from the character's own id. The same character
+        # always gets the same voice, and Personajes can change it.
+        if not name:name=VOICES[int(digest(str(person.get('id') or ''))[:8],16)%len(VOICES)]
+        person['voice']={**voice,'name':name,'languageCode':'ja-JP','direction':str(voice.get('direction') or '')}
+    return out
+
 def validate_stage(data,stage):
     validate_story(data)
     if stage==1:return copy.deepcopy(data)
-    result=link_references(plan_shots(data))
+    result=plan_voices(link_references(plan_shots(data)))
     missing={b['id'] for b in result['beats']}-{s.get('beatId') for s in result['shots']}
     require(not missing,'STORY_COVERAGE','El guion omitió momentos de la historia aprobada: '+', '.join(sorted(missing))+'. Completa este paso conservando la historia.')
     if stage==2:
@@ -165,7 +231,7 @@ def validate_stage(data,stage):
                'subtitles':[{'utteranceId':u.get('id'),'text':u.get('spanish')} for u in result['utterances']]}
         validate_development(check)
     else:
-        result=plan_music(result);validate_development(result)
+        result=plan_music(plan_sound(result));validate_development(result)
     return result
 
 def source_for_stage(cloud,project,stage,source_id,source_hash=None):
@@ -213,7 +279,21 @@ def develop(cloud,provider,job,project,idea):
     cloud.db.collection('animeShortsJobs').document(jid).update({'progress':{'stage':stage,'total':4,'label':label}})
     prompt=develop_prompt(project,idea['data'])+'\nGenera SOLO el paso '+label+'. No escribas los otros pasos ni cambies el contenido previo aprobado. '
     prompt+='La historia debe poder leerse completa antes de producir. Los intervalos de los planos deben permitir que el TOTAL del corto dure entre 6840 y 7560 frames (285 a 315 segundos a 24 FPS), incluyendo todas las pausas, sin acelerar voces. La aplicación calcula la suma provisional dentro de esos intervalos. La aplicación calcula la duración de cada encargo musical a partir de sus entradas y salidas, y divide piezas de más de 184 segundos. '
-    prompt+='Cada personaje necesita voz ja-JP y cada intervención debe referirse al ID exacto de su personaje.\nContexto aprobado:\n'+json.dumps(prior,ensure_ascii=False)
+    prompt+='Cada personaje necesita voz ja-JP y cada intervención debe referirse al ID exacto de su personaje. '
+    if stage==3:
+        # Every effect is a file the user has to go and obtain by hand. Thirteen
+        # of them for five minutes, with repeats, was a day of work; one of
+        # 315 seconds was not obtainable at all.
+        prompt+=('EFECTOS DE SONIDO: pide SOLO los que de verdad necesitan un archivo propio y marcan un momento. '
+                 'Para cinco minutos bastan entre tres y seis sonidos distintos; menos es mejor. Cada solicitud es un archivo '
+                 'que una persona tiene que conseguir y subir a mano. Si el MISMO sonido ocurre en varias tomas, repite su '
+                 'prompt palabra por palabra en cada toma donde suena: la aplicación lo reconoce como el mismo sonido y un '
+                 'solo archivo sirve para todas. No pidas efectos para lo que ya cuentan la voz o la música. '
+                 f'type=sfx es un sonido con un instante exacto de contacto y dura como máximo {SFX_MAX_SECONDS} segundos. '
+                 f'type=ambience es un lecho continuo del que solo hace falta un BUCLE CORTO de hasta {AMBIENCE_LOOP_SECONDS} '
+                 'segundos; la aplicación lo repite mientras dure su lugar, así que nunca pidas el ambiente entero del corto. '
+                 'Un fondo continuo o musical NO es un efecto: encárgalo en musicRequests, que lo compone Lyria. ')
+    prompt+='\nContexto aprobado:\n'+json.dumps(prior,ensure_ascii=False)
     if job['payload'].get('instruction'):prompt+='\nCorrección solicitada por el usuario para este paso: '+job['payload']['instruction']
     try:
         part=provider.text(prompt,max_output_tokens=limit,response_schema=stage_schema(stage))

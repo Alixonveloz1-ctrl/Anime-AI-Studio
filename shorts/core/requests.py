@@ -14,7 +14,21 @@ MODEL_CHOICES={
     'tts':[('gemini-2.5-flash-tts','Gemini Flash TTS'),('gemini-2.5-pro-tts','Gemini Pro TTS')],
     'music':[('lyria-3-pro-preview','Lyria 3 Pro')],
 }
-VOICES='Achernar Achird Algenib Algieba Alnilam Aoede Autonoe Callirrhoe Charon Despina Enceladus Erinome Fenrir Gacrux Iapetus Kore Laomedeia Leda Orus Pulcherrima Puck Rasalgethi Sadachbia Sadaltager Schedar Sulafat Umbriel Vindemiatrix Zephyr Zubenelgenubi'.split()
+# Gemini TTS answers with a bare voice name, so the app has to be the one that
+# says which of those names sounds female and which male. Without it the only
+# way to find out is to synthesise all thirty and listen to them one by one.
+# This is the split Google publishes for these same voices (Cloud
+# Text-to-Speech, "Gemini-TTS" voice table), cross-checked against Firebase AI
+# Logic's table and Google's own storytelling notebook for the same names.
+VOICE_GENDERS={
+ 'Achernar':'female','Achird':'male','Algenib':'male','Algieba':'male','Alnilam':'male',
+ 'Aoede':'female','Autonoe':'female','Callirrhoe':'female','Charon':'male','Despina':'female',
+ 'Enceladus':'male','Erinome':'female','Fenrir':'male','Gacrux':'female','Iapetus':'male',
+ 'Kore':'female','Laomedeia':'female','Leda':'female','Orus':'male','Pulcherrima':'female',
+ 'Puck':'male','Rasalgethi':'male','Sadachbia':'male','Sadaltager':'male','Schedar':'male',
+ 'Sulafat':'female','Umbriel':'male','Vindemiatrix':'female','Zephyr':'female','Zubenelgenubi':'male',
+}
+VOICES=list(VOICE_GENDERS)
 
 def selected_models(config,settings):
     import copy

@@ -116,7 +116,8 @@ def develop_segment(cloud,provider,job,project,idea,story):
                     key=ident(entity['id'])
                     require(key not in ids,'DUPLICATE_ID','ID repetido en las biblias: '+key)
                     ids.add(key)
-            result={**data,**part,'shots':[],'utterances':[]};completed=0
+            from shorts.service.development import plan_voices
+            result=plan_voices({**data,**part,'shots':[],'utterances':[]});completed=0
         else:
             result=validate_segment(data,part,plan,index);completed=index+1
         ready=completed==len(plan)

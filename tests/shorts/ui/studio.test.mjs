@@ -473,8 +473,13 @@ test('Music keeps playback and generation visible while effect instructions stay
  const {w,dom,click}=await setup();
  try{
   await click('Escenas');await click('Música y efectos');
-  const effects=[...w.document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent==='Efectos · ajustes avanzados');
+  const effects=[...w.document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent?.startsWith('Efectos de sonido'));
   assert.ok(effects);assert.equal(effects.open,false);assert.match(effects.textContent,/La puerta del andén/);
+  // El prompt es lo que se lleva a otra herramienta para generar el sonido:
+  // está a la vista dentro del efecto, no detrás de otro desplegable.
+  const texto=[...effects.querySelectorAll('.prompt-text')].map(n=>n.textContent);
+  assert.ok(texto.some(t=>t.includes('Metal station door closing')),'El prompt del efecto se lee en su tarjeta: '+texto.join(' | '));
+  assert.ok([...effects.querySelectorAll('button')].some(b=>b.textContent==='Copiar prompt'));
   const music=[...w.document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent==='Música');
   assert.ok(music.open);await new Promise(r=>setTimeout(r,0));assert.ok(music.querySelector('audio'));assert.match(music.textContent,/Crear otra pieza/);
  }finally{dom.window.close();}
@@ -495,6 +500,64 @@ test('Visible generators save their selection and character voice assignment sta
   assert.equal(fixture.calls.filter(c=>c.path.endsWith('/assets:generate')).length,0,'Selecting models and voices does not generate paid content');
  }finally{dom.window.close();}
 });
+test('A voice is chosen in the character card, and the list says which are female and which male',async()=>{
+ const {w,dom,click}=await setup();
+ try{
+  await click('Personajes');
+  const card=w.document.querySelector('.char-card');
+  const select=card.querySelector('select[aria-label="Voz de Haru"]');
+  assert.ok(select,'el selector de voz está en la ficha del personaje');
+  // Estaba debajo de la imagen y de sus botones: al fallar la generación
+  // («elige una voz») no se encontraba en la pantalla.
+  const order=[...card.querySelectorAll('select[aria-label="Voz de Haru"],.asset-card,.media-empty')];
+  assert.equal(order[0],select,'la voz va antes de la referencia visual');
+  assert.match(card.textContent,/2 voces femeninas y 1 masculinas/);
+  const groups=[...select.querySelectorAll('optgroup')].map(g=>g.label);
+  assert.deepEqual(groups,['Voces femeninas','Voces masculinas']);
+  const options=[...select.querySelectorAll('option')].map(o=>o.textContent);
+  assert.ok(options.includes('Kore · femenina')&&options.includes('Puck · masculina'),options.join(' | '));
+ }finally{dom.window.close();}
+});
+
+test('A saved voice outside the catalogue says so and still offers the catalogue',async()=>{
+ const {fixture,w,dom,click}=await setup();
+ try{
+  fixture.project.developments[0].data.bible.characters[0].voice={name:'Perseus',languageCode:'ja-JP',direction:''};
+  await click('Escenas');await click('Personajes');
+  const card=w.document.querySelector('.char-card');
+  assert.match(card.querySelector('.error').textContent,/no está en el catálogo/);
+  const select=card.querySelector('select[aria-label="Voz de Haru"]');
+  assert.equal(select.value,'','no se da por elegida una voz que no existe');
+  assert.ok([...select.querySelectorAll('option')].some(o=>o.value==='Kore'),'el catálogo sigue a mano');
+ }finally{dom.window.close();}
+});
+
+test('The activity list only appears when a generation is waiting for a decision',async()=>{
+ const {fixture,w,dom,click}=await setup();
+ try{
+  await click('Escenas');await click('Música y efectos');
+  assert.doesNotMatch(w.document.body.textContent,/Historial de actividad|Generaciones en curso/,
+   'un historial permanente debajo de la música no se usa para nada');
+  fixture.jobs.push({id:'enCurso',operation:'music',state:'running',created:99,revision:1,settled:false});
+  await click('Escenas y voces');await click('Música y efectos');
+  assert.match(w.document.body.textContent,/Generaciones en curso · 1/);
+ }finally{dom.window.close();}
+});
+
+test('The script reads as a story: no shot techniques, frame counts or internal ids',async()=>{
+ const {w,dom,click}=await setup();
+ try{
+  await click('Historia');
+  const breakdown=w.document.querySelector('.script-shot');
+  assert.match(breakdown.textContent,/Haru decide quedarse/,'el propósito dramático sí se lee');
+  assert.match(breakdown.textContent,/Todavía estamos a tiempo/,'y el diálogo también');
+  for(const noise of ['Ilustración','Cámara 2D','shot1','beat1'])
+   assert.doesNotMatch(breakdown.textContent,new RegExp(noise),noise+' lo decide el director, no se lee aquí');
+  const bible=[...w.document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent==='Ficha y dirección visual');
+  if(bible)for(const noise of ['Fotogramas','Cámara','Estado antes'])assert.doesNotMatch(bible.textContent,new RegExp(noise));
+ }finally{dom.window.close();}
+});
+
 test('A preview shown inside its card stays on screen after the job finishes',async()=>{
  const {w,dom,click}=await setup();await click('Exportar');await click('Revisar el corto');await click('Subtítulos');
  await click('Aprobar subtítulos revisados');

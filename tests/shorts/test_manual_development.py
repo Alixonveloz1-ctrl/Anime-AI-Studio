@@ -50,13 +50,23 @@ class ManualDevelopmentTests(unittest.TestCase):
         result=validate_stage(raw,2)
         self.assertEqual(result['shots'][0]['frames'],7100);self.assertEqual(raw['shots'][0]['frames'],7100)
         self.assertEqual(result['utterances'],raw['utterances'])
-    def test_impossible_duration_and_missing_voice_stop_at_script(self):
+    def test_impossible_duration_stops_at_script(self):
         d=complete();d['shots'][0].update(minFrames=6600,maxFrames=6800)
         with self.assertRaises(ContractError) as error:validate_stage(d,2)
         self.assertEqual(error.exception.code,'DURATION_PLAN')
+    def test_a_voice_outside_the_catalogue_never_leaves_the_story_mute(self):
+        # The response schema lists the thirty Gemini TTS names and the model
+        # still answers now and then with the Cloud spelling or with a name
+        # nobody has. The screenplay was accepted anyway and every single voice
+        # generation failed afterwards: a finished story that could not speak.
+        from shorts.core.requests import VOICES
         d=complete();del d['bible']['characters'][0]['voice']
-        with self.assertRaises(ContractError) as error:validate_stage(d,2)
-        self.assertEqual(error.exception.code,'CHARACTER_VOICE')
+        chosen=validate_stage(d,2)['bible']['characters'][0]['voice']
+        self.assertIn(chosen['name'],VOICES);self.assertEqual(chosen['languageCode'],'ja-JP')
+        self.assertEqual(validate_stage(d,2)['bible']['characters'][0]['voice'],chosen)
+        d=complete();d['bible']['characters'][0]['voice']={'name':'ja-JP-Chirp3-HD-Kore','languageCode':'ja-JP','direction':'suave'}
+        self.assertEqual(validate_stage(d,2)['bible']['characters'][0]['voice'],
+                         {'name':'Kore','languageCode':'ja-JP','direction':'suave'})
     def test_music_source_seconds_derived_and_long_cues_split(self):
         d=complete();d['musicRequests']=[{'id':'score','prompt':'Piano','seconds':1,'startFrame':0,'endFrame':7200,'gainDb':-18}]
         result=validate_stage(d,3)

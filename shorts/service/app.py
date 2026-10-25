@@ -88,13 +88,16 @@ def project_route(pid):
 
 @app.route('/projects/<pid>/generators',methods=['GET','POST'])
 def generators(pid):
-    from shorts.core.requests import MODEL_CHOICES,VOICES,selected_models
+    from shorts.core.requests import MODEL_CHOICES,VOICE_GENDERS,selected_models
     p=owned(pid)
     if request.method=='POST':
         settings=body();selected_models(config(),settings)
         def save(tx,current):current['generators']=settings
         _,p=cloud().mutate(pid,expected(),save)
-    return jsonify(choices={k:[{'id':m,'name':n} for m,n in rows] for k,rows in MODEL_CHOICES.items()},voices=VOICES,
+    # Each voice travels with its gender: choosing one by ear meant generating
+    # thirty samples to find out who was who.
+    return jsonify(choices={k:[{'id':m,'name':n} for m,n in rows] for k,rows in MODEL_CHOICES.items()},
+                   voices=[{'name':name,'gender':gender} for name,gender in VOICE_GENDERS.items()],
                    selected={k:v['model'] for k,v in selected_models(config(),p.get('generators',{})).items() if k in MODEL_CHOICES})
 
 @app.post('/projects/<pid>/characters/<cid>/voice')
