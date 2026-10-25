@@ -597,10 +597,11 @@ test('A task queued behind a busy engine starts on its own, with nothing to pres
  try{
   await click('Personajes');
   await click('Generar primera frase para escuchar');
-  const pedida=fixture.jobs.find(j=>j.operation==='tts');
+  const pedida=fixture.jobs.find(j=>j.operation==='tts'&&j.id!=='ocupante');
   assert.equal(pedida.settled,true,'acabó sola, sin que el usuario pulse nada más');
   assert.equal(pedida.dispatchError,null);
   assert.ok(fixture.calls.some(c=>c.path.includes(':resume')),'reintenta el reparto mientras espera turno');
+  assert.ok(fixture.calls.some(c=>c.path.includes('ocupante:inspect')),'y comprueba lo que ocupa el motor, que es gratis y no reenvía nada');
   assert.equal(w.document.querySelector('#notice').className,'','esperar turno nunca fue un error');
  }finally{dom.window.close();}
 });

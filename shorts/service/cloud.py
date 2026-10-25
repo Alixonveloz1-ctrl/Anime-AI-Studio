@@ -89,15 +89,20 @@ class Cloud:
             p=self.project_ref(j['projectId']).get(transaction=tx).to_dict()
             sr=self.db.collection('animeShortsCapacity').document(resource_class(j['operation']))
             slot=sr.get(transaction=tx).to_dict()
-            # A closed job cannot keep a capacity slot forever. Never release
-            # a running or uncertain submission based only on its age.
+            # A job that cannot run any more must not keep an engine. Age alone
+            # never frees one: what frees it is knowing nothing is executing.
             if slot and slot.get('jobId') and slot['jobId']!=j['id']:
                 previous=self.db.collection('animeShortsJobs').document(slot['jobId']).get(transaction=tx).to_dict()
-                # A slot pointing at a job record that is no longer there cannot
-                # be protecting a running submission: nothing exists that could
-                # report its outcome or free it, so it blocked that engine for
-                # good and every later request waited behind a ghost.
-                if not previous or previous.get('settled'):slot=None
+                # A record that is no longer there cannot be protecting a
+                # running submission: nothing exists that could report its
+                # outcome or free it, so it held that engine for good.
+                # An uncertain submission is not executing either — release_slot
+                # frees it for exactly this reason when the worker reaches it —
+                # and the job still stays open, unsettled and never resent, for
+                # the owner to close. A worker killed before releasing it left
+                # the engine held forever by something that is not running.
+                stopped=previous.get('state')=='submitted_unknown' if previous else False
+                if not previous or previous.get('settled') or stopped:slot=None
             try:out,slot,dispatch=acquire(j,p,slot,time.time())
             except ContractError as error:
                 if error.code not in ('CAPACITY_BUSY','LEASE'):raise

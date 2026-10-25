@@ -224,6 +224,15 @@ async function watch(id,projectId=p?.id){
    // Nadie vuelve a intentar el reparto por su cuenta: reintentarlo cada 30 s
    // es lo que hace que un motor retenido por un trabajo ya cerrado se suelte.
    if(n%10===9&&!j.settled){
+    // Comprobar lo que ocupa el motor es gratis y no reenvía nada: es lo que
+    // cierra un worker muerto y suelta su motor, sin que nadie lo busque.
+    const ocupante=j.dispatchError?.blockingJobId;
+    if(ocupante&&ocupante!==j.id){
+     try{
+      const otro=await api('/jobs/'+ocupante);
+      if(!otro.settled&&taskActions(otro).inspect)await api('/jobs/'+ocupante+':inspect','POST',{},{'If-Match':String(otro.revision)});
+     }catch{}
+    }
     try{if(!active)await lease(true);await api('/jobs/'+j.id+':resume','POST',{session},{'If-Match':String(j.revision)});}catch{}
    }
    await new Promise(r=>setTimeout(r,3000));continue;

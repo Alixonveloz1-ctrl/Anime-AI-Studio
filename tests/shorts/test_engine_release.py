@@ -107,8 +107,11 @@ class WaitingQueueTests(unittest.TestCase):
         self.assertEqual(self.enqueued,['waiting'],'it starts without the owner pressing anything')
 
     def test_closing_an_uncertain_job_also_starts_what_was_waiting(self):
-        self.c.db.data['animeShortsJobs/running'].update(state='submitted_unknown',providerCalls=[{'kind':'text','state':'submitted_unknown'}])
+        # It queues behind a job that IS executing; only afterwards does that
+        # job end uncertain and get closed.
         self.c.acquire_dispatch('waiting')
+        self.assertEqual(self.slot['waiting'],['waiting'])
+        self.c.db.data['animeShortsJobs/running'].update(state='submitted_unknown',providerCalls=[{'kind':'text','state':'submitted_unknown'}])
         self.c.close_uncertain('running')
         self.assertEqual(self.enqueued,['waiting'])
 
@@ -132,10 +135,24 @@ class WaitingQueueTests(unittest.TestCase):
         self.assertEqual(self.slot['jobId'],'waiting')
         self.assertIsNone(job.get('dispatchError'))
 
-    def test_an_engine_held_by_a_job_that_is_still_open_keeps_protecting_it(self):
-        # The opposite case must not change: a submission that may be running
+    def test_an_engine_held_by_an_uncertain_submission_is_freed_without_resending_it(self):
+        # The very first voice of a project reported «otro trabajo usa este
+        # motor» with nothing else asked for: the engine was held by an earlier
+        # submission left uncertain. Nothing executes for one of those — the
+        # worker frees the engine for exactly this reason when it gets that far,
+        # and a worker killed first left it held for good.
+        self.c.db.data['animeShortsJobs/running'].update(state='submitted_unknown',
+            providerCalls=[{'kind':'tts','state':'submitted_unknown'}])
+        job,dispatch=self.c.acquire_dispatch('waiting')
+        self.assertTrue(dispatch,'el motor se libera')
+        self.assertEqual(self.slot['jobId'],'waiting')
+        held=self.c.db.data['animeShortsJobs/running']
+        self.assertFalse(held.get('settled'),'el trabajo incierto sigue abierto para su dueño')
+        self.assertEqual(held['state'],'submitted_unknown','y no se reenvía ni se cierra solo')
+
+    def test_an_engine_held_by_a_job_that_is_still_running_keeps_protecting_it(self):
+        # The opposite case must not change: something that may be executing
         # keeps its engine, however old it looks.
-        self.c.db.data['animeShortsJobs/running'].update(state='submitted_unknown')
         job,dispatch=self.c.acquire_dispatch('waiting')
         self.assertFalse(dispatch)
         self.assertEqual(job['dispatchError']['code'],'CAPACITY_BUSY')

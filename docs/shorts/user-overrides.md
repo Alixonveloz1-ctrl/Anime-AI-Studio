@@ -227,7 +227,11 @@ Ahora esperar turno se lee como lo que es: «En cola: otra generación está usa
 
 Quitado por completo el botón «Liberar el motor y continuar» y su maquinaria. Un trabajo realmente atascado sigue apareciendo en la lista de actividad con sus acciones, que es donde corresponde: una lista de cosas que esperan una decisión, no la tarjeta de algo que sólo espera su turno.
 
-Pruebas (`tests/shorts/ui/studio.test.mjs`): una tarea encolada se lee como cola, sin rojo y con Cancelar como único botón; y una tarea pedida con el motor ocupado termina sola, reintentando el reparto, sin que el usuario pulse nada más.
+Falta la causa de origen, y es la que el dueño describe: «con la primera generación ya decía que había otra cosa trabajando, cuando yo no había mandado a hacer más nada antes, y ahí se quedaba y nunca paraba». El motor lo retenía un envío anterior que quedó incierto. Un envío incierto NO se está ejecutando —el worker suelta su motor por esa misma razón cuando llega a hacerlo— pero si al worker lo matan antes, nadie lo suelta nunca. Ahora al repartir trabajo también se libera el motor de un envío incierto: el trabajo sigue abierto, sin cerrarse ni reenviarse, para que su dueño decida; lo único que cambia es que deja de retener una máquina que no está usando. Un trabajo que sí puede estar ejecutándose sigue protegiendo su motor igual que antes.
+
+Y mientras una tarea espera turno, la página comprueba cada treinta segundos el trabajo que ocupa el motor. Comprobarlo es gratis y no reenvía nada, y es lo que cierra un worker muerto y suelta su motor sin que nadie busque ningún botón.
+
+Pruebas (`tests/shorts/test_engine_release.py`, `tests/shorts/ui/studio.test.mjs`): un motor retenido por un envío incierto se libera sin cerrar ni reenviar ese trabajo; uno retenido por algo que puede estar ejecutándose se sigue protegiendo; una tarea encolada se lee como cola, sin rojo y con Cancelar como único botón; y una tarea pedida con el motor ocupado termina sola, comprobando al ocupante y reintentando el reparto, sin que el usuario pulse nada más.
 
 ## U026 — La vista previa de una toma se ve, y lo pendiente se cuenta (2026-10-25)
 

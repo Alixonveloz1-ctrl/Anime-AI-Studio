@@ -64,8 +64,25 @@ class DispatchRecoveryTests(unittest.TestCase):
         self.c.db.data['animeShortsJobs/old'].update(state='failed',settled=True)
         j,send=self.c.acquire_dispatch('j');self.assertTrue(send);self.assertEqual(j['dispatchState'],'submitted')
         self.assertFalse(self.c.acquire_dispatch('j')[1])
-    def test_A075_uncertain_slot_never_released_by_age(self):
-        self.c.db.data['animeShortsJobs/old'].update(state='submitted_unknown',created=0)
+    def test_A075_uncertain_slot_is_freed_without_resending_or_closing_it(self):
+        # A075 prohíbe reenviar a ciegas un envío incierto y cobrarlo dos veces;
+        # no obliga a que retenga una máquina. Un envío incierto no está
+        # ejecutando nada —el worker libera su motor por esa misma razón cuando
+        # llega a hacerlo— y si lo matan antes nadie lo soltaba nunca: la
+        # primera generación siguiente decía «otro trabajo usa este motor» sin
+        # haber pedido nada más, y se quedaba ahí para siempre.
+        import copy
+        self.c.db.data['animeShortsJobs/old'].update(state='submitted_unknown',created=0,
+                                                     providerCalls=[{'kind':'text','state':'submitted_unknown'}])
+        antes=copy.deepcopy(self.c.db.data['animeShortsJobs/old'])
+        j,send=self.c.acquire_dispatch('j');self.assertTrue(send)
+        self.assertEqual(self.c.db.data['animeShortsCapacity/text-analysis']['jobId'],'j')
+        self.assertEqual(self.c.db.data['animeShortsJobs/old'],antes,
+                         'el trabajo incierto queda intacto: ni se cierra, ni se reenvía, ni se cobra otra vez')
+    def test_A075_a_job_that_may_be_running_keeps_its_engine(self):
+        # La protección que sí importa: algo que puede estar ejecutándose
+        # conserva su motor por viejo que parezca.
+        self.c.db.data['animeShortsJobs/old'].update(state='running',created=0)
         j,send=self.c.acquire_dispatch('j');self.assertFalse(send);self.assertEqual(j['dispatchError']['code'],'CAPACITY_BUSY')
         self.assertEqual(self.c.db.data['animeShortsCapacity/text-analysis']['jobId'],'old')
     def test_A078_enqueue_permission_error_visible_and_no_second_create(self):

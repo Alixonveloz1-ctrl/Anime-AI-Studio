@@ -13,6 +13,7 @@ export function createFixture({empty=false,servidorViejo=false,motorOcupado=fals
  function job(operation,result){
   // Como el servicio real: si el motor de esa clase está ocupado, el trabajo
   // queda encolado con su motivo en vez de arrancar.
+  if(motorOcupado&&!jobs.some(x=>x.id==='ocupante'))jobs.push({id:'ocupante',operation,state:'submitted_unknown',created:0,revision:1,settled:false,providerCalls:[{kind:operation,state:'submitted_unknown'}]});
   const esperando=motorOcupado&&!jobs.some(x=>x.operation===operation&&enCola(x));
   const j=esperando
    ?{id:'job'+(++n),operation,state:'queued',created:n,revision:1,settled:false,
