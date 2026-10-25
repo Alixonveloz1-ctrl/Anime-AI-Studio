@@ -588,13 +588,66 @@ test('A job waiting for a busy engine can be resolved from the card that is wait
   await click('Personajes');
   const panel=w.document.querySelector('#activity');
   assert.match(panel.textContent,/Otro trabajo usa este motor/);
-  await click('Comprobar el trabajo que lo bloquea',panel);
+  assert.match(panel.textContent,/Lo ocupa: Voz/,'dice qué ocupa el motor, no sólo que está ocupado');
+  await click('Liberar el motor y continuar',panel);
   assert.equal(fixture.jobs.find(j=>j.id==='bloqueante').settled,true,'el trabajo que ocupaba el motor queda cerrado');
   // Y la generación que esperaba continúa aquí mismo: resolver el bloqueo no
   // puede dejarte buscando otro botón.
   const espera=fixture.jobs.find(j=>j.id==='enEspera');
   assert.equal(espera.dispatchError,null,'deja de estar bloqueada');
   assert.equal(w.document.querySelector('#notice').className,'','sin error al final');
+ }finally{dom.window.close();}
+});
+
+test('An engine held by a generation that never delivered is freed by cancelling it',async()=>{
+ const {fixture,w,dom,click}=await setup();
+ try{
+  // El caso que dejaba la espera sin salida: lo que ocupa el motor no se puede
+  // ni consultar ni cerrar, porque nunca llegó a arrancar. Cancelarlo es lo
+  // único que lo suelta, y no repite ninguna llamada ya pagada.
+  fixture.jobs.push({id:'colgado',operation:'tts',state:'queued',created:98,revision:1,settled:false,dispatchState:'submitted'});
+  fixture.jobs.push({id:'enEspera',operation:'tts',state:'queued',created:99,revision:1,settled:false,
+   dispatchError:{code:'CAPACITY_BUSY',message:'Otro trabajo usa este motor. La tarea sigue pendiente.',blockingJobId:'colgado'}});
+  await click('Personajes');
+  const panel=w.document.querySelector('#activity');
+  w.confirm=()=>true;
+  await click('Liberar el motor y continuar',panel);
+  assert.equal(fixture.jobs.find(j=>j.id==='colgado').state,'cancelled');
+  assert.equal(fixture.jobs.find(j=>j.id==='enEspera').dispatchError,null,'la generación que esperaba continúa');
+  assert.equal(w.document.querySelector('#notice').className,'','sin error al final');
+ }finally{dom.window.close();}
+});
+
+test('An engine still busy says so instead of looping back to the same red line',async()=>{
+ const {fixture,w,dom,click}=await setup();
+ try{
+  // Reanudar sin haber liberado nada devolvía el mismo aviso rojo una y otra
+  // vez: hay que decir qué lo ocupa y que arrancará sola.
+  fixture.jobs.push({id:'enMarcha',operation:'tts',state:'cancel_requested',created:98,revision:1,settled:false,started:1});
+  fixture.jobs.push({id:'enEspera',operation:'tts',state:'queued',created:99,revision:1,settled:false,
+   dispatchError:{code:'CAPACITY_BUSY',message:'Otro trabajo usa este motor. La tarea sigue pendiente.',blockingJobId:'enMarcha'}});
+  await click('Personajes');
+  const panel=w.document.querySelector('#activity');
+  await [...panel.querySelectorAll('button')].find(b=>b.textContent==='Liberar el motor y continuar').onclick();
+  assert.match(w.document.querySelector('#notice').textContent,/arrancará sola/);
+  assert.equal(fixture.calls.filter(c=>c.path.includes(':resume')).length,0,'no se reanuda contra un motor ocupado');
+  assert.equal(fixture.jobs.find(j=>j.id==='enMarcha').state,'cancel_requested','no se toca lo que sigue en marcha');
+ }finally{dom.window.close();}
+});
+
+test('When only an updated server can free the engine, the page says exactly that',async()=>{
+ const {fixture,w,dom,click}=await setup({servidorViejo:true});
+ try{
+  // La ficha del trabajo que ocupa el motor ya no existe: soltarlo es cosa del
+  // servidor. Si la web lo reintenta y vuelve el mismo rechazo, repetir el
+  // aviso rojo no sirve de nada; hay que decir qué falta por hacer.
+  fixture.jobs.push({id:'enEspera',operation:'tts',state:'queued',created:99,revision:1,settled:false,
+   dispatchError:{code:'CAPACITY_BUSY',message:'Otro trabajo usa este motor. La tarea sigue pendiente.',blockingJobId:'fantasma'}});
+  await click('Personajes');
+  const panel=w.document.querySelector('#activity');
+  assert.match(panel.textContent,/ya no existe/);
+  await [...panel.querySelectorAll('button')].find(b=>b.textContent==='Liberar el motor y continuar').onclick();
+  assert.match(w.document.querySelector('#notice').textContent,/ejecuta «\.\/c» en Cloud Shell/);
  }finally{dom.window.close();}
 });
 

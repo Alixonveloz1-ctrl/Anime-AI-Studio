@@ -188,20 +188,48 @@ function showJob(job){
  // «Otro trabajo usa este motor» no decía cuál, y desde Personajes no había
  // ninguna lista donde encontrarlo: la espera no se podía resolver desde aquí.
  const bloqueante=job.dispatchError?.blockingJobId;
- if(bloqueante&&bloqueante!==job.id)controls.push(['Comprobar el trabajo que lo bloquea',async()=>{
-  const otro=await api('/jobs/'+bloqueante).catch(()=>null);
-  if(!otro){say('El trabajo que ocupaba el motor ya no existe. Pulsa Continuar para seguir con éste.');return;}
-  const acciones=taskActions(otro);
-  if(acciones.inspect){const r=await api('/jobs/'+bloqueante+':inspect','POST',{},{'If-Match':String(otro.revision)});say(r.message);}
-  else if(acciones.close){if(!await closeUncertain(bloqueante))return;}
-  else{say('El motor lo ocupa ahora mismo: '+titleFor(otro.operation)+' · '+titleFor(otro.state)+'. Esta tarea arrancará sola al quedar libre.');return;}
-  // Liberado el motor, esta generación se reanuda aquí mismo: dejarla esperando
-  // obligaba a buscar otro botón después de haber resuelto el bloqueo.
-  if(!active)await lease(true);
-  const actual=await api('/jobs/'+job.id);
-  await api('/jobs/'+job.id+':resume','POST',{session},{'If-Match':String(actual.revision)});
-  ++watchVersion;await watch(job.id);await draw();
- },true]);
+ if(bloqueante&&bloqueante!==job.id){
+  // Decir «otro trabajo usa este motor» sin decir cuál convierte la espera en
+  // un misterio. Aquí se lee qué lo ocupa, en cuanto se puede consultar.
+  const quien=document.createElement('p');quien.className='muted';quien.textContent='Consultando qué ocupa el motor…';panel.append(quien);
+  void api('/jobs/'+bloqueante).then(otro=>{
+   quien.textContent=otro?'Lo ocupa: '+titleFor(otro.operation)+' · '+titleFor(otro.state)+'.':'El trabajo que lo ocupaba ya no existe.';
+  }).catch(()=>{quien.textContent='El trabajo que lo ocupaba ya no existe.';});
+  controls.push(['Liberar el motor y continuar',async()=>{
+   const otro=await api('/jobs/'+bloqueante).catch(()=>null);
+   if(otro&&!otro.settled){
+    const acciones=taskActions(otro),nombre=titleFor(otro.operation)+' · '+titleFor(otro.state);
+    if(acciones.inspect){const r=await api('/jobs/'+bloqueante+':inspect','POST',{},{'If-Match':String(otro.revision)});say(r.message);}
+    else if(acciones.close){if(!await closeUncertain(bloqueante))return;}
+    // Una generación que nunca entregó nada se cancela: es lo único que suelta
+    // su motor, y cancelarla no repite ninguna llamada ya pagada.
+    else if(acciones.cancel){
+     const aviso=otro.started
+      ? 'El motor lo ocupa «'+nombre+'», que ya arrancó. ¿Cancelarlo para liberar el motor? Lo ya generado se conserva y no se repite ninguna llamada.'
+      : 'El motor lo ocupa «'+nombre+'», que nunca llegó a arrancar. ¿Cancelarlo para liberar el motor? No se repite ninguna llamada.';
+     if(!confirm(aviso))return;
+     const suyo=await api('/jobs/'+bloqueante);
+     await api('/jobs/'+bloqueante+':cancel','POST',{}, {'If-Match':String(suyo.revision)});
+     say('Se canceló «'+nombre+'». Lo ya generado se conserva.');
+    }
+    else{say('El motor lo ocupa «'+nombre+'» y todavía no se puede resolver. Esta tarea arrancará sola en cuanto quede libre.');return;}
+   }
+   // Comprobado de verdad: sólo se reanuda si el motor quedó libre, para no
+   // volver al mismo aviso rojo una y otra vez.
+   const despues=await api('/jobs/'+bloqueante).catch(()=>null);
+   if(despues&&!despues.settled){say('El motor sigue ocupado por «'+titleFor(despues.operation)+' · '+titleFor(despues.state)+'». Esta tarea arrancará sola en cuanto quede libre.',true);return;}
+   if(!active)await lease(true);
+   const actual=await api('/jobs/'+job.id);
+   await api('/jobs/'+job.id+':resume','POST',{session},{'If-Match':String(actual.revision)});
+   ++watchVersion;const resultado=await watch(job.id);
+   // Un motor retenido por una ficha que ya no existe sólo lo suelta el
+   // servidor actualizado. Si vuelve a quedar bloqueada por lo mismo, decirlo
+   // es lo único útil: desde la web no hay nada más que pulsar.
+   if(!despues&&resultado?.dispatchError?.code==='CAPACITY_BUSY')
+    say('El motor sigue retenido por un trabajo que ya no existe. Eso lo suelta el servidor actualizado: ejecuta «./c» en Cloud Shell y vuelve a intentarlo.',true);
+   await draw();
+  },true]);
+ }
  if(['awaiting_review','succeeded'].includes(job.state))controls.push(['Ver resultado',()=>go(['ideas','develop','revise'].includes(job.operation)?'Historia':'Escenas'),true]);
  buttons(panel,controls);
 }

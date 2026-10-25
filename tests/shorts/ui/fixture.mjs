@@ -1,7 +1,7 @@
 // Explicit UI fixtures. This transport never contacts Google or a real backend.
 const clone=value=>structuredClone(value);
 const still='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#253527"/><path d="M0 260L200 130 370 280 640 150V360H0" fill="#50674c"/><circle cx="500" cy="95" r="35" fill="#d8edac"/><text x="32" y="330" fill="#eee" font-size="20" font-family="sans-serif">Imagen sintética para probar la interfaz</text></svg>');
-export function createFixture({empty=false}={}){
+export function createFixture({empty=false,servidorViejo=false}={}){
  const data={story:'Haru espera el último tren, reconoce a una antigua amiga y decide quedarse para hablar.',title:'El último tren',bible:{dramatic:'Una despedida que se convierte en una decisión.',visual:'Anime 2D con luz de atardecer',characters:[{id:'hero',name:'Haru',japaneseReading:'ハル',age:28,objective:'Atreverse a hablar',relationships:[],speech:'Serena',voice:{name:'Kore',languageCode:'ja-JP',direction:'Contenida'},costumes:[{id:'coat',description:'Abrigo verde'}],referencePrompt:'Retrato de Haru'}],locations:[{id:'station',name:'Estación',layout:'Andén largo',entrances:[],windows:[],furniture:[],light:'Atardecer',soundZones:[],referencePrompt:'Estación tranquila'}],props:[]},shots:[{id:'shot1',beatId:'beat1',function:'Haru decide quedarse',frames:3600,treatment:'hold',prompt:'Haru espera bajo el reloj del andén.',referenceEntityIds:['hero','station'],locationId:'station',visibleCharacters:['hero'],offscreenCharacters:[],props:[],before:{hero:'De pie'},after:{hero:'Mira hacia la entrada'}},{id:'shot2',beatId:'beat1',function:'Una respuesta al otro lado',frames:3600,treatment:'camera2d',prompt:'La cámara se acerca al banco vacío.',referenceEntityIds:['station'],locationId:'station',visibleCharacters:[],offscreenCharacters:['hero'],props:[],before:{},after:{}}],beats:[{id:'beat1',change:'Decide hablar',minFrames:7200,preferredFrames:7200,maxFrames:7200}],utterances:[{id:'voice1',shotId:'shot1',speakerId:'hero',type:'dialogue',spanish:'Todavía estamos a tiempo.',japanese:'まだ間に合う。',acting:'Con esperanza',pauseBeforeFrames:0,pauseAfterFrames:12}],soundRequests:[{id:'door',name:'La puerta del andén',description:'Cierre seco de la puerta metálica.',prompt:'Metal station door closing, short dry impact.',type:'sfx',soundGroup:'g-door',seconds:2,preparationSeconds:.2,tailSeconds:.6,perspective:'Cerca de Haru',shotId:'shot1',eventDescription:'La puerta toca el marco',required:true},{id:'door2',name:'La puerta del andén',description:'Cierre seco de la puerta metálica.',prompt:'Metal station door closing, short dry impact.',type:'sfx',soundGroup:'g-door',seconds:2,preparationSeconds:.2,tailSeconds:.6,perspective:'Cerca de Haru',shotId:'shot2',eventDescription:'La puerta toca el marco otra vez',required:true}],musicRequests:[{id:'music1',prompt:'Piano íntimo, sin voces.',seconds:120,startFrame:0,endFrame:2880}],subtitles:[{utteranceId:'voice1',text:'Todavía estamos a tiempo.'}]};
  const asset=(id,entityId,kind,state='approved',created=1)=>({id,entityId,kind,approvalState:state,created,sha256:'hash-'+id,revision:1,samples:96000});
  const initialIdeas=[1,2,3].map(n=>({id:'idea'+n,batchId:'batch',created:n,data:{id:'concept'+n,title:['El último tren','La carta sin abrir','Cuando vuelva la lluvia'][n-1],premise:['Un encuentro pendiente en un andén.','Una carta llega veinte años después.','Dos antiguos rivales comparten refugio.'][n-1],initialSituation:'Una decisión cambia el rumbo.',obstacle:'El silencio entre ambos.',emotionalProgression:'Duda, tensión y esperanza.',ending:'La respuesta permanece abierta.'}}));
@@ -39,7 +39,13 @@ export function createFixture({empty=false}={}){
    if(!j)return new Response(JSON.stringify({error:'Trabajo no disponible'}),{status:404});
    if(['inspect','close'].includes(action)){Object.assign(j,{state:'failed',settled:true});result={state:j.state,message:'Trabajo cerrado sin repetir llamadas.'};}
    // Reanudar vuelve a encolarlo: con el motor libre arranca y entrega.
-   else if(action==='resume'){Object.assign(j,{state:'awaiting_review',settled:true,dispatchError:null});result=j;}
+   else if(action==='resume'){
+    // Un servidor sin actualizar vuelve a rechazarla por el mismo motivo.
+    if(servidorViejo)result=j;
+    else{Object.assign(j,{state:'awaiting_review',settled:true,dispatchError:null});result=j;}
+   }
+   // Cancelar un trabajo que aún no arrancó lo cierra y suelta su motor.
+   else if(action==='cancel'){Object.assign(j,{state:'cancelled',settled:true});result={state:j.state};}
    else result=j;
   }
   else if(path.startsWith('/jobs/'))result=jobs.find(j=>j.id===path.split('/')[2]);
