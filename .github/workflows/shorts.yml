@@ -26,6 +26,11 @@ jobs:
           npm ci --prefix tests/shorts/ui --ignore-scripts
       - name: Build the exact Cloud Run image
         run: docker build -f worker/montage-shorts/Dockerfile -t shorts-cloud-build-check .
+      # The installer refuses to give traffic to an image whose own self-test
+      # fails. Until now that step only ran at install time, in front of the
+      # owner: a green CI could still mean an update that stops halfway.
+      - name: Image self-test — the same step that gates every install
+        run: docker run --rm -e SHORTS_SELF_TEST=1 shorts-cloud-build-check
       - name: Original contracts
         run: |
           node tests/static-check.mjs
