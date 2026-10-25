@@ -114,4 +114,20 @@ class MediaReceiptTests(unittest.TestCase):
             self.assertEqual(c.upload_file.call_args.args[-2:],('image.webp','image/webp'))
             self.assertEqual(c.put_entity.call_args.args[2]['mimeType'],'image/webp')
 
+    def test_stored_media_keeps_its_type_without_a_system_mime_database(self):
+        # The runtime image is python:slim: no /etc/mime.types, so mimetypes
+        # answers only from Python's built-in table — which has no .webp. This
+        # passed on every developer machine and failed inside the image, where
+        # a stored image typed application/octet-stream downloads instead of
+        # being shown.
+        from shorts.service.production import media_type
+        with patch('shorts.service.production.mimetypes.guess_type',return_value=(None,None)):
+            for name,expected in (('a.webp','image/webp'),('a.png','image/png'),('a.jpg','image/jpeg'),
+                                  ('a.jpeg','image/jpeg'),('a.mp4','video/mp4'),('a.wav','audio/x-wav'),
+                                  ('a.mp3','audio/mpeg'),('a.json','application/json')):
+                with self.subTest(name=name):self.assertEqual(media_type(name),expected)
+            self.assertEqual(media_type(Path('/tmp/UPPER.WEBP')),'image/webp','la extensión puede venir en mayúsculas')
+            self.assertEqual(media_type('a.desconocida'),'application/octet-stream')
+            self.assertEqual(media_type('informe.desconocida','application/json'),'application/json')
+
 if __name__=='__main__':unittest.main()

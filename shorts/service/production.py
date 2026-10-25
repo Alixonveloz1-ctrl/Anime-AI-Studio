@@ -10,6 +10,18 @@ from shorts.core.contracts import require, digest, validate_ideas, ContractError
 from shorts.core.requests import IDEAS_OUTPUT_LIMIT
 from shorts.service.providers import Providers, UnknownSubmission
 from shorts.service.cloud import RequestJournal
+
+# La imagen de ejecución es python:slim y NO trae base de datos de tipos del
+# sistema, así que mimetypes sólo conoce la tabla interna de Python — y esa no
+# tiene .webp. Un archivo guardado como application/octet-stream no se ve en el
+# navegador: se descarga. Los formatos que produce esta aplicación se declaran
+# aquí para que la respuesta no dependa de lo que traiga el sistema operativo.
+MEDIA_TYPES={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp',
+             '.gif':'image/gif','.mp4':'video/mp4','.wav':'audio/x-wav','.mp3':'audio/mpeg',
+             '.json':'application/json','.txt':'text/plain','.srt':'text/plain'}
+
+def media_type(path,default='application/octet-stream'):
+    return MEDIA_TYPES.get(Path(str(path)).suffix.lower()) or mimetypes.guess_type(str(path))[0] or default
 from shorts.service.director import RULES, ideas_prompt, validate_development
 from shorts.service.timeline import approved_assets
 from shorts.core.dependencies import fingerprint, select_assets, dependency_records
@@ -31,8 +43,8 @@ def run_job(cloud,j,p):
     def development():
         require(p.get('activeDevelopment'),'DEVELOPMENT','Aprueba guion y biblias');return cloud.entity(pid,'developments',p['activeDevelopment'])
     def asset(path,kind,entity_id,meta=None):
-        aid=ident_new();obj=cloud.upload_file(pid,aid,path,Path(path).name,mimetypes.guess_type(path)[0] or 'application/octet-stream')
-        a={'id':aid,'projectId':pid,'entityId':entity_id,'developmentId':p.get('activeDevelopment'),'kind':kind,'object':obj,'sha256':checksum(path),'mimeType':mimetypes.guess_type(path)[0] or 'application/octet-stream','revision':1,'created':time.time(),'approvalState':'candidate','jobId':j['id'],**(meta or {})}
+        aid=ident_new();obj=cloud.upload_file(pid,aid,path,Path(path).name,media_type(path))
+        a={'id':aid,'projectId':pid,'entityId':entity_id,'developmentId':p.get('activeDevelopment'),'kind':kind,'object':obj,'sha256':checksum(path),'mimeType':media_type(path),'revision':1,'created':time.time(),'approvalState':'candidate','jobId':j['id'],**(meta or {})}
         if not a.get('requestId') and p.get('activeDevelopment'):
             a['inputFingerprint']=fingerprint(development()['data'],entity_id,kind)
         cloud.put_entity(pid,'assets',a);return a
@@ -144,7 +156,7 @@ def run_job(cloud,j,p):
             else:
                 r=next(r for r in d['musicRequests'] if r['id']==eid);raw=provider.music(r['prompt'],r['seconds']);source=root/'original.mp3'
             source.write_bytes(raw);target=root/'audio.wav';meta=pcm(source,target);meta['waveform']=waveform(target)
-            meta['model']=provider_config['models'][op];meta['contentReview']='needs_review';meta['originalObject']=cloud.upload_file(pid,ident_new(),source,source.name,mimetypes.guess_type(source)[0])
+            meta['model']=provider_config['models'][op];meta['contentReview']='needs_review';meta['originalObject']=cloud.upload_file(pid,ident_new(),source,source.name,media_type(source))
             return {'assetId':asset(target,'pcm',eid,meta)['id']}
         if op=='media':
             u=cloud.entity(pid,'uploads',data['uploadId']);source=root/'upload';cloud.download(pid,u['object'],source)
@@ -236,7 +248,7 @@ def run_job(cloud,j,p):
             rid=ident_new();files={}
             names=[result['file'],'clean.mp4','subtitles.srt','subtitles.ass','compiled.json','result.json','mix-report.json']
             if op=='render':names+=['dialogue.wav','thought.wav','narration.wav','system.wav','music.wav','ambience.wav','sfx.wav','mix.wav']
-            for name in names:files[name]=cloud.upload_file(pid,rid,root/name,name,mimetypes.guess_type(name)[0] or 'application/json')
+            for name in names:files[name]=cloud.upload_file(pid,rid,root/name,name,media_type(name,'application/json'))
             record={'id':rid,'revision':1,'state':'ready','jobId':j['id'],'cacheKey':digest([result['manifestHash'],data['startFrame'],data['endFrame'],op=='render',result['compilerVersion']]),'final':op=='render','timelineId':timeline['id'],'object':files[result['file']],'files':files,'draftIssues':timeline['data'].get('draftIssues',[]),'cueHashes':{c['id']:digest(c) for c in timeline['data']['cues']},**result}
             cloud.put_entity(pid,'previews',record);return {'previewId':rid,'final':op=='render'}
         if op=='review':
