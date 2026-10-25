@@ -216,3 +216,27 @@ Esto pasó inadvertido porque el simulador de pruebas aprobaba cualquier borrado
 El primer botón que di para esto no bastaba: consultaba o cerraba el trabajo bloqueante, pero el caso más común —una generación que nunca llegó a entregar nada— no se puede ni consultar ni cerrar, y la espera seguía sin salida. Ahora la tarjeta dice qué ocupa el motor («Lo ocupa: Voz · Preparando») y «Liberar el motor y continuar» hace lo que haga falta en orden de menor daño: consultarlo, cerrarlo sin repetirlo o, si nunca arrancó, cancelarlo tras confirmar. Después comprueba de verdad que el motor quedó libre antes de reanudar, para no volver al mismo aviso rojo; si sigue ocupado por algo en marcha, lo dice y avisa de que arrancará sola. Y cuando el motor lo retiene una ficha que ya no existe —lo único que la web no puede soltar— lo dice con lo que falta por hacer: ejecutar «./c».
 
 Pruebas: `tests/shorts/test_engine_release.py` (un motor retenido por una ficha inexistente se libera; uno retenido por una generación abierta se sigue protegiendo) y `tests/shorts/ui/studio.test.mjs` (el paso 4 abre producción sin pedir esa aprobación; una tarjeta en espera dice qué la bloquea y lo resuelve consultando, cerrando o cancelando; no se reanuda contra un motor que sigue ocupado; y con el servidor sin actualizar dice que hay que ejecutar «./c»).
+
+## U025 — Esperar turno es una cola, no un error (2026-10-25)
+
+«Yo quiero que si le doy al botón de generar la voz, que se genere. Y si está otra voz generándose, pues que se ponga en la cola y ya, y se genere en el orden. Y ya. Cuatro botones ahí que ni sé qué funcionan.»
+
+Tiene razón y la cola ya existía: el servidor recuerda quién espera cada motor y arranca al primero en cuanto queda libre. Lo que estaba mal era la web. Pintaba la espera como un fallo —aviso rojo, «Otro trabajo usa este motor»— cortaba el seguimiento del trabajo y ofrecía cuatro acciones de rescate (comprobar, continuar, cancelar y, por mi parte, liberar el motor) para algo que no requiere ninguna decisión. Los arreglos anteriores iban en la dirección equivocada: mejoraban los botones en vez de quitar el problema.
+
+Ahora esperar turno se lee como lo que es: «En cola: otra generación está usando este motor. Ésta empezará sola cuando termine.» Sin rojo. El único botón es Cancelar, por si no la quieres. El seguimiento no se corta: la página sigue mirando hasta que le toca y entrega sola. Y mientras espera reintenta el reparto cada treinta segundos, que es lo que hace que un motor retenido por un trabajo ya cerrado se suelte sin que nadie pulse nada.
+
+Quitado por completo el botón «Liberar el motor y continuar» y su maquinaria. Un trabajo realmente atascado sigue apareciendo en la lista de actividad con sus acciones, que es donde corresponde: una lista de cosas que esperan una decisión, no la tarjeta de algo que sólo espera su turno.
+
+Pruebas (`tests/shorts/ui/studio.test.mjs`): una tarea encolada se lee como cola, sin rojo y con Cancelar como único botón; y una tarea pedida con el motor ocupado termina sola, reintentando el reparto, sin que el usuario pulse nada más.
+
+## U026 — La vista previa de una toma se ve, y lo pendiente se cuenta (2026-10-25)
+
+«Le doy a ver toma completa y convirtió la imagen en un video de 10 segundos… le restó como un 90% de calidad. La imagen pasó de Ultra HD a parecer calidad 360.»
+
+Era literal: toda vista previa se renderizaba a 640×360, incluida la de una sola toma. No se gastó ninguna generación de Veo —una vista previa no llama a ningún modelo, sólo monta con lo ya generado—, pero el resultado llegaba borroso y parecía que previsualizar hubiera estropeado la imagen. Los 360p existen para que revisar el corto entero sea rápido, no para mirar una toma.
+
+Ahora la resolución depende de lo que se previsualiza: hasta 45 segundos se ve a tamaño real (1920 o 1080 según el formato), hasta dos minutos y medio a tamaño intermedio, y sólo por encima de eso se reduce. Una toma suelta se ve como se generó.
+
+Y debajo del reproductor aparecía la lista de pendientes del borrador una por una: treinta veces «Falta voz aprobada» con la frase entera de cada intervención, un muro de texto que no decía más que «faltan treinta voces». Ahora se agrupan y se cuentan: «Falta voz aprobada: 30 pendientes».
+
+Pruebas (`tests/shorts/ui/studio.test.mjs`): los pendientes de una vista previa se resumen por tipo y no se enumeran uno a uno.

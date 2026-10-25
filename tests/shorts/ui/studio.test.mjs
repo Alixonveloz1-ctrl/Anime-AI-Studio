@@ -37,7 +37,7 @@ async function setup(options={}){
  if(options.failJobPolls&&path.startsWith('/jobs/')&&!path.includes(':'))return new Response(JSON.stringify({error:'Lectura no disponible'}),{status:503});
  if(options.nonJsonError&&decodeURIComponent(url).endsWith('/ideas:generate')){options.errorRequests=(options.errorRequests||0)+1;return new Response('',{status:502});}if(new Headers(request.headers).has('If-Match'))return new Response('',{status:412});return baseTransport(url,request);};
  const dom=new JSDOM(html,{url:'https://fixture.invalid/cortos/',runScripts:'outside-only'}),w=dom.window;
- Object.assign(w,{...catalogue,steps:presentation.steps,titleFor:presentation.label,terminal:presentation.terminal,unresolved:presentation.unresolved,jobMessage:presentation.jobMessage,versions:presentation.versions,taskActions:presentation.taskActions,entityName:presentation.entityName,fieldLabel:presentation.fieldLabel,TextEncoder,structuredClone,fetch:fixture.transport,confirm:()=>{throw new Error('Unexpected confirmation')},prompt:()=>null});
+ Object.assign(w,{...catalogue,steps:presentation.steps,titleFor:presentation.label,terminal:presentation.terminal,unresolved:presentation.unresolved,enCola:presentation.enCola,jobMessage:presentation.jobMessage,versions:presentation.versions,taskActions:presentation.taskActions,entityName:presentation.entityName,fieldLabel:presentation.fieldLabel,TextEncoder,structuredClone,fetch:fixture.transport,confirm:()=>{throw new Error('Unexpected confirmation')},prompt:()=>null});
  Object.defineProperty(w.crypto,'subtle',{value:webcrypto.subtle});w.setInterval=()=>0;if(options.fastPoll){const timeout=w.setTimeout.bind(w);w.setTimeout=(fn,ms,...args)=>timeout(fn,ms===3000?0:ms,...args);}
  w.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','')};w.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open')};w.HTMLMediaElement.prototype.pause=function(){};
  w.HTMLCanvasElement.prototype.getContext=()=>({clearRect(){},beginPath(){},moveTo(){},lineTo(){},stroke(){}});
@@ -576,78 +576,46 @@ test('With the script already approved, step 4 opens production instead of askin
  }finally{dom.window.close();}
 });
 
-test('A job waiting for a busy engine can be resolved from the card that is waiting',async()=>{
+test('Waiting for a busy engine reads as a queue, not as an error with buttons to press',async()=>{
  const {fixture,w,dom,click}=await setup();
  try{
-  // «Otro trabajo usa este motor» no decía cuál era, y en Personajes no había
-  // ninguna lista donde encontrarlo: la espera no tenía salida.
-  fixture.jobs.push({id:'bloqueante',operation:'tts',state:'submitted_unknown',created:98,revision:1,settled:false,
-   providerCalls:[{kind:'tts',state:'submitted_unknown'}]});
+  // «Otro trabajo usa este motor», en rojo y con cuatro botones de rescate,
+  // convertía una espera normal en un problema que había que entender.
   fixture.jobs.push({id:'enEspera',operation:'tts',state:'queued',created:99,revision:1,settled:false,
-   dispatchError:{code:'CAPACITY_BUSY',message:'Otro trabajo usa este motor. La tarea sigue pendiente.',blockingJobId:'bloqueante'}});
+   dispatchError:{code:'CAPACITY_BUSY',message:'Otro trabajo usa este motor. La tarea sigue pendiente.',blockingJobId:'ocupante'}});
   await click('Personajes');
   const panel=w.document.querySelector('#activity');
-  assert.match(panel.textContent,/Otro trabajo usa este motor/);
-  assert.match(panel.textContent,/Lo ocupa: Voz/,'dice qué ocupa el motor, no sólo que está ocupado');
-  await click('Liberar el motor y continuar',panel);
-  assert.equal(fixture.jobs.find(j=>j.id==='bloqueante').settled,true,'el trabajo que ocupaba el motor queda cerrado');
-  // Y la generación que esperaba continúa aquí mismo: resolver el bloqueo no
-  // puede dejarte buscando otro botón.
-  const espera=fixture.jobs.find(j=>j.id==='enEspera');
-  assert.equal(espera.dispatchError,null,'deja de estar bloqueada');
-  assert.equal(w.document.querySelector('#notice').className,'','sin error al final');
+  assert.match(panel.textContent,/En cola/);
+  assert.doesNotMatch(panel.textContent,/Otro trabajo usa este motor/);
+  assert.deepEqual([...panel.querySelectorAll('button')].map(b=>b.textContent),['Cancelar'],
+   'en cola no hay nada que comprobar ni continuar: le toca sola');
  }finally{dom.window.close();}
 });
 
-test('An engine held by a generation that never delivered is freed by cancelling it',async()=>{
- const {fixture,w,dom,click}=await setup();
+test('A task queued behind a busy engine starts on its own, with nothing to press',async()=>{
+ const {fixture,w,dom,click}=await setup({motorOcupado:true,fastPoll:true});
  try{
-  // El caso que dejaba la espera sin salida: lo que ocupa el motor no se puede
-  // ni consultar ni cerrar, porque nunca llegó a arrancar. Cancelarlo es lo
-  // único que lo suelta, y no repite ninguna llamada ya pagada.
-  fixture.jobs.push({id:'colgado',operation:'tts',state:'queued',created:98,revision:1,settled:false,dispatchState:'submitted'});
-  fixture.jobs.push({id:'enEspera',operation:'tts',state:'queued',created:99,revision:1,settled:false,
-   dispatchError:{code:'CAPACITY_BUSY',message:'Otro trabajo usa este motor. La tarea sigue pendiente.',blockingJobId:'colgado'}});
   await click('Personajes');
-  const panel=w.document.querySelector('#activity');
-  w.confirm=()=>true;
-  await click('Liberar el motor y continuar',panel);
-  assert.equal(fixture.jobs.find(j=>j.id==='colgado').state,'cancelled');
-  assert.equal(fixture.jobs.find(j=>j.id==='enEspera').dispatchError,null,'la generación que esperaba continúa');
-  assert.equal(w.document.querySelector('#notice').className,'','sin error al final');
+  await click('Generar primera frase para escuchar');
+  const pedida=fixture.jobs.find(j=>j.operation==='tts');
+  assert.equal(pedida.settled,true,'acabó sola, sin que el usuario pulse nada más');
+  assert.equal(pedida.dispatchError,null);
+  assert.ok(fixture.calls.some(c=>c.path.includes(':resume')),'reintenta el reparto mientras espera turno');
+  assert.equal(w.document.querySelector('#notice').className,'','esperar turno nunca fue un error');
  }finally{dom.window.close();}
 });
 
-test('An engine still busy says so instead of looping back to the same red line',async()=>{
- const {fixture,w,dom,click}=await setup();
+test('Pending work in a preview is summed up instead of listed line by line',async()=>{
+ const faltan=Array.from({length:30},(_,i)=>'Falta voz aprobada: voice'+i);
+ const {w,dom,click}=await setup({pendientes:[...faltan,'Falta material aprobado: shot2']});
  try{
-  // Reanudar sin haber liberado nada devolvía el mismo aviso rojo una y otra
-  // vez: hay que decir qué lo ocupa y que arrancará sola.
-  fixture.jobs.push({id:'enMarcha',operation:'tts',state:'cancel_requested',created:98,revision:1,settled:false,started:1});
-  fixture.jobs.push({id:'enEspera',operation:'tts',state:'queued',created:99,revision:1,settled:false,
-   dispatchError:{code:'CAPACITY_BUSY',message:'Otro trabajo usa este motor. La tarea sigue pendiente.',blockingJobId:'enMarcha'}});
-  await click('Personajes');
-  const panel=w.document.querySelector('#activity');
-  await [...panel.querySelectorAll('button')].find(b=>b.textContent==='Liberar el motor y continuar').onclick();
-  assert.match(w.document.querySelector('#notice').textContent,/arrancará sola/);
-  assert.equal(fixture.calls.filter(c=>c.path.includes(':resume')).length,0,'no se reanuda contra un motor ocupado');
-  assert.equal(fixture.jobs.find(j=>j.id==='enMarcha').state,'cancel_requested','no se toca lo que sigue en marcha');
- }finally{dom.window.close();}
-});
-
-test('When only an updated server can free the engine, the page says exactly that',async()=>{
- const {fixture,w,dom,click}=await setup({servidorViejo:true});
- try{
-  // La ficha del trabajo que ocupa el motor ya no existe: soltarlo es cosa del
-  // servidor. Si la web lo reintenta y vuelve el mismo rechazo, repetir el
-  // aviso rojo no sirve de nada; hay que decir qué falta por hacer.
-  fixture.jobs.push({id:'enEspera',operation:'tts',state:'queued',created:99,revision:1,settled:false,
-   dispatchError:{code:'CAPACITY_BUSY',message:'Otro trabajo usa este motor. La tarea sigue pendiente.',blockingJobId:'fantasma'}});
-  await click('Personajes');
-  const panel=w.document.querySelector('#activity');
-  assert.match(panel.textContent,/ya no existe/);
-  await [...panel.querySelectorAll('button')].find(b=>b.textContent==='Liberar el motor y continuar').onclick();
-  assert.match(w.document.querySelector('#notice').textContent,/ejecuta «\.\/c» en Cloud Shell/);
+  // Treinta frases enteras repetidas llenaban la pantalla sin decir nada más
+  // que «faltan treinta voces».
+  await click('Escenas');
+  await click('Ver toma completa',w.document.querySelector('.shot-section'));
+  const texto=w.document.querySelector('.shot-section').textContent;
+  assert.match(texto,/Falta voz aprobada: 30 pendientes/);
+  assert.doesNotMatch(texto,/voice7/,'no se enumera una por una');
  }finally{dom.window.close();}
 });
 

@@ -264,7 +264,13 @@ def run_job(cloud,j,p):
             require(op!='render' or timeline['approvalState']=='approved','TIMELINE','Montaje sin aprobar')
             for aid,a in m['assets'].items():
                 path=root/f'{aid}.media';cloud.download(pid,a['object'],path);a['local']=path.name
-            result=render(m,root,data['startFrame'],data['endFrame'],op=='render')
+            # Una vista previa se veía siempre a 640x360, incluso la de una
+            # sola toma: la imagen llegaba borrosa y parecía que generarla la
+            # hubiera estropeado. Lo corto se ve a tamaño real; sólo una
+            # previsualización larga se reduce, que es donde importa el tiempo.
+            vertical=m.get('format')=='9:16';duracion=data['endFrame']-data['startFrame']
+            ancho=None if op=='render' else (1080 if vertical else 1920) if duracion<=24*45 else (720 if vertical else 1280) if duracion<=24*150 else (360 if vertical else 640)
+            result=render(m,root,data['startFrame'],data['endFrame'],op=='render',ancho)
             rid=ident_new();files={}
             names=[result['file'],'clean.mp4','subtitles.srt','subtitles.ass','compiled.json','result.json','mix-report.json']
             if op=='render':names+=['dialogue.wav','thought.wav','narration.wav','system.wav','music.wav','ambience.wav','sfx.wav','mix.wav']

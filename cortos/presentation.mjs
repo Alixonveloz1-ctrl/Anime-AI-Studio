@@ -9,6 +9,9 @@ export function jobMessage(job){
  if(job.state==='running'&&job.providerWait){const wait=job.providerWait;const seconds=Math.max(0,Math.ceil(wait.retryAt-Date.now()/1000));return wait.reason==='quota'?`Google pidió esperar por cuota (429). Reintento ${wait.attempt} de ${wait.maxRetries} en aproximadamente ${seconds} s. No necesitas pulsar otra vez.`:`Esperando ${seconds} s para espaciar las llamadas a Gemini.`;}
  if(code==='PROVIDER_QUOTA')return job.result?.error||'Google mantiene el límite de cuota (429). Lo terminado sigue guardado.';
  if(job.result?.error)return job.result.error;
+ // Esperar turno no es un fallo: es una cola. Decirlo como error, en rojo y
+ // con botones de rescate, convertía una espera normal en un problema.
+ if(job.dispatchError?.code==='CAPACITY_BUSY')return 'En cola: otra generación está usando este motor. Ésta empezará sola cuando termine.';
  if(job.dispatchError?.message)return job.dispatchError.message;
  if(job.queueError?.message)return job.queueError.message;
  if(job.state==='submitted_unknown'||job.dispatchUnknown)return 'No se confirmó el resultado del envío. Conservamos este trabajo y no repetimos la generación.';
@@ -27,7 +30,11 @@ export function versions(rows,selectedId){
  if(!visible.length&&sorted.length)visible.push(sorted.at(-1));
  return {visible,history:sorted.filter(x=>!visible.includes(x)).reverse()};
 }
+export function enCola(job){return job.dispatchError?.code==='CAPACITY_BUSY'&&!job.settled;}
 export function taskActions(job){
+ // En cola no hay nada que comprobar ni que continuar: le toca sola. Sólo se
+ // puede renunciar a ella.
+ if(enCola(job))return {cancel:job.state!=='cancel_requested',recover:false,inspect:false,close:false};
  if(['queued','running','waiting_provider','cancel_requested'].includes(job.state)){
   const recover=job.state==='queued'&&!job.dispatchState||job.state==='waiting_provider'&&['VEO_PENDING','SPEECH_PENDING'].includes(job.errorCode);
   // A job running inside the service can also be checked: past Cloud Run's

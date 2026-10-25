@@ -1,5 +1,5 @@
 import {fileHash} from './hash.mjs';
-import {steps,label as titleFor,terminal,unresolved,jobMessage,versions,taskActions,entityName,fieldLabel} from './presentation.mjs';
+import {steps,label as titleFor,terminal,unresolved,jobMessage,versions,taskActions,entityName,fieldLabel,enCola} from './presentation.mjs';
 import {genres,subgenres,storyChoice} from './catalog.mjs';
 const $=s=>document.querySelector(s), screen=$('#screen'), notice=$('#notice');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -124,6 +124,17 @@ function pageTitle(title,subtitle=''){const h=document.createElement('div');h.cl
 function empty(title,text){screen.append(card(title,`<p class="muted">${esc(text)}</p>`));}
 async function go(next,part){stage=next;if(part&&next==='Escenas')productionTab=part;if(part&&next==='Revisión')reviewTab=part;await draw();}
 function tabs(parent,options,selected,onSelect){const nav=document.createElement('nav');nav.className='tabs';nav.setAttribute('aria-label','Contenido de esta etapa');for(const [id,name] of options){const b=action(name,()=>onSelect(id),true);b.setAttribute('aria-pressed',String(id===selected));nav.append(b);}parent.append(nav);}
+// Treinta veces «Falta voz aprobada: …», cada una con su frase entera, llenaba
+// la pantalla sin decir nada más que «faltan treinta voces».
+function resumirPendientes(issues){
+ const grupos=new Map();
+ for(const issue of issues){
+  const corte=String(issue).indexOf(':');
+  const clave=corte>0?String(issue).slice(0,corte):String(issue);
+  (grupos.get(clave)||grupos.set(clave,[]).get(clave)).push(issue);
+ }
+ return [...grupos].map(([clave,lista])=>lista.length>1?`${clave}: ${lista.length} pendientes`:describeIssue(lista[0])).join(' · ');
+}
 function describeIssue(text){const d=development();if(!d)return text;let value=String(text);const ids=[...d.shots,...d.utterances,...d.soundRequests,...d.musicRequests,...d.bible.characters,...d.bible.locations,...d.bible.props].sort((a,b)=>b.id.length-a.id.length);for(const row of ids)value=value.replaceAll(row.id,entityName(d,row.id));return value;}
 async function runTask(operation,path,data={}){
  if(generatorSave)await generatorSave;
@@ -170,7 +181,7 @@ function showJob(job){
   await api('/jobs/'+job.id+':start','POST',{session},{'If-Match':String(latest.revision)});
   await watch(job.id);await draw();
  }]);
- if(unresolved(job))controls.push(['Comprobar estado',async()=>{
+ if(unresolved(job)&&!enCola(job))controls.push(['Comprobar estado',async()=>{
   const latest=await api('/jobs/'+job.id);
   if(taskActions(latest).inspect){const result=await api('/jobs/'+job.id+':inspect','POST',{}, {'If-Match':String(latest.revision)});say(result.message);}
   await watch(job.id);await draw();
@@ -185,51 +196,6 @@ function showJob(job){
   ++watchVersion;await draw();say('Cancelación solicitada. Lo ya generado se conserva.');
  },true]);
  if(available.close)controls.push(['Cerrar sin repetir',async()=>{if(await closeUncertain(job.id)){++watchVersion;await draw();}},true]);
- // «Otro trabajo usa este motor» no decía cuál, y desde Personajes no había
- // ninguna lista donde encontrarlo: la espera no se podía resolver desde aquí.
- const bloqueante=job.dispatchError?.blockingJobId;
- if(bloqueante&&bloqueante!==job.id){
-  // Decir «otro trabajo usa este motor» sin decir cuál convierte la espera en
-  // un misterio. Aquí se lee qué lo ocupa, en cuanto se puede consultar.
-  const quien=document.createElement('p');quien.className='muted';quien.textContent='Consultando qué ocupa el motor…';panel.append(quien);
-  void api('/jobs/'+bloqueante).then(otro=>{
-   quien.textContent=otro?'Lo ocupa: '+titleFor(otro.operation)+' · '+titleFor(otro.state)+'.':'El trabajo que lo ocupaba ya no existe.';
-  }).catch(()=>{quien.textContent='El trabajo que lo ocupaba ya no existe.';});
-  controls.push(['Liberar el motor y continuar',async()=>{
-   const otro=await api('/jobs/'+bloqueante).catch(()=>null);
-   if(otro&&!otro.settled){
-    const acciones=taskActions(otro),nombre=titleFor(otro.operation)+' · '+titleFor(otro.state);
-    if(acciones.inspect){const r=await api('/jobs/'+bloqueante+':inspect','POST',{},{'If-Match':String(otro.revision)});say(r.message);}
-    else if(acciones.close){if(!await closeUncertain(bloqueante))return;}
-    // Una generación que nunca entregó nada se cancela: es lo único que suelta
-    // su motor, y cancelarla no repite ninguna llamada ya pagada.
-    else if(acciones.cancel){
-     const aviso=otro.started
-      ? 'El motor lo ocupa «'+nombre+'», que ya arrancó. ¿Cancelarlo para liberar el motor? Lo ya generado se conserva y no se repite ninguna llamada.'
-      : 'El motor lo ocupa «'+nombre+'», que nunca llegó a arrancar. ¿Cancelarlo para liberar el motor? No se repite ninguna llamada.';
-     if(!confirm(aviso))return;
-     const suyo=await api('/jobs/'+bloqueante);
-     await api('/jobs/'+bloqueante+':cancel','POST',{}, {'If-Match':String(suyo.revision)});
-     say('Se canceló «'+nombre+'». Lo ya generado se conserva.');
-    }
-    else{say('El motor lo ocupa «'+nombre+'» y todavía no se puede resolver. Esta tarea arrancará sola en cuanto quede libre.');return;}
-   }
-   // Comprobado de verdad: sólo se reanuda si el motor quedó libre, para no
-   // volver al mismo aviso rojo una y otra vez.
-   const despues=await api('/jobs/'+bloqueante).catch(()=>null);
-   if(despues&&!despues.settled){say('El motor sigue ocupado por «'+titleFor(despues.operation)+' · '+titleFor(despues.state)+'». Esta tarea arrancará sola en cuanto quede libre.',true);return;}
-   if(!active)await lease(true);
-   const actual=await api('/jobs/'+job.id);
-   await api('/jobs/'+job.id+':resume','POST',{session},{'If-Match':String(actual.revision)});
-   ++watchVersion;const resultado=await watch(job.id);
-   // Un motor retenido por una ficha que ya no existe sólo lo suelta el
-   // servidor actualizado. Si vuelve a quedar bloqueada por lo mismo, decirlo
-   // es lo único útil: desde la web no hay nada más que pulsar.
-   if(!despues&&resultado?.dispatchError?.code==='CAPACITY_BUSY')
-    say('El motor sigue retenido por un trabajo que ya no existe. Eso lo suelta el servidor actualizado: ejecuta «./c» en Cloud Shell y vuelve a intentarlo.',true);
-   await draw();
-  },true]);
- }
  if(['awaiting_review','succeeded'].includes(job.state))controls.push(['Ver resultado',()=>go(['ideas','develop','revise'].includes(job.operation)?'Historia':'Escenas'),true]);
  buttons(panel,controls);
 }
@@ -252,6 +218,15 @@ async function watch(id,projectId=p?.id){
   if(terminal(j.state)){
    say(describeIssue(jobMessage(j)),['failed','submitted_unknown'].includes(j.state));
    await refresh();needsRedraw=true;return j;
+  }
+  if(enCola(j)){
+   say(jobMessage(j));
+   // Nadie vuelve a intentar el reparto por su cuenta: reintentarlo cada 30 s
+   // es lo que hace que un motor retenido por un trabajo ya cerrado se suelte.
+   if(n%10===9&&!j.settled){
+    try{if(!active)await lease(true);await api('/jobs/'+j.id+':resume','POST',{session},{'If-Match':String(j.revision)});}catch{}
+   }
+   await new Promise(r=>setTimeout(r,3000));continue;
   }
   if(j.dispatchError||j.queueError){say(jobMessage(j),true);return j;}
   if(n===239){say(j.state==='queued'?'Todavía no se confirmó el inicio. Puedes comprobar o cancelar este mismo trabajo.':'La consulta automática se pausó. Usa Comprobar estado para consultar este mismo trabajo.');return j;}
@@ -903,7 +878,7 @@ async function uploadSound(r,file,progress){
  say(jobId?'Archivo recibido. Revisa el ataque propuesto y su contexto.':'Archivo conservado. Su preparación espera tu autorización.');
 }
 
-async function playPreview(id,parent){const d=await api(route(`/previews/${id}`));if(!d.url)throw new Error('Preview aún no disponible.');if(d.current===false){const stale=document.createElement('p');stale.className='error';stale.textContent='Versión anterior: cambiaron sus dependencias. Puedes compararla, pero no aprobar ajustes nuevos con ella.';parent.append(stale);}if(d.draftIssues?.length){const note=document.createElement('p');note.textContent='Borrador: '+d.draftIssues.map(describeIssue).join(' · ');parent.append(note);}parent.querySelector(':scope > video.preview-player')?.remove();const v=document.createElement('video');v.className='preview-player';v.controls=true;v.playsInline=true;v.src=d.url;parent.append(v);return d;}
+async function playPreview(id,parent){const d=await api(route(`/previews/${id}`));if(!d.url)throw new Error('Preview aún no disponible.');if(d.current===false){const stale=document.createElement('p');stale.className='error';stale.textContent='Versión anterior: cambiaron sus dependencias. Puedes compararla, pero no aprobar ajustes nuevos con ella.';parent.append(stale);}if(d.draftIssues?.length){const note=document.createElement('p');note.className='muted';note.textContent='Borrador: '+resumirPendientes(d.draftIssues);parent.append(note);}parent.querySelector(':scope > video.preview-player')?.remove();const v=document.createElement('video');v.className='preview-player';v.controls=true;v.playsInline=true;v.src=d.url;parent.append(v);return d;}
 async function preparePreview(parent){
  const t=await mutate(route('/timeline:compile'),{});const id=await runTask('preview',route('/previews'),{timelineId:t.id,startFrame:0,endFrame:t.data.frames});
  if(id){const job=await api('/jobs/'+id);if(job.result?.previewId){await playPreview(job.result.previewId,parent);keepInlineResult();}}
@@ -933,7 +908,7 @@ async function exportsView(){
  const ready=p.previews.filter(r=>!r.final&&r.state==='ready'&&r.startFrame===0&&r.endFrame>=6840&&r.endFrame<=7560).sort((a,b)=>(b.created||0)-(a.created||0));
  let current;for(const candidate of ready){const detail=await api(route(`/previews/${candidate.id}`));if(detail.current&&detail.fullProgram){current=detail;break;}}
  if(!current){c.innerHTML+='<p>Prepara y revisa el corto completo antes de exportar.</p>';buttons(c,[['Revisar el corto',()=>go('Revisión')]]);}
- else if(current.draftIssues?.length){const list=document.createElement('ul');for(const issue of current.draftIssues){const li=document.createElement('li');li.textContent=describeIssue(issue);list.append(li);}c.append(list);buttons(c,[['Revisar pendientes',()=>go('Revisión')],['Abrir producción',()=>go('Escenas'),true]]);}
+ else if(current.draftIssues?.length){const list=document.createElement('p');list.textContent=resumirPendientes(current.draftIssues);c.append(list);buttons(c,[['Revisar pendientes',()=>go('Revisión')],['Abrir producción',()=>go('Escenas'),true]]);}
  else{c.innerHTML+='<p>Reproduce esta versión. Al aprobarla se prepararán el video final, los subtítulos y las pistas de sonido.</p>';await playPreview(current.id,c);buttons(c,[['Aprobar y exportar',async()=>{const t=await mutate(route('/timeline:compile'),{});if(t.compiledHash!==current.manifestHash)throw new Error('El corto cambió. Revisa una nueva vista previa antes de exportar.');await approve('timelines',t.id);await runTask('render',route('/renders'));await draw();}]]);}
  await previewHistory(screen,true);
 }
