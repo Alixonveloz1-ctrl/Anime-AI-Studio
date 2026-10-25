@@ -437,7 +437,7 @@ def upload(pid,sid):
     dev=cloud().entity(pid,'developments',p['activeDevelopment'])['data']
     sound=next((r for r in dev['soundRequests'] if r['id']==sid),None)
     require(sound,'SOUND_REQUEST','Solicitud inexistente')
-    require(d.get('mime') in ('audio/mpeg','audio/mp3','audio/wav','audio/x-wav','audio/mp4','audio/flac','audio/ogg'),'MIME','Formato no admitido')
+    require(d.get('mime') in ('audio/mpeg','audio/mp3','audio/wav','audio/x-wav','audio/mp4','audio/aac','audio/x-aac','audio/m4a','audio/x-m4a','audio/flac','audio/ogg','audio/webm'),'MIME','Formato no admitido')
     require(type(d.get('size'))is int and 0<d['size']<=250*1024*1024,'SIZE','Máximo 250 MB',413)
     file_key=d.get('fileKey','');require(isinstance(file_key,str) and len(file_key)==64 and all(c in '0123456789abcdef' for c in file_key),'FILE_KEY','Falta huella del archivo')
     aid=digest([pid,sid,digest(sound),file_key]);ref=cloud().entity_ref(pid,'uploads',aid);existing=ref.get().to_dict()

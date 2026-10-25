@@ -7,6 +7,7 @@ let user,p,stage='Historia',productionTab='tomas',reviewTab='corto',active=false
 let mediaLoads=[];
 let knownJobs=[],watchVersion=0;
 let generatorCatalog,generatorSave=null,mutationQueue=Promise.resolve();
+let lastGeneration=null;
 const projectTitle=item=>item.title?.trim()||'Corto sin título';
 let transport=fetch;
 // A reload of the same tab is the SAME production session. Minting a new id
@@ -29,7 +30,7 @@ const say=(s,error=false)=>{
  if(!aviso){aviso=document.createElement('p');aviso.className='dialog-notice';aviso.setAttribute('role','alert');abierto.append(aviso);}
  aviso.textContent=s;aviso.className='dialog-notice'+(error?' error':'');
 };
-function action(label,fn,secondary=false){const b=document.createElement('button');b.textContent=label;if(secondary)b.className='secondary';b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn();}catch(e){say(e.message,true);}finally{b.disabled=false;if(needsRedraw&&!document.querySelector('dialog[open]')){needsRedraw=false;try{await draw();}catch(e){say('No se pudo actualizar la vista. '+e.message,true);}}}};return b;}
+function action(label,fn,secondary=false){const b=document.createElement('button');b.textContent=label;if(secondary)b.className='secondary';b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn();}catch(e){say(e.message,true);}finally{b.disabled=false;if(needsRedraw&&!document.querySelector('dialog[open]')){try{await refreshAfterGeneration();}catch(e){say('No se pudo actualizar la vista. '+e.message,true);}}}};return b;}
 // A result shown inside the card that asked for it (a preview player, word
 // timings) would be wiped by the full redraw the finished job requests.
 function keepInlineResult(){needsRedraw=false;}
@@ -137,6 +138,7 @@ function resumirPendientes(issues){
 }
 function describeIssue(text){const d=development();if(!d)return text;let value=String(text);const ids=[...d.shots,...d.utterances,...d.soundRequests,...d.musicRequests,...d.bible.characters,...d.bible.locations,...d.bible.props].sort((a,b)=>b.id.length-a.id.length);for(const row of ids)value=value.replaceAll(row.id,entityName(d,row.id));return value;}
 async function runTask(operation,path,data={}){
+ lastGeneration=data?.entityId?{operation,entityId:data.entityId}:null;
  if(generatorSave)await generatorSave;
  await mutationQueue;
  // Another job of the same kind may be running for a DIFFERENT shot, line or
@@ -270,6 +272,61 @@ function draw(){
   await new Promise(r=>setTimeout(r,0));quedarse();
  });
  drawQueue=pending;return pending;
+}
+async function cargarMediosDeTarjeta(inicio){
+ const cargas=mediaLoads.splice(inicio);
+ await Promise.all(Array.from({length:3},async()=>{while(cargas.length){const load=cargas.shift();await load();}}));
+}
+async function reemplazarTarjeta(vieja,nueva,inicio){
+ if(!vieja||!vieja.isConnected)return false;
+ vieja.replaceWith(nueva);
+ await cargarMediosDeTarjeta(inicio);
+ return true;
+}
+async function refreshShotCard(shotId){
+ const d=development();if(!d)return false;
+ const shot=d.shots.find(s=>s.id===shotId);if(!shot)return false;
+ const vieja=[...document.querySelectorAll('.shot-section')].find(el=>el.dataset.shot===shotId);if(!vieja)return false;
+ const inicio=mediaLoads.length;
+ const nueva=await buildShotCard(shot,d.shots.findIndex(s=>s.id===shotId));
+ return reemplazarTarjeta(vieja,nueva,inicio);
+}
+async function refreshMusicCard(musicId){
+ const d=development();if(!d)return false;
+ const m=d.musicRequests.find(x=>x.id===musicId);if(!m)return false;
+ const vieja=[...document.querySelectorAll('[data-music]')].find(el=>el.dataset.music===musicId);if(!vieja)return false;
+ const inicio=mediaLoads.length;
+ const nueva=await buildMusicCard(m,d.musicRequests.findIndex(x=>x.id===musicId));
+ return reemplazarTarjeta(vieja,nueva,inicio);
+}
+async function refreshEffectCard(usos){
+ await refresh();
+ const d=development();if(!d)return false;
+ const clave=usos[0].soundGroup||usos[0].id;
+ const actuales=d.soundRequests.filter(r=>(r.soundGroup||r.id)===clave);if(!actuales.length)return false;
+ const vieja=[...document.querySelectorAll('[data-effect-group]')].find(el=>el.dataset.effectGroup===clave);if(!vieja)return false;
+ const inicio=mediaLoads.length;
+ const nueva=await buildEffectCard(actuales);
+ return reemplazarTarjeta(vieja,nueva,inicio);
+}
+async function refreshGeneratedCard(){
+ if(!lastGeneration)return false;
+ try{
+  await refresh();
+  const d=development();if(!d||stage!=='Escenas')return false;
+  const eid=lastGeneration.entityId;
+  const shot=d.shots.find(s=>s.id===eid)||d.shots.find(s=>d.utterances.some(u=>u.id===eid&&u.shotId===s.id));
+  if(shot&&productionTab==='tomas')return await refreshShotCard(shot.id);
+  const music=d.musicRequests.find(m=>m.id===eid);
+  if(music&&productionTab==='sonido')return await refreshMusicCard(music.id);
+  return false;
+ }catch{return false;}
+}
+async function refreshAfterGeneration(){
+ if(!needsRedraw)return;
+ needsRedraw=false;
+ if(await refreshGeneratedCard().catch(()=>false))return;
+ await draw();
 }
 async function drawScreen(){
  mediaLoads=[];
@@ -759,13 +816,10 @@ async function references(){
  // —incluido el trabajo que tiene ocupado un motor— se ve aquí también.
  await activityList();
 }
-async function shots(){
+async function buildShotCard(shot,index){
  const d=development();
- const pending=['characters','locations','props'].flatMap(k=>d.bible[k]).filter(e=>!selectedAsset(e.id,'image'));
- if(pending.length){const c=card('Referencias pendientes',`<p>${pending.length} fichas necesitan una imagen aprobada para producir las escenas.</p>`);buttons(c,[['Ver personajes y referencias',()=>go('Personajes'),true]]);screen.append(c);}
- for(const [index,shot] of d.shots.entries()){
-  const has=selectedAsset(shot.id,shot.treatment==='veo'?'veo_silent_validated':'image');
-  const c=document.createElement('article');c.className='shot-section scene-card';c.dataset.shot=shot.id;screen.append(c);
+const has=selectedAsset(shot.id,shot.treatment==='veo'?'veo_silent_validated':'image');
+  const c=document.createElement('article');c.className='shot-section scene-card';c.dataset.shot=shot.id;
   const header=document.createElement('div');header.className='scene-header';header.innerHTML=`<h3 class="scene-num">Plano ${String(index+1).padStart(2,'0')}</h3><span class="scene-act">${esc(titleFor(shot.treatment))} · ${(shot.frames/24).toFixed(1)} s</span>`;c.append(header);
   const image=selectedAsset(shot.id,'image'),visuals=p.assets.filter(a=>a.entityId===shot.id||a.variantOf===shot.id);
   const media=document.createElement('div');media.className='scene-visuals';c.append(media);
@@ -786,7 +840,13 @@ async function shots(){
   if(has)buttons(c,[['Ver y escuchar esta toma',()=>previewShots([shot.id],c)]]);
   const more=fold(c,'Editar y comparar');buttons(more,[['Movimiento y capas',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id}),true]]:[]),...(image&&shot.treatment==='veo'?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id}),true]]:[])]);
   if(has)buttons(more,[['Ver y escuchar la escena entera',()=>previewShots(d.shots.filter(x=>x.beatId===shot.beatId).map(x=>x.id),c),true],['Comparar tomas contiguas',()=>compareShots(shot,c),true]]);
- }
+ return c;
+}
+async function shots(){
+ const d=development();
+ const pending=['characters','locations','props'].flatMap(k=>d.bible[k]).filter(e=>!selectedAsset(e.id,'image'));
+ if(pending.length){const c=card('Referencias pendientes',`<p>${pending.length} fichas necesitan una imagen aprobada para producir las escenas.</p>`);buttons(c,[['Ver personajes y referencias',()=>go('Personajes'),true]]);screen.append(c);}
+ for(const [index,shot] of d.shots.entries()){screen.append(await buildShotCard(shot,index));}
 }
 
 async function importAsset(){
@@ -812,6 +872,40 @@ async function compareShots(shot,parent){
   const images=p.assets.filter(a=>a.entityId===adjacent.id&&a.kind==='image'),approved=selectedAsset(adjacent.id,'image'),candidate=images.filter(a=>a.approvalState==='candidate').at(-1);
   for(const asset of [approved,candidate].filter(Boolean)){const image=document.createElement('img');image.src=(await api(route(`/assets/${asset.id}/url`))).url;image.alt=adjacent.id+' · '+asset.approvalState;const label=document.createElement('p');label.textContent=asset.approvalState==='approved'?'Aprobada':'Candidata';item.append(label,image);}
  }
+}
+async function buildMusicCard(m,index){
+const c=card('Pieza '+(index+1),`<p class="muted">${m.seconds} segundos</p>`);promptBox(c,m.prompt);const rows=p.assets.filter(a=>a.entityId===m.id);buttons(c,[[rows.length?'Crear otra pieza':'Generar música',()=>runTask('music',route('/assets:generate'),{operation:'music',entityId:m.id}),rows.length>0]]);await assetVersions(c,rows);
+ c.dataset.music=m.id;
+ return c;
+}
+async function buildEffectCard(usos){
+ const d=development();
+const r=usos[0];
+  const c=card(r.name,`<p>${esc(r.description)}</p>`);
+  c.dataset.effectGroup=r.soundGroup||r.id;
+  const resumen=document.createElement('p');resumen.className='muted';
+  resumen.textContent=[r.type==='ambience'?`Ambiente · bucle de ${r.seconds} s que se repite mientras dure el lugar`:`Efecto · ${r.seconds} s`,
+   r.perspective,usos.length>1?`El mismo sonido en ${usos.length} tomas: súbelo una vez`:''].filter(Boolean).join(' · ');
+  c.append(resumen);
+  promptBox(c,r.prompt);
+  if(r.type!=='ambience'&&(r.preparationSeconds||r.tailSeconds)){const margen=document.createElement('p');margen.className='muted';margen.textContent=`Preparación: ${r.preparationSeconds} s · Cola: ${r.tailSeconds} s`;c.append(margen);}
+  const label=document.createElement('label');label.className='upload';label.textContent='Subir tu efecto';const input=document.createElement('input');input.type='file';input.accept='audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/aac,audio/x-aac,audio/mp4,audio/x-m4a,audio/ogg,audio/flac,audio/webm,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.webm';label.append(input);c.append(label);const progress=document.createElement('progress');progress.max=1;progress.value=0;progress.hidden=true;c.append(progress);
+  input.onchange=async()=>{progress.hidden=false;try{await uploadSound(r,input.files[0],progress);if(!(await refreshEffectCard(usos)))await draw();}catch(e){say(e.message,true);}finally{progress.hidden=true;input.value='';}};
+  // Un archivo para todo el grupo, y una sincronización por toma.
+  await assetVersions(c,p.assets.filter(a=>usos.some(u=>u.id===a.requestId)));
+  for(const uso of usos){
+   const destino=usos.length>1?fold(c,'Ajuste en «'+entityName(d,uso.shotId)+'»'):c;
+   const cues=p.cues.filter(x=>x.requestId===uso.id),v=versions(cues,p.cueSelections?.[uso.id]);
+   const showCue=(parent,cue)=>{const box=document.createElement('div');box.className='cue-controls';const state=document.createElement('p');state.className='badge';state.textContent=cue.manualLock?'Ajuste manual fijado':titleFor(cue.approvalState);box.append(state);buttons(box,[['Ajustar sincronización',()=>openEditor(cue)]]);const options=fold(box,'Ayuda con IA');
+    if(cue.manualLock){options.append(document.createTextNode('Tu ajuste está protegido. Puedes crear una nueva corrección manual o permitir una nueva propuesta.'));buttons(options,[['Permitir nueva propuesta',async()=>{await mutate(route(`/cues/${cue.id}`),{cueRevision:cue.revision,patch:{reason:'Solicito una nueva propuesta de sincronización'}},'PATCH');await draw();},true]]);}
+    else{if((cue.analysisAttempts||0)<2)buttons(options,[['Localizar contacto',()=>runTask('analyze',route(`/cues/${cue.id}:analyze`)),true],['Corregir con IA',async()=>{const reason=prompt('¿Qué debe cambiar en este sonido?');if(reason)await runTask('analyze',route(`/cues/${cue.id}:correct`),{reason});},true]]);else options.append(document.createTextNode('El análisis no resolvió el contacto. El ajuste manual sigue disponible.'));
+    if(cue.proposedEventId)buttons(options,[['Usar propuesta',async()=>{await mutate(route(`/cues/${cue.id}/proposal:apply`),{});await draw();},true]]);}
+    if(cue.analysisScan?.options.length>1&&(cue.analysisAttempts||0)<2)for(const [index,option] of cue.analysisScan.options.entries())buttons(options,[[`Contacto ${index+1} · ${option.description}`,()=>runTask('analyze',route(`/cues/${cue.id}:analyze`),{occurrenceIndex:index,reason:'Usar el contacto elegido'}),true]]);
+    parent.append(box);};
+   v.visible.forEach(cue=>showCue(destino,cue));if(v.history.length){const history=fold(destino,'Ajustes anteriores · '+v.history.length);v.history.forEach(cue=>showCue(history,cue));}
+  }
+  const omit=fold(c,'Opciones del efecto');buttons(omit,[['Omitir este sonido',async()=>{const reason=prompt('¿Por qué quieres omitirlo?');if(reason){for(const uso of usos)await mutate(route(`/sound-requests/${uso.id}/omit`),{reason});await draw();}},true]]);
+ return c;
 }
 async function sounds(){
  const d=development();
@@ -839,44 +933,23 @@ async function sounds(){
   }else buttons(c,[['Revisar el guion',()=>go('Historia')]]);
  }
 
- if(d.musicRequests.length){const music=fold(screen,'Música',true);for(const [index,m] of d.musicRequests.entries()){const c=card('Pieza '+(index+1),`<p class="muted">${m.seconds} segundos</p>`);promptBox(c,m.prompt);const rows=p.assets.filter(a=>a.entityId===m.id);buttons(c,[[rows.length?'Crear otra pieza':'Generar música',()=>runTask('music',route('/assets:generate'),{operation:'music',entityId:m.id}),rows.length>0]]);await assetVersions(c,rows);music.append(c);}}
+ if(d.musicRequests.length){const music=fold(screen,'Música',true);for(const [index,m] of d.musicRequests.entries())music.append(await buildMusicCard(m,index));}
  // Un sonido que se repite es UNA tarjeta: el plan agrupa las solicitudes que
  // son el mismo sonido y subir su archivo una vez lo coloca en todas sus tomas.
  const grupos=new Map();
  for(const r of d.soundRequests){const clave=r.soundGroup||r.id;if(!grupos.has(clave))grupos.set(clave,[]);grupos.get(clave).push(r);}
  const effects=d.soundRequests.length?fold(screen,'Efectos de sonido · '+grupos.size):null;
- for(const usos of grupos.values()){
-  const r=usos[0];
-  const c=card(r.name,`<p>${esc(r.description)}</p>`);effects.append(c);
-  const resumen=document.createElement('p');resumen.className='muted';
-  resumen.textContent=[r.type==='ambience'?`Ambiente · bucle de ${r.seconds} s que se repite mientras dure el lugar`:`Efecto · ${r.seconds} s`,
-   r.perspective,usos.length>1?`El mismo sonido en ${usos.length} tomas: súbelo una vez`:''].filter(Boolean).join(' · ');
-  c.append(resumen);
-  promptBox(c,r.prompt);
-  if(r.type!=='ambience'&&(r.preparationSeconds||r.tailSeconds)){const margen=document.createElement('p');margen.className='muted';margen.textContent=`Preparación: ${r.preparationSeconds} s · Cola: ${r.tailSeconds} s`;c.append(margen);}
-  const label=document.createElement('label');label.className='upload';label.textContent='Subir tu efecto';const input=document.createElement('input');input.type='file';input.accept='audio/*';label.append(input);c.append(label);const progress=document.createElement('progress');progress.max=1;progress.value=0;progress.hidden=true;c.append(progress);
-  input.onchange=async()=>{progress.hidden=false;try{await uploadSound(r,input.files[0],progress);await draw();}catch(e){say(e.message,true);}finally{progress.hidden=true;}};
-  // Un archivo para todo el grupo, y una sincronización por toma.
-  await assetVersions(c,p.assets.filter(a=>usos.some(u=>u.id===a.requestId)));
-  for(const uso of usos){
-   const destino=usos.length>1?fold(c,'Ajuste en «'+entityName(d,uso.shotId)+'»'):c;
-   const cues=p.cues.filter(x=>x.requestId===uso.id),v=versions(cues,p.cueSelections?.[uso.id]);
-   const showCue=(parent,cue)=>{const box=document.createElement('div');box.className='cue-controls';const state=document.createElement('p');state.className='badge';state.textContent=cue.manualLock?'Ajuste manual fijado':titleFor(cue.approvalState);box.append(state);buttons(box,[['Ajustar sincronización',()=>openEditor(cue)]]);const options=fold(box,'Ayuda con IA');
-    if(cue.manualLock){options.append(document.createTextNode('Tu ajuste está protegido. Puedes crear una nueva corrección manual o permitir una nueva propuesta.'));buttons(options,[['Permitir nueva propuesta',async()=>{await mutate(route(`/cues/${cue.id}`),{cueRevision:cue.revision,patch:{reason:'Solicito una nueva propuesta de sincronización'}},'PATCH');await draw();},true]]);}
-    else{if((cue.analysisAttempts||0)<2)buttons(options,[['Localizar contacto',()=>runTask('analyze',route(`/cues/${cue.id}:analyze`)),true],['Corregir con IA',async()=>{const reason=prompt('¿Qué debe cambiar en este sonido?');if(reason)await runTask('analyze',route(`/cues/${cue.id}:correct`),{reason});},true]]);else options.append(document.createTextNode('El análisis no resolvió el contacto. El ajuste manual sigue disponible.'));
-    if(cue.proposedEventId)buttons(options,[['Usar propuesta',async()=>{await mutate(route(`/cues/${cue.id}/proposal:apply`),{});await draw();},true]]);}
-    if(cue.analysisScan?.options.length>1&&(cue.analysisAttempts||0)<2)for(const [index,option] of cue.analysisScan.options.entries())buttons(options,[[`Contacto ${index+1} · ${option.description}`,()=>runTask('analyze',route(`/cues/${cue.id}:analyze`),{occurrenceIndex:index,reason:'Usar el contacto elegido'}),true]]);
-    parent.append(box);};
-   v.visible.forEach(cue=>showCue(destino,cue));if(v.history.length){const history=fold(destino,'Ajustes anteriores · '+v.history.length);v.history.forEach(cue=>showCue(history,cue));}
-  }
-  const omit=fold(c,'Opciones del efecto');buttons(omit,[['Omitir este sonido',async()=>{const reason=prompt('¿Por qué quieres omitirlo?');if(reason){for(const uso of usos)await mutate(route(`/sound-requests/${uso.id}/omit`),{reason});await draw();}},true]]);
- }
+ for(const usos of grupos.values())effects.append(await buildEffectCard(usos));
 }
 
 async function uploadSound(r,file,progress){
  if(!file)return;if(file.size>250*1024*1024)throw new Error('Máximo 250 MB.');
+ const mimePorExtension={'.mp3':'audio/mpeg','.wav':'audio/x-wav','.m4a':'audio/mp4','.aac':'audio/aac','.ogg':'audio/ogg','.flac':'audio/flac','.mp4':'audio/mp4','.webm':'audio/webm'};
+ const extension='.'+String(file.name||'').split('.').pop().toLowerCase();
+ const mime=mimePorExtension[extension]||file.type;
+ if(!mime||!['audio/mpeg','audio/mp3','audio/wav','audio/x-wav','audio/mp4','audio/aac','audio/x-aac','audio/m4a','audio/x-m4a','audio/flac','audio/ogg','audio/webm'].includes(mime))throw new Error(`No se reconoció el formato de ${file.name||'ese archivo'}. Usa MP3, WAV, M4A, AAC, OGG o FLAC.`);
  say('Verificando el archivo completo antes de subir…');
- const fileKey=await fileHash(file,value=>progress.value=value),payload={mime:file.type||'audio/mpeg',size:file.size,fileKey};
+ const fileKey=await fileHash(file,value=>progress.value=value),payload={mime,size:file.size,fileKey};
  await refresh();let sessionUpload=await api(route(`/sound-requests/${r.id}/upload-session`),'POST',payload);
  const queryStatus=()=>fetch(sessionUpload.uploadUrl,{method:'PUT',headers:{'Content-Range':`bytes */${file.size}`}});
  let query=await queryStatus();

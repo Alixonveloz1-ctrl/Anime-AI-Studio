@@ -642,6 +642,29 @@ test('Finishing a generation keeps you where you were looking; changing section 
   assert.equal(posicion,0,'cambiar de sección sí empieza arriba');
  }finally{dom.window.close();}
 });
+test('Generating in one shot leaves the other shot card untouched',async()=>{
+ const {w,dom,click}=await setup();
+ try{
+  await click('Escenas');
+  const shots=[...w.document.querySelectorAll('.shot-section')];
+  assert.equal(shots.length,2);
+  await click('Generar otra interpretación',shots[0]);
+  await new Promise(r=>setTimeout(r,0));
+  const after=[...w.document.querySelectorAll('.shot-section')];
+  assert.equal(after.length,2);
+  assert.equal(after[1],shots[0+1],'the other shot card was not rebuilt by the generation');
+  assert.ok(after[1].isConnected);
+ }finally{dom.window.close();}
+});
+test('Effect upload accepts named audio formats, not only a generic audio type',async()=>{
+ const {w,dom,click}=await setup();
+ try{
+  await click('Escenas');await click('Música y efectos');
+  const input=w.document.querySelector('input[type=file]');
+  assert.ok(input,'there is an effect upload input');
+  for(const format of ['audio/mpeg','.mp3','.m4a','.aac','.wav'])assert.ok(input.accept.includes(format),`upload accepts ${format}: ${input.accept}`);
+ }finally{dom.window.close();}
+});
 
 test('A preview shown inside its card stays on screen after the job finishes',async()=>{
  const {w,dom,click}=await setup();await click('Exportar');await click('Revisar el corto');await click('Subtítulos');
