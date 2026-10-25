@@ -57,7 +57,9 @@ Estudio personal para producir historias anime largas desde el móvil. Tiene exa
 
 El repositorio incluye su propio montador y un instalador idempotente.
 
-[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://shell.cloud.google.com/?cloudshell_git_repo=https://github.com/Alixonveloz1-ctrl/Anime-AI-Studio)
+[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://shell.cloud.google.com/?authuser=4&cloudshell_git_repo=https://github.com/Alixonveloz1-ctrl/Anime-AI-Studio&cloudshell_git_branch=main&cloudshell_workspace=.)
+
+`authuser=4` abre Cloud Shell con la cuenta de Google donde está instalado este estudio. Sin ese parámetro Google usa la cuenta predeterminada del navegador y la instalación no aparece. Si algún día cambias de cuenta, el número es el que muestra la URL de tu consola (`console.cloud.google.com/?authuser=N`).
 
 En Cloud Shell escribe solamente:
 
@@ -444,6 +446,6 @@ episodios quedan intactos.
 
 La implementación nueva vive en `/cortos/`, `shorts/`, `api/shorts.js` y `worker/montage-shorts/`. La raíz conserva Animes. Estado verificable: [matriz de 100 pruebas](docs/shorts/acceptance.md), [auditoría](docs/shorts/audit.md), [guía móvil](docs/shorts/mobile.md).
 
-[Abrir instalador de Cortos en Cloud Shell](https://shell.cloud.google.com/?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2FAlixonveloz1-ctrl%2FAnime-AI-Studio&cloudshell_git_branch=main&cloudshell_workspace=.)
+[Abrir instalador de Cortos en Cloud Shell](https://shell.cloud.google.com/?authuser=4&cloudshell_git_repo=https%3A%2F%2Fgithub.com%2FAlixonveloz1-ctrl%2FAnime-AI-Studio&cloudshell_git_branch=main&cloudshell_workspace=.)
 
 Escribe `./c` (respaldo `bash c`). El menú permite instalar/actualizar, diagnosticar y restaurar una versión anterior. Solicita autorización antes de infraestructura y nunca genera contenido en health/CI. La autenticación y enlace Vercel deben verificarse antes de activar la sección. `i` y `setup.sh` conservan su función anterior.
