@@ -18,12 +18,12 @@ async function setup(options={}){
   const result=await baseTransport(url,request),body=JSON.parse(request.body),row=fixture.project.developmentDrafts.at(-1);
   if(body.stage===2){
    const previous=fixture.project.developmentDrafts.find(d=>d.id===body.checkpointId),completed=previous?previous.scriptProgress.completed+1:0;
-   row.checkpointId=body.checkpointId;row.scriptProgress={completed,total:2,frames:completed*3600};
+   row.checkpointId=body.checkpointId;row.scriptProgress={completed,total:options.segments||2,frames:completed*3600};
    // Como el servicio real: un tramo inválido hace fallar su trabajo, no lo
    // deja en revisión, y conserva el último punto bueno.
    if(options.failSegment&&completed===1){row.status='invalid';row.error={message:'429'};row.scriptProgress={...previous.scriptProgress};options.failSegment=false;
     Object.assign(fixture.jobs.at(-1),{state:'failed',settled:true,result:{code:'SEGMENT',error:'Google mantiene el límite de cuota (429).'}});}
-   else if(completed<2){row.status='partial';row.approvalState='incomplete';}
+   else if(completed<(options.segments||2)){row.status='partial';row.approvalState='incomplete';}
   }
   return result;
  }
@@ -415,6 +415,29 @@ test('One press writes the whole screenplay; a failure stops it keeping what was
   assert.notEqual(segmentos.at(-1).body.checkpointId,segmentos.at(-2).body.checkpointId,'each one from the previous, never twice from the same point');
   assert.equal(fixture.project.activeDevelopment,'dev','and the script ends ready to produce');
   assert.equal(w.document.querySelectorAll('.shot-section').length,2,'with its shots ready to work on');
+ }finally{dom.window.close();}
+});
+
+// A screenplay already half written with the step-by-step interface is not
+// stranded: the saved checkpoints are the same, so one press finishes it.
+test('A screenplay left half written is finished by one press, without rewriting it',async()=>{
+ const {fixture,w,dom,click}=await setup({empty:true,segmented:true,segments:10});
+ const develops=()=>fixture.calls.filter(c=>c.path.endsWith('/develop'));
+ try{
+  await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
+  await click('Generar sólo «Historia»');await click('Aprobar este paso y parar aquí');
+  await click('Generar sólo «Guion, biblias y planos»');
+  // Where the old interface left it: three of ten segments written and saved.
+  const punto=fixture.project.developmentDrafts.at(-1);
+  punto.scriptProgress={completed:3,total:10,frames:3*720};
+  await click('Historia');
+  assert.ok(w.document.body.textContent.includes('3 de 10 tramos'),'it reports what was saved');
+  const hechas=develops().length;
+  await click('Seguir escribiendo (faltan 7 tramos)');
+  const nuevas=develops().slice(hechas);
+  assert.deepEqual(nuevas.map(c=>c.body.stage),[2,2,2,2,2,2,2,3,4],'the seven missing segments and the steps left');
+  assert.equal(nuevas[0].body.checkpointId,punto.id,'it continues the saved point instead of rewriting');
+  assert.equal(fixture.project.activeDevelopment,'dev','and the script ends ready to produce');
  }finally{dom.window.close();}
 });
 
