@@ -18,6 +18,23 @@ from install import ROOT, PREFIX, g, command, state_load, state_save, check_owne
 SITE = 'https://anime-ai-studio-umber.vercel.app'
 
 
+def build_failure_detail(project, region):
+    """The tail of the failed build's own output, printed where it happened."""
+    try:
+        build = g('builds', 'list', '--project', project, '--region', region, '--limit', '1',
+                  '--format=value(id)').strip()
+        if not re.fullmatch(r'[0-9a-f-]{8,64}', build):
+            return '\nNo se pudo identificar la construcción para leer su registro.'
+        text = g('logging', 'read', f'resource.type=build AND resource.labels.build_id={build}',
+                 '--project', project, '--order=asc', '--limit', '2000', '--format=value(textPayload)')
+        lines = [line for line in text.splitlines() if line.strip()]
+        if not lines:
+            return '\nGoogle no devolvió el registro de la construcción ' + build + '.'
+        return '\nÚltimas líneas de la construcción ' + build + ':\n' + '\n'.join(lines[-30:])
+    except (RuntimeError, OSError) as error:
+        return '\nNo se pudo leer el registro de la construcción: ' + str(error)
+
+
 def read_site(path):
     with urllib.request.urlopen(SITE + '/api/shorts?path=' + path, timeout=25) as response:
         return json.load(response)
@@ -104,8 +121,14 @@ def update(project):
         command(['tar', '-xf', str(tmp/'source.tar'), '-C', str(source)])
         builder = f'projects/{project}/serviceAccounts/{PREFIX}-build@{project}.iam.gserviceaccount.com'
         build = tmp/'build.json'; build.write_text(json.dumps(build_config(image, builder)))
-        g('builds', 'submit', str(source), '--config', str(build), '--project', project, '--region', region,
-          '--gcs-source-staging-dir', 'gs://' + bucket + '/build-source', capture=False)
+        try:
+            g('builds', 'submit', str(source), '--config', str(build), '--project', project, '--region', region,
+              '--gcs-source-staging-dir', 'gs://' + bucket + '/build-source', capture=False)
+        except RuntimeError:
+            # The owner updates from a phone, where Cloud Shell has no paste:
+            # asking them to type a logging query by hand is not a diagnosis.
+            # Whatever the build printed is what explains the failure.
+            print(build_failure_detail(project, region)); raise
         digest = g('artifacts', 'docker', 'images', 'describe', image, '--project', project, '--format=value(image_summary.digest)')
         require(re.fullmatch(r'sha256:[a-f0-9]{64}', digest), 'No se confirmó el contenido de la imagen construida.')
         immutable = image.rsplit(':', 1)[0] + '@' + digest
