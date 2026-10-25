@@ -371,38 +371,78 @@ async function script(parent=screen){
  const intro=card('Guion y biblias',`<p>${esc(p.ideas.find(i=>i.id===p.selectedIdea?.id)?.data.title||'Tu historia elegida')}</p>`);
  const working=knownJobs.some(j=>j.operation==='develop'&&unresolved(j));
  const stages=['Historia','Guion, biblias y planos','Sonido, música y subtítulos','Revisión de continuidad'];
+ // Dónde va el guion AHORA. La cadena lo vuelve a leer después de cada
+ // entrega, porque aprobar una mueve el paso vigente.
+ function estadoDelGuion(){
+  const rows=(p.developmentDrafts||[]).filter(d=>d.ideaId===p.selectedIdea.id);
+  let ok=rows.find(d=>d.id===p.activeDraft&&d.approvalState==='approved');
+  if(ok&&rows.some(d=>d.stage===1&&d.approvalState!=='approved'&&d.created>ok.created))ok=null;
+  const paso=(ok?.stage||0)+1;
+  const opciones=rows.filter(d=>d.stage===paso&&(paso===1||d.sourceDraftId===ok?.id)).sort((a,b)=>b.created-a.created);
+  const ultimo=opciones[0];
+  return {aprobado:ok,paso,ultimo,
+   punto:paso===2?(ultimo?.status==='partial'?ultimo:ultimo?.status==='invalid'?opciones.find(d=>d.id===ultimo?.checkpointId&&d.status==='partial'):null):null};
+ }
  const drafts=(p.developmentDrafts||[]).filter(d=>d.ideaId===p.selectedIdea.id);
- let approved=drafts.find(d=>d.id===p.activeDraft&&d.approvalState==='approved');
- if(approved&&drafts.some(d=>d.stage===1&&d.approvalState!=='approved'&&d.created>approved.created))approved=null;
- const next=(approved?.stage||0)+1;
- const choices=drafts.filter(d=>d.stage===next&&(next===1||d.sourceDraftId===approved?.id)).sort((a,b)=>b.created-a.created);
- const latest=choices[0];
+ const {aprobado:approved,paso:next,ultimo:latest,punto:checkpoint}=estadoDelGuion();
  const parentId=approved?.id;
- const checkpoint=next===2?(latest?.status==='partial'?latest:latest?.status==='invalid'?choices.find(d=>d.id===latest?.checkpointId&&d.status==='partial'):null):null;
- const runStage=(number,instruction='',checkpointId=null)=>runTask('develop',route('/develop'),{stage:number,sourceDraftId:number>1?parentId:null,instruction,...(checkpointId?{checkpointId}:{})});
+ const runStage=(number,instruction='',checkpointId=null,desde=parentId)=>runTask('develop',route('/develop'),{stage:number,sourceDraftId:number>1?desde:null,instruction,...(checkpointId?{checkpointId}:{})});
  // Los tramos son el límite de UNA respuesta del modelo, no pasos editoriales:
  // un guion de cinco minutos son diez, y pedir una pulsación por tramo eran
  // diez pulsaciones para escribir lo que Animes escribe de una vez. Una sola
  // pulsación los encadena. Cada tramo se guarda al terminar, así que detenerlo
  // o un fallo conservan lo escrito y la siguiente pulsación sigue desde ahí.
- async function escribirGuionCompleto(instruction,desde){
+ async function escribirGuionCompleto(instruction,desde,padre){
   let checkpointId=desde;
   for(let restantes=60;restantes>0;restantes--){
-   const jid=await runStage(2,instruction,checkpointId);
-   if(!jid)return;
+   const jid=await runStage(2,instruction,checkpointId,padre);
+   if(!jid)return false;
    const job=await api('/jobs/'+jid);
    // Cancelado, incierto o fallido: lo guardado se conserva y aquí se para.
-   if(job.state!=='awaiting_review'||!job.result?.draftId)return;
+   if(job.state!=='awaiting_review'||!job.result?.draftId)return false;
    const draft=await api(route('/drafts/'+job.result.draftId));
-   if(draft.status!=='partial'){
-    if(draft.status==='ready')say('Guion completo. Léelo y apruébalo para continuar.');
-    return;   // inválido: su error ya se muestra, y el último tramo bueno sigue guardado
-   }
+   // Inválido: su error ya se muestra y el último tramo bueno sigue guardado.
+   if(draft.status!=='partial')return draft.status==='ready';
    checkpointId=draft.id;
   }
+  return false;
+ }
+ // Lo que es texto se escribe solo. Historia, guion y biblias, plan de sonido y
+ // revisión de continuidad son cuatro entregas del mismo relato: aprobar cada
+ // una a mano no decidía nada, sólo añadía toques. Lo que se paga por toma
+ // —imagen, video y voz— se sigue pidiendo una a una desde Escenas.
+ async function escribirTodoElTexto(instruction){
+  for(let vueltas=12;vueltas>0;vueltas--){
+   const estado=estadoDelGuion();
+   if(estado.paso>4)return abrirProduccion();
+   // Ya escrita y sin aprobar: se aprueba, no se vuelve a pagar por ella.
+   if(estado.ultimo?.status==='ready'){await mutate(route('/drafts/'+estado.ultimo.id+':approve'),{});continue;}
+   const escrito=estado.paso===2
+    ? await escribirGuionCompleto(instruction,estado.punto?.id||null,estado.aprobado?.id)
+    : await ejecutarPaso(estado.paso,instruction,estado.aprobado?.id);
+   if(!escrito)return;   // el fallo ya se muestra; lo aprobado sigue guardado
+  }
+ }
+ async function ejecutarPaso(numero,instruction,desde){
+  const jid=await runStage(numero,instruction,null,desde);
+  if(!jid)return false;
+  const job=await api('/jobs/'+jid);
+  // La revisión de continuidad devuelve una versión de guion, no un borrador.
+  return job.state==='awaiting_review'&&!!(job.result?.draftId||job.result?.developmentId);
+ }
+ // La revisión deja el guion como versión candidata. Aprobarla no genera nada:
+ // es lo que deja las tomas listas para pedir imagen, video y voz.
+ async function abrirProduccion(){
+  const candidata=(p.developments||[]).filter(d=>d.approvalState==='candidate').sort((a,b)=>(a.created||0)-(b.created||0)).at(-1);
+  if(!candidata){say('Texto completo. Abre producción con este guion para trabajar las tomas.');return;}
+  try{
+   await approve('developments',candidata.id);
+   say('Historia completa: guion, plan de sonido y revisión listos. Genera las imágenes y las voces desde cada toma.');
+   await go('Escenas');
+  }catch(error){say(error.message,true);}
  }
  const nextControls=document.createElement('section');nextControls.className='next-step';intro.append(nextControls);
- const note=document.createElement('p');note.textContent=p.activeDevelopment?'Tu guion está aprobado. Ya puedes producir las tomas.':'Aprueba la historia y el guion completo para abrir los botones de imagen, video y voz de cada toma.';nextControls.append(note);
+ const note=document.createElement('p');note.textContent=p.activeDevelopment?'Tu guion está aprobado. Ya puedes producir las tomas.':'Una pulsación escribe todo el texto —historia, guion y biblias, plan de sonido y revisión— y deja las tomas listas. Imagen, video y voz los pides tú, una a una, en Escenas.';nextControls.append(note);
  const inUse=p.developments.find(d=>d.id===p.activeDevelopment);
  if(approved&&[2,3].includes(approved.stage)&&inUse?.sourceDraftId!==approved.id){
   buttons(nextControls,[[inUse?'Usar este guion en producción':'Abrir producción con este guion',async()=>{await mutate(route('/drafts/'+approved.id+':produce'),{});await go('Escenas');say('Guion abierto. Genera y revisa cada imagen, video y voz desde su toma.');}]]);
@@ -418,9 +458,11 @@ async function script(parent=screen){
   if(next===2){
    const progress=checkpoint?.scriptProgress||latest?.scriptProgress;
    const explanation=document.createElement('p');
-   explanation.textContent=progress?`Guion guardado: ${progress.completed} de ${progress.total} tramos · ${(progress.frames/24).toFixed(1)} segundos. Una sola pulsación escribe los que faltan, uno tras otro; si lo detienes o algo falla, lo guardado se conserva.`:'Primero se preparan personajes y lugares. Después, una sola pulsación escribe el guion entero por tramos —guardando cada uno— hasta completar aproximadamente cinco minutos.';
+   explanation.textContent=progress?`Guion guardado: ${progress.completed} de ${progress.total} tramos · ${(progress.frames/24).toFixed(1)} segundos. La pulsación sigue con los que faltan, uno tras otro; si lo detienes o algo falla, lo guardado se conserva.`:'Se preparan personajes y lugares y después se escribe el guion por tramos, guardando cada uno, hasta completar aproximadamente cinco minutos.';
    nextControls.append(explanation);
   }
+  // Acciones de un solo paso, plegadas: la vía normal es escribirlo todo.
+  const sueltas=[];
   if(latest){
    try{
     const saved=await api(route('/drafts/'+latest.id));
@@ -429,20 +471,22 @@ async function script(parent=screen){
     if(next===3)audioPlan(intro,saved.data);
     if(saved.review){const review=fold(intro,'Revisión de continuidad');readable(review,saved.review);}
     if(saved.error){const error=document.createElement('p');error.textContent=saved.error.message+' Los pasos aprobados siguen guardados.';intro.append(error);}
-    if(saved.status==='ready'&&next<4)buttons(nextControls,[['Aprobar este paso',async()=>{await mutate(route('/drafts/'+saved.id+':approve'),{});await draw();say('Paso aprobado. El siguiente se genera únicamente cuando lo solicites.');}]]);
+    // Aprobar y PARAR aquí, para ir a trabajar las tomas sin escribir más.
+    if(saved.status==='ready'&&next<4)sueltas.push(['Aprobar este paso y parar aquí',async()=>{await mutate(route('/drafts/'+saved.id+':approve'),{});await draw();say('Paso aprobado. Lo que falte del texto se escribe cuando lo pidas.');},true]);
    }catch(e){const error=document.createElement('p');error.textContent=e.message;intro.append(error);}
   }
   if(next===3){const note=document.createElement('p');note.textContent='Ya puedes abrir producción y trabajar las imágenes y voces. Este paso prepara el plan de música y efectos; no genera archivos de audio. Completa el plan y la revisión antes de exportar.';intro.append(note);}
   const label=document.createElement('label');label.textContent=next===2?'Indicaciones para el guion (opcional)':latest?'Qué quieres corregir en este paso (opcional)':'Indicaciones para este paso (opcional)';
   const instruction=document.createElement('textarea');instruction.maxLength=3000;label.append(instruction);const adjustments=fold(nextControls,'Cambiar indicaciones (opcional)');adjustments.append(label);
+  // Una sola pulsación escribe lo que falte del texto, de principio a fin.
   const faltan=checkpoint?checkpoint.scriptProgress.total-checkpoint.scriptProgress.completed:0;
-  const generateLabel=checkpoint
-   ?(latest?.status==='invalid'?`Reintentar y seguir (faltan ${faltan} tramos)`
-     :checkpoint.scriptProgress.completed===0?'Aprobar biblias y escribir el guion completo'
-     :`Seguir escribiendo el guion (faltan ${faltan} tramos)`)
-   :latest?'Generar otra versión de este paso':'Generar '+stages[next-1].toLowerCase();
-  buttons(latest?.status==='ready'?fold(nextControls,'Generar otra versión'):nextControls,
-   [[generateLabel,()=>checkpoint?escribirGuionCompleto(instruction.value,checkpoint.id):runStage(next,instruction.value,null)]]);
+  const escribirLabel=next===1&&!latest?'Escribir toda la historia'
+   :checkpoint?(latest?.status==='invalid'?`Reintentar y seguir (faltan ${faltan} tramos)`:`Seguir escribiendo (faltan ${faltan} tramos)`)
+   :latest?.status==='ready'?`Aprobar y seguir desde «${stages[next-1]}»`
+   :`Seguir desde «${stages[next-1]}»`;
+  buttons(nextControls,[[escribirLabel,()=>escribirTodoElTexto(instruction.value)]]);
+  sueltas.push([`Generar sólo «${stages[next-1]}»`,()=>runStage(next,instruction.value,null),true]);
+  buttons(fold(nextControls,'Hacer sólo este paso'),sueltas);
   // Un solo tramo, para rehacer la parte que no convenció sin reescribir el resto.
   if(next===2&&latest?.status==='partial')buttons(intro,[['Generar otra versión de esta parte',()=>runStage(2,instruction.value,latest.checkpointId||null),true]]);
   if(next===1){

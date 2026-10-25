@@ -150,3 +150,13 @@ Una sola pulsación encadena los tramos que falten. Cada respuesta correcta se s
 Esto NO sustituye U013: los cuatro pasos editoriales —Historia; Guion, biblias y planos; Sonido, música y subtítulos; Revisión de continuidad— siguen pidiendo su pulsación y su lectura, y aprobar un paso no genera el siguiente. Las biblias se siguen entregando aparte, para leerlas antes de que se escriba el guion. Una entrega parcial sigue sin poder aprobarse para producción.
 
 Pruebas (`tests/shorts/ui/studio.test.mjs`): una pulsación escribe los tramos restantes uno tras otro, un fallo detiene la cadena sin seguir gastando y conserva el último punto de control, y la pulsación siguiente continúa desde ahí hasta el guion completo. El fixture marca el trabajo como fallido cuando su tramo es inválido, igual que el servicio.
+
+## U020 — Todo el texto con una sola pulsación (2026-10-25)
+
+El usuario corrige U013 y U016: no quiere aprobar paso a paso. «Mientras yo menos pasos tenga, mejor. Los únicos pasos que me interesa hacer manualmente son la generación de imagen, de video, de audio. Ya lo que es texto, la historia como tal, no necesito estar aprobando cada paso.» Esta decisión sustituye a U013 en lo que respecta a las entregas de texto.
+
+Una pulsación escribe la historia, el guion y las biblias (con sus tramos encadenados), el plan de sonido y la revisión de continuidad, aprobando cada entrega, y termina aprobando la versión de guion resultante: las tomas quedan listas y la vista pasa a Escenas. No se genera ni una imagen, ni un video, ni una voz: todo lo que se paga por toma se sigue pidiendo una a una.
+
+Se conserva lo que protege el gasto y el trabajo hecho: cada entrega y cada tramo se guardan como punto de control inmutable, un fallo o una cancelación detienen la cadena sin seguir llamando, y la siguiente pulsación continúa desde el último punto bueno. Siguen existiendo, plegadas bajo «Hacer sólo este paso», las acciones de un solo paso: «Generar sólo …» y «Aprobar este paso y parar aquí», para quien quiera leer una entrega antes de pagar la siguiente. Una entrega parcial sigue sin poder aprobarse como guion completo, y abrir producción desde el paso 2 o 3 sigue disponible.
+
+Pruebas (`tests/shorts/ui/studio.test.mjs`): una pulsación produce exactamente las cuatro llamadas de texto en orden, cada una continuando la anterior, sin ninguna llamada a generación de recursos, y deja el guion activo con sus tomas en pantalla; un fallo de tramo detiene la cadena conservando lo escrito y la pulsación siguiente la termina; y un paso suelto se puede generar y aprobar sin que nada siga.

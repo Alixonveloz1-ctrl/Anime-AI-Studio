@@ -85,25 +85,23 @@ test('Cortos includes every Animes genre/subgenre and sends choices accepted by 
   assert.equal(Number(result.trim()),catalogue.genres.length);
  }finally{legacy.window.close();}
 });
-test('Idea selection and development stay connected to the production actions',async()=>{
+test('Choosing an idea and one press leave the script ready to produce',async()=>{
  const {fixture,w,dom,click}=await setup({empty:true});await click('Generar tres ideas');
- await click('Elegir esta historia',w.document.querySelector('.grid>.card'));await click('Generar historia');
- for(const label of ['Generar guion, biblias y planos','Generar sonido, música y subtítulos','Generar revisión de continuidad']){await click('Aprobar este paso');await click(label);}
- await click('Aprobar guion y biblias');assert.equal(fixture.project.activeDevelopment,'dev');assert.equal(w.document.querySelector('#steps [aria-current]').textContent,'Escenas');dom.window.close();
+ await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
+ await click('Escribir toda la historia');
+ assert.equal(fixture.project.activeDevelopment,'dev');assert.equal(w.document.querySelector('#steps [aria-current]').textContent,'Escenas');dom.window.close();
 });
 test('Blocked production exposes the next action above the script and reaches image, video and voice controls',async()=>{
  const {fixture,w,dom,click}=await setup({empty:true});
  try{
-  await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));await click('Generar historia');
+  await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
   await click('Personajes');
-  assert.ok(w.document.querySelector('.next-step button'));
-  await click('Aprobar este paso');await click('Generar guion, biblias y planos');
+  assert.ok(w.document.querySelector('.next-step button'),'the next action is reachable from a blocked section');
+  await click('Escribir toda la historia');
+  await click('Historia');
   const first=w.document.querySelector('.script-shot'),controls=w.document.querySelector('.next-step');
   assert.ok(controls.compareDocumentPosition(first)&w.Node.DOCUMENT_POSITION_FOLLOWING);
   assert.doesNotMatch(first.textContent,/Japonés y actuación|Acción, imagen y movimiento|Por qué dura este tiempo/);
-  await click('Escenas');await click('Aprobar este paso');await click('Generar sonido, música y subtítulos');await click('Aprobar este paso');await click('Generar revisión de continuidad');
-  assert.ok([...w.document.querySelectorAll('.next-step button')].some(b=>b.textContent==='Aprobar guion y biblias'));
-  await click('Aprobar guion y biblias');
   fixture.project.developments[0].data.shots[0].treatment='veo';
   await click('Escenas');
   let shot=w.document.querySelector('.shot-section');
@@ -308,12 +306,12 @@ test('A completed screenplay step stays visible after redraw instead of resurrec
  try{
   await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
   fixture.jobs.push({id:'old-quota',operation:'develop',state:'failed',settled:true,created:0,revision:1,result:{code:'PROVIDER_QUOTA',error:'Google rechazó la solicitud (429). No se cambió modelo ni se reenvió.'}});
-  await click('Generar historia');
-  assert.match(w.document.querySelector('#notice').textContent,/Listo para revisar/);
+  await click('Escribir toda la historia');
+  assert.match(w.document.querySelector('#notice').textContent,/Historia completa/);
   assert.match(w.document.querySelector('#activity').textContent,/Guion y biblias · Listo para revisar/);
   assert.doesNotMatch(w.document.querySelector('#activity').textContent,/429|No se completó/);
-  assert.match(w.document.body.textContent,/Haru espera el último tren/);
   await click('Historia',w.document.querySelector('#steps'));
+  assert.match(w.document.body.textContent,/Haru espera el último tren/);
   assert.doesNotMatch(w.document.querySelector('#activity').textContent,/429/);
   fixture.jobs.push({id:'new-quota',operation:'develop',state:'failed',settled:true,created:100,revision:1,result:{code:'PROVIDER_QUOTA',error:'Nueva solicitud rechazada (429)'}});
   await click('Historia',w.document.querySelector('#steps'));
@@ -338,24 +336,45 @@ test('Cold worker starting after the former three-minute limit still paints its 
   assert.equal(fixture.calls.filter(c=>c.path.endsWith('/ideas:generate')).length,1);
  }finally{dom.window.close();}
 });
-test('Every editorial step waits for explicit approval and another generation click',async()=>{
+// Everything that is text — story, screenplay and bibles, sound plan and
+// continuity review — is the same story told once. One press writes all four
+// and leaves the shots ready; nothing that is paid per shot is generated.
+test('One press writes every text step and generates no image, video or voice',async()=>{
  const {fixture,w,dom,click}=await setup({empty:true});
  try{
   await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
-  await click('Generar historia');
-  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).length,1);
+  await click('Escribir toda la historia');
+  const calls=fixture.calls.filter(c=>c.path.endsWith('/develop'));
+  assert.deepEqual(calls.map(c=>c.body.stage),[1,2,3,4],'the four text steps, in order and with no presses between them');
+  assert.ok(calls.slice(1).every(c=>c.body.sourceDraftId),'each one continues the step before');
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/assets:generate')).length,0,'nothing paid per shot was generated');
+  // It ends with the script in production, which is what opens the shot controls.
+  assert.equal(fixture.project.developments.length,1);
+  assert.equal(fixture.project.developments[0].approvalState,'approved');
+  assert.equal(fixture.project.activeDevelopment,fixture.project.developments[0].id);
+  assert.equal(w.document.querySelectorAll('.shot-section').length,2,'the shots are ready to work on');
+  await click('Historia');
   assert.match(w.document.body.textContent,/Haru espera el último tren/);
-  assert.equal(fixture.project.developments.length,0);
-  await click('Aprobar este paso');
-  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).length,1,'Approval cannot generate');
-  for(const [index,label] of ['Generar guion, biblias y planos','Generar sonido, música y subtítulos','Generar revisión de continuidad'].entries()){
-   await click(label);const calls=fixture.calls.filter(c=>c.path.endsWith('/develop'));
-   assert.equal(calls.length,index+2);assert.equal(calls.at(-1).body.stage,index+2);assert.ok(calls.at(-1).body.sourceDraftId);
-   if(index===0){assert.equal(w.document.querySelectorAll('.story-content .script-shot').length,2);assert.match(w.document.querySelector('.story-content .script-shot').textContent,/Haru decide quedarse|Todavía estamos a tiempo/);}
-   if(index===1){assert.match(w.document.body.textContent,/La dirección sonora está preparada/);assert.doesNotMatch(w.document.body.textContent,/Piano íntimo|La puerta del andén|Metal station door/);assert.equal(fixture.calls.filter(c=>c.path.endsWith('/assets:generate')).length,0);}
-   if(index<2){assert.equal(fixture.project.developments.length,0);await click('Aprobar este paso');}
-  }
-  assert.equal(fixture.project.developments.length,1);assert.equal(fixture.project.developments[0].approvalState,'candidate');
+  // The sound plan is explained, never dumped as raw prompts to approve.
+  const paso3=[...w.document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent==='Paso 3 aprobado · Sonido, música y subtítulos');
+  assert.ok(paso3,'the sound step is there to read');
+  assert.match(paso3.textContent,/La dirección sonora está preparada/);
+  assert.doesNotMatch(paso3.textContent,/Piano íntimo|Metal station door/);
+ }finally{dom.window.close();}
+});
+
+// Reading one delivery before paying for the next is still possible, folded
+// away: it is no longer the only way through.
+test('A single step can still be generated and approved on its own',async()=>{
+ const {fixture,w,dom,click}=await setup({empty:true});
+ try{
+  await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
+  await click('Generar sólo «Historia»');
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).length,1,'one step, one call');
+  assert.match(w.document.body.textContent,/Haru espera el último tren/);
+  await click('Aprobar este paso y parar aquí');
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).length,1,'approving generates nothing');
+  assert.equal(fixture.project.developments.length,0,'and nothing went to production');
  }finally{dom.window.close();}
 });
 test('Legacy recovery reads only the story and sends no generation request',async()=>{
@@ -378,29 +397,24 @@ test('One press writes the whole screenplay; a failure stops it keeping what was
  const develops=()=>fixture.calls.filter(c=>c.path.endsWith('/develop'));
  const botón=name=>[...w.document.querySelectorAll('button')].find(b=>b.textContent===name);
  try{
-  await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));await click('Generar historia');await click('Aprobar este paso');await click('Generar guion, biblias y planos');
-  const bible=fixture.project.developmentDrafts.at(-1).id;
-  assert.equal(develops().length,2,'the bible is its own delivery, read before writing');
-  assert.ok(!botón('Aprobar este paso'),'a partial screenplay cannot be approved');
-  // This run fails on its first segment: the press stops there, not silently.
-  const escribir=botón('Aprobar biblias y escribir el guion completo');
-  assert.ok(escribir,'one press writes the screenplay');
-  await escribir.onclick();
+  await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
+  // One press: story, bibles and the segments. This run fails on its first segment.
+  await botón('Escribir toda la historia').onclick();
   assert.equal(w.document.querySelector('#notice').className,'error');
   assert.match(w.document.querySelector('#notice').textContent,/429/);
-  assert.equal(develops().length,3,'it did not keep spending after the failure');
-  assert.equal(develops().at(-1).body.checkpointId,bible,'from the last good checkpoint');
+  assert.deepEqual(develops().map(c=>c.body.stage),[1,2,2],'story, bibles and the segment that failed');
+  assert.ok(develops().at(-1).body.checkpointId,'the segment continued the bibles');
   assert.ok(w.document.body.textContent.includes('0 de 2 tramos'),'and what was saved is what is reported');
-  // Pressing again continues from there and writes the rest with no more presses.
+  assert.equal(fixture.project.developments.length,0,'nothing reached production');
+  // Pressing again continues from the last good checkpoint, to the end.
   await click('Reintentar y seguir (faltan 2 tramos)');
-  assert.equal(develops().length,5,'the two remaining segments went in one press');
-  assert.deepEqual(develops().slice(3).map(c=>c.body.checkpointId),
-   [bible,fixture.project.developmentDrafts.find(d=>d.scriptProgress?.completed===1).id],
-   'each segment continues the one before');
-  assert.equal(w.document.querySelectorAll('.story-content .script-shot').length,2,'the written shots are on screen');
-  assert.match(w.document.querySelector('.story-content .script-shot .voice-row').textContent,/Todavía estamos a tiempo/);
-  await click('Aprobar este paso');
-  assert.ok(w.document.body.textContent.includes('Generar sonido, música y subtítulos'),'the four editorial steps still ask for their press');
+  assert.deepEqual(develops().map(c=>c.body.stage),[1,2,2,2,2,3,4],'the rest of the screenplay and the remaining text steps');
+  const segmentos=develops().filter(c=>c.body.stage===2);
+  assert.equal(segmentos.length,4,'bibles, the segment that failed and the two that completed it');
+  assert.ok(segmentos.slice(1).every(c=>c.body.checkpointId),'every segment continues a saved checkpoint');
+  assert.notEqual(segmentos.at(-1).body.checkpointId,segmentos.at(-2).body.checkpointId,'each one from the previous, never twice from the same point');
+  assert.equal(fixture.project.activeDevelopment,'dev','and the script ends ready to produce');
+  assert.equal(w.document.querySelectorAll('.shot-section').length,2,'with its shots ready to work on');
  }finally{dom.window.close();}
 });
 
@@ -415,7 +429,8 @@ test('Approved screenplay opens production before sound planning and retains ass
  const {fixture,w,dom,click}=await setup({empty:true});
  try{
   await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
-  await click('Generar historia');await click('Aprobar este paso');await click('Generar guion, biblias y planos');await click('Aprobar este paso');
+  await click('Generar sólo «Historia»');await click('Aprobar este paso y parar aquí');
+  await click('Generar sólo «Guion, biblias y planos»');await click('Aprobar este paso y parar aquí');
   const calls=fixture.calls.filter(c=>c.path.endsWith('/develop')).length;
   await click('Abrir producción con este guion');
   assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).length,calls,'Opening production makes no model call');
@@ -425,7 +440,7 @@ test('Approved screenplay opens production before sound planning and retains ass
   await click('Música y efectos');await click('Preparar música y efectos');await click('Aprobar sonido y abrir sus generadores');
   assert.ok(fixture.project.assets.some(a=>a.id===asset));
   await click('Música y efectos');assert.match(w.document.body.textContent,/Piano íntimo/);
-  await click('Continuar preparación en Historia');await click('Generar revisión de continuidad');await click('Aprobar guion y biblias');
+  await click('Continuar preparación en Historia');await click('Generar sólo «Revisión de continuidad»');await click('Aprobar guion y biblias');
   assert.ok(fixture.project.assets.some(a=>a.id===asset));await click('Escenas y voces');assert.equal(w.document.querySelectorAll('.shot-section').length,2);
  }finally{dom.window.close();}
 });
