@@ -24,6 +24,20 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(minimum,98) # 1.3 s voice + 66 authored pause/action frames
         self.assertEqual(shot_bounds(s,minimum),(7000,7200))
         with self.assertRaises(ContractError):shot_bounds(s,7201)
+    def test_a_voice_longer_than_planned_stretches_the_draft_but_not_the_export(self):
+        # La duración de la toma se planeó antes de que la voz existiera. Si la
+        # voz grabada no cabe, el borrador la deja caber —nunca acelerando el
+        # audio— para poder verla y escucharla; exportar sigue exigiendo
+        # revisar esa toma, porque cambia el metraje aprobado.
+        s=development()['shots'][0]
+        self.assertEqual(shot_bounds(s,7201,draft=True),(7201,7201))
+        with self.assertRaises(ContractError) as error:shot_bounds(s,7201)
+        self.assertEqual(error.exception.code,'SCRIPT_REVIEW')
+        # Y el tope de Veo no se relaja ni en borrador: un clip no puede durar
+        # más de ocho segundos.
+        veo={**s,'treatment':'veo','minFrames':96,'maxFrames':144,'frames':120}
+        with self.assertRaises(ContractError) as error:shot_bounds(veo,200,draft=True)
+        self.assertEqual(error.exception.code,'VEO_COVERAGE')
     def test_A020_validate_plan_no_unrenderable_veo(self):
         d=development();validate_development(d)
         d['shots'][0]['treatment']='veo'

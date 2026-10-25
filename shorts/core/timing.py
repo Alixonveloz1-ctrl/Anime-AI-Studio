@@ -14,9 +14,14 @@ def voice_layout(shot, voices):
     return rows,(cursor+1999)//2000
 
 
-def shot_bounds(shot,measured_minimum):
+def shot_bounds(shot,measured_minimum,draft=False):
     lo=max(measured_minimum,shot.get('minFrames',shot['frames']))
     hi=shot.get('maxFrames',shot['frames'])
+    # La duración de una toma se planeó antes de que la voz existiera, así que
+    # la voz medida puede no caber. En un borrador manda la voz y la toma se
+    # alarga —nunca se acelera el audio—; la toma queda señalada y exportar
+    # sigue exigiendo revisarla, porque cambia el metraje aprobado.
+    if draft and lo>hi:hi=lo
     require(lo<=hi,'SCRIPT_REVIEW','La voz, pausas y acciones exceden el intervalo aprobado en '+shot['id']+'; revisa esa toma, sin acelerar el audio')
     require(shot['treatment']!='veo' or hi<=192,'VEO_COVERAGE','Divide o cambia el tratamiento de la toma Veo '+shot['id']+': máximo 8 segundos, sin repetir clips')
     return lo,hi

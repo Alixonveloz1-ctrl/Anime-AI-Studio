@@ -61,7 +61,9 @@ def assemble_plan(cloud,p,cue_overrides=None):
     for s in d['shots']:
         speech=sum(a['samples'] for _,a in voice_by_shot.get(s['id'],[]));_,minimum=voice_layout(s,voice_by_shot.get(s['id'],[]))
         # Only pauses explicitly approved with development can absorb time.
-        lo,hi=shot_bounds(s,minimum)
+        lo,hi=shot_bounds(s,minimum,draft=True)
+        if lo>s.get('maxFrames',s['frames']):
+            issues.append(f"La voz medida no cabe en el tiempo previsto de {s['id']}: el borrador alarga esa toma a {lo/24:.1f} s. Ajústala antes de exportar.")
         elastic.append({'id':s['id'],'minFrames':lo,'preferredFrames':max(lo,min(hi,s['frames'])),'maxFrames':hi,'timingEvidence':'measured_audio' if speech else 'approved_action'})
     target=duration_target(sum(b['minFrames'] for b in elastic),sum(b['preferredFrames'] for b in elastic),sum(b['maxFrames'] for b in elastic))
     planned=plan_beats(elastic,target)

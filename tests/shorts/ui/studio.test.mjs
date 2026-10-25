@@ -613,10 +613,33 @@ test('Pending work in a preview is summed up instead of listed line by line',asy
   // Treinta frases enteras repetidas llenaban la pantalla sin decir nada más
   // que «faltan treinta voces».
   await click('Escenas');
-  await click('Ver toma completa',w.document.querySelector('.shot-section'));
+  await click('Ver y escuchar esta toma',w.document.querySelector('.shot-section'));
   const texto=w.document.querySelector('.shot-section').textContent;
   assert.match(texto,/Falta voz aprobada: 30 pendientes/);
   assert.doesNotMatch(texto,/voice7/,'no se enumera una por una');
+ }finally{dom.window.close();}
+});
+
+test('Finishing a generation keeps you where you were looking; changing section starts at the top',async()=>{
+ const {w,dom,click}=await setup();
+ try{
+  // Por cada imagen y por cada voz la pantalla se repintaba entera y el
+  // navegador saltaba al principio: parecía que la página se recargaba sola.
+  await click('Escenas');
+  let posicion=1200;
+  w.scrollTo=o=>{posicion=typeof o==='number'?o:o.top;};
+  Object.defineProperty(w,'scrollY',{get:()=>posicion,configurable:true});
+  // Vaciar la pantalla para repintarla deja al navegador en el principio: es
+  // exactamente lo que el usuario ve como «se recargó la página entera».
+  const pantalla=w.document.querySelector('#screen');
+  const vaciar=pantalla.replaceChildren.bind(pantalla);
+  pantalla.replaceChildren=(...args)=>{posicion=0;return vaciar(...args);};
+  const shot=w.document.querySelector('.shot-section');
+  await click('Generar otra interpretación',shot);
+  await new Promise(r=>setTimeout(r,0));
+  assert.equal(posicion,1200,'termina una generación y sigues donde estabas');
+  await click('Personajes');
+  assert.equal(posicion,0,'cambiar de sección sí empieza arriba');
  }finally{dom.window.close();}
 });
 

@@ -256,3 +256,15 @@ Eran dos frenos encadenados. El reintento estaba habilitado sólo para `kind=='t
 Lo que no cambia: el tope de tres reintentos por cuota, el presupuesto acumulado de espera, el plazo interno, y que un envío cuyo resultado no se conoce nunca se reenvía. Un 429 no es un envío incierto: es un rechazo confirmado.
 
 Pruebas (`tests/shorts/test_quota_retry.py`): una voz, una imagen, una música y un video esperan el minuto que pide Google y reintentan la misma solicitud, sin espaciado de texto y sin gastar su presupuesto en el intento rechazado.
+
+## U028 — Tres cosas de la primera sesión que sí funcionó (2026-10-25)
+
+Con el motor de voz ya libre, la voz se generó. Tres cosas más de esa misma sesión.
+
+**«La voz, pausas y acciones exceden el intervalo aprobado en t1_shot03».** La voz grabada no cabía en el tiempo que el guion había previsto para esa toma, y eso bloqueaba cualquier vista previa de todo el corto. Pero la duración de una toma se planea ANTES de que la voz exista: el propio guion dice que la duración definitiva depende del audio medido. Ahora un borrador deja caber la voz —alargando la toma, nunca acelerando el audio—, señala esa toma entre los pendientes del borrador y se puede ver y escuchar. Exportar sigue exigiendo revisarla, porque cambia el metraje aprobado, y el tope de ocho segundos de una toma Veo no se relaja ni en borrador.
+
+**«¿Qué significa ver toma completa?»** No decía lo que hace: arma un video de esa toma con sus voces, su música y sus efectos. Pasa a llamarse «Ver y escuchar esta toma», y la de la escena, «Ver y escuchar la escena entera».
+
+**«Por cada cosa que genero, se recarga la página completa».** Al terminar una generación la pantalla se repinta entera y el navegador saltaba al principio, así que por cada imagen y por cada voz había que volver a buscar dónde estabas. Ahora el repintado conserva la posición, incluso después de que entren las imágenes, que cambian el alto. Cambiar de sección sí empieza arriba, que es lo que se espera.
+
+Pruebas: `tests/shorts/test_workflow.py` (el borrador alarga la toma, exportar la exige revisada, y Veo sigue acotado) y `tests/shorts/ui/studio.test.mjs` (terminar una generación te deja donde estabas; cambiar de sección empieza arriba).

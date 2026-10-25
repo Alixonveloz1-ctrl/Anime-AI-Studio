@@ -122,7 +122,7 @@ setInterval(async()=>{
 function fold(parent,title,open=false){const d=document.createElement('details');d.className='disclosure';const summary=document.createElement('summary');summary.textContent=title;d.append(summary);d.open=open;parent.append(d);return d;}
 function pageTitle(title,subtitle=''){const h=document.createElement('div');h.className='section-heading';h.innerHTML=`<div><p class="eyebrow">${esc(p?.title||'TU ESTUDIO')}</p><h2>${esc(title)}</h2>${subtitle?`<p class="muted">${esc(subtitle)}</p>`:''}</div>`;screen.append(h);return h;}
 function empty(title,text){screen.append(card(title,`<p class="muted">${esc(text)}</p>`));}
-async function go(next,part){stage=next;if(part&&next==='Escenas')productionTab=part;if(part&&next==='Revisión')reviewTab=part;await draw();}
+async function go(next,part){stage=next;if(part&&next==='Escenas')productionTab=part;if(part&&next==='Revisión')reviewTab=part;volverArriba=true;await draw();}
 function tabs(parent,options,selected,onSelect){const nav=document.createElement('nav');nav.className='tabs';nav.setAttribute('aria-label','Contenido de esta etapa');for(const [id,name] of options){const b=action(name,()=>onSelect(id),true);b.setAttribute('aria-pressed',String(id===selected));nav.append(b);}parent.append(nav);}
 // Treinta veces «Falta voz aprobada: …», cada una con su frase entera, llenaba
 // la pantalla sin decir nada más que «faltan treinta voces».
@@ -252,10 +252,23 @@ function navigation(){
  }
  $('#project-name').textContent=p?projectTitle(p):'';
 }
-let drawRequest=0,drawQueue=Promise.resolve();
+let drawRequest=0,drawQueue=Promise.resolve(),volverArriba=false;
+// Terminar una generación repinta la pantalla entera, y el navegador saltaba
+// al principio: por cada imagen, por cada voz, parecía que la página se
+// recargaba sola y había que volver a buscar dónde estabas. Cambiar de
+// sección sí empieza arriba, que es lo que se espera.
 function draw(){
  const request=++drawRequest;
- const pending=drawQueue.catch(()=>{}).then(()=>{if(request===drawRequest)return drawScreen();});
+ const altura=volverArriba?0:window.scrollY;volverArriba=false;
+ const quedarse=()=>{if(request===drawRequest&&window.scrollY!==altura)window.scrollTo({top:altura,behavior:'instant'});};
+ const pending=drawQueue.catch(()=>{}).then(async()=>{
+  if(request!==drawRequest)return;
+  await drawScreen();
+  quedarse();
+  // Las imágenes entran después del primer pintado y cambian el alto; sin esta
+  // segunda vuelta la posición se quedaba corta.
+  await new Promise(r=>setTimeout(r,0));quedarse();
+ });
  drawQueue=pending;return pending;
 }
 async function drawScreen(){
@@ -770,9 +783,9 @@ async function shots(){
    const assets=p.assets.filter(a=>a.entityId===u.id);await assetVersions(row,assets);
    buttons(row,[[assets.length?'Generar otra interpretación':'Generar voz japonesa',()=>runTask('tts',route('/assets:generate'),{operation:'tts',entityId:u.id}),assets.length>0]]);
   }
-  if(has)buttons(c,[['Ver toma completa',()=>previewShots([shot.id],c)]]);
+  if(has)buttons(c,[['Ver y escuchar esta toma',()=>previewShots([shot.id],c)]]);
   const more=fold(c,'Editar y comparar');buttons(more,[['Movimiento y capas',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id}),true]]:[]),...(image&&shot.treatment==='veo'?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id}),true]]:[])]);
-  if(has)buttons(more,[['Ver escena',()=>previewShots(d.shots.filter(x=>x.beatId===shot.beatId).map(x=>x.id),c),true],['Comparar tomas contiguas',()=>compareShots(shot,c),true]]);
+  if(has)buttons(more,[['Ver y escuchar la escena entera',()=>previewShots(d.shots.filter(x=>x.beatId===shot.beatId).map(x=>x.id),c),true],['Comparar tomas contiguas',()=>compareShots(shot,c),true]]);
  }
 }
 
