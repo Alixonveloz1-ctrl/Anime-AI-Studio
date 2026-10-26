@@ -34,7 +34,7 @@ def veo_payload(c,shot,image_uri,output_uri):
 def tts_payload(c,u,voice):
     # Validate before begin_call: an invalid stored voice never consumes a
     # provider submission. Do not silently substitute another character voice.
-    require(isinstance(u,dict) and isinstance(u.get('japanese'),str) and bool(re.search('[\u3040-\u30ff\u3400-\u9fff]',u['japanese'])),'JAPANESE','Falta texto japonés aprobado')
+    require(isinstance(u,dict) and isinstance(u.get('japanese'),str) and bool(re.search('[\u3040-\u30ff\u3400-\u9fff]',u['japanese'])),'JAPANESE','Falta texto japonés aprobado en la intervención '+str(u.get('id') if isinstance(u,dict) else '')+'. Su texto en japonés está vacío o no usa caracteres japoneses. Texto en español: '+str(u.get('spanish','') if isinstance(u,dict) else '')[:60])
     require(isinstance(voice,dict) and voice.get('name') in VOICES,'CHARACTER_VOICE','La voz guardada no pertenece al catálogo Gemini TTS. Abre Personajes, elige una voz válida y vuelve a generar.')
     require(voice.get('languageCode','ja-JP')=='ja-JP','JAPANESE','La voz de Cortos debe ser japonesa')
     direction=voice.get('direction') or '';acting=u.get('acting') or ''
