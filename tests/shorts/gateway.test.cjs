@@ -6,6 +6,14 @@ test('A079 rejects path traversal before fetch',async()=>{const r=await call('/p
 test('A008 rejects external service destination',async()=>{const r=await call('/health',{SHORTS_ENABLED:'true',SHORTS_PRODUCTION_URL:'https://metadata.google.internal'});assert.equal(r.status,503)});
 test('U003 production refuses a preview service',async()=>{const r=await call('/projects',{SHORTS_ENABLED:'true',SHORTS_PRODUCTION_URL:'https://example.run.app',VERCEL_ENV:'production',SHORTS_ENVIRONMENT:'preview'});assert.equal(r.result.code,'PRODUCTION_ISOLATION')});
 test('U003 production forwards only to its configured Cortos service',async()=>{const original=global.fetch;let destination;global.fetch=async url=>{destination=String(url);return new Response('{"projects":[]}',{headers:{'content-type':'application/json'}})};try{const r=await call('/projects',{SHORTS_ENABLED:'true',SHORTS_PRODUCTION_URL:'https://example.run.app',VERCEL_ENV:'production',SHORTS_ENVIRONMENT:'production'});assert.equal(r.status,200);assert.equal(destination,'https://example.run.app/projects')}finally{global.fetch=original}});
+test('DELETE reaches the installed Cortos service instead of being rejected by the gateway',async()=>{
+ const {handleShortsRequest}=await import('../../shorts/gateway.mjs'),original=global.fetch;let method,destination;
+ global.fetch=async(url,options)=>{method=options.method;destination=String(url);return new Response('{"deleted":true}',{headers:{'content-type':'application/json'}})};
+ try{
+  const r=await handleShortsRequest(new Request('https://app.invalid/api/shorts?path=/projects/p',{method:'DELETE',headers:{Authorization:'Bearer <redacted>'}}),{SHORTS_ENABLED:'true',SHORTS_PRODUCTION_URL:'https://example.run.app',SHORTS_ENVIRONMENT:'production',VERCEL_ENV:'production'});
+  assert.equal(r.status,200);assert.equal(method,'DELETE');assert.equal(destination,'https://example.run.app/projects/p');
+ }finally{global.fetch=original;}
+});
 test('Application revision reaches the installed worker only on writes; reads are unconditional',async()=>{
  const {handleShortsRequest}=await import('../../shorts/gateway.mjs'),original=global.fetch,calls=[];
  global.fetch=async(url,options)=>{calls.push(options);return new Response('{}',{headers:{'content-type':'application/json'}})};

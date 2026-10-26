@@ -68,9 +68,13 @@ def projects():
         return jsonify(projects=[x.to_dict() for x in db.collection('animeShortsProjects').where(filter=FieldFilter('owner','==',owner)).limit(100).stream()])
     p=project(owner,new_id(),body());p['created']=p['updated']=time.time();cloud().project_ref(p['id']).create(p);return jsonify(p),201
 
-@app.route('/projects/<pid>',methods=['GET','PATCH'])
+@app.route('/projects/<pid>',methods=['GET','PATCH','DELETE'])
 def project_route(pid):
     p=owned(pid)
+    if request.method=='DELETE':
+        # La confirmación en la pantalla es la autorización: no se pide
+        # revisión, porque se puede borrar un proyecto que no está abierto.
+        return jsonify(cloud().delete_project(pid,p['owner']))
     if request.method=='GET':
         result={**p,'entityCursors':{}}
         for k in ('ideas','developments','assets','cues','events','timelines','previews','developmentDrafts'):
@@ -82,7 +86,7 @@ def project_route(pid):
             assets=result['assets'] if 'assets' not in result['entityCursors'] else [x.to_dict() for x in cloud().project_ref(pid).collection('assets').stream()]
             result['usableAssetSelections']={eid+'|'+kind:a['id'] for (eid,kind),a in select_assets(assets,dev['data'],dev['id'],p.get('assetSelections')).items()}
         return jsonify(result)
-    d=body();require(set(d)<={'title','archived'},'FIELDS','Edita el contenido como una nueva revisión')
+    d=body();require(set(d)<={'title'},'FIELDS','Edita el contenido como una nueva revisión')
     def patch(tx,current):current.update(d)
     _,p=cloud().mutate(pid,expected(),patch);return jsonify(p)
 

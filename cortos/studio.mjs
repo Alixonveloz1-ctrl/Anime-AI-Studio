@@ -406,23 +406,25 @@ async function projectList(){
  const content=document.createElement('div');dialog.append(content);content.textContent='Cargando proyectos…';dialog.showModal();
  try{
   const list=await api('/projects');content.replaceChildren();
-  const visible=list.projects.filter(x=>!x.archived);
+  // No hay archivar: lo que se conserva queda en esta lista, y lo que no
+  // se elimina por completo. Los proyectos archivados antes también se
+  // muestran aquí, para poder conservarlos o eliminarlos.
+  const visible=[...list.projects].sort((a,b)=>(b.created||0)-(a.created||0));
   if(!visible.length){const line=document.createElement('p');line.textContent='Todavía no has guardado ningún corto.';content.append(line);}
   for(const item of visible){
    const row=document.createElement('div');row.className='project-row';
    const open=action(projectTitle(item),async()=>{try{await openProject(item.id);dialog.close();dialog.remove();say('Proyecto abierto.');}catch(error){openFailure(item.id,error);}},true);open.className='project-open';
    const meta=document.createElement('small');meta.textContent=[item.genre,item.created?new Date(item.created*1000).toLocaleString('es'):null].filter(Boolean).join(' · ');open.append(meta);row.append(open);
-   const archive=action('Archivar',async()=>{
-    if(!confirm('¿Archivar este corto? Su guion y sus archivos se conservarán.'))return;
-    const stored=await getProject(item.id);
-    await api(`/projects/${item.id}`,'PATCH',{archived:true},{'X-Shorts-Revision':String(stored.revision)});
-    if(p?.id===item.id){if(active)await lease(false);p=null;stage='Historia';location.hash='';await draw();}
-    row.remove();say('Corto archivado. Sus archivos se conservan.');
-   },true);row.append(archive);content.append(row);
+   const remove=action('Eliminar',async()=>{
+    if(!confirm('¿Eliminar este corto para siempre? Se borrarán el guion, los archivos, los trabajos y todo lo de este proyecto. Esto no se puede deshacer.'))return;
+    const wasOpen=p?.id===item.id;
+    if(wasOpen){if(active)await lease(false);p=null;stage='Historia';location.hash='';}
+    await api(`/projects/${item.id}`,'DELETE');
+    if(wasOpen)await draw();
+    row.remove();say('Corto eliminado por completo.');
+   },true);row.append(remove);content.append(row);
   }
   buttons(content,[['＋ Nuevo proyecto',async()=>{if(active)await lease(false);p=null;stage='Historia';location.hash='';dialog.close();dialog.remove();await draw();say('');}]]);
-  const archived=list.projects.filter(x=>x.archived);
-  if(archived.length){const history=fold(content,'Archivados · '+archived.length);for(const item of archived)buttons(history,[[`Recuperar ${projectTitle(item)}`,async()=>{const stored=await getProject(item.id);await api(`/projects/${item.id}`,'PATCH',{archived:false},{'X-Shorts-Revision':String(stored.revision)});dialog.close();dialog.remove();await projectList();},true]]);}
  }catch(error){content.textContent='No se pudo leer la lista: '+error.message;buttons(content,[['Reintentar',async()=>{dialog.close();dialog.remove();await projectList();},true]]);}
 }
 async function ideas(parent=screen){

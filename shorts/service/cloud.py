@@ -39,6 +39,42 @@ class Cloud:
             result=fn(tx,current);current['revision']+=1;current['updated']=time.time();tx.set(ref,current)
             return result,current
         return apply(self.db.transaction())
+    def delete_project(self,pid,owner):
+        # Borrarlo todo, no esconderlo: documento, todas sus colecciones,
+        # todos sus trabajos y todos sus objetos en el bucket del proyecto.
+        # Una generación que ya está en marcha con el proveedor no se borra:
+        # borrar su registro dejaría una llamada sin dueño y sin resultado.
+        from google.cloud.firestore_v1.base_query import FieldFilter
+        ident(pid);ref=self.project_ref(pid);project=ref.get().to_dict()
+        require(project and project['owner']==owner,'PROJECT_ACCESS','Proyecto no disponible',404)
+        jobs=[x.to_dict() for x in self.db.collection('animeShortsJobs').where(filter=FieldFilter('projectId','==',pid)).stream()]
+        in_flight=[j for j in jobs if j.get('state') in ('running','waiting_provider','submitted_unknown') and not j.get('settled')]
+        require(not in_flight,'JOB_RUNNING','Hay una generación en curso en este proyecto. Espera a que termine o cancélala antes de eliminarlo.',409)
+        for job in jobs:
+            try:self.release_slot(job['id'])
+            except Exception:pass
+        for job in jobs:
+            try:
+                client=tasks_v2.CloudTasksClient();parent=client.queue_path(self.c['project'],self.c['region'],self.c['queue'])
+                for attempt in range(int(job.get('dispatchAttempt',0))+1):
+                    try:client.delete_task(name=parent+'/tasks/'+job['id']+'-'+str(attempt))
+                    except Exception:pass
+            except Exception:pass
+        deleted_objects=0
+        for blob in self.bucket.list_blobs(prefix=f"{self.c['prefix']}/projects/{pid}/"):
+            try:blob.delete();deleted_objects+=1
+            except Exception:pass
+        def delete_collection(collection):
+            count=0
+            for doc in collection.stream():
+                for sub in doc.reference.collections():count+=delete_collection(sub)
+                doc.reference.delete();count+=1
+            return count
+        deleted_entities=0
+        for collection in ref.collections():deleted_entities+=delete_collection(collection)
+        for job in jobs:self.db.collection('animeShortsJobs').document(job['id']).delete()
+        ref.delete()
+        return {'deleted':True,'deletedEntities':deleted_entities,'deletedJobs':len(jobs),'deletedObjects':deleted_objects}
     def object_name(self,p,asset,name):
         ident(p);ident(asset);require(name and '/' not in name and '..' not in name,'OBJECT','Nombre inválido')
         return f'{self.c["prefix"]}/projects/{p}/assets/{asset}/{name}'

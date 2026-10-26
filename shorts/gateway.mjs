@@ -24,7 +24,7 @@ export async function handleShortsRequest(request, env = {}) {
     return json(503, { code: 'PRODUCTION_ISOLATION', error: 'Conecta Cortos a la página habitual desde el instalador de main.' });
   if (!/^\/(?:health|projects|jobs)(?:[A-Za-z0-9_/:.-]*)$/.test(path) || path.includes('..'))
     return json(400, { error: 'Ruta no válida.' });
-  if (!['GET', 'POST', 'PATCH'].includes(request.method)) return json(405, { error: 'Método no admitido.' });
+  if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(request.method)) return json(405, { error: 'Método no admitido.' });
   const headers = { 'Content-Type': 'application/json' };
   for (const key of ['authorization', 'idempotency-key']) {
     const value = request.headers.get(key);

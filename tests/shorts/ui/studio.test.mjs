@@ -14,6 +14,7 @@ async function setup(options={}){
  const fixture=createFixture(options);
  const baseTransport=fixture.transport;fixture.transport=async(url,request={})=>{
  const path=new URL(url,'https://fixture.invalid').searchParams.get('path');
+ if(request.method==='DELETE'&&path.startsWith('/projects/')){fixture.calls.push({path,method:'DELETE',body:{}});return new Response(JSON.stringify({deleted:true}),{status:200});}
  if(options.segmented&&path==='/projects/fixture/develop'){
   const result=await baseTransport(url,request),body=JSON.parse(request.body),row=fixture.project.developmentDrafts.at(-1);
   if(body.stage===2){
@@ -186,6 +187,23 @@ test('Project list stays in the header, contains only stored records, and empty 
   for(const row of w.document.querySelectorAll('.project-open'))assert.match(row.textContent,/Corto sin título/);
   assert.doesNotMatch(w.document.body.textContent,/Una nueva historia por contar/);
   assert.equal(fixture.calls.some(c=>c.method!=='GET'),false,'Viewing the list cannot create, archive or generate anything');
+ }finally{dom.window.close();}
+});
+
+test('Project list has delete instead of archive, and deleting removes only that row',async()=>{
+ const {fixture,w,dom,click}=await setup({empty:true,projectList:true,threeDrafts:true});
+ try{
+  await click('📁 Proyectos');
+  assert.equal(w.document.querySelectorAll('.projects-dialog[open] .project-row').length,3);
+  assert.equal([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Archivar'),false,'No archive button anywhere in the list');
+  assert.doesNotMatch(w.document.body.textContent,/Archivados/);
+  w.confirm=()=>true;
+  const remove=[...w.document.querySelectorAll('.projects-dialog[open] button')].find(b=>b.textContent==='Eliminar');
+  assert.ok(remove);
+  await remove.onclick();
+  assert.equal(fixture.calls.filter(c=>c.method==='DELETE'&&c.path.startsWith('/projects/')).length,1,'Exactly one delete request');
+  assert.equal(w.document.querySelectorAll('.projects-dialog[open] .project-row').length,2);
+  assert.match(w.document.querySelector('#notice').textContent,/eliminado por completo/);
  }finally{dom.window.close();}
 });
 
