@@ -727,7 +727,7 @@ async function generatorControls(parent){
    const pending=(generatorSave||Promise.resolve()).catch(()=>{}).then(async()=>{
     if(p?.id!==projectId)throw new Error('Cambió el proyecto abierto. Vuelve a elegir el generador.');
     const latest=await api(`/projects/${projectId}/generators`);
-    const result=await mutate(`/projects/${projectId}/generators`,{...latest.selected,[kind]:model});
+    const result=await mutate(`/projects/${projectId}/generators`,{...latest.selected,visualStyle:latest.visualStyle||'anime_cinematografico',[kind]:model});
     if(p?.id===projectId)generatorCatalog=result;
     return result;
    });
@@ -737,6 +737,26 @@ async function generatorControls(parent){
    finally{select.disabled=false;if(generatorSave===pending)generatorSave=null;}
   };
  }
+ const styleLabel=document.createElement('label');styleLabel.textContent='Estilo visual';
+ const styleSelect=document.createElement('select');styleSelect.setAttribute('aria-label','Estilo visual');
+ const styles=generatorCatalog.visualStyles||[{id:'anime_cinematografico',name:'Anime cinematográfico'},{id:'realista',name:'Cinematográfico realista'}];
+ for(const style of styles){const option=document.createElement('option');option.value=style.id;option.textContent=style.name;styleSelect.append(option);}
+ styleSelect.value=generatorCatalog.visualStyle||'anime_cinematografico';styleLabel.append(styleSelect);box.append(styleLabel);
+ styleSelect.onchange=async()=>{
+  const style=styleSelect.value,previous=generatorCatalog.visualStyle||'anime_cinematografico';
+  styleSelect.disabled=true;say('Guardando estilo visual…');
+  const pending=(generatorSave||Promise.resolve()).catch(()=>{}).then(async()=>{
+   if(p?.id!==projectId)throw new Error('Cambió el proyecto abierto. Vuelve a elegir el estilo.');
+   const latest=await api(`/projects/${projectId}/generators`);
+   const result=await mutate(`/projects/${projectId}/generators`,{...latest.selected,visualStyle:style});
+   if(p?.id===projectId)generatorCatalog=result;
+   return result;
+  });
+  generatorSave=pending;
+  try{await pending;say('Estilo visual guardado. Se aplica a las generaciones nuevas; las fichas ya aprobadas no cambian solas.');}
+  catch(error){styleSelect.value=previous;say(error.message,true);}
+  finally{styleSelect.disabled=false;if(generatorSave===pending)generatorSave=null;}
+ };
 }
 function voiceControls(parent,character){
  if(!generatorCatalog)return;

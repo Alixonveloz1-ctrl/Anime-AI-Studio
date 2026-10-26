@@ -8,7 +8,7 @@ import json
 import math
 import time
 from shorts.core.contracts import require, digest, ident, ContractError
-from shorts.service.director import RULES, validate_development
+from shorts.service.director import rules_for, project_style, validate_development
 from shorts.service.references import link_references
 
 
@@ -91,7 +91,7 @@ def develop_segment(cloud,provider,job,project,idea,story):
            'segmentPlan':plan,'scriptProgress':progress,'created':time.time(),'status':'building','approvalState':'incomplete'}
     cloud.put_entity(pid,'developmentDrafts',copy.deepcopy(draft));ref=cloud.entity_ref(pid,'developmentDrafts',jid)
     cloud.db.collection('animeShortsJobs').document(jid).update({'progress':{'stage':(index+2) if index is not None else 1,'total':len(plan)+1,'label':label}})
-    prompt=RULES+'\nEsta llamada genera SOLO '+label+'. No desarrolles otros pasos.\n'
+    prompt=rules_for(project_style(project))+'\nEsta llamada genera SOLO '+label+'. No desarrolles otros pasos.\n'
     prompt+='Proyecto e idea: '+json.dumps({'project':{k:project[k] for k in ('genre','subgenres','concept','format')},'idea':idea['data']},ensure_ascii=False)
     prompt+='\nHistoria y contenido previo que debes conservar sin reescribir:\n'+json.dumps(data,ensure_ascii=False)
     prompt+='\nPlan completo de tramos (duraciones en fotogramas a 24 FPS): '+json.dumps(plan,ensure_ascii=False)

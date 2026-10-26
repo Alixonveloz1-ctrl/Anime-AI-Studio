@@ -736,3 +736,17 @@ test('After an interrupted poll the next tap generates again instead of showing 
   assert.notEqual(fixture.jobs.at(-1).id,finished.id,'a new generation, not the finished one again');
  }finally{dom.window.close();}
 });
+
+test('Visual style selector offers anime cinematic and realistic, and saves the choice',async()=>{
+ const {fixture,w,dom,click}=await setup();
+ try{
+  await click('Personajes');
+  const style=w.document.querySelector('select[aria-label="Estilo visual"]');
+  assert.ok(style,'el selector de estilo visual está en Generadores');
+  assert.deepEqual([...style.querySelectorAll('option')].map(o=>o.value),['anime_cinematografico','realista']);
+  assert.equal(style.value,'anime_cinematografico');
+  style.value='realista';await style.onchange();
+  assert.equal(fixture.project.generators.visualStyle,'realista');
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/assets:generate')).length,0,'Choosing a style does not generate paid content');
+ }finally{dom.window.close();}
+});

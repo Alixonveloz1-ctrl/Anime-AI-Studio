@@ -30,11 +30,25 @@ VOICE_GENDERS={
 }
 VOICES=list(VOICE_GENDERS)
 
+VISUAL_STYLES={
+    'anime_cinematografico':'Anime cinematográfico',
+    'realista':'Cinematográfico realista',
+}
+
+def visual_style(settings):
+    # Sin elección guardada, el estilo por defecto es anime cinematográfico:
+    # es el género de la sección, pero ya no el dibujo plano de antes.
+    if not settings:return 'anime_cinematografico'
+    style=settings.get('visualStyle','anime_cinematografico')
+    require(style in VISUAL_STYLES,'VISUAL_STYLE','Estilo visual no admitido')
+    return style
+
 def selected_models(config,settings):
     import copy
     result=copy.deepcopy(config['models'])
-    require(isinstance(settings,dict) and set(settings)<=set(MODEL_CHOICES),'MODEL_SELECTION','Selección de generadores inválida')
-    for kind,model in settings.items():
+    models={k:v for k,v in (settings or {}).items() if k!='visualStyle'}
+    require(isinstance(settings,dict) and set(models)<=set(MODEL_CHOICES),'MODEL_SELECTION','Selección de generadores inválida')
+    for kind,model in models.items():
         require(model in [m for m,_ in MODEL_CHOICES[kind]],'MODEL_SELECTION','Generador no admitido: '+kind)
         result[kind]={'model':model,'region':MODELS[kind][1]}
     verify_models({'models':result})

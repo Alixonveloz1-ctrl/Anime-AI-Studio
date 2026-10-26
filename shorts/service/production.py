@@ -22,7 +22,7 @@ MEDIA_TYPES={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp'
 
 def media_type(path,default='application/octet-stream'):
     return MEDIA_TYPES.get(Path(str(path)).suffix.lower()) or mimetypes.guess_type(str(path))[0] or default
-from shorts.service.director import RULES, ideas_prompt, validate_development
+from shorts.service.director import rules_for, project_style, ideas_prompt, validate_development
 from shorts.service.timeline import approved_assets
 from shorts.core.dependencies import fingerprint, select_assets, dependency_records
 from media import pcm, waveform, silent_video, inspect, checksum, extract_frames, probe
@@ -37,6 +37,10 @@ def run_job(cloud,j,p):
     if data.get('developmentId'):p={**p,'activeDevelopment':data['developmentId']}
     if 'assetSelections' in data:p={**p,'assetSelections':data['assetSelections']}
     if 'approvedAssetIds' in data:p={**p,'approvedAssetIds':data['approvedAssetIds']}
+    # Estilo visual elegido en Generadores para este corto. Sin elección
+    # guardada, anime cinematográfico. Se aplica a guion nuevo, imagen y
+    # video nuevos; las fichas ya aprobadas no cambian solas.
+    style=project_style(p);rules=rules_for(style)
     def entity(kind,value):
         record={'id':ident_new(),'revision':1,'approvalState':'candidate','created':time.time(),'jobId':j['id'],**value}
         cloud.put_entity(pid,kind,record);return record
@@ -71,7 +75,7 @@ def run_job(cloud,j,p):
         old=cloud.entity(pid,data['kind'],data['entityId'])
         original=old['data'];scope=data.get('scope')
         target=scoped_value(original,scope) if data['kind']=='developments' else idea_scope(original,scope)
-        revised=provider.text(RULES+'\nCorrige únicamente el objeto target. Devuelve {replacement:objeto editado,changeSummary:[]}. Conserva su id. El contexto solo sirve para continuidad, no lo reescribas.\n'+json.dumps({'target':target,'context':original.get('bible',original) if scope and scope.get('group')!='whole' else None,'correction':data['instruction']},ensure_ascii=False))
+        revised=provider.text(rules+'\nCorrige únicamente el objeto target. Devuelve {replacement:objeto editado,changeSummary:[]}. Conserva su id. El contexto solo sirve para continuidad, no lo reescribas.\n'+json.dumps({'target':target,'context':original.get('bible',original) if scope and scope.get('group')!='whole' else None,'correction':data['instruction']},ensure_ascii=False))
         require(isinstance(revised.get('replacement'),dict),'REVISION_SCHEMA','Corrección incompleta')
         if data['kind']=='developments':
             # A corrected sound plan goes through the same normalisation as a
@@ -118,17 +122,17 @@ def run_job(cloud,j,p):
             if shot and data.get('variantPrompt'):
                 base=selected(eid,'image');refs=[{**base,'uri':uri(base),'referenceLabel':'imagen aprobada de la toma '+eid+' que se debe editar'}]
                 require(isinstance(data['variantPrompt'],str) and 0<len(data['variantPrompt'])<=3000,'VARIANT_PROMPT','Describe el movimiento localizado')
-                prompt=image_prompt(shot,variant=data['variantPrompt'])
+                prompt=image_prompt(shot,variant=data['variantPrompt'],style=style)
             elif shot:
                 for rid in shot['referenceEntityIds']:
                     a=selected(rid,'image')
                     group,e=next((k,e) for k in ('characters','locations','props') for e in d['bible'][k] if e['id']==rid)
                     label={'characters':'Personaje','locations':'Lugar','props':'Objeto'}[group]+': '+e['name']+' ('+rid+')'
                     refs.append({**a,'uri':uri(a),'referenceLabel':label})
-                prompt=image_prompt(shot,shot=True)
+                prompt=image_prompt(shot,shot=True,style=style)
             else:
                 e=next((e for k in ('characters','locations','props') for e in d['bible'][k] if e['id']==eid),None)
-                require(e,'ENTITY','Referencia inexistente');prompt=image_prompt(e)
+                require(e,'ENTITY','Referencia inexistente');prompt=image_prompt(e,style=style)
             raw,mime=provider.image(prompt,refs,p['format'])
             extension={'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp','image/gif':'.gif'}.get(mime)
             require(extension,'IMAGE_FORMAT','Google devolvió un formato de imagen no admitido. No se repitió la generación.')
@@ -138,7 +142,11 @@ def run_job(cloud,j,p):
             from shorts.core.timing import veo_seconds
             shot=next(s for s in d['shots'] if s['id']==eid);image=selected(eid,'image')
             raw_id=ident_new();output=j.get('providerOutput') or f'gs://{cloud.c["bucket"]}/{cloud.c["prefix"]}/projects/{pid}/assets/{raw_id}/'
-            operation={'name':j['providerOperation']} if j.get('providerOperation') else provider.veo({'prompt':shot['prompt'],'imageApproved':True,'imageMime':image['mimeType'],'durationSeconds':veo_seconds(shot),'format':p['format']},uri(image),output)
+            # Veo parte de la imagen aprobada, así que el estilo ya viene de
+            # ella; este sufijo refuerza el estilo elegido cuando la imagen
+            # es antigua o el modelo duda entre estilos.
+            veo_style=' Estilo visual: anime cinematográfico detallado y maduro, no infantil.' if style=='anime_cinematografico' else ' Estilo visual: cinematográfico fotorrealista, personas reales, no dibujo ni anime.'
+            operation={'name':j['providerOperation']} if j.get('providerOperation') else provider.veo({'prompt':shot['prompt']+veo_style,'imageApproved':True,'imageMime':image['mimeType'],'durationSeconds':veo_seconds(shot),'format':p['format']},uri(image),output)
             require(operation.get('name'),'VEO_OPERATION','No se recibió operationId')
             ref=cloud.db.collection('animeShortsJobs').document(j['id']);ref.update({'providerOperation':operation['name'],'providerOutput':output,'state':'waiting_provider'})
             deadline=time.time()+1800
@@ -219,7 +227,7 @@ def run_job(cloud,j,p):
                 require(scan['videoRevision']==a['id'] and scan.get('visualFingerprint')==visual_hash and scan['eventDescription']==cue['eventDescription'],'EVENT_SCAN_STALE','Cambió el video o el evento; revisa con fotogramas manuales')
                 options=scan['options'];result={'confidence':scan.get('confidence')}
             else:
-                result=provider.text(RULES+'\nExamina el video real. Evento: '+cue['eventDescription']+'. Corrección solicitada: '+data.get('reason','Localizar contacto')+'. Devuelve {visible:boolean,approxSeconds:number|null,occurrences:[{seconds:number,description:string}],evidence:string,confidence:number}. Incluye CADA contacto visible separado y no inventes contacto.',[{'fileData':{'fileUri':composed_uri,'mimeType':'video/mp4'}}],True)
+                result=provider.text(rules+'\nExamina el video real. Evento: '+cue['eventDescription']+'. Corrección solicitada: '+data.get('reason','Localizar contacto')+'. Devuelve {visible:boolean,approxSeconds:number|null,occurrences:[{seconds:number,description:string}],evidence:string,confidence:number}. Incluye CADA contacto visible separado y no inventes contacto.',[{'fileData':{'fileUri':composed_uri,'mimeType':'video/mp4'}}],True)
                 options=contact_options(result,float(probe(path)['format']['duration']))
                 scan={'videoRevision':a['id'],'visualFingerprint':visual_hash,'eventDescription':cue['eventDescription'],'options':options,'confidence':result.get('confidence')}
                 cloud.entity_ref(pid,'cues',cue['id']).update({'analysisScan':scan})
@@ -230,7 +238,7 @@ def run_job(cloud,j,p):
             parts=[{'text':f'Frame {f["index"]}' } for f in []]
             for f in frames:
                 parts.extend([{'text':f'Frame {f["index"]}'},{'inlineData':{'mimeType':'image/jpeg','data':base64.b64encode((root/'frames'/f['file']).read_bytes()).decode()}}])
-            fine=provider.text(RULES+'\nElige fotograma de contacto, solo con evidencia. Devuelve {visible:boolean,frameIndex:number|null,evidence:string}. Evento: '+cue['eventDescription'],parts,True)
+            fine=provider.text(rules+'\nElige fotograma de contacto, solo con evidencia. Devuelve {visible:boolean,frameIndex:number|null,evidence:string}. Evento: '+cue['eventDescription'],parts,True)
             require(fine.get('visible') and any(f['index']==fine.get('frameIndex') for f in frames),'EVENT_UNCERTAIN','Contacto no concluyente; usa ajuste manual')
             proposal=entity('events',{'shotId':cue['shotId'],'videoRevision':a['id'],'pts':fine['frameIndex'],'timebase':24,'visible':True,'evidence':fine['evidence'],'source':'analysis','visualFingerprint':visual_hash,'coordinateSpace':'shot_output','occurrence':choice,'occurrenceIndex':data.get('occurrenceIndex',0),'confidence':result.get('confidence')})
             # An automatic pass proposes; it never overwrites a manually locked cue.
@@ -279,7 +287,7 @@ def run_job(cloud,j,p):
             cloud.put_entity(pid,'previews',record);return {'previewId':rid,'final':op=='render'}
         if op=='review':
             a=cloud.entity(pid,'assets',data['assetId'])
-            result=provider.text(RULES+'\nRevisa solo el material observado contra estas biblias. Devuelve {issues:[],coverage:[],uncertainty:string}. No certifiques perfección.\n'+json.dumps(d['bible'],ensure_ascii=False),[{'fileData':{'fileUri':uri(a),'mimeType':a['mimeType']}}],True)
+            result=provider.text(rules+'\nRevisa solo el material observado contra estas biblias. Devuelve {issues:[],coverage:[],uncertainty:string}. No certifiques perfección.\n'+json.dumps(d['bible'],ensure_ascii=False),[{'fileData':{'fileUri':uri(a),'mimeType':a['mimeType']}}],True)
             return {'review':result,'assetId':a['id']}
         if op=='transcribe':
             import re

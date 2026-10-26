@@ -33,7 +33,8 @@ export function createFixture({empty=false,servidorViejo=false,motorOcupado=fals
   else if(path.endsWith('/generators')){
    const choices={image:[{id:'gemini-3.1-flash-image',name:'Nano Banana 2'},{id:'gemini-2.5-flash-image',name:'Nano Banana'}],veo:[{id:'veo-3.1-generate-001',name:'Veo 3.1'},{id:'veo-3.1-fast-generate-001',name:'Veo 3.1 Fast'}],tts:[{id:'gemini-2.5-pro-tts',name:'Gemini Pro TTS'},{id:'gemini-2.5-flash-tts',name:'Gemini Flash TTS'}],music:[{id:'lyria-3-pro-preview',name:'Lyria 3 Pro'}]};
    if(method==='POST')p.generators=body;
-   result={choices,voices:[{name:'Kore',gender:'female'},{name:'Puck',gender:'male'},{name:'Aoede',gender:'female'}],selected:p.generators||Object.fromEntries(Object.entries(choices).map(([k,v])=>[k,v[0].id]))};
+   const selectedModels=p.generators||Object.fromEntries(Object.entries(choices).map(([k,v])=>[k,v[0].id]));
+   result={choices,voices:[{name:'Kore',gender:'female'},{name:'Puck',gender:'male'},{name:'Aoede',gender:'female'}],selected:{image:selectedModels.image,veo:selectedModels.veo,tts:selectedModels.tts,music:selectedModels.music},visualStyle:selectedModels.visualStyle||'anime_cinematografico',visualStyles:[{id:'anime_cinematografico',name:'Anime cinematográfico'},{id:'realista',name:'Cinematográfico realista'}]};
   }
   else if(path.includes('/characters/')&&path.endsWith('/voice')){const dev=p.developments.find(x=>x.id===p.activeDevelopment);dev.data.bible.characters.find(x=>x.id===path.split('/')[4]).voice={...body,languageCode:'ja-JP'};result=dev;}
   else if(path.endsWith('/lease')){
