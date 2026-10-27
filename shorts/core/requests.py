@@ -6,11 +6,11 @@ TEXT_OUTPUT_LIMIT=32768
 IDEAS_OUTPUT_LIMIT=4096
 IMAGE_OUTPUT_LIMIT=8192
 MODELS={'text':('gemini-3.1-pro-preview','global'), 'analysis':('gemini-3.1-pro-preview','global'),
-        'image':('gemini-3.1-flash-image','global'), 'veo':('veo-3.1-generate-001','us-central1'),
+        'image':('gemini-3.1-flash-image','global'), 'veo':('veo-3.1-lite-generate-001','us-central1'),
         'tts':('gemini-2.5-pro-tts','global'), 'music':('lyria-3-pro-preview','global')}
 MODEL_CHOICES={
     'image':[('gemini-3.1-flash-image','Nano Banana 2'),('gemini-2.5-flash-image','Nano Banana'),('gemini-3-pro-image','Nano Banana Pro')],
-    'veo':[('veo-3.1-fast-generate-001','Veo 3.1 Fast'),('veo-3.1-generate-001','Veo 3.1')],
+    'veo':[('veo-3.1-lite-generate-001','Veo 3.1 Lite'),('veo-3.1-fast-generate-001','Veo 3.1 Fast'),('veo-3.1-generate-001','Veo 3.1')],
     'tts':[('gemini-2.5-flash-tts','Gemini Flash TTS'),('gemini-2.5-pro-tts','Gemini Pro TTS')],
     'music':[('lyria-3-pro-preview','Lyria 3 Pro')],
 }
