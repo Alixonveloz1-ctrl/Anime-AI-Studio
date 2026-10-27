@@ -108,7 +108,10 @@ test('Blocked production exposes the next action above the script and reaches im
   let shot=w.document.querySelector('.shot-section');
   await click('Generar imagen',shot);await new Promise(r=>setTimeout(r,0));
   shot=w.document.querySelector('.shot-section');shot.querySelector('img').onload();
-  await click('Aprobar versión',shot);
+  // Auto-aprobación: la imagen generada a mano queda aprobada y en uso
+  // sola, sin botón de aprobar, así que el video ya se puede generar.
+  assert.equal([...shot.querySelectorAll('button')].some(b=>b.textContent==='Aprobar versión'),false);
+  assert.ok(fixture.project.assetSelections['shot1|image']);
   shot=w.document.querySelector('.shot-section');await click('Generar video',shot);
   shot=w.document.querySelector('.shot-section');await click('Generar voz japonesa',shot);
   assert.deepEqual(fixture.calls.filter(c=>c.path.endsWith('/assets:generate')).map(c=>c.body.operation),['image','veo','tts']);

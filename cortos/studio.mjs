@@ -177,7 +177,10 @@ async function runTask(operation,path,data={}){
  // la anterior salió mal, la nueva la reemplaza automáticamente. No se
  // aplica a variantes, revisiones, importaciones ni a otros trabajos, que
  // siguen pidiendo revisión explícita.
- if(result?.state==='succeeded'&&['image','veo','tts','music','media'].includes(operation)&&result.result?.assetId&&!data.variantPrompt){
+ // Los trabajos que terminan bien no quedan en "succeeded", sino en
+ // "awaiting_review": ese era el error, el chequeo anterior nunca se
+ // cumplía y el botón de aprobar seguía apareciendo.
+ if(['awaiting_review','succeeded'].includes(result?.state)&&['image','veo','tts','music','media'].includes(operation)&&result.result?.assetId&&!data.variantPrompt){
   try{
    await refresh();
    const asset=p?.assets?.find(a=>a.id===result.result.assetId);
