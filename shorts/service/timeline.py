@@ -44,6 +44,19 @@ def ambience_placements(shots,cue,audio_samples):
         out.append(repeat);cursor+=piece
     return out,cursor<start+span
 
+def veo_retime(asset,frames):
+    """Velocidad para que el clip completo cubra la toma, sin recortar.
+
+    Devuelve None si no se conoce la duración real del clip; en ese caso
+    el montaje conserva la velocidad que ya trae la toma.
+    """
+    clip_seconds=asset.get('clipSeconds') or None
+    if not clip_seconds:
+        try:clip_seconds=float(asset.get('probe',{}).get('format',{}).get('duration',0))
+        except (TypeError,ValueError):clip_seconds=0
+    if clip_seconds and frames>0:return clip_seconds*24/frames
+    return None
+
 def assemble_plan(cloud,p,cue_overrides=None):
     pid=p['id'];dev=cloud.entity(pid,'developments',p['activeDevelopment'])
     require(dev['approvalState']=='approved','SCRIPT_APPROVAL','Guion sin aprobar')
@@ -75,6 +88,13 @@ def assemble_plan(cloud,p,cue_overrides=None):
             a={'id':'missing_'+s['id']}
         else:assets[a['id']]=a
         shot={**s,'startFrame':t['startFrame'],'frames':t['frames'],'assetRevision':a['id'],'trimSeconds':s.get('trimSeconds',0),'speed':s.get('speed',1)}
+        if shot['treatment']=='veo' and not a['id'].startswith('missing_'):
+            # Regla del usuario, prohibido cortar: el clip completo se
+            # acelera o se ralentiza para cubrir la toma, nunca se recorta
+            # un segundo del final. La velocidad sale de la duración real
+            # del clip aprobado, no de la duración pedida a Veo (4, 6 u 8 s).
+            speed=veo_retime(a,t['frames'])
+            if speed:shot['speed']=speed;shot['trimSeconds']=0;shot['retimeApproved']=True
         if a['id'].startswith('missing_'):shot.update(treatment='black',approvedBlack=True,draftPlaceholder=True)
         if shot['treatment']=='localized':
             layers=[]

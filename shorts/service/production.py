@@ -157,11 +157,24 @@ def run_job(cloud,j,p):
                 time.sleep(10)
             else:raise ContractError('VEO_PENDING','Operación conocida pendiente; conserva ID para recuperación',503)
             require(not result.get('error'),'VEO_FAILED','Veo informó error')
-            videos=result.get('response',{}).get('videos',[]);require(videos,'VEO_EMPTY','Sin video utilizable')
-            source=videos[0]['gcsUri'];require(source.startswith(output),'VEO_OUTPUT','Salida fuera del destino autorizado')
+            videos=result.get('response',{}).get('videos',[])
+            if videos:
+                source=videos[0]['gcsUri'];require(source.startswith(output),'VEO_OUTPUT','Salida fuera del destino autorizado')
+            else:
+                # Regla del usuario: si Veo generó un archivo y quedó guardado
+                # en el bucket, la aplicación debe mostrarlo aunque la
+                # respuesta de la operación no lo liste. El usuario decide
+                # si le sirve y lo aprueba o si lo regenera. Solo se busca
+                # dentro del destino autorizado de este trabajo, nunca fuera.
+                prefix=output.removeprefix('gs://'+cloud.c['bucket']+'/')
+                found=sorted(b.name for b in cloud.bucket.list_blobs(prefix=prefix) if b.name.lower().endswith('.mp4'))
+                require(found,'VEO_EMPTY','Sin video utilizable')
+                source='gs://'+cloud.c['bucket']+'/'+found[0]
             name=source.removeprefix('gs://'+cloud.c['bucket']+'/');original=root/'original.mp4';cloud.download(pid,name,original)
             silent=root/'silent.mp4';meta=silent_video(original,silent)
-            return {'assetId':asset(silent,'veo_silent_validated',eid,{**meta,'dependencies':dependency_records([image]),'originalObject':name,'referenceImage':image['id'],'model':provider_config['models']['veo'],'generateAudio':False})['id']}
+            try:clip_seconds=float(meta.get('probe',{}).get('format',{}).get('duration',0))
+            except (TypeError,ValueError):clip_seconds=0
+            return {'assetId':asset(silent,'veo_silent_validated',eid,{**meta,'clipSeconds':clip_seconds,'dependencies':dependency_records([image]),'originalObject':name,'referenceImage':image['id'],'model':provider_config['models']['veo'],'generateAudio':False})['id']}
         if op in ('tts','music'):
             if op=='tts':
                 u=next(u for u in d['utterances'] if u['id']==eid);character=next(c for c in d['bible']['characters'] if c['id']==u['speakerId'])
