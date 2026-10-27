@@ -118,8 +118,39 @@ def run_job(cloud,j,p):
         if op=='image':
             from shorts.service.image_direction import image_prompt
             shot=next((s for s in d['shots'] if s['id']==eid),None)
-            refs=[]
-            if shot and data.get('variantPrompt'):
+            refs=[];asset_deps=None;asset_parent=None
+            if shot and data.get('shotImageInstruction'):
+                # Imagen principal con instrucción del usuario: NO es una
+                # variante. Se edita la imagen aprobada de la toma (si la
+                # hay) con la instrucción, pero el archivo resultante es
+                # una imagen propia de la toma, así que al aprobarla queda
+                # en uso para la toma y para el video, sin pasos extra.
+                # Las dependencias son las referencias de la toma, no la
+                # imagen base, porque una dependencia sobre la propia toma
+                # impediría que la imagen nueva quedara seleccionada.
+                instruction=data['shotImageInstruction']
+                require(isinstance(instruction,str) and 0<len(instruction)<=3000,'IMAGE_INSTRUCTION','Escribe la instrucción para la imagen')
+                reference_assets=[]
+                for rid in shot['referenceEntityIds']:
+                    try:reference_assets.append(selected(rid,'image'))
+                    except Exception:pass
+                asset_deps=dependency_records(reference_assets)
+                try:base=selected(eid,'image')
+                except Exception:base=None
+                if base:
+                    asset_parent=base['id']
+                    refs=[{**base,'uri':uri(base),'referenceLabel':'imagen aprobada de la toma '+eid+' que se debe editar'}]
+                    for a in reference_assets:
+                        group,e=next((k,e) for k in ('characters','locations','props') for e in d['bible'][k] if e['id']==a['entityId'])
+                        refs.append({**a,'uri':uri(a),'referenceLabel':{'characters':'Personaje','locations':'Lugar','props':'Objeto'}[group]+': '+e['name']})
+                    prompt=image_prompt(shot,variant=instruction,style=style)
+                else:
+                    refs=[]
+                    for a in reference_assets:
+                        group,e=next((k,e) for k in ('characters','locations','props') for e in d['bible'][k] if e['id']==a['entityId'])
+                        refs.append({**a,'uri':uri(a),'referenceLabel':{'characters':'Personaje','locations':'Lugar','props':'Objeto'}[group]+': '+e['name']})
+                    prompt=image_prompt(shot,shot=True,style=style)+'\nInstrucción del usuario: '+instruction
+            elif shot and data.get('variantPrompt'):
                 base=selected(eid,'image');refs=[{**base,'uri':uri(base),'referenceLabel':'imagen aprobada de la toma '+eid+' que se debe editar'}]
                 require(isinstance(data['variantPrompt'],str) and 0<len(data['variantPrompt'])<=3000,'VARIANT_PROMPT','Describe el movimiento localizado')
                 prompt=image_prompt(shot,variant=data['variantPrompt'],style=style)
@@ -137,7 +168,7 @@ def run_job(cloud,j,p):
             extension={'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp','image/gif':'.gif'}.get(mime)
             require(extension,'IMAGE_FORMAT','Google devolvió un formato de imagen no admitido. No se repitió la generación.')
             path=root/('image'+extension);path.write_bytes(raw);inspect(path,'video')
-            return {'assetId':asset(path,'image',('layer_'+ident_new()) if data.get('variantPrompt') else eid,{'variantOf':eid if data.get('variantPrompt') else None,'parentAssetId':refs[0]['id'] if data.get('variantPrompt') else None,'references':[a['id'] for a in refs],'dependencies':dependency_records(refs),'model':provider_config['models']['image'],'prompt':prompt})['id']}
+            return {'assetId':asset(path,'image',('layer_'+ident_new()) if data.get('variantPrompt') else eid,{'variantOf':eid if data.get('variantPrompt') else None,'parentAssetId':refs[0]['id'] if data.get('variantPrompt') else asset_parent,'references':[a['id'] for a in refs],'dependencies':asset_deps if asset_deps is not None else dependency_records(refs),'model':provider_config['models']['image'],'prompt':prompt})['id']}
         if op=='veo':
             from shorts.core.timing import veo_seconds
             shot=next(s for s in d['shots'] if s['id']==eid);image=selected(eid,'image')

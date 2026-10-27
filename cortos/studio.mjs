@@ -881,7 +881,7 @@ async function buildShotCard(shot,index){
 const has=selectedAsset(shot.id,shot.treatment==='veo'?'veo_silent_validated':'image');
   const c=document.createElement('article');c.className='shot-section scene-card';c.dataset.shot=shot.id;
   const header=document.createElement('div');header.className='scene-header';header.innerHTML=`<h3 class="scene-num">Plano ${String(index+1).padStart(2,'0')}</h3><span class="scene-act">${esc(titleFor(shot.treatment))} · ${(shot.frames/24).toFixed(1)} s</span>`;c.append(header);
-  const image=selectedAsset(shot.id,'image'),visuals=p.assets.filter(a=>a.entityId===shot.id||a.variantOf===shot.id);
+  const image=selectedAsset(shot.id,'image'),visuals=p.assets.filter(a=>a.entityId===shot.id);
   const media=document.createElement('div');media.className='scene-visuals';c.append(media);
   if(!visuals.length){const placeholder=document.createElement('div');placeholder.className='scene-img media-empty';placeholder.style.aspectRatio=p.format==='9:16'?'9 / 16':'16 / 9';placeholder.textContent='Imagen por generar';media.append(placeholder);}
   await assetVersions(media,visuals);
@@ -898,7 +898,7 @@ const has=selectedAsset(shot.id,shot.treatment==='veo'?'veo_silent_validated':'i
    buttons(row,[[assets.length?'Generar otra interpretación':'Generar voz japonesa',()=>runTask('tts',route('/assets:generate'),{operation:'tts',entityId:u.id}),assets.length>0]]);
   }
   if(has)buttons(c,[['Ver y escuchar esta toma',()=>previewShots([shot.id],c)]]);
-  const more=fold(c,'Editar y comparar');buttons(more,[['Movimiento y capas',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id}),true]]:[]),...(image&&shot.treatment==='veo'?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id}),true]]:[])]);
+  const more=fold(c,'Editar y comparar');buttons(more,[['Movimiento y cámara',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id}),true]]:[]),['Crear imagen principal con instrucción',()=>createShotImageWithInstruction(shot),true],...(image&&shot.treatment==='veo'?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id}),true]]:[])]);
   if(has)buttons(more,[['Ver y escuchar la escena entera',()=>previewShots(d.shots.filter(x=>x.beatId===shot.beatId).map(x=>x.id),c),true],['Comparar tomas contiguas',()=>compareShots(shot,c),true]]);
  return c;
 }
@@ -1154,22 +1154,23 @@ async function subtitlesView(){
  }
 }
 
+async function createShotImageWithInstruction(shot){
+ // Imagen principal con instrucción propia: no crea variante. La imagen
+ // que sale de aquí es una imagen propia de la toma; al aprobarla queda
+ // en uso para la toma y para el video, sin pasos extra.
+ const dialog=document.createElement('dialog');document.body.append(dialog);const box=card('Crear imagen principal con instrucción','<p>Escribe cómo quieres que salga la imagen. Se crea como imagen principal de esta toma, no como variante.</p>');dialog.append(box);
+ const field=document.createElement('textarea');field.placeholder='Ejemplo: sin pistola en las manos, manos en el pelo, conservar todo lo demás';const label=document.createElement('label');label.textContent='Instrucción para la imagen';label.append(field);box.append(label);
+ buttons(box,[['Generar imagen principal',async()=>{if(!field.value.trim())throw new Error('Escribe la instrucción para la imagen.');const instruction=field.value.trim();dialog.close();dialog.remove();await runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id,shotImageInstruction:instruction});await draw();say('Imagen principal creada. Revisa y aprueba su imagen para usarla en el video.');},true],['Cerrar',()=>{dialog.close();dialog.remove();},true]]);dialog.showModal();
+}
+
 async function visualEditor(shot){
- const dialog=document.createElement('dialog');document.body.append(dialog);const box=card('Movimiento y capas','<p>La cámara reutiliza la imagen aprobada. Una variante localizada solo se genera cuando la solicitas; el montaje reutiliza su archivo.</p>');dialog.append(box);
+ const dialog=document.createElement('dialog');document.body.append(dialog);const box=card('Movimiento y cámara','<p>La cámara reutiliza la imagen aprobada.</p>');dialog.append(box);
  const fields={},field=(key,label,value,min,max,step='any')=>{const l=document.createElement('label');l.textContent=label;const input=document.createElement('input');input.type='number';input.min=min;input.max=max;input.step=step;input.value=value;l.append(input);box.append(l);fields[key]=input;};
- const methodLabel=document.createElement('label');methodLabel.textContent='Tratamiento';const method=document.createElement('select');for(const [value,label] of [['hold','Ilustración sostenida'],['camera2d','Cámara 2D'],['localized','Variante localizada'],['veo','Veo']]){const option=document.createElement('option');option.value=value;option.textContent=label;method.append(option);}method.value=shot.treatment;methodLabel.append(method);box.append(methodLabel);
+ const methodLabel=document.createElement('label');methodLabel.textContent='Tratamiento';const method=document.createElement('select');for(const [value,label] of [['hold','Ilustración sostenida'],['camera2d','Cámara 2D'],['veo','Veo']]){const option=document.createElement('option');option.value=value;option.textContent=label;method.append(option);}method.value=shot.treatment==='localized'?'hold':shot.treatment;methodLabel.append(method);box.append(methodLabel);
  for(const [end,label] of [['start','Inicio'],['end','Final']]){const values=shot.camera?.[end]||[1,.5,.5];field(end+'Zoom',label+' · zoom',values[0],1,2);field(end+'X',label+' · centro horizontal (%)',values[1]*100,0,100);field(end+'Y',label+' · centro vertical (%)',values[2]*100,0,100);}
  const base=selectedAsset(shot.id,'image');
- if(base){const image=document.createElement('img');image.src=(await api(route(`/assets/${base.id}/url`))).url;image.alt='Referencia de la toma para elegir región';box.append(image);}
- const promptField=document.createElement('textarea');promptField.placeholder='Ejemplo: párpados cerrados, conservar todo lo demás';const label=document.createElement('label');label.textContent='Cambio para una nueva variante';label.append(promptField);box.append(label);
- buttons(box,[['Generar variante con Gemini',async()=>{if(!promptField.value.trim())throw new Error('Describe la variante.');await runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id,variantPrompt:promptField.value});dialog.close();dialog.remove();await draw();say('Variante creada. Revisa y aprueba su imagen antes de aplicar la máscara.');},true]]);
- const variants=p.assets.filter(a=>a.variantOf===shot.id&&a.approvalState==='approved'),layerRows=[];
- for(const variant of variants){const previous=shot.layers?.find(x=>x.assetRevision===variant.id);const row=card('Variante visual'),use=document.createElement('input');use.type='checkbox';use.checked=!!previous;const label=document.createElement('label');label.append(use,document.createTextNode('Usar esta variante'));row.append(label);const image=document.createElement('img');image.src=(await api(route(`/assets/${variant.id}/url`))).url;image.alt='Variante regional aprobada';row.append(image);const inputs={};
-  for(const [key,title,value,max] of [['x','Izquierda (%)',(previous?.mask.x??0)*100,100],['y','Arriba (%)',(previous?.mask.y??0)*100,100],['width','Ancho (%)',(previous?.mask.width??1)*100,100],['height','Alto (%)',(previous?.mask.height??1)*100,100],['startFrame','Primer fotograma',previous?.startFrame??0,shot.frames-1],['endFrame','Fotograma de salida',previous?.endFrame??shot.frames,shot.frames]]){const l=document.createElement('label');l.textContent=title;const input=document.createElement('input');input.type='number';input.min=0;input.max=max;input.value=value;input.step=key.endsWith('Frame')?'1':'.1';l.append(input);row.append(l);inputs[key]=input;}
-  const note=document.createElement('p');note.textContent='Se superpone únicamente la región rectangular elegida durante este intervalo; comprueba sus bordes y continuidad en la preview.';row.append(note);const voice=document.createElement('select'),manual=document.createElement('option');manual.value='';manual.textContent='Intervalo manual';voice.append(manual);
-  for(const u of development().utterances.filter(u=>u.shotId===shot.id)){const a=selectedAsset(u.id,'pcm');if(a){const option=document.createElement('option');option.value=a.id;option.textContent='Boca por actividad: '+u.spanish.slice(0,45);voice.append(option);}}
-  voice.value=previous?.voiceBinding?.audioRevision||'';const voiceLabel=document.createElement('label');voiceLabel.textContent='Activar variante (apertura/cierre limitado, sin sincronía fonética garantizada)';voiceLabel.append(voice);row.append(voiceLabel);box.append(row);layerRows.push({variant,use,inputs,voice});
- }
+ if(base){const image=document.createElement('img');image.src=(await api(route(`/assets/${base.id}/url`))).url;image.alt='Imagen aprobada de la toma';box.append(image);}
+ const layerRows=[];
  buttons(box,[['Guardar candidata visual',async()=>{const camera=Object.fromEntries(['start','end'].map(end=>[end,[Number(fields[end+'Zoom'].value),Number(fields[end+'X'].value)/100,Number(fields[end+'Y'].value)/100]]));const layers=layerRows.filter(x=>x.use.checked).map(({variant,inputs,voice})=>({...(voice.value?{voiceBinding:(()=>{const a=p.assets.find(a=>a.id===voice.value);return {utteranceId:a.entityId,audioRevision:a.id,audioHash:a.sha256};})()}:{}),assetRevision:variant.id,mask:Object.fromEntries(['x','y','width','height'].map(k=>[k,Number(inputs[k].value)/100])),startFrame:Number(inputs.startFrame.value),endFrame:Number(inputs.endFrame.value),approved:true}));await mutate(route(`/shots/${shot.id}/visual:propose`),{treatment:method.value,camera,layers});dialog.close();dialog.remove();stage='Historia';await draw();say('Edición visual candidata. Revisa su alcance antes de aprobarla.');}],['Cerrar',()=>{dialog.close();dialog.remove();},true]]);dialog.showModal();
 }
 

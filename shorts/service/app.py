@@ -406,7 +406,7 @@ def generate(pid):
         speaker=next(x for x in dev['data']['bible']['characters'] if x['id']==u['speakerId'])
         tts_payload(config(),u,speaker['voice'])
     if d['operation']=='review':require(any(a['id']==d.get('assetId') for a in assets),'ASSET','Material a revisar inexistente')
-    return submit(pid,d['operation'],{k:d[k] for k in ('entityId','assetId','referenceIds','seconds','variantPrompt') if k in d})
+    return submit(pid,d['operation'],{k:d[k] for k in ('entityId','assetId','referenceIds','seconds','variantPrompt','shotImageInstruction') if k in d})
 
 def batch_plan(p):
     from shorts.core.batches import pending_plan
