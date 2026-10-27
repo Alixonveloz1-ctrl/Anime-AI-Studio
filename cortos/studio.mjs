@@ -170,6 +170,20 @@ async function runTask(operation,path,data={}){
  say('Solicitud guardada. Comprobando su estado…');
  const result=await watch(job.jobId,projectId);
  if(result&&terminal(result.state)&&result.state!=='submitted_unknown')localStorage.removeItem(storageKey);
+ // Aprobación automática: el usuario genera cada cosa a mano, una por una,
+ // así que no tiene sentido hacerle pulsar "Aprobar" después de cada
+ // generación. La última generación de imagen, video, voz, música o efecto
+ // subido queda aprobada y en uso sola, sin botón extra. Si regenera porque
+ // la anterior salió mal, la nueva la reemplaza automáticamente. No se
+ // aplica a variantes, revisiones, importaciones ni a otros trabajos, que
+ // siguen pidiendo revisión explícita.
+ if(result?.state==='succeeded'&&['image','veo','tts','music','media'].includes(operation)&&result.result?.assetId&&!data.variantPrompt){
+  try{
+   await refresh();
+   const asset=p?.assets?.find(a=>a.id===result.result.assetId);
+   if(asset?.approvalState==='candidate'&&!asset.variantOf)await approve('assets',asset.id,true);
+  }catch(e){say('La generación terminó, pero no quedó aprobada automáticamente: '+e.message,true);}
+ }
  if(p?.id===projectId&&stage===currentStage)needsRedraw=true;
  return job.jobId;
 }
@@ -1160,7 +1174,7 @@ async function createShotImageWithInstruction(shot){
  // en uso para la toma y para el video, sin pasos extra.
  const dialog=document.createElement('dialog');document.body.append(dialog);const box=card('Crear imagen principal con instrucción','<p>Escribe cómo quieres que salga la imagen. Se crea como imagen principal de esta toma, no como variante.</p>');dialog.append(box);
  const field=document.createElement('textarea');field.placeholder='Ejemplo: sin pistola en las manos, manos en el pelo, conservar todo lo demás';const label=document.createElement('label');label.textContent='Instrucción para la imagen';label.append(field);box.append(label);
- buttons(box,[['Generar imagen principal',async()=>{if(!field.value.trim())throw new Error('Escribe la instrucción para la imagen.');const instruction=field.value.trim();dialog.close();dialog.remove();await runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id,shotImageInstruction:instruction});await draw();say('Imagen principal creada. Revisa y aprueba su imagen para usarla en el video.');},true],['Cerrar',()=>{dialog.close();dialog.remove();},true]]);dialog.showModal();
+ buttons(box,[['Generar imagen principal',async()=>{if(!field.value.trim())throw new Error('Escribe la instrucción para la imagen.');const instruction=field.value.trim();dialog.close();dialog.remove();await runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id,shotImageInstruction:instruction});await draw();say('Imagen principal creada y en uso para el video.');},true],['Cerrar',()=>{dialog.close();dialog.remove();},true]]);dialog.showModal();
 }
 
 async function visualEditor(shot){
