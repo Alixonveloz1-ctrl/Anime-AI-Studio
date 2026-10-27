@@ -7,7 +7,7 @@ let user,p,stage='Historia',productionTab='tomas',reviewTab='corto',active=false
 let mediaLoads=[];
 let knownJobs=[],watchVersion=0;
 let generatorCatalog,generatorSave=null,mutationQueue=Promise.resolve();
-let lastGeneration=null;
+let lastGeneration=null,pendingCard=null;
 const projectTitle=item=>item.title?.trim()||'Corto sin título';
 let transport=fetch;
 // A reload of the same tab is the SAME production session. Minting a new id
@@ -138,7 +138,7 @@ function resumirPendientes(issues){
 }
 function describeIssue(text){const d=development();if(!d)return text;let value=String(text);const ids=[...d.shots,...d.utterances,...d.soundRequests,...d.musicRequests,...d.bible.characters,...d.bible.locations,...d.bible.props].sort((a,b)=>b.id.length-a.id.length);for(const row of ids)value=value.replaceAll(row.id,entityName(d,row.id));return value;}
 async function runTask(operation,path,data={}){
- lastGeneration=data?.entityId?{operation,entityId:data.entityId}:null;
+ lastGeneration=data?.entityId?{operation,entityId:data.entityId}:null;pendingCard=data?.entityId||null;
  if(generatorSave)await generatorSave;
  await mutationQueue;
  // Another job of the same kind may be running for a DIFFERENT shot, line or
@@ -309,24 +309,49 @@ async function refreshEffectCard(usos){
  const nueva=await buildEffectCard(actuales);
  return reemplazarTarjeta(vieja,nueva,inicio);
 }
+async function refreshReferenceCard(entityId){
+ const d=development();if(!d)return false;
+ for(const group of ['characters','locations','props']){
+  const e=d.bible[group].find(x=>x.id===entityId);if(!e)continue;
+  const vieja=document.querySelector(`[data-entity="${entityId}"]`);if(!vieja)return false;
+  const inicio=mediaLoads.length;
+  const nueva=await buildReferenceSection(group,e);
+  return reemplazarTarjeta(vieja,nueva,inicio);
+ }
+ return false;
+}
 async function refreshGeneratedCard(){
- if(!lastGeneration)return false;
+ const eid=pendingCard||lastGeneration?.entityId;
  try{
   await refresh();
-  const d=development();if(!d||stage!=='Escenas')return false;
-  const eid=lastGeneration.entityId;
+  const d=development();if(!d)return false;
+  if(!eid)return false;
+  // Si la tarjeta no está en la pantalla que el usuario ve ahora (cambió
+  // de sección mientras generaba), no se redibuja nada: los datos ya están
+  // actualizados y la tarjeta nueva aparecerá cuando vuelva a esa sección.
+  if(stage==='Personajes'){const ut=d.utterances.find(u=>u.id===eid);await refreshReferenceCard(ut?ut.speakerId:eid).catch(()=>false);return true;}
+  if(stage!=='Escenas')return true;
   const shot=d.shots.find(s=>s.id===eid)||d.shots.find(s=>d.utterances.some(u=>u.id===eid&&u.shotId===s.id));
-  if(shot&&productionTab==='tomas')return await refreshShotCard(shot.id);
+  if(shot){await refreshShotCard(shot.id).catch(()=>false);return true;}
   const music=d.musicRequests.find(m=>m.id===eid);
-  if(music&&productionTab==='sonido')return await refreshMusicCard(music.id);
-  return false;
- }catch{return false;}
+  if(music){await refreshMusicCard(music.id).catch(()=>false);return true;}
+  const uso=d.soundRequests.find(r=>r.id===eid||r.soundGroup===eid);
+  if(uso){await refreshEffectCard([uso]).catch(()=>false);return true;}
+  return true;
+ }catch{return true;}
 }
 async function refreshAfterGeneration(){
  if(!needsRedraw)return;
  needsRedraw=false;
- if(await refreshGeneratedCard().catch(()=>false))return;
- await draw();
+ // Con una tarjeta concreta (imagen, voz, música, efecto, aprobación):
+ // sólo se actualiza esa tarjeta, nunca toda la pantalla, aunque el
+ // usuario haya cambiado de sección mientras generaba. Sin tarjeta
+ // concreta (ideas, guion, revisiones) sigue siendo necesario redibujar,
+ // porque lo generado es contenido nuevo en la pantalla.
+ const hasCard=pendingCard||lastGeneration?.entityId;
+ if(!hasCard){await draw();pendingCard=null;return;}
+ await refreshGeneratedCard().catch(()=>{});
+ pendingCard=null;
 }
 async function drawScreen(){
  mediaLoads=[];
@@ -451,7 +476,7 @@ async function revise(kind,e){
  const instruction=document.createElement('textarea');instruction.placeholder='Describe qué debe cambiar y qué debe conservarse';const field=document.createElement('label');field.textContent='Corrección';field.append(instruction);dialog.append(field);
  buttons(dialog,[['Crear candidata',async()=>{if(!instruction.value.trim())throw new Error('Describe la corrección.');await runTask('revise',route(`/revisions/${kind}/${e.id}:revise`),{instruction:instruction.value,scope:options[Number(select.value)]});dialog.close();dialog.remove();await draw();}],['Cerrar',()=>{dialog.close();dialog.remove();},true]]);dialog.showModal();
 }
-async function approve(kind,id,reviewed=false){await mutate(route(`/revisions/${kind}/${id}:approve`),{reviewed});needsRedraw=true;say('Versión aprobada y conservada.');}
+async function approve(kind,id,reviewed=false){const asset=p?.assets?.find(a=>a.id===id);pendingCard=asset?.entityId||null;await mutate(route(`/revisions/${kind}/${id}:approve`),{reviewed});needsRedraw=true;say('Versión aprobada y conservada.');}
 // Lo que decide el director, no el usuario: identificadores internos, encuadre,
 // fotogramas y fontanería del sonido. Volcarlo en las pantallas de lectura
 // llenaba la pantalla de datos que no se deciden ahí (el editor manual sigue
@@ -785,7 +810,7 @@ function voiceControls(parent,character){
  }
  select.value=names.includes(saved.name)?saved.name:'';label.append(select);parent.append(label);
  const directionLabel=document.createElement('label');directionLabel.textContent='Cómo habla';const direction=document.createElement('textarea');direction.value=saved.direction;direction.maxLength=1000;directionLabel.append(direction);parent.append(directionLabel);
- const note=document.createElement('p');note.className='muted';note.textContent='Se aplica a todas sus frases en japonés. Al escuchar se guardan primero tus cambios. Los audios anteriores se conservan como versiones.';parent.append(note);
+ const note=document.createElement('p');note.className='muted';note.textContent='Se aplica a todas sus frases en japonés. Al escuchar se guardan primero tus cambios. Solo se muestra la versión más nueva.';parent.append(note);
  const status=document.createElement('p');status.className='muted';status.setAttribute('role','status');parent.append(status);
  const describe=()=>{const falta=!names.includes(select.value);status.className=falta?'error':'muted';status.textContent=falta?'Esta voz no está en el catálogo, así que el personaje no puede hablar. Elige una de la lista y guarda.':select.value!==saved.name||direction.value!==saved.direction?'Cambios pendientes. Puedes guardar o generar la primera frase.':'Voz guardada: '+saved.name+'.';};
  select.onchange=describe;direction.oninput=describe;describe();
@@ -809,10 +834,22 @@ function voiceControls(parent,character){
  if(first){const sample=document.createElement('div');parent.append(sample);buttons(sample,[['Generar primera frase para escuchar',async()=>{
   await saveVoice();
   if(p?.id!==projectId)throw new Error('Cambió el proyecto abierto. No se generó otra voz.');
-  await runTask('tts',`/projects/${projectId}/assets:generate`,{operation:'tts',entityId:first.id});await draw();
+  await runTask('tts',`/projects/${projectId}/assets:generate`,{operation:'tts',entityId:first.id});
  },true]]);for(const a of p.assets.filter(a=>a.entityId===first.id).slice(-1))void assetCard(sample,a);}
 }
 
+async function buildReferenceSection(group,e){
+ const section=card(e.name);section.classList.add('char-card');section.dataset.entity=e.id;
+ const description=document.createElement('p');description.className='char-detail';description.textContent=e.description||e.objective||e.layout||e.state||'';section.append(description);
+ // La voz va primero en la ficha: estaba debajo de la imagen y de sus
+ // botones, y al fallar la generación («elige una voz») no se encontraba.
+ if(group==='characters')voiceControls(section,e);
+ const rows=p.assets.filter(a=>a.entityId===e.id);await assetVersions(section,rows);
+ if(!rows.length){const placeholder=document.createElement('div');placeholder.className='scene-img media-empty';placeholder.textContent='Referencia por generar';section.append(placeholder);}
+ buttons(section,[[rows.length?'Crear otra referencia':'Generar referencia',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:e.id}),rows.length>0]]);
+ const details=fold(section,'Ficha y dirección visual');readable(details,e);
+ return section;
+}
 async function references(){
  pageTitle('👥 Personajes, lugares y objetos');
  const d=development();
@@ -821,17 +858,7 @@ async function references(){
  for(const [group,title] of [['characters','Personajes'],['locations','Lugares'],['props','Objetos']]){
   if(!d.bible[group].length)continue;
   const heading=document.createElement('h3');heading.textContent=title;screen.append(heading);
-  for(const e of d.bible[group]){
-   const section=card(e.name);section.classList.add('char-card');screen.append(section);
-   const description=document.createElement('p');description.className='char-detail';description.textContent=e.description||e.objective||e.layout||e.state||'';section.append(description);
-   // La voz va primero en la ficha: estaba debajo de la imagen y de sus
-   // botones, y al fallar la generación («elige una voz») no se encontraba.
-   if(group==='characters')voiceControls(section,e);
-   const rows=p.assets.filter(a=>a.entityId===e.id);await assetVersions(section,rows);
-   if(!rows.length){const placeholder=document.createElement('div');placeholder.className='scene-img media-empty';placeholder.textContent='Referencia por generar';section.append(placeholder);}
-   buttons(section,[[rows.length?'Crear otra referencia':'Generar referencia',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:e.id}),rows.length>0]]);
-   const details=fold(section,'Ficha y dirección visual');readable(details,e);
-  }
+  for(const e of d.bible[group])screen.append(await buildReferenceSection(group,e));
  }
  const importBox=fold(screen,'Reutilizar de otra historia');buttons(importBox,[['Importar referencia o música',()=>importAsset(),true]]);
  // Aquí se piden referencias y voces, así que lo que espera una decisión
@@ -912,7 +939,7 @@ const r=usos[0];
   promptBox(c,r.prompt);
   if(r.type!=='ambience'&&(r.preparationSeconds||r.tailSeconds)){const margen=document.createElement('p');margen.className='muted';margen.textContent=`Preparación: ${r.preparationSeconds} s · Cola: ${r.tailSeconds} s`;c.append(margen);}
   const label=document.createElement('label');label.className='upload';label.textContent='Subir tu efecto';const input=document.createElement('input');input.type='file';input.accept='audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/aac,audio/x-aac,audio/mp4,audio/x-m4a,audio/ogg,audio/flac,audio/webm,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.webm';label.append(input);c.append(label);const progress=document.createElement('progress');progress.max=1;progress.value=0;progress.hidden=true;c.append(progress);
-  input.onchange=async()=>{progress.hidden=false;try{await uploadSound(r,input.files[0],progress);if(!(await refreshEffectCard(usos)))await draw();}catch(e){say(e.message,true);}finally{progress.hidden=true;input.value='';}};
+  input.onchange=async()=>{progress.hidden=false;try{await uploadSound(r,input.files[0],progress);await refreshEffectCard(usos).catch(()=>false);}catch(e){say(e.message,true);}finally{progress.hidden=true;input.value='';}};
   // Un archivo para todo el grupo, y una sincronización por toma.
   await assetVersions(c,p.assets.filter(a=>usos.some(u=>u.id===a.requestId)));
   for(const uso of usos){

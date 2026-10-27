@@ -23,12 +23,13 @@ export function jobMessage(job){
  return label(job.state);
 }
 export function versions(rows,selectedId){
+ // Solo la versión más nueva: si el usuario regeneró un recurso es porque
+ // la versión anterior quedó mal, así que las viejas no se ofrecen como
+ // opciones. Los datos viejos se conservan en el servidor, pero la pantalla
+ // muestra únicamente la más reciente, para aprobarla o regenerarla.
  const sorted=[...rows].sort((a,b)=>(a.created||0)-(b.created||0));
- const current=sorted.find(x=>x.id===selectedId)||sorted.filter(x=>x.approvalState==='approved').at(-1);
- const candidate=sorted.filter(x=>x.approvalState==='candidate').at(-1);
- const visible=[candidate,current].filter((x,i,a)=>x&&a.indexOf(x)===i);
- if(!visible.length&&sorted.length)visible.push(sorted.at(-1));
- return {visible,history:sorted.filter(x=>!visible.includes(x)).reverse()};
+ const newest=sorted.at(-1);
+ return {visible:newest?[newest]:[],history:[]};
 }
 export function enCola(job){return job.dispatchError?.code==='CAPACITY_BUSY'&&!job.settled;}
 export function taskActions(job){

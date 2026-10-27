@@ -114,11 +114,12 @@ test('Blocked production exposes the next action above the script and reaches im
   assert.deepEqual(fixture.calls.filter(c=>c.path.endsWith('/assets:generate')).map(c=>c.body.operation),['image','veo','tts']);
  }finally{dom.window.close();}
 });
-test('Current and candidate remain visible; previous versions are folded; one review approves',async()=>{
+test('Only the newest version is shown, never old versions; one review approves',async()=>{
  const {fixture,w,dom,click}=await setup();await click('Escenas');
- const shot=[...w.document.querySelectorAll('.shot-section')][0];const history=[...shot.querySelectorAll('details')].find(x=>x.querySelector('summary')?.textContent.startsWith('Versiones anteriores'));assert.ok(history);assert.equal(history.open,false);
+ const shot=[...w.document.querySelectorAll('.shot-section')][0];const history=[...shot.querySelectorAll('details')].find(x=>x.querySelector('summary')?.textContent.startsWith('Versiones anteriores'));assert.equal(history,undefined);
  const candidate=[...shot.querySelectorAll('.card')].find(x=>x.querySelector(':scope>.badge')?.textContent.includes('Por revisar'));
  assert.ok(candidate);assert.equal(candidate.querySelectorAll('input[type=checkbox]').length,0);
+ assert.equal(shot.querySelectorAll('.scene-visuals>.asset-card img').length,1,'Only the newest image is shown, not the older approved one');
  await new Promise(r=>setTimeout(r,0));assert.ok(candidate.querySelector('img'),'Candidate image is visible without opening another panel');candidate.querySelector('img').onload();await click('Aprobar versión',candidate);
  const sent=fixture.calls.find(c=>c.path.includes('imgCandidate:approve'));assert.deepEqual(sent.body,{reviewed:true});assert.equal(fixture.project.assetSelections['shot1|image'],'imgCandidate');dom.window.close();
 });
@@ -230,7 +231,7 @@ test('Scenes show image and voice players inline, references stay under Personaj
   const shots=w.document.querySelectorAll('.scene-card');assert.equal(shots.length,2);
   assert.equal([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Generar pendientes'),false,'Production must not silently launch multiple assets');
   assert.equal(shots[0].closest('details'),null);
-  assert.equal(shots[0].querySelectorAll('.scene-visuals>.asset-card img').length,2,'Approved image and candidate both remain visible');
+  assert.equal(shots[0].querySelectorAll('.scene-visuals>.asset-card img').length,1,'Only the newest image is shown, never the older approved one');
   assert.ok(shots[0].querySelector('.voice-row audio[controls]'));
   assert.equal(shots[0].querySelector('audio').autoplay,false);
   assert.ok(shots[0].textContent.includes('Todavía estamos a tiempo.'));
