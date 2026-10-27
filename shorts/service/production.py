@@ -242,16 +242,15 @@ def run_job(cloud,j,p):
                     bed=other.get('type')=='ambience'
                     place={'anchorShotId':other['shotId'],'anchorFrameOffset':0} if bed else {'eventId':'event_'+ident_new()}
                     shared.append(entity('cues',{'audioRevision':a['id'],'requestId':other['id'],'track':'ambience' if bed else 'sfx','shotId':other['shotId'],'sourceSyncSample':0 if bed else (attacks[0] if attacks else 0),'trimInSample':0,'trimOutSample':meta['samples'],'offsetSamples':0,'gainDb':0,**place,'correctionSource':'detector','manualLock':False,'eventDescription':other['eventDescription'],'requestFingerprint':digest(other),'analysisAttempts':0}))
-            auto_job=None
-            try:
-                current=cloud.project(pid,p['owner'])
-                if not ambience:auto_job=cloud.submit(current,'analyze',{'cueId':cue['id'],'reason':'Sincronización tras carga','developmentId':p['activeDevelopment'],'approvedAssetIds':data.get('approvedAssetIds',[])},j['id']+'-analysis',current['revision'],j['session'])['id']
-                for extra in shared:
-                    if extra['track']=='ambience':continue
-                    current=cloud.project(pid,p['owner'])
-                    cloud.submit(current,'analyze',{'cueId':extra['id'],'reason':'Sincronización del mismo sonido en otra toma','developmentId':p['activeDevelopment'],'approvedAssetIds':data.get('approvedAssetIds',[])},j['id']+'-analysis-'+extra['id'],current['revision'],j['session'])
-            except ContractError:pass
-            return {'analysisJobId':auto_job,'assetId':a['id'],'cueId':cue['id'],'sharedCueIds':[x['id'] for x in shared],'requiresVisualAnchor':True,'requestedSeconds':req['seconds'],'receivedSeconds':meta['samples']/48000}
+            # Subir un efecto es solo cargar y guardar: NO se lanza ningún
+            # análisis automático de sincronización al subir, porque ese
+            # análisis era lo que hacía eterna la carga y obligaba a
+            # cancelarla. El efecto queda guardado con su ataque detectado
+            # como sincronización inicial, y si el usuario quiere afinarlo
+            # lo hace a mano con "Ajustar sincronización" o con "Localizar
+            # contacto" en "Ayuda con IA", que sí lanza el análisis solo
+            # cuando él lo pide.
+            return {'analysisJobId':None,'assetId':a['id'],'cueId':cue['id'],'sharedCueIds':[x['id'] for x in shared],'requiresVisualAnchor':False,'requestedSeconds':req['seconds'],'receivedSeconds':meta['samples']/48000}
         if op=='analyze':
             from google.cloud import firestore
             @firestore.transactional

@@ -133,7 +133,11 @@ def assemble_plan(cloud,p,cue_overrides=None):
     all_cues=[x.to_dict() for x in cloud.project_ref(pid).collection('cues').stream()]
     selections={**p.get('cueSelections',{}),**(cue_overrides or {})}
     stored=[]
-    omitted={k for k,v in p.get('soundOmissions',{}).items() if v.get('developmentId')==dev['id']}
+    # Una omisión es una decisión editorial sobre esa solicitud de sonido y
+    # se mantiene aunque el guion cambie de revisión: si solo se respetara
+    # con el mismo developmentId, omitir y luego revisar el guion haría que
+    # el efecto volviera a pedirse, que era el error reportado.
+    omitted=set(p.get('soundOmissions',{}).keys())
     for req in d['soundRequests']:
         if req['id'] in omitted:continue
         versions=sorted([c for c in all_cues if c.get('requestId')==req['id']],key=lambda c:c.get('created',0))

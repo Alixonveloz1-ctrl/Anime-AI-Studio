@@ -878,6 +878,14 @@ def omit_sound(pid,sid):
     _,p=cloud().mutate(pid,expected(),change)
     return jsonify(record)
 
+@app.post('/projects/<pid>/sound-requests/<sid>/unomit')
+def unomit_sound(pid,sid):
+    p=owned(pid)
+    def change(tx,current):
+        (current.get('soundOmissions') or {}).pop(sid,None);current['timelineStale']=True
+    _,p=cloud().mutate(pid,expected(),change)
+    return jsonify(removed=True)
+
 @app.post('/projects/<pid>/subtitles:approve')
 def subtitles_approve(pid):
     p=owned(pid);ref=cloud().entity_ref(pid,'developments',p['activeDevelopment']);d=body()

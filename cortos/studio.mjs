@@ -1013,10 +1013,19 @@ async function sounds(){
  if(d.musicRequests.length){const music=fold(screen,'Música',true);for(const [index,m] of d.musicRequests.entries())music.append(await buildMusicCard(m,index));}
  // Un sonido que se repite es UNA tarjeta: el plan agrupa las solicitudes que
  // son el mismo sonido y subir su archivo una vez lo coloca en todas sus tomas.
- const grupos=new Map();
+ // Un efecto omitido NO se muestra como pendiente: se aparta a su propia
+ // sección, con opción de restaurarlo, porque si no, omitir parecía no
+ // aceptarse y el efecto seguía pidiéndose.
+ const omitidos=new Set(Object.keys(p.soundOmissions||{}));
+ const grupos=new Map(),gruposOmitidos=[];
  for(const r of d.soundRequests){const clave=r.soundGroup||r.id;if(!grupos.has(clave))grupos.set(clave,[]);grupos.get(clave).push(r);}
- const effects=d.soundRequests.length?fold(screen,'Efectos de sonido · '+grupos.size):null;
- for(const usos of grupos.values())effects.append(await buildEffectCard(usos));
+ for(const usos of [...grupos.values()])if(usos.every(u=>omitidos.has(u.id)))gruposOmitidos.push(usos);
+ const visibles=[...grupos.values()].filter(usos=>!usos.every(u=>omitidos.has(u.id)));
+ const effects=visibles.length?fold(screen,'Efectos de sonido · '+visibles.length):null;
+ for(const usos of visibles)effects.append(await buildEffectCard(usos));
+ if(gruposOmitidos.length){const omitidosBox=fold(screen,'Efectos omitidos · '+gruposOmitidos.length);
+  for(const usos of gruposOmitidos){const line=document.createElement('p');line.textContent=usos[0].name+' · omitido';omitidosBox.append(line);buttons(omitidosBox,[['Restaurar este efecto',async()=>{for(const uso of usos)await mutate(route(`/sound-requests/${uso.id}/unomit`),{});await draw();},true]]);}
+ }
 }
 
 async function uploadSound(r,file,progress){
@@ -1047,7 +1056,7 @@ async function uploadSound(r,file,progress){
   offset=received;progress.value=offset/file.size;
  }
  const jobId=await runTask('media',route(`/sound-requests/${r.id}/complete`),{assetId:sessionUpload.assetId});
- say(jobId?'Archivo recibido. Revisa el ataque propuesto y su contexto.':'Archivo conservado. Su preparación espera tu autorización.');
+ say(jobId?'Efecto guardado y en uso.':'Archivo conservado. Su preparación espera tu autorización.');
 }
 
 async function playPreview(id,parent){const d=await api(route(`/previews/${id}`));if(!d.url)throw new Error('Preview aún no disponible.');if(d.current===false){const stale=document.createElement('p');stale.className='error';stale.textContent='Versión anterior: cambiaron sus dependencias. Puedes compararla, pero no aprobar ajustes nuevos con ella.';parent.append(stale);}if(d.draftIssues?.length){const note=document.createElement('p');note.className='muted';note.textContent='Borrador: '+resumirPendientes(d.draftIssues);parent.append(note);}parent.querySelector(':scope > video.preview-player')?.remove();const v=document.createElement('video');v.className='preview-player';v.controls=true;v.playsInline=true;v.src=d.url;parent.append(v);return d;}
