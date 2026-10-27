@@ -332,7 +332,10 @@ async function refreshGeneratedCard(){
   if(stage==='Personajes'){const ut=d.utterances.find(u=>u.id===eid);await refreshReferenceCard(ut?ut.speakerId:eid).catch(()=>false);return true;}
   if(stage!=='Escenas')return true;
   const shot=d.shots.find(s=>s.id===eid)||d.shots.find(s=>d.utterances.some(u=>u.id===eid&&u.shotId===s.id));
-  if(shot){await refreshShotCard(shot.id).catch(()=>false);return true;}
+  // Si la tarjeta no se pudo redibujar, no se deja la pantalla vieja como si
+  // nada hubiera pasado: se redibuja entera para que la selección nueva se
+  // vea, en vez de que el botón parezca no hacer nada.
+  if(shot){if(!(await refreshShotCard(shot.id).catch(()=>false)))await draw();return true;}
   const music=d.musicRequests.find(m=>m.id===eid);
   if(music){await refreshMusicCard(music.id).catch(()=>false);return true;}
   const uso=d.soundRequests.find(r=>r.id===eid||r.soundGroup===eid);
@@ -476,7 +479,8 @@ async function revise(kind,e){
  const instruction=document.createElement('textarea');instruction.placeholder='Describe qué debe cambiar y qué debe conservarse';const field=document.createElement('label');field.textContent='Corrección';field.append(instruction);dialog.append(field);
  buttons(dialog,[['Crear candidata',async()=>{if(!instruction.value.trim())throw new Error('Describe la corrección.');await runTask('revise',route(`/revisions/${kind}/${e.id}:revise`),{instruction:instruction.value,scope:options[Number(select.value)]});dialog.close();dialog.remove();await draw();}],['Cerrar',()=>{dialog.close();dialog.remove();},true]]);dialog.showModal();
 }
-async function approve(kind,id,reviewed=false){const asset=p?.assets?.find(a=>a.id===id);pendingCard=asset?.entityId||null;await mutate(route(`/revisions/${kind}/${id}:approve`),{reviewed});needsRedraw=true;say('Versión aprobada y conservada.');}
+async function approve(kind,id,reviewed=false){const asset=p?.assets?.find(a=>a.id===id);pendingCard=asset?.variantOf||asset?.entityId||null;await mutate(route(`/revisions/${kind}/${id}:approve`),{reviewed});needsRedraw=true;say('Versión aprobada y conservada.');}
+async function useVariantAsShotImage(a){const shotId=a.variantOf;pendingCard=shotId;const promoted=await mutate(route(`/assets/${a.id}:use-as-shot-image`),{});needsRedraw=true;if(selectedAsset(shotId,'image')?.id!==promoted.id)throw new Error('La variante no quedó en uso para la toma. Vuelve a intentarlo.');say('Variante usada como imagen de la toma.');}
 // Lo que decide el director, no el usuario: identificadores internos, encuadre,
 // fotogramas y fontanería del sonido. Volcarlo en las pantallas de lectura
 // llenaba la pantalla de datos que no se deciden ahí (el editor manual sigue
@@ -703,7 +707,13 @@ function expandImage(url,name){
 }
 async function assetCard(parent,a){
  const name=entityName(development(),a.entityId),projectId=p.id;
- const c=card(titleFor(a.kind),`<p class="badge">${esc(titleFor(a.approvalState))}${selectedAsset(a.entityId,a.kind)?.id===a.id?' · en uso':''}</p>`);c.classList.add('asset-card');parent.append(c);
+ // Una variante (variantOf) no es una imagen de toma: nunca queda "en uso"
+ // para la toma con "Usar esta versión", así que se etiqueta como variante
+ // y se le da su propio botón de promoción, en vez de ofrecerle un botón
+ // que selecciona solo la capa y parece no hacer nada.
+ const promotedCopy=a.variantOf?p.assets.find(x=>x.promotedFrom===a.id):null;
+ const inUse=promotedCopy&&selectedAsset(a.variantOf,'image')?.id===promotedCopy.id;
+ const c=card(titleFor(a.kind),`<p class="badge">${esc(titleFor(a.approvalState))}${a.variantOf?' · variante':selectedAsset(a.entityId,a.kind)?.id===a.id?' · en uso':''}${inUse?' · en uso como imagen de la toma':''}</p>`);c.classList.add('asset-card');parent.append(c);
  if(a.requestId&&a.samples){const requested=development()?.soundRequests.find(x=>x.id===a.requestId);const duration=document.createElement('p');duration.className='muted';duration.textContent=`Solicitado: ${requested?.seconds??'—'} s · archivo: ${(a.samples/48000).toFixed(2)} s`;c.append(duration);}
  const mediaBox=document.createElement('div');mediaBox.className='asset-media';c.append(mediaBox);
  if(a.approvalState==='quarantined'||!['image','pcm','veo_silent_validated'].includes(a.kind)){mediaBox.textContent='Este archivo no está validado para reproducirse.';return;}
@@ -732,7 +742,8 @@ async function assetCard(parent,a){
  };
  mediaLoads.push(open);
  if(a.approvalState==='candidate')buttons(c,[['Aprobar versión',async()=>{if(!opened){await open();say('Revisa el recurso cargado y pulsa Aprobar versión cuando esté listo.');return;}await approve('assets',a.id,true);},true]]);
- else if(a.approvalState==='approved'&&selectedAsset(a.entityId,a.kind)?.id!==a.id)buttons(c,[['Usar esta versión',()=>approve('assets',a.id),true]]);
+ else if(a.approvalState==='approved'&&a.variantOf&&!inUse)buttons(c,[['Usar como imagen de esta toma',()=>useVariantAsShotImage(a),true]]);
+ else if(a.approvalState==='approved'&&!a.variantOf&&selectedAsset(a.entityId,a.kind)?.id!==a.id)buttons(c,[['Usar esta versión',()=>approve('assets',a.id),true]]);
 }
 async function assetVersions(parent,rows){
  const groups=Object.groupBy(rows,a=>a.entityId+'|'+a.kind);

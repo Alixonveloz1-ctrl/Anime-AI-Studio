@@ -354,6 +354,44 @@ def approve(pid,kind,eid):
         return entity
     entity,_=cloud().mutate(pid,expected(),change);return jsonify(entity)
 
+@app.post('/projects/<pid>/assets/<aid>:use-as-shot-image')
+def use_variant_as_shot_image(pid,aid):
+    # Una variante aprobada (layer_*, variantOf=una toma) no es una imagen de
+    # toma: su entityId es la capa, su huella es None y select_assets nunca
+    # la devuelve para la toma, así que "Usar esta versión" sobre una variante
+    # parecía no hacer nada: seleccionaba la capa, no la toma, y el video
+    # seguía usando la imagen vieja. Esta promoción crea una copia de la
+    # variante como imagen propia de la toma, con la huella del guion vigente
+    # y sin dependencias, porque el usuario la eligió explícitamente; así la
+    # selección queda en uso para la toma y para Generar video. Si ya existe
+    # una copia promovida de esta variante, se reutiliza en vez de duplicarla.
+    from shorts.core.dependencies import fingerprint
+    p=owned(pid);require(p.get('activeDevelopment'),'DEVELOPMENT','Aprueba guion y biblias primero')
+    dev=cloud().entity(pid,'developments',p['activeDevelopment'])
+    variant=cloud().entity(pid,'assets',aid)
+    require(variant.get('kind')=='image' and variant.get('approvalState')=='approved','VARIANT','Solo una variante de imagen aprobada puede usarse como imagen de la toma')
+    shot_id=variant.get('variantOf');require(shot_id,'VARIANT','Esta imagen no es una variante de una toma')
+    shot=next((s for s in dev['data']['shots'] if s['id']==shot_id),None);require(shot,'SHOT','La toma de la variante ya no existe en el guion vigente')
+    existing=None
+    for row in cloud().project_ref(pid).collection('assets').stream():
+        row=row.to_dict()
+        if row.get('promotedFrom')==aid and row.get('entityId')==shot_id:
+            existing=row;break
+    def change(tx,current):
+        entity=cloud().entity_ref(pid,'assets',aid).get(transaction=tx).to_dict()
+        require(entity and entity.get('kind')=='image' and entity.get('approvalState')=='approved','VARIANT','Solo una variante de imagen aprobada puede usarse como imagen de la toma')
+        require(entity.get('variantOf')==shot_id,'VARIANT','La variante ya no pertenece a esta toma')
+        if existing:
+            promoted=dict(existing)
+        else:
+            promoted={**entity,'id':new_id(),'entityId':shot_id,'variantOf':None,'promotedFrom':aid,'approvalState':'approved','approvedBy':p['owner'],'approvedAt':time.time(),'created':time.time(),'revision':1,'inputFingerprint':fingerprint(dev['data'],shot_id,'image'),'dependencies':[]}
+            tx.create(cloud().entity_ref(pid,'assets',promoted['id']),promoted)
+        current.setdefault('assetSelections',{})[shot_id+'|image']=promoted['id']
+        current['timelineStale']=True
+        tx.create(cloud().entity_ref(pid,'approvals',new_id()),{'kind':'assets','entity':promoted['id'],'action':'use_variant_as_shot_image','source':aid,'author':p['owner'],'at':time.time()})
+        return promoted
+    promoted,_=cloud().mutate(pid,expected(),change);return jsonify(promoted)
+
 @app.post('/projects/<pid>/assets:generate')
 def generate(pid):
     p=owned(pid);d=body();require(d.get('operation') in ('image','veo','tts','music','transcribe','review'),'OPERATION','Motor inválido')
