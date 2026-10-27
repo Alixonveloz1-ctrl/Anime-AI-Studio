@@ -5,7 +5,7 @@ _COMMON=''' Entrega la imagen renderizada. Sin letras, rótulos ni subtítulos d
 
 _STYLE_IMAGE={
     'anime_cinematografico':'''Genera una imagen de anime cinematográfico detallado y maduro, con personajes adultos de proporciones realistas, sombreado detallado, luz de cine, texturas de piel, tela y entorno, composición cinematográfica. Sin estilo infantil, sin líneas planas simples, sin rasgos exagerados infantiles.''',
-    'realista':'''Genera una imagen cinematográfica fotorrealista, con personas reales adultas, textura real de piel, pelo y tela, luz natural de cine, profundidad de campo y composición cinematográfica. Sin dibujo, sin anime, sin caricatura, sin 3D de videojuego.''',
+    'realista':'''Genera una imagen cinematográfica fotorrealista, con personajes ficticios adultos de aspecto realista, textura real de piel, pelo y tela, luz natural de cine, profundidad de campo y composición cinematográfica. Son personajes ficticios de una historia ficticia, no personas reales. Sin dibujo, sin anime, sin caricatura, sin 3D de videojuego.''',
 }
 
 def image_rules(style=None):
