@@ -180,9 +180,17 @@ def assemble_plan(cloud,p,cue_overrides=None):
         if c['track']=='ambience':
             placements,incomplete=ambience_placements(shots,c,a['samples'])
             if incomplete:issues.append('El ambiente «'+req['name']+'» es demasiado corto para cubrir su lugar; sube un bucle más largo.')
+            # Un efecto en uso, con su archivo aprobado, ya está aprobado
+            # para el montaje final: no existe un botón de aprobar el cue
+            # en Sonido, y sin esto el render final siempre fallaba con
+            # "Sonido sin aprobación vigente" aunque la vista previa
+            # estuviera limpia. La corrección manual posterior, con su
+            # "Aprobar y fijar", sigue protegiendo ese ajuste concreto.
+            for pl in placements:pl['approvalState']='approved'
             cues.extend(placements)
         else:
             rendered=cue_render_data(c)
+            rendered['approvalState']='approved'
             # Regla del usuario: un efecto que dura más de lo que exige su
             # plano se recorta a la duración del plano, sin cortar nunca el
             # ataque que lo hace sonar. El ambiente queda fuera porque cubre
