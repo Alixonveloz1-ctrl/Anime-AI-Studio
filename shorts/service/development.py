@@ -165,9 +165,21 @@ def plan_sound(data):
     """
     out=copy.deepcopy(data);rows=out.get('soundRequests')
     require(isinstance(rows,list),'SOUND','Falta el plan de efectos.')
+    # Regla del usuario para futuros proyectos: un sonido producido por
+    # voz humana NUNCA es un efecto a subir. Grito, gemido, respiración,
+    # suspiro, risa, llanto o jadeo van como intervención (utterance)
+    # con la voz del personaje en Gemini TTS, no como efecto externo,
+    # porque una app externa le daría otro tono distinto al personaje.
+    # Si el modelo genera uno así en el plan de sonido, se descarta aquí
+    # en vez de pedirlo como archivo a subir; en el guion debe aparecer
+    # como intervención del personaje, no como efecto.
+    import re
+    vocal=re.compile(r'\b(scream|shout|yell|cry|groan|moan|grunt|growl|breath|breathing|sigh|laugh|sob|whisper|gasp|pant|vocal|grito|gemido|respir|suspiro|risa|llanto|llorar|jadeo|susurr|human (voice|groan|scream|breath))\w*\b')
     kept=[];seen=set()
     for row in rows:
         require(isinstance(row,dict),'SOUND','Solicitud de sonido inválida')
+        texto=' '.join(str(row.get(k) or '') for k in ('name','description','prompt','eventDescription')).lower()
+        if vocal.search(texto):continue
         prompt=' '.join(str(row.get('prompt') or '').split()).lower()
         # The same sound in the same shot twice is not two sounds.
         key=(str(row.get('shotId') or ''),prompt)

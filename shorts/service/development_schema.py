@@ -42,7 +42,7 @@ def development_schema():
             type={'type':'STRING','enum':['dialogue','thought','narration','system']},spanish=text(),japanese=text(),
             acting=text(),pauseBeforeFrames=number(),pauseAfterFrames=number())),
         soundRequests=rows(obj(id=text(),name=text(),description=text(),prompt=text(),
-            type={'type':'STRING','enum':['sfx','ambience'],'description':'sfx: un sonido con un instante exacto de contacto (un golpe, un paso, una puerta). ambience: un lecho continuo (lluvia, ciudad, sala) del que basta un bucle corto; la aplicación lo repite mientras dure su lugar.'},
+            type={'type':'STRING','enum':['sfx','ambience'],'description':'sfx: un sonido con un instante exacto de contacto (un golpe, un paso, una puerta). ambience: un lecho continuo (lluvia, ciudad, sala) del que basta un bucle corto; la aplicación lo repite mientras dure su lugar. NUNCA un sonido de voz humana (grito, gemido, respiración, suspiro, risa, llanto, jadeo): eso es una utterance con speakerId, generada con Gemini TTS con la voz del personaje, no un efecto a subir.'},
             seconds=number('NUMBER',0,600),preparationSeconds=number('NUMBER',0,600),tailSeconds=number('NUMBER',0,600),
             perspective=text(),shotId=text(),eventDescription=text(),required={'type':'BOOLEAN'})),
         musicRequests=rows(obj(id=text(),prompt=text(),seconds=number(minimum=1,maximum=184),
