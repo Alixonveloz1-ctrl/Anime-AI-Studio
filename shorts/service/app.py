@@ -517,7 +517,16 @@ def upload(pid,sid):
 def upload_complete(pid,sid):
     owned(pid);d=body();u=cloud().entity(pid,'uploads',d['assetId']);require(u['requestId']==sid,'REQUEST','Solicitud incorrecta')
     b=cloud().blob(pid,u['object']);b.reload();require(b.size==u['size'],'UPLOAD_INCOMPLETE','La carga no está completa')
-    return submit(pid,'media',{'uploadId':u['id'],'requestId':sid,'developmentId':u['developmentId']},key_override='upload-complete-'+u['id'],pin=False)
+    # Si el trabajo anterior con este mismo archivo falló o se canceló,
+    # volver a subir el mismo archivo devolvía ese trabajo viejo y la
+    # carga parecía bien pero el efecto nunca aparecía. En ese caso se
+    # crea un trabajo nuevo; si el anterior sigue en curso o ya terminó
+    # bien, se devuelve ese, como antes.
+    base='upload-complete-'+u['id'];key=base
+    old=cloud().db.collection('animeShortsJobs').document(digest([pid,base])).get().to_dict()
+    if old and old.get('settled') and old.get('state') in ('failed','cancelled'):
+        key=base+'-retry-'+str(int(time.time()))
+    return submit(pid,'media',{'uploadId':u['id'],'requestId':sid,'developmentId':u['developmentId']},key_override=key,pin=False)
 
 @app.get('/projects/<pid>/assets/<aid>/url')
 def asset_url(pid,aid):
@@ -870,7 +879,10 @@ def alignment(pid,aid):
 def omit_sound(pid,sid):
     p=owned(pid);d=body();dev=cloud().entity(pid,'developments',p['activeDevelopment'])
     require(any(r['id']==sid for r in dev['data']['soundRequests']),'SOUND_REQUEST','Solicitud inexistente')
-    reason=d.get('reason','');require(isinstance(reason,str) and 3<=len(reason)<=2000,'REASON','Describe la decisión editorial')
+    # Omitir es una decisión del usuario sobre su propio corto: no se le
+    # exige justificarla. Si no escribe motivo, queda registrado como tal.
+    reason=d.get('reason') or 'Omitido por el usuario'
+    require(isinstance(reason,str) and len(reason)<=2000,'REASON','Motivo demasiado largo')
     record={'requestId':sid,'developmentId':dev['id'],'reason':reason,'approvedBy':p['owner'],'approvedAt':time.time()}
     def change(tx,current):
         current.setdefault('soundOmissions',{})[sid]=record;current['timelineStale']=True
@@ -885,6 +897,34 @@ def unomit_sound(pid,sid):
         (current.get('soundOmissions') or {}).pop(sid,None);current['timelineStale']=True
     _,p=cloud().mutate(pid,expected(),change)
     return jsonify(removed=True)
+
+@app.post('/projects/<pid>/sound-effects:use-latest')
+def use_latest_sound_effects(pid):
+    # Regla del usuario: el último efecto subido es el que se usa, sin
+    # botón de aprobar. Esto pone en uso, de una vez, los efectos viejos
+    # que quedaron como "Por revisar" o "Aprobado pero sin usar" antes de
+    # la aprobación automática, para que en Sonido no quede ningún botón
+    # de aprobar/usar. No genera nada, no sube nada y no toca imágenes,
+    # videos, voces ni música.
+    p=owned(pid);dev=cloud().entity(pid,'developments',p['activeDevelopment'])
+    assets=[x.to_dict() for x in cloud().project_ref(pid).collection('assets').stream()]
+    changed=[]
+    for req in dev['data']['soundRequests']:
+        rows=sorted([a for a in assets if a.get('requestId')==req['id'] and a.get('kind')=='pcm' and a.get('approvalState') in ('candidate','approved')],key=lambda a:(a.get('created',0),a['id']))
+        if not rows:continue
+        newest=rows[-1];key=req['id']+'|pcm'
+        if newest['approvalState']=='approved' and p.get('assetSelections',{}).get(key)==newest['id']:continue
+        changed.append({'requestId':req['id'],'assetId':newest['id'],'was':newest['approvalState']})
+    if not changed:return jsonify(changed=False,effects=[])
+    def change(tx,current):
+        for item in changed:
+            ref=cloud().entity_ref(pid,'assets',item['assetId']);row=ref.get(transaction=tx).to_dict()
+            if row and row.get('approvalState')=='candidate':
+                row.update(approvalState='approved',approvedBy=current['owner'],approvedAt=time.time(),humanReview={'reviewed':True,'at':time.time(),'by':current['owner']});tx.set(ref,row)
+            current.setdefault('assetSelections',{})[item['requestId']+'|pcm']=item['assetId']
+        current['timelineStale']=True
+    _,p=cloud().mutate(pid,expected(),change)
+    return jsonify(changed=True,effects=changed)
 
 @app.post('/projects/<pid>/subtitles:approve')
 def subtitles_approve(pid):

@@ -745,7 +745,7 @@ async function assetCard(parent,a){
     const {url}=await api(`/projects/${projectId}/assets/${a.id}/url`,'GET',undefined,{},controller.signal);
     if(!c.isConnected)return;
     const media=document.createElement(a.kind==='image'?'img':a.kind==='pcm'?'audio':'video');
-    media.src=url;media.controls=true;media.playsInline=true;media.preload='none';media.alt=name;
+    media.src=url;media.controls=true;media.playsInline=true;media.preload=a.kind==='pcm'?'metadata':'none';media.alt=name;
     if(a.kind==='image'){media.loading='lazy';media.decoding='async';media.tabIndex=0;media.setAttribute('role','button');media.setAttribute('aria-label','Ampliar imagen de '+name);media.onclick=()=>expandImage(url,name);media.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();expandImage(url,name);}};}
     // The backend supplies only validated silent Veo derivatives. Raw provider
     // files never appear in this view; integrated playback uses muxed previews.
@@ -758,7 +758,13 @@ async function assetCard(parent,a){
   })();return loading;
  };
  mediaLoads.push(open);
- if(a.approvalState==='candidate')buttons(c,[['Aprobar versión',async()=>{if(!opened){await open();say('Revisa el recurso cargado y pulsa Aprobar versión cuando esté listo.');return;}await approve('assets',a.id,true);},true]]);
+ // Aprobar un audio es un solo toque: antes, el primer toque solo
+ // cargaba el audio y, como el audio no se reproducía, nunca se marcaba
+ // como revisado y el botón seguía apareciendo. Para imagen y video se
+ // mantiene la regla de no aprobar lo que no cargó, porque ahí hay que
+ // verlo primero; el audio lo subió el usuario y lo puede escuchar en
+ // su reproductor, así que aprobar no depende de que se reproduzca.
+ if(a.approvalState==='candidate')buttons(c,[['Aprobar versión',async()=>{if(a.kind!=='pcm'&&!opened){await open();say('Revisa el recurso cargado y pulsa Aprobar versión cuando esté listo.');return;}await approve('assets',a.id,true);},true]]);
  else if(a.approvalState==='approved'&&a.variantOf&&!inUse)buttons(c,[['Usar como imagen de esta toma',()=>useVariantAsShotImage(a),true]]);
  else if(a.approvalState==='approved'&&!a.variantOf&&selectedAsset(a.entityId,a.kind)?.id!==a.id)buttons(c,[['Usar esta versión',()=>approve('assets',a.id),true]]);
 }
@@ -973,18 +979,22 @@ const r=usos[0];
   for(const uso of usos){
    const destino=usos.length>1?fold(c,'Ajuste en «'+entityName(d,uso.shotId)+'»'):c;
    const cues=p.cues.filter(x=>x.requestId===uso.id),v=versions(cues,p.cueSelections?.[uso.id]);
-   const showCue=(parent,cue)=>{const box=document.createElement('div');box.className='cue-controls';const state=document.createElement('p');state.className='badge';state.textContent=cue.manualLock?'Ajuste manual fijado':titleFor(cue.approvalState);box.append(state);buttons(box,[['Ajustar sincronización',()=>openEditor(cue)]]);const options=fold(box,'Ayuda con IA');
-    if(cue.manualLock){options.append(document.createTextNode('Tu ajuste está protegido. Puedes crear una nueva corrección manual o permitir una nueva propuesta.'));buttons(options,[['Permitir nueva propuesta',async()=>{await mutate(route(`/cues/${cue.id}`),{cueRevision:cue.revision,patch:{reason:'Solicito una nueva propuesta de sincronización'}},'PATCH');await draw();},true]]);}
-    else{if((cue.analysisAttempts||0)<2)buttons(options,[['Localizar contacto',()=>runTask('analyze',route(`/cues/${cue.id}:analyze`)),true],['Corregir con IA',async()=>{const reason=prompt('¿Qué debe cambiar en este sonido?');if(reason)await runTask('analyze',route(`/cues/${cue.id}:correct`),{reason});},true]]);else options.append(document.createTextNode('El análisis no resolvió el contacto. El ajuste manual sigue disponible.'));
-    if(cue.proposedEventId)buttons(options,[['Usar propuesta',async()=>{await mutate(route(`/cues/${cue.id}/proposal:apply`),{});await draw();},true]]);}
-    if(cue.analysisScan?.options.length>1&&(cue.analysisAttempts||0)<2)for(const [index,option] of cue.analysisScan.options.entries())buttons(options,[[`Contacto ${index+1} · ${option.description}`,()=>runTask('analyze',route(`/cues/${cue.id}:analyze`),{occurrenceIndex:index,reason:'Usar el contacto elegido'}),true]]);
+   // La sincronización es trabajo del montaje final, no de esta pantalla:
+   // aquí no se lanza ningún análisis, ni aparece "Ayuda con IA". El
+   // ajuste manual solo se abre si el usuario lo pide, y el anclaje del
+   // sonido se decide cuando se monte el video, no al subir el efecto.
+   const showCue=(parent,cue)=>{const box=document.createElement('div');box.className='cue-controls';const state=document.createElement('p');state.className='badge';state.textContent=cue.manualLock?'Ajuste manual fijado':titleFor(cue.approvalState);box.append(state);buttons(box,[['Ajustar sincronización',()=>openEditor(cue)]]);
     parent.append(box);};
    v.visible.forEach(cue=>showCue(destino,cue));if(v.history.length){const history=fold(destino,'Ajustes anteriores · '+v.history.length);v.history.forEach(cue=>showCue(history,cue));}
   }
-  const omit=fold(c,'Opciones del efecto');buttons(omit,[['Omitir este sonido',async()=>{const reason=prompt('¿Por qué quieres omitirlo?');if(reason){for(const uso of usos)await mutate(route(`/sound-requests/${uso.id}/omit`),{reason});await draw();}},true]]);
+  const omit=fold(c,'Opciones del efecto');buttons(omit,[['Omitir este sonido',async()=>{for(const uso of usos)await mutate(route(`/sound-requests/${uso.id}/omit`),{});say('Efecto omitido.');await draw();},true]]);
  return c;
 }
 async function sounds(){
+ // Al abrir Sonido, los efectos viejos que quedaron pendientes antes de
+ // la aprobación automática se ponen en uso solos, sin botón de aprobar:
+ // el último subido es el que vale, como en el resto de la app.
+ try{await mutate(route('/sound-effects:use-latest'),{});}catch(e){/* Si no hay nada que poner en uso, se sigue mostrando Sonido igual. */}
  const d=development();
  if(!d.musicRequests.length&&!d.soundRequests.length){
   const c=card('Prepara la música y los efectos','<p>Conservamos tu guion. Puedes preparar, revisar y aprobar su sonido aquí.</p>');screen.append(c);
@@ -1056,6 +1066,10 @@ async function uploadSound(r,file,progress){
   offset=received;progress.value=offset/file.size;
  }
  const jobId=await runTask('media',route(`/sound-requests/${r.id}/complete`),{assetId:sessionUpload.assetId});
+ // No decir "guardado" si el trabajo terminó fallido o cancelado: eso
+ // era lo que hacía parecer que los clics metálicos habían cargado bien
+ // cuando en realidad el efecto nunca aparecía.
+ if(jobId){const job=await api('/jobs/'+jobId);if(job.state==='failed'||job.state==='cancelled')throw new Error('La carga no quedó guardada: '+(job.result?.error||'el trabajo terminó sin guardar el efecto')+'. Vuelve a subir el mismo archivo.');if(!job.result?.assetId)throw new Error('La carga no quedó guardada: no se creó el efecto. Vuelve a subir el mismo archivo.');}
  say(jobId?'Efecto guardado y en uso.':'Archivo conservado. Su preparación espera tu autorización.');
 }
 
