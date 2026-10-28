@@ -1093,7 +1093,7 @@ async function previewHistory(parent,final){
  const rows=p.previews.filter(x=>!!x.final===final&&x.state==='ready').sort((a,b)=>(b.created||0)-(a.created||0));
  for(const [index,r] of rows.entries()){const target=index?fold(parent,`Versión anterior · ${new Date(r.created*1000).toLocaleDateString('es')}`):parent;
   const item=card(final?'Archivo terminado':index?'Vista previa anterior':'Última vista previa',`<p class="muted">${r.startFrame/24}–${r.endFrame/24} segundos</p>`);target.append(item);buttons(item,[['Reproducir',()=>playPreview(r.id,item),true]]);
-  if(final)buttons(item,[['Descargar archivos',async()=>{if(item.querySelector('.download-list'))return;const list=await api(route(`/exports/${r.id}`)),box=document.createElement('div');box.className='download-list';for(const file of list.files){const link=document.createElement('a');link.href=file.url;link.textContent=file.name;link.className='button secondary';link.target='_blank';link.rel='noopener';box.append(link);}item.append(box);}]]);
+  if(final)buttons(item,[['Descargar ZIP',async()=>{const list=await api(route(`/exports/${r.id}`));const zip=list.files.find(f=>f.name.endsWith('.zip'))||list.files.find(f=>f.name.endsWith('.mp4'));if(!zip)throw new Error('El paquete todavía no está listo.');const a=document.createElement('a');a.href=zip.url;a.download=zip.name;a.click();}]]);
  }
 }
 async function exportsView(){

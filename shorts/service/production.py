@@ -18,7 +18,7 @@ from shorts.service.cloud import RequestJournal
 # aquí para que la respuesta no dependa de lo que traiga el sistema operativo.
 MEDIA_TYPES={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp',
              '.gif':'image/gif','.mp4':'video/mp4','.wav':'audio/x-wav','.mp3':'audio/mpeg',
-             '.json':'application/json','.txt':'text/plain','.srt':'text/plain'}
+             '.json':'application/json','.txt':'text/plain','.srt':'text/plain','.zip':'application/zip'}
 
 def media_type(path,default='application/octet-stream'):
     return MEDIA_TYPES.get(Path(str(path)).suffix.lower()) or mimetypes.guess_type(str(path))[0] or default
@@ -331,6 +331,35 @@ def run_job(cloud,j,p):
             rid=ident_new();files={}
             names=[result['file'],'clean.mp4','subtitles.srt','subtitles.ass','compiled.json','result.json','mix-report.json']
             if op=='render':names+=['dialogue.wav','thought.wav','narration.wav','system.wav','music.wav','ambience.wav','sfx.wav','mix.wav']
+            if op=='render':
+                # Entrega para publicar, en Anime y en Cortos por igual:
+                # un solo ZIP con el MP4 final y un texto con título,
+                # descripción corta y hashtags, generado automáticamente
+                # con los datos del proyecto, sin inventar historia. Los
+                # demás archivos siguen existiendo para trabajo técnico,
+                # pero en Exportar solo se muestra el botón Descargar ZIP.
+                import re, zipfile
+                title=str(p.get('title') or 'Corto')
+                try:story=str(development()['data'].get('story') or '')
+                except Exception:story=''
+                desc=story.strip()
+                for sep in ('\n\n','. '):
+                    if sep in desc:desc=desc.split(sep,1)[0].strip();break
+                if len(desc)>400:desc=desc[:397].rsplit(' ',1)[0].strip()+'...'
+                if not desc:desc=title
+                slug=re.sub(r'[^A-Za-z0-9]+','',title.title())
+                tags=['#'+slug if slug else '#Corto','#Corto','#Anime']
+                genre=str(p.get('genre') or '').strip()
+                if genre:tags.append('#'+re.sub(r'[^A-Za-z0-9]+','',genre.title()))
+                for sub in (p.get('subgenres') or [])[:2]:
+                    tag='#'+re.sub(r'[^A-Za-z0-9]+','',str(sub).title())
+                    if tag not in tags:tags.append(tag)
+                txt=(title+'\n\n'+desc+'\n\n'+' '.join(tags)+'\n')
+                (root/'publicacion.txt').write_text(txt,encoding='utf-8')
+                with zipfile.ZipFile(root/'paquete_publicacion.zip','w',zipfile.ZIP_DEFLATED) as z:
+                    z.write(root/result['file'],result['file'])
+                    z.write(root/'publicacion.txt','publicacion.txt')
+                names+=['paquete_publicacion.zip','publicacion.txt']
             for name in names:files[name]=cloud.upload_file(pid,rid,root/name,name,media_type(name,'application/json'))
             record={'id':rid,'revision':1,'state':'ready','jobId':j['id'],'cacheKey':digest([result['manifestHash'],data['startFrame'],data['endFrame'],op=='render',result['compilerVersion']]),'final':op=='render','timelineId':timeline['id'],'object':files[result['file']],'files':files,'draftIssues':timeline['data'].get('draftIssues',[]),'cueHashes':{c['id']:digest(c) for c in timeline['data']['cues']},**result}
             cloud.put_entity(pid,'previews',record);return {'previewId':rid,'final':op=='render'}
