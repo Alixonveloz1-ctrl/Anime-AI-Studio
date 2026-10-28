@@ -717,7 +717,7 @@ function editorialNotice(parent){
  const box=card('Puedes producir tus tomas','<p>Genera y revisa imágenes, videos y voces. Antes de exportar, completa el plan de sonido y la revisión de continuidad en Historia.</p>');
  buttons(box,[['Continuar preparación en Historia',()=>go('Historia'),true]]);parent.append(box);
 }
-const selectedAsset=(id,kind)=>p.usableAssetSelections?p.assets.find(a=>a.id===p.usableAssetSelections[id+'|'+kind]):p.assets.find(a=>a.id===p.assetSelections?.[id+'|'+kind])||p.assets.filter(a=>a.entityId===id&&a.kind===kind&&a.approvalState==='approved').at(-1);
+const selectedAsset=(id,kind)=>{const usable=p.assets.find(a=>a.id===p.usableAssetSelections?.[id+'|'+kind]);if(usable)return usable;const chosen=p.assets.find(a=>a.id===p.assetSelections?.[id+'|'+kind]);if(chosen?.requestId)return chosen;return p.usableAssetSelections?undefined:p.assets.filter(a=>a.entityId===id&&a.kind===kind&&a.approvalState==='approved').at(-1);};
 function expandImage(url,name){
  const dialog=document.createElement('dialog');dialog.className='image-dialog';const bar=document.createElement('div');bar.className='dialog-header';const label=document.createElement('strong');label.textContent=name;bar.append(label,action('Cerrar',()=>{dialog.close();dialog.remove();},true));dialog.append(bar);
  const img=document.createElement('img');img.src=url;img.alt=name;dialog.append(img);document.body.append(dialog);dialog.showModal();
