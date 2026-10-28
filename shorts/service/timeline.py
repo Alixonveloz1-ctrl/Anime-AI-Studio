@@ -160,12 +160,18 @@ def assemble_plan(cloud,p,cue_overrides=None):
         a=next((a for a in available if a['id']==c['audioRevision']),None)
         if not a:
             issues.append('Falta efecto aprobado: '+c['id']);continue
-        if c.get('eventId') and not cloud.entity_ref(pid,'events',c['eventId']).get().exists:
-            issues.append('Falta contacto visual: '+c['id']);continue
         current_shot=next((s for s in shots if s['id']==c['shotId']),None)
         if not current_shot:
             issues.append('Toma del efecto ya no existe: '+c['id']);continue
-        event=cloud.entity(pid,'events',c['eventId']) if c.get('eventId') else None
+        # Regla del usuario, arreglo de fondo y no manual por proyecto:
+        # al subir o generar un efecto, la app guarda un contacto visual
+        # de relleno ('event_...') que todavía no existe, esperando que
+        # alguien lo detecte después. Si nadie lo detectó, el montaje
+        # antes saltaba el efecto y no sonaba, y eso se repetía en cada
+        # proyecto nuevo. Ahora, si no hay contacto real, el efecto suena
+        # igualmente: su ataque cae al inicio de su toma. Un ancla manual
+        # posterior sigue ganando, porque entonces el evento sí existe.
+        event=cloud.entity(pid,'events',c['eventId']) if c.get('eventId') and cloud.entity_ref(pid,'events',c['eventId']).get().exists else None
         if event and event.get('videoRevision')!=current_shot['assetRevision']:
             issues.append('Revisar ancla tras cambiar material: '+c['id']);continue
         req=next(r for r in d['soundRequests'] if r['id']==c['requestId'])
@@ -193,6 +199,18 @@ def assemble_plan(cloud,p,cue_overrides=None):
                         rendered['trimOutSample']=trimmed_out
                 except Exception:
                     pass
+            else:
+                # Sin contacto real: el ataque cae al inicio de la toma,
+                # y el efecto suena desde su ataque hasta el final de la
+                # toma, sin audio previo que se cuele en la toma anterior.
+                # Nunca se salta un efecto en uso.
+                rendered.pop('eventId',None)
+                rendered['anchorSample']=current_shot['startFrame']*2000
+                rendered['trimInSample']=int(c.get('sourceSyncSample',0))
+                shot_samples=current_shot['frames']*2000
+                trimmed_out=int(c.get('sourceSyncSample',0))+shot_samples
+                if trimmed_out<int(c.get('trimOutSample',a['samples'])):
+                    rendered['trimOutSample']=trimmed_out
             cues.append(rendered)
     for req in d['soundRequests']:
         if not any(c.get('requestId')==req['id'] for c in stored) and req.get('required',True) and req['id'] not in omitted:issues.append('Falta efecto obligatorio: '+req['name'])
