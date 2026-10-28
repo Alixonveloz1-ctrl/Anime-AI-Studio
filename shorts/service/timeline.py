@@ -1,4 +1,4 @@
-from shorts.core.contracts import require, RATE, FPS, FRAMES, plan_beats, cue_render_data, digest, duration_target
+from shorts.core.contracts import require, RATE, FPS, FRAMES, plan_beats, cue_render_data, digest, duration_target, resolve_event
 from shorts.core.dependencies import select_assets
 from shorts.core.subtitles import subtitle_segments,validate_segments
 from shorts.core.timing import voice_layout,shot_bounds
@@ -119,13 +119,17 @@ def assemble_plan(cloud,p,cue_overrides=None):
         placements,_=voice_layout(s,voice_by_shot.get(s['id'],[]))
         for placement in placements:
             u,audio=placement['utterance'],placement['audio'];cursor=t['startFrame']*2000+placement['offsetSample']
+            trimmed=placement.get('samples',audio['samples'])
+            if trimmed<=0:
+                issues.append('Sonido vocal sin espacio en el plano: '+u['id']);continue
             assets[audio['id']]=audio
-            cues.append({'id':'voice_'+u['id'],'track':u['type'],'audioRevision':audio['id'],'anchorSample':cursor,'sourceSyncSample':0,'trimOutSample':audio['samples'],'approvalState':'approved'})
+            cues.append({'id':'voice_'+u['id'],'track':u['type'],'audioRevision':audio['id'],'anchorSample':cursor,'sourceSyncSample':0,'trimOutSample':trimmed,'approvalState':'approved'})
             sub=next((x for x in d['subtitles'] if x['utteranceId']==u['id']),None)
             require(sub,'SUBTITLE_MISSING','Falta traducción española vinculada')
             segments,stale=subtitle_segments(u,audio,sub['text'],p.get('subtitleEdits',{}))
             if stale:issues.append('Revisar subtítulos tras cambiar audio: '+u['id'])
-            warnings=validate_segments(segments,audio['samples'])
+            segments=[{**seg,'endSample':min(seg['endSample'],trimmed)} for seg in segments if seg['startSample']<trimmed]
+            warnings=validate_segments(segments,trimmed)
             if any(not w['exceptionApproved'] for w in warnings):issues.append('Legibilidad de subtítulos pendiente: '+u['id'])
             approved=p.get('subtitleApproval',{}).get('developmentId')==dev['id'] and p.get('subtitleApproval',{}).get('audioHashes',{}).get(audio['id'])==audio['sha256'] and not stale
             for segment in segments:
@@ -165,7 +169,25 @@ def assemble_plan(cloud,p,cue_overrides=None):
             placements,incomplete=ambience_placements(shots,c,a['samples'])
             if incomplete:issues.append('El ambiente «'+req['name']+'» es demasiado corto para cubrir su lugar; sube un bucle más largo.')
             cues.extend(placements)
-        else:cues.append(cue_render_data(c))
+        else:
+            rendered=cue_render_data(c)
+            # Regla del usuario: un efecto que dura más de lo que exige su
+            # plano se recorta a la duración del plano, sin cortar nunca el
+            # ataque que lo hace sonar. El ambiente queda fuera porque cubre
+            # un lugar, no un solo plano, y ya se repite y recorta a su lugar.
+            # Una solicitud omitida no llega aquí: se salta antes y el plano
+            # conserva su duración normal, simplemente ese sonido no suena.
+            if event:
+                try:
+                    event_sample=resolve_event(event,current_shot)['sample']
+                    cue_start=event_sample-(int(c.get('sourceSyncSample',0))-int(c.get('trimInSample',0)))+int(c.get('offsetSamples',0))
+                    shot_end=(current_shot['startFrame']+current_shot['frames'])*2000
+                    trimmed_out=int(c.get('trimInSample',0))+max(0,shot_end-cue_start)
+                    if trimmed_out<int(c.get('trimOutSample',a['samples'])) and trimmed_out>int(c.get('sourceSyncSample',0)):
+                        rendered['trimOutSample']=trimmed_out
+                except Exception:
+                    pass
+            cues.append(rendered)
     for req in d['soundRequests']:
         if not any(c.get('requestId')==req['id'] for c in stored) and req.get('required',True) and req['id'] not in omitted:issues.append('Falta efecto obligatorio: '+req['name'])
     for r in d['musicRequests']:

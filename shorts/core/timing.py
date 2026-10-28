@@ -2,15 +2,36 @@
 from .contracts import integer,require
 
 
+def is_vocal_sound(utterance):
+    # Regla del usuario: un sonido producido por la voz humana (respiración,
+    # gemido, gruñido, grito, jadeo, suspiro) se escribe entre paréntesis en
+    # el texto en español y NO es diálogo ni pensamiento hablado, aunque su
+    # tipo sea dialogue. Solo ese sonido vocal se recorta a la duración del
+    # plano; una frase hablada o un pensamiento nunca se recortan.
+    text=str(utterance.get('spanish') or '').strip()
+    return len(text)>=2 and text.startswith('(') and text.endswith(')')
+
+
 def voice_layout(shot, voices):
     cursor=integer(shot.get('leadFrames',0),'acción inicial',0,7560)*2000
     rows=[]
+    shot_samples=integer(shot.get('frames',0),'duración',1,7560)*2000
+    tail_samples=integer(shot.get('tailFrames',0),'acción final',0,7560)*2000
     for utterance,audio in voices:
         cursor+=integer(utterance.get('pauseBeforeFrames',0),'pausa antes',0,7560)*2000
         length=integer(audio['samples'],'voz medida',1,15120000)
-        rows.append({'utterance':utterance,'audio':audio,'offsetSample':cursor})
-        cursor+=length+integer(utterance.get('pauseAfterFrames',0),'pausa después',0,7560)*2000
-    cursor+=integer(shot.get('tailFrames',0),'acción final',0,7560)*2000
+        pause_after=integer(utterance.get('pauseAfterFrames',0),'pausa después',0,7560)*2000
+        if is_vocal_sound(utterance):
+            # Respiración, gemido, gruñido, grito: si dura más de lo que
+            # exige el plano, se recorta a lo que queda en el plano después
+            # de su pausa posterior y de la acción final. Nunca alarga el
+            # plano y nunca se acelera: simplemente suena hasta el final
+            # del plano. Los clips de video no se recortan jamás; esos se
+            # aceleran o ralentizan en el montaje.
+            length=max(0,min(length,shot_samples-cursor-pause_after-tail_samples))
+        rows.append({'utterance':utterance,'audio':audio,'offsetSample':cursor,'samples':length})
+        cursor+=length+pause_after
+    cursor+=tail_samples
     return rows,(cursor+1999)//2000
 
 

@@ -146,3 +146,17 @@ class InputBoundaryTests(unittest.TestCase):
             for data in ('[]','null','true','NaN'):
                 r=app.test_client().post('/projects',data=data,content_type='application/json')
                 self.assertEqual(r.status_code,400)
+
+class VocalTrimTests(unittest.TestCase):
+    def test_a_parenthetical_vocal_sound_is_trimmed_to_its_shot_but_dialogue_is_not(self):
+        from shorts.core.timing import voice_layout
+        s=development()['shots'][0]
+        s={**s,'frames':240,'minFrames':240,'maxFrames':240,'leadFrames':24,'tailFrames':24}
+        vocal={'id':'breath','shotId':'shot','speakerId':'hero','type':'dialogue','spanish':'(Respiración lenta y profunda)','japanese':'呼吸。','acting':'calm','pauseBeforeFrames':24,'pauseAfterFrames':24}
+        rows,minimum=voice_layout(s,[(vocal,{'samples':48000*20})])
+        self.assertEqual(rows[0]['samples'],240*2000-24*2000-24*2000-24*2000-24*2000)
+        self.assertEqual(minimum,240)
+        spoken={**vocal,'spanish':'Sobrevivir.'}
+        rows,minimum=voice_layout(s,[(spoken,{'samples':48000*20})])
+        self.assertEqual(rows[0]['samples'],48000*20)
+        self.assertGreater(minimum,240)
