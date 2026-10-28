@@ -174,7 +174,10 @@ def plan_sound(data):
     # en vez de pedirlo como archivo a subir; en el guion debe aparecer
     # como intervención del personaje, no como efecto.
     import re
-    vocal=re.compile(r'\b(scream|shout|yell|cry|groan|moan|grunt|growl|breath|breathing|sigh|laugh|sob|whisper|gasp|pant|vocal|grito|gemido|respir|suspiro|risa|llanto|llorar|jadeo|susurr|human (voice|groan|scream|breath))\w*\b')
+    # Palabras completas, no prefijos: "sobre" no es "sob" (sollozo), y
+    # "pasos sobre grava" no es un sonido vocal. Solo coinciden formas
+    # completas de grito, gemido, respiración, etc., en inglés y español.
+    vocal=re.compile(r'\b(?:screams?|screaming|shouts?|shouting|yells?|yelling|cry|cries|crying|groans?|groaning|moans?|moaning|grunts?|grunting|growls?|growling|breaths?|breathing|sighs?|sighing|laughs?|laughing|sobs?|sobbing|whispers?|whispering|gasps?|gasping|pants?|panting|vocal|voice|gritos?|gemidos?|respiración|respiraciones|respirar|respira|respirando|suspiros?|risas?|llanto|llorar|llora|llorando|jadeos?|jadear|susurros?|susurrar|human voice)\b')
     kept=[];seen=set()
     for row in rows:
         require(isinstance(row,dict),'SOUND','Solicitud de sonido inválida')
