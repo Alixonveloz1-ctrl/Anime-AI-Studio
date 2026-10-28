@@ -160,3 +160,10 @@ class VocalTrimTests(unittest.TestCase):
         rows,minimum=voice_layout(s,[(spoken,{'samples':48000*20})])
         self.assertEqual(rows[0]['samples'],48000*20)
         self.assertGreater(minimum,240)
+
+class VocalSubtitleTests(unittest.TestCase):
+    def test_parenthetical_vocal_sound_is_recognised_as_not_dialogue(self):
+        from shorts.core.timing import is_vocal_sound
+        self.assertTrue(is_vocal_sound({'spanish':'(Respiración lenta y profunda)'}))
+        self.assertFalse(is_vocal_sound({'spanish':'Sobrevivir.'}))
+        self.assertFalse(is_vocal_sound({'spanish':'¿De dónde viene...?'}))

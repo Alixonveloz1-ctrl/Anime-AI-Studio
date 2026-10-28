@@ -1,7 +1,7 @@
 from shorts.core.contracts import require, RATE, FPS, FRAMES, plan_beats, cue_render_data, digest, duration_target, resolve_event
 from shorts.core.dependencies import select_assets
 from shorts.core.subtitles import subtitle_segments,validate_segments
-from shorts.core.timing import voice_layout,shot_bounds
+from shorts.core.timing import voice_layout,shot_bounds,is_vocal_sound
 
 def approved_assets(cloud,pid):
     assets=[x.to_dict() for x in cloud.project_ref(pid).collection('assets').stream()]
@@ -124,6 +124,12 @@ def assemble_plan(cloud,p,cue_overrides=None):
                 issues.append('Sonido vocal sin espacio en el plano: '+u['id']);continue
             assets[audio['id']]=audio
             cues.append({'id':'voice_'+u['id'],'track':u['type'],'audioRevision':audio['id'],'anchorSample':cursor,'sourceSyncSample':0,'trimOutSample':trimmed,'approvalState':'approved'})
+            if is_vocal_sound(u):
+                # Regla del usuario: los subtítulos son solo para el diálogo
+                # hablado. Un sonido vocal entre paréntesis (respiración,
+                # gemido, gruñido, grito) suena, pero nunca sale como
+                # subtítulo descriptivo en el video final.
+                continue
             sub=next((x for x in d['subtitles'] if x['utteranceId']==u['id']),None)
             require(sub,'SUBTITLE_MISSING','Falta traducción española vinculada')
             segments,stale=subtitle_segments(u,audio,sub['text'],p.get('subtitleEdits',{}))
