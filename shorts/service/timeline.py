@@ -222,7 +222,8 @@ def assemble_plan(cloud,p,cue_overrides=None):
             cues.append(rendered)
     for req in d['soundRequests']:
         if not any(c.get('requestId')==req['id'] for c in stored) and req.get('required',True) and req['id'] not in omitted:issues.append('Falta efecto obligatorio: '+req['name'])
-    for r in d['musicRequests']:
+    music_order=sorted(d['musicRequests'],key=lambda x:x['startFrame'])
+    for ri,r in enumerate(d['musicRequests']):
         a=by.get((r['id'],'pcm'))
         if not a:
             issues.append('Falta música aprobada: '+r['id']);continue
@@ -235,10 +236,34 @@ def assemble_plan(cloud,p,cue_overrides=None):
         # repite desde su inicio y la repetición se corta exactamente para
         # rellenar solo el tiempo faltante. No se inventa música nueva, no
         # se alarga el archivo y no se cambia la pieza aprobada.
-        remaining=duration;anchor=r['startFrame']*2000;piece=0
+        # Cambio de pieza sin corte brusco: la pieza anterior se alarga
+        # 2 segundos sobre la siguiente, bajando, mientras la siguiente
+        # entra subiendo en esos mismos 2 segundos. Es un fundido cruzado
+        # real (las dos suenan a la vez en la frontera), no un corte seco
+        # ni un silencio entre piezas. El fundido nunca supera la mitad
+        # de la pieza más corta de la frontera.
+        idx=next((i for i,x in enumerate(music_order) if x['id']==r['id']),0)
+        nxt=music_order[idx+1] if idx+1<len(music_order) else None
+        cross=0
+        if nxt:
+            nxt_duration=(nxt['endFrame']-nxt['startFrame'])*2000
+            cross=min(96000,duration//2,nxt_duration//2)
+        # El fundido de entrada de cada pieza (salvo la primera) es el
+        # fundido de su frontera anterior, igual al fundido de salida
+        # de la pieza anterior.
+        fade_in_cross=0
+        if idx>0:
+            prev=music_order[idx-1]
+            prev_duration=(prev['endFrame']-prev['startFrame'])*2000
+            fade_in_cross=min(96000,prev_duration//2,duration//2)
+        effective=duration+cross
+        remaining=effective;anchor=r['startFrame']*2000;piece=0
         while remaining>0:
             take=min(a['samples']-source,remaining)
-            cues.append({'id':'music_'+r['id'] if piece==0 else 'music_'+r['id']+'_bucle'+str(piece),'track':'music','audioRevision':a['id'],'anchorSample':anchor,'sourceSyncSample':source,'trimInSample':source,'trimOutSample':source+take,'gainDb':r.get('gainDb',-18),'fadeInSamples':r.get('fadeInSamples',0) if piece==0 else 0,'fadeOutSamples':r.get('fadeOutSamples',0) if take==remaining else 0,'approvalState':'approved'})
+            last_piece=take==remaining
+            fade_in=r.get('fadeInSamples',0) if piece==0 and not fade_in_cross else fade_in_cross if piece==0 else 0
+            fade_out=cross if last_piece and cross else r.get('fadeOutSamples',0) if last_piece else 0
+            cues.append({'id':'music_'+r['id'] if piece==0 else 'music_'+r['id']+'_bucle'+str(piece),'track':'music','audioRevision':a['id'],'anchorSample':anchor,'sourceSyncSample':source,'trimInSample':source,'trimOutSample':source+take,'gainDb':r.get('gainDb',-18),'fadeInSamples':fade_in,'fadeOutSamples':fade_out,'approvalState':'approved'})
             anchor+=take;remaining-=take;piece+=1
     events={x.id:x.to_dict() for x in cloud.project_ref(pid).collection('events').stream()}
     used_events={c['eventId'] for c in cues if c.get('eventId')}

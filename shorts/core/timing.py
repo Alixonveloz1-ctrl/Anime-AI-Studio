@@ -18,6 +18,27 @@ def voice_layout(shot, voices):
     shot_samples=integer(shot.get('frames',0),'duración',1,7560)*2000
     tail_samples=integer(shot.get('tailFrames',0),'acción final',0,7560)*2000
     for utterance,audio in voices:
+        # Desfase que el usuario vio en El Llanto: una voz que empieza
+        # varios segundos después de que cambia la toma parece que llega
+        # tarde, y un grito que empieza tarde parece que suena cuando la
+        # escena ya pasó. La primera intervención de una toma no puede
+        # esperar más de 1 segundo tras el cambio de toma; un sonido
+        # vocal (grito, gemido, respiración) que abre la toma suena en
+        # el mismo cambio de toma, porque es la reacción a lo que se ve.
+        # Las pausas entre intervenciones dentro de la misma toma no se
+        # tocan: ahí sí son interpretación.
+        if not rows:
+            pre=cursor+integer(utterance.get('pauseBeforeFrames',0),'pausa antes',0,7560)*2000
+            limit=0 if is_vocal_sound(utterance) else 24*2000
+            if pre>limit:cursor=limit
+            else:cursor=pre
+            pause_after=integer(utterance.get('pauseAfterFrames',0),'pausa después',0,7560)*2000
+            length=integer(audio['samples'],'voz medida',1,15120000)
+            if is_vocal_sound(utterance):
+                length=max(0,min(length,shot_samples-cursor-pause_after-tail_samples))
+            rows.append({'utterance':utterance,'audio':audio,'offsetSample':cursor,'samples':length})
+            cursor+=length+pause_after
+            continue
         cursor+=integer(utterance.get('pauseBeforeFrames',0),'pausa antes',0,7560)*2000
         length=integer(audio['samples'],'voz medida',1,15120000)
         pause_after=integer(utterance.get('pauseAfterFrames',0),'pausa después',0,7560)*2000
