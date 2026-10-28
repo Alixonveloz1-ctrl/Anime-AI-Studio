@@ -203,8 +203,17 @@ def assemble_plan(cloud,p,cue_overrides=None):
         assets[a['id']]=a
         duration=(r['endFrame']-r['startFrame'])*2000
         source=r.get('sourceInSample',0)
-        require(source+duration<=a['samples'],'MUSIC_COVERAGE','La música no cubre el intervalo; ajusta la edición sin inventar extensión')
-        cues.append({'id':'music_'+r['id'],'track':'music','audioRevision':a['id'],'anchorSample':r['startFrame']*2000,'sourceSyncSample':source,'trimInSample':source,'trimOutSample':source+duration,'gainDb':r.get('gainDb',-18),'fadeInSamples':r.get('fadeInSamples',0),'fadeOutSamples':r.get('fadeOutSamples',0),'approvalState':'approved'})
+        require(0<=source<a['samples'],'MUSIC_COVERAGE','La música no empieza dentro de su archivo')
+        # Regla del usuario: música y efectos de sonido SÍ pueden repetirse
+        # en bucle. Si la pieza aprobada es más corta que su intervalo, se
+        # repite desde su inicio y la repetición se corta exactamente para
+        # rellenar solo el tiempo faltante. No se inventa música nueva, no
+        # se alarga el archivo y no se cambia la pieza aprobada.
+        remaining=duration;anchor=r['startFrame']*2000;piece=0
+        while remaining>0:
+            take=min(a['samples']-source,remaining)
+            cues.append({'id':'music_'+r['id'] if piece==0 else 'music_'+r['id']+'_bucle'+str(piece),'track':'music','audioRevision':a['id'],'anchorSample':anchor,'sourceSyncSample':source,'trimInSample':source,'trimOutSample':source+take,'gainDb':r.get('gainDb',-18),'fadeInSamples':r.get('fadeInSamples',0) if piece==0 else 0,'fadeOutSamples':r.get('fadeOutSamples',0) if take==remaining else 0,'approvalState':'approved'})
+            anchor+=take;remaining-=take;piece+=1
     events={x.id:x.to_dict() for x in cloud.project_ref(pid).collection('events').stream()}
     used_events={c['eventId'] for c in cues if c.get('eventId')}
     # Waveforms (1600 peaks per audio) were already used above for subtitles and
