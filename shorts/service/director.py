@@ -87,9 +87,11 @@ def validate_development(d, *, duration_bounds=(6840,7560)):
     # Regla del usuario: la mayoría de las tomas deben ser video real,
     # no imagen con paneo. Se exige en el guion mismo, antes de aprobar
     # y antes de pagar generaciones, para que un proyecto nuevo no nazca
-    # ya como imágenes fijas.
+    # ya como imágenes fijas. Solo se aplica a un corto completo (8 o
+    # más tomas); una ficha mínima de prueba con 1-2 tomas no es un corto.
     veo_count=sum(1 for s in d['shots'] if s.get('treatment')=='veo')
-    require(veo_count*2>=len(d['shots']),'VIDEO_MAJORITY','La mayoría de las tomas deben ser video real (veo), no imagen con paneo: al menos la mitad de las tomas deben ser veo.')
+    if len(d['shots'])>=8:
+        require(veo_count*2>=len(d['shots']),'VIDEO_MAJORITY','La mayoría de las tomas deben ser video real (veo), no imagen con paneo: al menos la mitad de las tomas deben ser veo.')
     total_frames=sum(s['frames'] for s in d['shots'])
     require(duration_bounds[0]<=total_frames<=duration_bounds[1],'DURATION_PLAN','La duración TOTAL del guion debe estar entre 285 y 315 segundos' if duration_bounds==(6840,7560) else 'La duración del guion no corresponde al tramo solicitado')
     for u in d['utterances']:

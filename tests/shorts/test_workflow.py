@@ -20,8 +20,11 @@ class WorkflowTests(unittest.TestCase):
     def test_A020_measured_voice_and_explicit_pauses(self):
         d=development();s=d['shots'][0];u=d['utterances'][0]
         rows,minimum=voice_layout(s,[(u,{'samples':62400})])
-        self.assertEqual(rows[0]['offsetSample'],60000)
-        self.assertEqual(minimum,98) # 1.3 s voice + 66 authored pause/action frames
+        # Regla del usuario 2026-10-28: la primera voz de una toma no
+        # espera más de 1 s tras el cambio de toma, aunque el guion
+        # pusiera lead 24 + pausa 6. El resto de pausas no se toca.
+        self.assertEqual(rows[0]['offsetSample'],48000)
+        self.assertEqual(minimum,92) # 1.3 s voice + 24 + 12 + 24 frames, con la primera voz a 1 s
         self.assertEqual(shot_bounds(s,minimum),(7000,7200))
         with self.assertRaises(ContractError):shot_bounds(s,7201)
     def test_a_voice_longer_than_planned_stretches_the_draft_but_not_the_export(self):
@@ -154,7 +157,10 @@ class VocalTrimTests(unittest.TestCase):
         s={**s,'frames':240,'minFrames':240,'maxFrames':240,'leadFrames':24,'tailFrames':24}
         vocal={'id':'breath','shotId':'shot','speakerId':'hero','type':'dialogue','spanish':'(Respiración lenta y profunda)','japanese':'呼吸。','acting':'calm','pauseBeforeFrames':24,'pauseAfterFrames':24}
         rows,minimum=voice_layout(s,[(vocal,{'samples':48000*20})])
-        self.assertEqual(rows[0]['samples'],240*2000-24*2000-24*2000-24*2000-24*2000)
+        # Regla del usuario 2026-10-28: un sonido vocal que abre la toma
+        # suena en el cambio de toma, no tras lead + pausa; por eso se
+        # recorta solo por pausa posterior y acción final, no por lead.
+        self.assertEqual(rows[0]['samples'],240*2000-24*2000-24*2000)
         self.assertEqual(minimum,240)
         spoken={**vocal,'spanish':'Sobrevivir.'}
         rows,minimum=voice_layout(s,[(spoken,{'samples':48000*20})])
