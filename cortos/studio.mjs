@@ -337,12 +337,27 @@ async function refreshReferenceCard(entityId){
  }
  return false;
 }
+async function refreshAssetCardOnly(eid){
+ // Una generación nueva solo reemplaza su propia tarjeta de recurso,
+ // no toda la toma: el resto de la toma (título, descripción, voces,
+ // otros medios) se queda exactamente como estaba, sin volver a cargar.
+ const rows=p.assets.filter(a=>a.entityId===eid);if(!rows.length)return false;
+ const newest=[...rows].sort((a,b)=>(a.created||0)-(b.created||0)).at(-1);
+ if(document.querySelector(`.asset-card[data-asset="${newest.id}"]`))return updateAssetCardInPlace(newest.id);
+ const old=document.querySelector(`.asset-card[data-entity="${eid}"][data-kind="${newest.kind}"]`);if(!old)return false;
+ const temp=document.createElement('div');await assetCard(temp,newest);
+ const nueva=temp.querySelector('.asset-card');if(!nueva)return false;
+ old.replaceWith(nueva);
+ const load=mediaLoads.pop();if(load)await load();
+ return true;
+}
 async function refreshGeneratedCard(){
  const eid=pendingCard||lastGeneration?.entityId;
  try{
   await refresh();
   const d=development();if(!d)return false;
   if(!eid)return false;
+  if(await refreshAssetCardOnly(eid).catch(()=>false))return true;
   // Si la tarjeta no está en la pantalla que el usuario ve ahora (cambió
   // de sección mientras generaba), no se redibuja nada: los datos ya están
   // actualizados y la tarjeta nueva aparecerá cuando vuelva a esa sección.
@@ -496,7 +511,43 @@ async function revise(kind,e){
  const instruction=document.createElement('textarea');instruction.placeholder='Describe qué debe cambiar y qué debe conservarse';const field=document.createElement('label');field.textContent='Corrección';field.append(instruction);dialog.append(field);
  buttons(dialog,[['Crear candidata',async()=>{if(!instruction.value.trim())throw new Error('Describe la corrección.');await runTask('revise',route(`/revisions/${kind}/${e.id}:revise`),{instruction:instruction.value,scope:options[Number(select.value)]});dialog.close();dialog.remove();await draw();}],['Cerrar',()=>{dialog.close();dialog.remove();},true]]);dialog.showModal();
 }
-async function approve(kind,id,reviewed=false){const asset=p?.assets?.find(a=>a.id===id);pendingCard=asset?.variantOf||asset?.entityId||null;await mutate(route(`/revisions/${kind}/${id}:approve`),{reviewed});needsRedraw=true;say('Versión aprobada y conservada.');}
+function badgeForAsset(a){
+ const promotedCopy=a.variantOf?p.assets.find(x=>x.promotedFrom===a.id):null;
+ const inUse=promotedCopy&&selectedAsset(a.variantOf,'image')?.id===promotedCopy.id;
+ return titleFor(a.approvalState)+(a.variantOf?' · variante':selectedAsset(a.entityId,a.kind)?.id===a.id?' · en uso':'')+(inUse?' · en uso como imagen de la toma':'');
+}
+function updateAssetCardInPlace(assetId){
+ const cardEl=document.querySelector(`.asset-card[data-asset="${assetId}"]`);if(!cardEl)return false;
+ const a=p?.assets?.find(x=>x.id===assetId);if(!a)return false;
+ const badge=cardEl.querySelector('.badge');if(badge)badge.textContent=badgeForAsset(a);
+ cardEl.querySelector('.actions')?.remove();
+ if(a.approvalState==='approved'&&a.variantOf){
+  const promotedCopy=p.assets.find(x=>x.promotedFrom===a.id);
+  const inUse=promotedCopy&&selectedAsset(a.variantOf,'image')?.id===promotedCopy.id;
+  if(!inUse)buttons(cardEl,[['Usar como imagen de esta toma',()=>useVariantAsShotImage(a),true]]);
+ }else if(a.approvalState==='approved'&&!a.variantOf&&selectedAsset(a.entityId,a.kind)?.id!==a.id){
+  buttons(cardEl,[['Usar esta versión',()=>approve('assets',a.id),true]]);
+ }
+ // Si otra tarjeta del mismo recurso dejó de estar en uso, su insignia
+ // también cambia, sin tocar su medio ni reconstruirla.
+ for(const other of document.querySelectorAll(`.asset-card[data-entity="${a.entityId}"][data-kind="${a.kind}"]`)){
+  if(other===cardEl)continue;
+  const oa=p.assets.find(x=>x.id===other.dataset.asset);if(!oa)continue;
+  const ob=other.querySelector('.badge');if(ob)ob.textContent=badgeForAsset(oa);
+ }
+ return true;
+}
+async function approve(kind,id,reviewed=false){
+ const asset=p?.assets?.find(a=>a.id===id);pendingCard=asset?.variantOf||asset?.entityId||null;
+ await mutate(route(`/revisions/${kind}/${id}:approve`),{reviewed});
+ // Como en Universos-IA: aprobar solo cambia el estado de esa tarjeta.
+ // No se reconstruye la toma, no se vuelve a pedir el medio y no se
+ // pierde la posición: solo cambia la insignia y el botón, en su sitio.
+ // Si la tarjeta no está en pantalla (otro botón, otra sección), se
+ // deja el redibujo habitual para que el cambio se vea al volver.
+ if(kind==='assets'&&updateAssetCardInPlace(id)){needsRedraw=false;say('Versión aprobada y conservada.');return true;}
+ needsRedraw=true;say('Versión aprobada y conservada.');return false;
+}
 async function useVariantAsShotImage(a){const shotId=a.variantOf;pendingCard=shotId;const promoted=await mutate(route(`/assets/${a.id}:use-as-shot-image`),{});needsRedraw=true;if(selectedAsset(shotId,'image')?.id!==promoted.id)throw new Error('La variante no quedó en uso para la toma. Vuelve a intentarlo.');say('Variante usada como imagen de la toma.');}
 // Lo que decide el director, no el usuario: identificadores internos, encuadre,
 // fotogramas y fontanería del sonido. Volcarlo en las pantallas de lectura
@@ -730,7 +781,7 @@ async function assetCard(parent,a){
  // que selecciona solo la capa y parece no hacer nada.
  const promotedCopy=a.variantOf?p.assets.find(x=>x.promotedFrom===a.id):null;
  const inUse=promotedCopy&&selectedAsset(a.variantOf,'image')?.id===promotedCopy.id;
- const c=card(titleFor(a.kind),`<p class="badge">${esc(titleFor(a.approvalState))}${a.variantOf?' · variante':selectedAsset(a.entityId,a.kind)?.id===a.id?' · en uso':''}${inUse?' · en uso como imagen de la toma':''}</p>`);c.classList.add('asset-card');parent.append(c);
+ const c=card(titleFor(a.kind),`<p class="badge">${esc(titleFor(a.approvalState))}${a.variantOf?' · variante':selectedAsset(a.entityId,a.kind)?.id===a.id?' · en uso':''}${inUse?' · en uso como imagen de la toma':''}</p>`);c.classList.add('asset-card');c.dataset.asset=a.id;c.dataset.entity=a.entityId;c.dataset.kind=a.kind;parent.append(c);
  if(a.requestId&&a.samples){const requested=development()?.soundRequests.find(x=>x.id===a.requestId);const duration=document.createElement('p');duration.className='muted';duration.textContent=`Solicitado: ${requested?.seconds??'—'} s · archivo: ${(a.samples/48000).toFixed(2)} s`;c.append(duration);}
  const mediaBox=document.createElement('div');mediaBox.className='asset-media';c.append(mediaBox);
  if(a.approvalState==='quarantined'||!['image','pcm','veo_silent_validated'].includes(a.kind)){mediaBox.textContent='Este archivo no está validado para reproducirse.';return;}
