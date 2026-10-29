@@ -86,6 +86,9 @@ def veo_seconds_for_manual_video(shot):
     cortarlo nunca. Si la toma es más corta, el clip elegido es el
     menor que la cubre, y el montaje lo acelera para ajustarla."""
     frames=integer(shot['frames'],'duración Veo',1,7560)
-    for seconds in (4,6,8):
-        if seconds*24>=frames:return seconds
-    return 8
+    # El más cercano a la toma, no siempre el que la cubre: una toma de
+    # 6 s genera 6 s (no 8 ralentizado), una de 4.5 s genera 4 s y se
+    # alarga un poco, una de 7 s genera 8 s. En empate (5 s, 7 s) se
+    # prefiere el que cubre, para no ralentizar más de lo necesario.
+    # Por encima de 8 s siempre es 8 s, porque Veo no genera más.
+    return min((4,6,8),key=lambda s:(abs(s*24-frames),-s))
