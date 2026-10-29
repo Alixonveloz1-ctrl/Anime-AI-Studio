@@ -108,6 +108,40 @@ def generators(pid):
                    visualStyle=visual_style(p.get('generators',{})),
                    visualStyles=[{'id':k,'name':v} for k,v in VISUAL_STYLES.items()])
 
+@app.post('/projects/<pid>/characters/<cid>/costumes')
+def character_costumes(pid,cid):
+    # Vestuario editable en la ficha (2026-10-29, a petición del usuario):
+    # el director lo genera, el usuario lo cambia, y ese vestuario es el
+    # que se pide en las próximas imágenes. Igual que el cambio de voz:
+    # crea una versión aprobada nueva y la deja en uso de inmediato, sin
+    # pasar por una candidata que haya que aprobar aparte. Los IDs de
+    # vestuario se conservan, solo cambian sus descripciones, así que
+    # nada más referencia esos IDs.
+    from shorts.service.director import validate_development
+    p=owned(pid);d=body()
+    costumes=d.get('costumes')
+    require(isinstance(costumes,list) and costumes,'COSTUMES','Escribe al menos un vestuario.')
+    for c in costumes:
+        require(isinstance(c,dict) and isinstance(c.get('id'),str) and c['id'] and isinstance(c.get('description'),str) and c['description'].strip(),'COSTUMES','Cada vestuario necesita una descripción.')
+    require(len({c['id'] for c in costumes})==len(costumes),'COSTUMES','IDs de vestuario duplicados.')
+    require(p.get('activeDevelopment'),'DEVELOPMENT','Abre producción con el guion aprobado.')
+    old=cloud().entity(pid,'developments',p['activeDevelopment'])
+    candidate=copy.deepcopy(old['data']);person=next((x for x in candidate['bible']['characters'] if x['id']==cid),None)
+    require(person,'CHARACTER','Personaje inexistente')
+    old_ids={c.get('id') for c in person.get('costumes',[])}
+    require(old_ids and set(c['id'] for c in costumes)==old_ids,'COSTUMES','Solo se pueden editar los vestuarios que ya tiene este personaje.')
+    person['costumes']=[{'id':c['id'],'description':c['description'].strip()} for c in costumes]
+    validate_development(candidate)
+    record={**old,'id':new_id(),'data':candidate,'previousId':old['id'],'source':'costume_edit','created':time.time(),'revision':1,
+            'approvalState':'approved','approvedBy':p['owner'],'approvedAt':time.time()}
+    for field in ('impact','review','jobId','dataHash'):record.pop(field,None)
+    def save(tx,current):
+        require(current.get('activeDevelopment')==old['id'],'STAGE_CHANGED','Cambió el guion. Vuelve a editar el vestuario.',409)
+        tx.create(cloud().entity_ref(pid,'developments',record['id']),record)
+        current.update(activeDevelopment=record['id'],timelineStale=True)
+        return record
+    result,_=cloud().mutate(pid,expected(),save);return jsonify(result),201
+
 @app.post('/projects/<pid>/characters/<cid>/voice')
 def character_voice(pid,cid):
     from shorts.core.requests import VOICES

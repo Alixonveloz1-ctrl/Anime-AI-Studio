@@ -923,6 +923,32 @@ function voiceControls(parent,character){
  },true]]);for(const a of p.assets.filter(a=>a.entityId===first.id).slice(-1))void assetCard(sample,a);}
 }
 
+async function editCostumes(e){
+ const dialog=document.createElement('dialog');document.body.append(dialog);
+ const box=card('Editar vestuario','<p>Lo que escribas aquí es el vestuario que se pedirá en las próximas imágenes de este personaje. El director lo generó, pero tú lo cambias cuando quieras.</p>');dialog.append(box);
+ const fields=[];
+ for(const costume of (e.costumes||[])){
+  const label=document.createElement('label');label.textContent='Vestuario · '+(costume.id||'');
+  const input=document.createElement('textarea');input.value=costume.description||'';label.append(input);box.append(label);fields.push({id:costume.id,input});
+ }
+ if(!fields.length){const note=document.createElement('p');note.textContent='Este personaje no tiene vestuario en su ficha. El director debe generarlo primero.';box.append(note);}
+ buttons(box,[['Guardar vestuario',async()=>{
+  if(!fields.length)throw new Error('No hay vestuario que guardar.');
+  const costumes=fields.map(f=>({id:f.id,description:f.input.value.trim()}));
+  if(costumes.some(c=>!c.description))throw new Error('Escribe la descripción de cada vestuario.');
+  await mutate(route(`/characters/${e.id}/costumes`),{costumes});
+  dialog.close();dialog.remove();await draw();
+  say('Vestuario guardado y en uso para las próximas imágenes. La referencia vieja ya no coincide con la ficha nueva: genera otra referencia para que el personaje salga con este vestuario, y luego genera otra imagen en cada toma que quieras con el vestuario nuevo. Las imágenes ya generadas no cambian solas.');
+ },true],['Generar referencia con este vestuario',async()=>{
+  if(!fields.length)throw new Error('No hay vestuario que guardar.');
+  const costumes=fields.map(f=>({id:f.id,description:f.input.value.trim()}));
+  if(costumes.some(c=>!c.description))throw new Error('Escribe la descripción de cada vestuario.');
+  await mutate(route(`/characters/${e.id}/costumes`),{costumes});
+  dialog.close();dialog.remove();
+  await runTask('image',route('/assets:generate'),{operation:'image',entityId:e.id});
+ },true],['Cerrar',()=>{dialog.close();dialog.remove();},true]]);
+ dialog.showModal();
+}
 async function buildReferenceSection(group,e){
  const section=card(e.name);section.classList.add('char-card');section.dataset.entity=e.id;
  const description=document.createElement('p');description.className='char-detail';description.textContent=e.description||e.objective||e.layout||e.state||'';section.append(description);
@@ -932,6 +958,7 @@ async function buildReferenceSection(group,e){
  const rows=p.assets.filter(a=>a.entityId===e.id);await assetVersions(section,rows);
  if(!rows.length){const placeholder=document.createElement('div');placeholder.className='scene-img media-empty';placeholder.textContent='Referencia por generar';section.append(placeholder);}
  buttons(section,[[rows.length?'Crear otra referencia':'Generar referencia',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:e.id}),rows.length>0]]);
+ if(group==='characters')buttons(section,[['Editar vestuario',()=>editCostumes(e),true]]);
  const details=fold(section,'Ficha y dirección visual');readable(details,e);
  return section;
 }

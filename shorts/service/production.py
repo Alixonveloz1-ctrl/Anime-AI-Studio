@@ -161,6 +161,15 @@ def run_job(cloud,j,p):
                     label={'characters':'Personaje','locations':'Lugar','props':'Objeto'}[group]+': '+e['name']+' ('+rid+')'
                     refs.append({**a,'uri':uri(a),'referenceLabel':label})
                 prompt=image_prompt(shot,shot=True,style=style)
+                # Vestuario vigente (2026-10-29): si el usuario editó el
+                # vestuario en la ficha, ese es el que se debe pedir en
+                # las imágenes nuevas, no el que tenía la referencia vieja.
+                _costumes=[]
+                for _rid in shot.get('visibleCharacters',[]):
+                    _ch=next((x for k in ('characters',) for x in d['bible'][k] if x['id']==_rid),None)
+                    if _ch and _ch.get('costumes'):
+                        _costumes.append(_ch['name']+': '+'; '.join(c.get('description','') for c in _ch['costumes'] if c.get('description')))
+                if _costumes:prompt+='\nVestuario vigente que deben llevar los personajes en esta imagen: '+ ' | '.join(_costumes)
             else:
                 e=next((e for k in ('characters','locations','props') for e in d['bible'][k] if e['id']==eid),None)
                 require(e,'ENTITY','Referencia inexistente');prompt=image_prompt(e,style=style)
