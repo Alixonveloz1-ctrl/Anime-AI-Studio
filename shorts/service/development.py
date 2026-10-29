@@ -179,7 +179,24 @@ def plan_sound(data):
     # completas de grito, gemido, respiración, etc., en inglés y español.
     vocal=re.compile(r'\b(?:screams?|screaming|shouts?|shouting|yells?|yelling|cry|cries|crying|groans?|groaning|moans?|moaning|grunts?|grunting|growls?|growling|breaths?|breathing|sighs?|sighing|laughs?|laughing|sobs?|sobbing|whispers?|whispering|gasps?|gasping|pants?|panting|vocal|voice|gritos?|gemidos?|respiración|respiraciones|respirar|respira|respirando|suspiros?|risas?|llanto|llorar|llora|llorando|jadeos?|jadear|susurros?|susurrar|human voice)\b')
     kept=[];seen=set()
+    # IDs ya ocupados por el resto de la historia: un sonido nunca puede
+    # reutilizar el ID de una toma, una voz o una ficha, ni el de otro sonido.
+    seen_ids={str(r.get('id') or '') for group in ('beats','shots','utterances','musicRequests') for r in out.get(group,[]) if isinstance(r,dict)}
+    seen_ids.update(str(r.get('id') or '') for kind in ('characters','locations','props') for r in out.get('bible',{}).get(kind,[]) if isinstance(r,dict))
+    seen_ids.discard('')
     for row in rows:
+        # El modelo repite el ID cuando el mismo sonido suena en varias
+        # tomas (caso real 2026-10-29: sfx_heavy_footsteps_01 duplicado
+        # en el paso 3 de Mi Vida Lenta). La validación exige IDs únicos
+        # en toda la historia, así que la segunda ocurrencia se renombra
+        # con sufijo, sin tocar su sonido, su toma ni su prompt: el
+        # agrupado por sonido ya lo hace soundGroup, no el ID.
+        rid=str(row.get('id') or '')
+        if rid in seen_ids:
+            suffix=2
+            while f"{rid}_{suffix:02d}" in seen_ids:suffix+=1
+            row['id']=f"{rid}_{suffix:02d}"
+        seen_ids.add(str(row.get('id') or ''))
         require(isinstance(row,dict),'SOUND','Solicitud de sonido inválida')
         texto=' '.join(str(row.get(k) or '') for k in ('name','description','prompt','eventDescription')).lower()
         if vocal.search(texto):continue
@@ -303,7 +320,7 @@ def develop(cloud,provider,job,project,idea):
                  'Para cinco minutos bastan entre tres y seis sonidos distintos; menos es mejor. Cada solicitud es un archivo '
                  'que una persona tiene que conseguir y subir a mano. Si el MISMO sonido ocurre en varias tomas, repite su '
                  'prompt palabra por palabra en cada toma donde suena: la aplicación lo reconoce como el mismo sonido y un '
-                 'solo archivo sirve para todas. No pidas efectos para lo que ya cuentan la voz o la música. '
+                 'solo archivo sirve para todas. PERO cada ocurrencia debe tener un ID ÚNICO y distinto, nunca repitas un ID: si son pasos pesados en tres tomas, usa sfx_heavy_footsteps_01, sfx_heavy_footsteps_02 y sfx_heavy_footsteps_03, uno por toma. Un ID repetido rechaza todo el plan, aunque el sonido sea el mismo. No pidas efectos para lo que ya cuentan la voz o la música. '
                  f'type=sfx es un sonido con un instante exacto de contacto y dura como máximo {SFX_MAX_SECONDS} segundos. '
                  f'type=ambience es un lecho continuo del que solo hace falta un BUCLE CORTO de hasta {AMBIENCE_LOOP_SECONDS} '
                  'segundos; la aplicación lo repite mientras dure su lugar, así que nunca pidas el ambiente entero del corto. '
