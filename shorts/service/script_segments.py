@@ -101,7 +101,7 @@ def develop_segment(cloud,provider,job,project,idea,story):
         segment=plan[index];start=sum(s['frames'] for s in data.get('shots',[]))/24
         prompt+=f'\nESCRIBE SOLAMENTE EL TRAMO {index+1}: momento {segment["beatId"]}, parte {segment["part"]} de {segment["parts"]}. Ya hay {start:.1f} segundos guardados. Este tramo necesita {segment["targetFrames"]/24:.2f} segundos propios, con margen de {segment["minFrames"]/24:.2f} a {segment["maxFrames"]/24:.2f}. NO son cinco minutos en esta llamada. Desarrolla acciones y diálogo suficientes para este tramo, sin resumirlo. Continúa desde el estado final del tramo anterior; reserva los hechos posteriores para sus tramos y llega al desenlace solo en el último.'
         prompt+=f'\nUsa IDs nuevos con prefijo t{index+1}_ para planos e intervenciones; conserva exactamente los IDs de las biblias. No repitas planos ni diálogos anteriores. Devuelve todas las tomas y voces de este tramo. Los planos sin voz son válidos si tienen acción, silencio o ambiente con intención dramática.'
-        prompt+='\nframes, minFrames, maxFrames y pausas se expresan en FOTOGRAMAS: 2 s=48, 8 s=192. La suma de frames de este tramo debe cubrir su presupuesto. Cada toma Veo tiene máximo 192 frames incluidos los márgenes; divide acciones largas con continuidad. Elige imagen/movimiento/video según la acción, no por una cuota. No alargues imágenes ni repitas acciones para llenar tiempo. Cuenta voces, acciones y silencios dentro de la duración del plano; música y efectos simultáneos no se suman otra vez. No inventes audio medido. Usa diálogos japoneses con traducción española.'
+        prompt+='\nframes, minFrames, maxFrames y pausas se expresan en FOTOGRAMAS: 2 s=48, 8 s=192. La suma de frames de este tramo debe cubrir su presupuesto. Cada toma Veo tiene máximo 192 frames incluidos los márgenes; divide acciones largas con continuidad. REGLA OBLIGATORIA DE VIDEO, SIN EXCEPCIÓN POR GÉNERO: al menos la mitad de las tomas DE ESTE TRAMO deben ser video real (treatment=veo), no imagen con paneo. Una toma con diálogo, grito, reacción o acción debe ser veo. Solo una pausa quieta, un detalle fijo o una transición pueden ser imagen, y nunca la mayoría del tramo. Incluso una historia lenta o tranquila se filma con video: movimiento lento, cultivar, regar, caminar, viento, luz que cambia. Nunca conviertas una acción en imagen solo para alargarla: divídela en varias tomas veo seguidas, cada una de máximo 192 frames, con continuidad explícita. Antes de responder, cuenta tus tomas: si menos de la mitad son veo, convierte tomas de imagen a veo hasta llegar a la mitad. No alargues imágenes ni repitas acciones para llenar tiempo. Cuenta voces, acciones y silencios dentro de la duración del plano; música y efectos simultáneos no se suman otra vez. No inventes audio medido. Usa diálogos japoneses con traducción española.'
     if payload.get('instruction'):prompt+='\nIndicaciones del usuario para esta parte: '+payload['instruction']
     schema=segment_schema(index,plan)
     try:
@@ -119,7 +119,29 @@ def develop_segment(cloud,provider,job,project,idea,story):
             from shorts.service.development import plan_voices
             result=plan_voices({**data,**part,'shots':[],'utterances':[]});completed=0
         else:
-            result=validate_segment(data,part,plan,index);completed=index+1
+            try:
+                result=validate_segment(data,part,plan,index)
+            except ContractError as ve:
+                # El modelo generó el tramo sin cumplir la regla de video:
+                # no se le devuelve el error al usuario para que vuelva a
+                # pulsar y pagar otra llamada a ciegas. Se le pide al
+                # mismo modelo, con el tramo ya generado en la mano, que
+                # lo corrija a video, en esta misma tarea, una sola vez.
+                # Si tampoco así cumple, el error original sí se muestra.
+                if ve.code!='VIDEO_MAJORITY':raise
+                segment=plan[index]
+                fix_prompt=(rules_for(project_style(project))+'\nCorrige SOLO este tramo, sin reescribir la historia ni cambiar voces. '
+                    'El tramo que generaste tiene menos de la mitad de sus tomas como video real, y eso no se acepta. '
+                    'Convierte tomas de imagen (hold/camera2d) a video real (treatment=veo) hasta que al menos la mitad de las tomas DE ESTE TRAMO sean veo. '
+                    'Una toma con diálogo, reacción o acción debe ser veo. Divide cada toma larga en varias tomas veo seguidas, cada una de máximo 192 frames, con continuidad explícita, conservando la duración total del tramo entre '
+                    f"{segment['minFrames']} y {segment['maxFrames']} frames. Conserva exactamente los IDs de las tomas que ya son veo y de todas las voces; para las tomas nuevas usa IDs nuevos con prefijo t{index+1}_. "
+                    'Devuelve SOLO shots y utterances de este tramo, con el mismo esquema.\nTramo a corregir:\n'+json.dumps(part,ensure_ascii=False))
+                fixed=provider.text(fix_prompt,max_output_tokens=16384,response_schema=schema)
+                ref.update({'raw':fixed})
+                require(isinstance(fixed,dict) and set(fixed)==set(schema['required']),'DEVELOPMENT_STAGE','Respuesta incompleta en la corrección del tramo. Lo anterior sigue guardado.')
+                validate_shape(fixed,schema)
+                result=validate_segment(data,fixed,plan,index)
+            completed=index+1
         ready=completed==len(plan)
         progress={'completed':completed,'total':len(plan),'frames':sum(s['frames'] for s in result['shots'])}
         ref.update({'data':result,'scriptProgress':progress,'status':'ready' if ready else 'partial','approvalState':'candidate' if ready else 'incomplete'})
