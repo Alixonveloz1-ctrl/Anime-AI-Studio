@@ -29,7 +29,7 @@ def stage_schema(stage):
                 if field in item.get(order,[]):item[order].remove(field)
     if stage==2:
         image=copy.deepcopy(properties['shots']['items']);video=copy.deepcopy(image)
-        image['properties']['treatment']['enum']=['hold','camera2d','localized']
+        image['properties']['treatment']['enum']=['hold','camera2d']
         video['properties']['treatment']['enum']=['veo']
         for key in ('frames','minFrames','maxFrames','leadFrames','tailFrames'):
             video['properties'][key]['maximum']=192
@@ -387,4 +387,4 @@ def script_timing_brief(prior):
         'Presupuesto orientativo por momento narrativo, calculado sobre el total de cinco minutos: '+json.dumps(budget,ensure_ascii=False)+'. '
         'Cada momento necesita todos sus planos e intervenciones. Verifica antes de responder que la suma de frames de TODOS los planos está entre 6840 y 7560. '
         'No confíes en que el montaje añadirá el tiempo que falta. No estires miradas ni dupliques planos para rellenar. '
-        'Solo Veo tiene límite de 192 frames por toma; hold/camera2d/localized pueden cubrir acciones más largas con justificación dramática.')
+        'Solo Veo tiene límite de 192 frames por toma; hold/camera2d pueden cubrir acciones más largas con justificación dramática. No existe el tratamiento localized.')
