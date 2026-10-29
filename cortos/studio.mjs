@@ -962,7 +962,7 @@ const has=selectedAsset(shot.id,shot.treatment==='veo'?'veo_silent_validated':'i
   const description=document.createElement('p');description.className='scene-narration';description.textContent=shot.function;c.append(description);
   const actions=[];
   if(!image&&!visuals.some(a=>a.kind==='image'&&a.approvalState==='candidate'))actions.push(['Generar imagen',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id})]);
-  if(image&&shot.treatment==='veo'&&!visuals.some(a=>a.kind==='veo_silent_validated'&&['candidate','approved'].includes(a.approvalState)))actions.push(['Generar video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id})]);
+  if(image&&!visuals.some(a=>a.kind==='veo_silent_validated'&&['candidate','approved'].includes(a.approvalState)))actions.push(['Generar video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id})]);
   if(actions.length)buttons(c,actions);
   for(const u of d.utterances.filter(u=>u.shotId===shot.id)){
    const character=d.bible.characters.find(x=>x.id===u.speakerId);
@@ -972,7 +972,7 @@ const has=selectedAsset(shot.id,shot.treatment==='veo'?'veo_silent_validated':'i
    buttons(row,[[assets.length?'Generar otra interpretación':'Generar voz japonesa',()=>runTask('tts',route('/assets:generate'),{operation:'tts',entityId:u.id}),assets.length>0]]);
   }
   if(has)buttons(c,[['Ver y escuchar esta toma',()=>previewShots([shot.id],c)]]);
-  const more=fold(c,'Editar y comparar');buttons(more,[['Movimiento y cámara',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id}),true]]:[]),['Crear imagen principal con instrucción',()=>createShotImageWithInstruction(shot),true],...(image&&shot.treatment==='veo'?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id}),true]]:[])]);
+  const more=fold(c,'Editar y comparar');buttons(more,[['Movimiento y cámara',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id}),true]]:[]),['Crear imagen principal con instrucción',()=>createShotImageWithInstruction(shot),true],...(image?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id}),true]]:[])]);
   if(has)buttons(more,[['Ver y escuchar la escena entera',()=>previewShots(d.shots.filter(x=>x.beatId===shot.beatId).map(x=>x.id),c),true],['Comparar tomas contiguas',()=>compareShots(shot,c),true]]);
  return c;
 }

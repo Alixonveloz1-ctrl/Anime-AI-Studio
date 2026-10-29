@@ -81,14 +81,19 @@ def assemble_plan(cloud,p,cue_overrides=None):
     target=duration_target(sum(b['minFrames'] for b in elastic),sum(b['preferredFrames'] for b in elastic),sum(b['maxFrames'] for b in elastic))
     planned=plan_beats(elastic,target)
     for s,t in zip(d['shots'],planned):
-        kind='veo_silent_validated' if s['treatment']=='veo' else 'image'
-        a=by.get((s['id'],kind))
+        # Video pedido a mano (2026-10-29): si existe un video aprobado
+        # para esta toma, se usa aunque el director la marcara como
+        # imagen o cámara 2D; el usuario decide por toma si la quiere
+        # en video. Solo si no hay video aprobado se usa la imagen.
+        _video=by.get((s['id'],'veo_silent_validated')) if s['treatment'] in ('hold','camera2d','veo') else None
+        kind='veo_silent_validated' if _video else 'image'
+        a=_video if _video else by.get((s['id'],kind))
         if not a:
             issues.append('Falta material aprobado: '+s['id'])
             a={'id':'missing_'+s['id']}
         else:assets[a['id']]=a
         shot={**s,'startFrame':t['startFrame'],'frames':t['frames'],'assetRevision':a['id'],'trimSeconds':s.get('trimSeconds',0),'speed':s.get('speed',1)}
-        if shot['treatment']=='veo' and not a['id'].startswith('missing_'):
+        if kind=='veo_silent_validated' and not a['id'].startswith('missing_'):
             # Regla del usuario, prohibido cortar: el clip completo se
             # acelera o se ralentiza para cubrir la toma, nunca se recorta
             # un segundo del final. La velocidad sale de la duración real

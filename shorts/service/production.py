@@ -170,7 +170,7 @@ def run_job(cloud,j,p):
             path=root/('image'+extension);path.write_bytes(raw);inspect(path,'video')
             return {'assetId':asset(path,'image',('layer_'+ident_new()) if data.get('variantPrompt') else eid,{'variantOf':eid if data.get('variantPrompt') else None,'parentAssetId':refs[0]['id'] if data.get('variantPrompt') else asset_parent,'references':[a['id'] for a in refs],'dependencies':asset_deps if asset_deps is not None else dependency_records(refs),'model':provider_config['models']['image'],'prompt':prompt})['id']}
         if op=='veo':
-            from shorts.core.timing import veo_seconds
+            from shorts.core.timing import veo_seconds_for_manual_video
             shot=next(s for s in d['shots'] if s['id']==eid);image=selected(eid,'image')
             raw_id=ident_new();output=j.get('providerOutput') or f'gs://{cloud.c["bucket"]}/{cloud.c["prefix"]}/projects/{pid}/assets/{raw_id}/'
             # Veo parte de la imagen aprobada, así que el estilo ya viene de
@@ -183,7 +183,7 @@ def run_job(cloud,j,p):
             # este contexto, un plano realista con un arma puede leerse como
             # manejo real de un arma y el proveedor lo devuelve vacío.
             veo_context='Fictional science-fiction survival story, fictional characters and fictional creatures, staged scene, not real people, not real violence. '
-            operation={'name':j['providerOperation']} if j.get('providerOperation') else provider.veo({'prompt':veo_context+shot['prompt']+veo_style,'imageApproved':True,'imageMime':image['mimeType'],'durationSeconds':veo_seconds(shot),'format':p['format']},uri(image),output)
+            operation={'name':j['providerOperation']} if j.get('providerOperation') else provider.veo({'prompt':veo_context+shot['prompt']+veo_style,'imageApproved':True,'imageMime':image['mimeType'],'durationSeconds':veo_seconds_for_manual_video(shot),'format':p['format']},uri(image),output)
             require(operation.get('name'),'VEO_OPERATION','No se recibió operationId')
             ref=cloud.db.collection('animeShortsJobs').document(j['id']);ref.update({'providerOperation':operation['name'],'providerOutput':output,'state':'waiting_provider'})
             deadline=time.time()+1800

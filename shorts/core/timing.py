@@ -75,3 +75,17 @@ def veo_seconds(shot):
     frames=integer(shot['frames'],'duración Veo',1,192)
     maximum=integer(shot.get('maxFrames',frames),'máximo Veo',frames,192)
     return next(seconds for seconds in (4,6,8) if seconds*24>=maximum)
+
+def veo_seconds_for_manual_video(shot):
+    """Clip para un video pedido a mano en cualquier toma (2026-10-29, a
+    petición del usuario: todas las tomas deben poder tener video, no solo
+    las que el director marcó como veo). No exige tratamiento veo ni
+    frames <=192: elige el clip soportado más corto que cubra la toma
+    (4, 6 u 8 s) y, si la toma es más larga, 8 s; el montaje luego
+    ralentiza o acelera el clip completo para cubrir la toma, sin
+    cortarlo nunca. Si la toma es más corta, el clip elegido es el
+    menor que la cubre, y el montaje lo acelera para ajustarla."""
+    frames=integer(shot['frames'],'duración Veo',1,7560)
+    for seconds in (4,6,8):
+        if seconds*24>=frames:return seconds
+    return 8
