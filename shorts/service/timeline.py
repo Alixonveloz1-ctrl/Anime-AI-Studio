@@ -85,7 +85,7 @@ def assemble_plan(cloud,p,cue_overrides=None):
         # para esta toma, se usa aunque el director la marcara como
         # imagen o cámara 2D; el usuario decide por toma si la quiere
         # en video. Solo si no hay video aprobado se usa la imagen.
-        _video=by.get((s['id'],'veo_silent_validated')) if s['treatment'] in ('hold','camera2d','veo') else None
+        _video=by.get((s['id'],'veo_silent_validated'))
         kind='veo_silent_validated' if _video else 'image'
         a=_video if _video else by.get((s['id'],kind))
         if not a:
@@ -101,7 +101,7 @@ def assemble_plan(cloud,p,cue_overrides=None):
             speed=veo_retime(a,t['frames'])
             if speed:shot['speed']=speed;shot['trimSeconds']=0;shot['retimeApproved']=True
         if a['id'].startswith('missing_'):shot.update(treatment='black',approvedBlack=True,draftPlaceholder=True)
-        if shot['treatment']=='localized':
+        if shot['treatment']=='localized' and kind!='veo_silent_validated':
             layers=[]
             for layer in s.get('layers',[]):
                 variant=next((x for x in available if x['id']==layer['assetRevision']),None)
