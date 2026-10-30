@@ -39,6 +39,30 @@ async function setup(options={}){
  if(options.nonJsonError&&decodeURIComponent(url).endsWith('/ideas:generate')){options.errorRequests=(options.errorRequests||0)+1;return new Response('',{status:502});}if(new Headers(request.headers).has('If-Match'))return new Response('',{status:412});return baseTransport(url,request);};
  const dom=new JSDOM(html,{url:'https://fixture.invalid/cortos/',runScripts:'outside-only'}),w=dom.window;
  Object.assign(w,{...catalogue,steps:presentation.steps,titleFor:presentation.label,terminal:presentation.terminal,unresolved:presentation.unresolved,enCola:presentation.enCola,jobMessage:presentation.jobMessage,versions:presentation.versions,taskActions:presentation.taskActions,entityName:presentation.entityName,fieldLabel:presentation.fieldLabel,TextEncoder,structuredClone,fetch:fixture.transport,confirm:()=>{throw new Error('Unexpected confirmation')},prompt:()=>null});
+ // Un corto largo de verdad: cuarenta tomas con su imagen y su voz.
+ if(options.muchasTomas){
+  const d=fixture.project.developments[0].data,tomas=[],voces=[];
+  for(let i=0;i<options.muchasTomas;i++){
+   const id='t'+i;
+   tomas.push({...d.shots[0],id,beatId:'beat1',frames:180,prompt:'Toma '+i});
+   voces.push({...d.utterances[0],id:'v'+i,shotId:id});
+   for(const [aid,eid,kind] of [['img-'+id,id,'image'],['voz-'+id,'v'+i,'pcm']])
+    fixture.project.assets.push({id:aid,entityId:eid,kind,approvalState:'approved',created:i,sha256:'h',revision:1,samples:96000});
+  }
+  d.shots=tomas;d.utterances=voces;
+ }
+ // jsdom no sabe qué está en pantalla. Este doble deja ver sólo las primeras
+ // tarjetas, como un teléfono, y w.__verTarjeta simula bajar hasta otra.
+ if(options.pantallaDeTelefono){
+  const avisos=new Map();
+  w.IntersectionObserver=class{
+   constructor(fn){this.fn=fn;this.vistos=0;}
+   observe(nodo){avisos.set(nodo,this.fn);if(this.vistos++<options.pantallaDeTelefono)this.fn([{target:nodo,isIntersecting:true}]);}
+   unobserve(nodo){avisos.delete(nodo);}
+   disconnect(){avisos.clear();}
+  };
+  w.__verTarjeta=nodo=>{for(const [observado,fn] of avisos)if(nodo===observado||nodo.contains(observado))fn([{target:observado,isIntersecting:true}]);};
+ }
  Object.defineProperty(w.crypto,'subtle',{value:webcrypto.subtle});w.setInterval=()=>0;if(options.fastPoll){const timeout=w.setTimeout.bind(w);w.setTimeout=(fn,ms,...args)=>timeout(fn,ms===3000?0:ms,...args);}
  w.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','')};w.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open')};w.HTMLMediaElement.prototype.pause=function(){};
  w.HTMLCanvasElement.prototype.getContext=()=>({clearRect(){},beginPath(){},moveTo(){},lineTo(){},stroke(){}});
@@ -137,8 +161,13 @@ test('Manual synchronization is usable with analysis exhausted and without AI ca
 test('Subtitle approval, automatic preview preparation and final export are connected',async()=>{
  const {fixture,w,dom,click}=await setup();await click('Exportar');await click('Revisar el corto');await click('Subtítulos');
  assert.equal([...w.document.querySelectorAll('textarea')].length,1,'No empty exception fields');
- await click('Aprobar subtítulos revisados');await click('Preparar vista previa');await click('Exportar');await click('Aprobar y exportar');await click('Descargar archivos');
- assert.ok(fixture.calls.some(c=>c.path.endsWith('/timeline:compile')));assert.ok(fixture.calls.some(c=>c.path.endsWith('/renders')));assert.equal(w.document.querySelectorAll('.download-list a').length,2);
+ await click('Aprobar subtítulos revisados');await click('Preparar vista previa');await click('Exportar');await click('Aprobar y exportar');
+ // Exportar entrega UN paquete, no una lista de archivos que descargar uno a uno.
+ const descargas=[];w.HTMLAnchorElement.prototype.click=function(){descargas.push(this.download);};
+ await click('Descargar ZIP');
+ assert.ok(fixture.calls.some(c=>c.path.endsWith('/timeline:compile')));assert.ok(fixture.calls.some(c=>c.path.endsWith('/renders')));
+ assert.deepEqual(descargas,['paquete_publicacion.zip'],'un solo paquete, no una lista de enlaces');
+ assert.equal(w.document.querySelectorAll('.download-list a').length,0,'ya no hay lista de descargas');
  assert.equal([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Compilar montaje'),false);dom.window.close();
 });
 
@@ -752,5 +781,35 @@ test('Visual style selector offers anime cinematic and realistic, and saves the 
   style.value='realista';await style.onchange();
   assert.equal(fixture.project.generators.visualStyle,'realista');
   assert.equal(fixture.calls.filter(c=>c.path.endsWith('/assets:generate')).length,0,'Choosing a style does not generate paid content');
+ }finally{dom.window.close();}
+});
+
+// «Tarda mucho en cargar todo.» (U030) Un corto de cinco minutos son cuarenta
+// tomas, y abrir Escenas pedía la dirección de cada imagen y de cada voz de
+// las cuarenta antes de haber mirado la primera.
+test('Abrir Escenas con cuarenta tomas sólo pide los medios que se ven',async()=>{
+ const {fixture,w,dom,click}=await setup({muchasTomas:40,pantallaDeTelefono:2});
+ try{
+  fixture.calls.length=0;
+  await click('Escenas');
+  await new Promise(r=>setTimeout(r,0));
+  const medios=fixture.calls.filter(c=>/\/assets\/[^/]+\/url$/.test(c.path));
+  assert.ok(medios.length<=4,'sólo los medios en pantalla: '+medios.length);
+  // Y lo demás que se pide al abrir una pantalla no se pide dos veces.
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/jobs')).length,1,'los trabajos se leen una vez');
+  const tomas=[...w.document.querySelectorAll('.shot-section')];
+  assert.equal(tomas.length,40,'las cuarenta tomas están pintadas, con o sin su imagen');
+  // Al llegar a una toma de más abajo, entonces sí se pide su medio.
+  const antes=fixture.calls.length;
+  w.__verTarjeta(tomas[20]);
+  await new Promise(r=>setTimeout(r,0));
+  assert.ok(fixture.calls.length>antes,'bajar hasta una toma pide su imagen');
+ }finally{dom.window.close();}
+});
+test('El catálogo de generadores se lee una vez por corto, no en cada pantalla',async()=>{
+ const {fixture,dom,click}=await setup();
+ try{
+  await click('Personajes');await click('Escenas');await click('Personajes');
+  assert.equal(fixture.calls.filter(c=>c.path.endsWith('/generators')&&c.method==='GET').length,1);
  }finally{dom.window.close();}
 });

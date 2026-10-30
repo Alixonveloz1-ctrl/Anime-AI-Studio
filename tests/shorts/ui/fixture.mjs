@@ -87,7 +87,7 @@ export function createFixture({empty=false,servidorViejo=false,motorOcupado=fals
   else if(path.endsWith('/previews')&&method==='POST')result=render(false,body);
   else if(path.endsWith('/renders'))result=render(true,{timelineId:p.activeTimeline});
   else if(path.includes('/previews/'))result=p.previews.find(x=>x.id===path.split('/').at(-1));
-  else if(path.includes('/exports/'))result={files:[{name:'Corto.mp4',url:still},{name:'Subtítulos.srt',url:still}]};
+  else if(path.includes('/exports/'))result={files:[{name:'Corto.mp4',url:still},{name:'Subtítulos.srt',url:still},{name:'paquete_publicacion.zip',url:still},{name:'publicacion.txt',url:still}]};
   else if(path.endsWith('/mix-policy')){p.mixPolicy={normalization:{enabled:body.normalize},ducking:{enabled:body.duckMusic}};result=p;}
   else if(path.endsWith('/subtitles')&&method==='GET')result={rows:[{utteranceId:'voice1',shotId:'shot1',japanese:'まだ間に合う。',audioRevision:'voice',audioHash:'hash-voice',samples:96000,segments:[{text:'Todavía estamos a tiempo.',startSample:0,endSample:96000}],warnings:[],stale:false}]};
   else if(path.endsWith('/subtitles:approve')){p.subtitleApproval=body;result=p;}

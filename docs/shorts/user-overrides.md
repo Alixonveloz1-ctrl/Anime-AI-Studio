@@ -268,3 +268,28 @@ Con el motor de voz ya libre, la voz se generó. Tres cosas más de esa misma se
 **«Por cada cosa que genero, se recarga la página completa».** Al terminar una generación la pantalla se repinta entera y el navegador saltaba al principio, así que por cada imagen y por cada voz había que volver a buscar dónde estabas. Ahora el repintado conserva la posición, incluso después de que entren las imágenes, que cambian el alto. Cambiar de sección sí empieza arriba, que es lo que se espera.
 
 Pruebas: `tests/shorts/test_workflow.py` (el borrador alarga la toma, exportar la exige revisada, y Veo sigue acotado) y `tests/shorts/ui/studio.test.mjs` (terminar una generación te deja donde estabas; cambiar de sección empieza arriba).
+
+## U029 — Abrir una pantalla no pide los medios de todo el corto (2026-10-30)
+
+«Tarda mucho en cargar todo.»
+
+Medido con cuarenta tomas, que es un corto de cinco minutos: abrir Escenas
+lanzaba **84 peticiones al servicio**, y 80 de ellas eran la dirección firmada
+de un archivo —una por cada imagen y cada voz de las cuarenta tomas—, de tres
+en tres, antes de haber mirado la primera toma. Las otras cuatro también
+sobraban en parte: la lista de trabajos se leía dos veces por pantalla, y el
+catálogo de generadores se volvía a pedir en cada cambio de sección aunque sólo
+cambie cuando esta misma página lo guarda.
+
+Ahora el archivo de una tarjeta se pide cuando esa tarjeta entra en pantalla,
+con 400 píxeles de margen para que ya esté al llegar, y siguen bajando tres a
+la vez como máximo. La lista de trabajos se pide a la vez que el proyecto, no
+después, y se lee una sola vez. El catálogo de generadores se lee una vez por
+corto. Las mismas cuarenta tomas, en una pantalla de teléfono: **5
+peticiones**. Un navegador que no sepa qué hay en pantalla las pide todas, como
+antes.
+
+Pruebas (`tests/shorts/ui/studio.test.mjs`): con cuarenta tomas pintadas,
+abrir Escenas pide como mucho cuatro archivos y lee los trabajos una vez;
+bajar hasta la toma veintiuno pide entonces su imagen; y el catálogo de
+generadores se lee una vez aunque se cambie de sección tres veces.

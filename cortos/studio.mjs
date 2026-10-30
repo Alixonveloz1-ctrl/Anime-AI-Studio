@@ -6,7 +6,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 let user,p,stage='Historia',productionTab='tomas',reviewTab='corto',active=false,busy=false,heartbeatBusy=false,needsRedraw=false;
 let mediaLoads=[];
 let knownJobs=[],watchVersion=0;
-let generatorCatalog,generatorSave=null,mutationQueue=Promise.resolve();
+let generatorCatalog,generatorCatalogProject=null,generatorSave=null,mutationQueue=Promise.resolve();
 let lastGeneration=null,pendingCard=null;
 // 2026-10-30, a petición del usuario: subir efectos en lote. Elegir un
 // archivo ya NO lo sube al momento; queda pendiente en esta cola, en
@@ -396,19 +396,55 @@ async function refreshAfterGeneration(){
 async function drawScreen(){
  mediaLoads=[];
  await renderStage();
- const queued=mediaLoads,generation=drawRequest;
- // Paint the complete page first. Read only visible media, at most three at a
- // time. A slow or inaccessible image never hides the other scene controls.
- void Promise.all(Array.from({length:3},async()=>{
-  while(queued.length&&generation===drawRequest){const load=queued.shift();await load();}
- }));
+ observarMedios(mediaLoads.splice(0),drawRequest);
+}
+// Un corto de cinco minutos son cuarenta tomas. Abrir Escenas pedía la
+// dirección de cada imagen y de cada voz de las cuarenta —ochenta peticiones
+// al servicio— antes de haber mirado la primera: eso es lo que tardaba tanto
+// en cargar. Ahora el medio de una tarjeta se pide cuando esa tarjeta entra en
+// pantalla, con un margen para que ya esté al llegar, y siguen bajando tres a
+// la vez como máximo. Un navegador sin este aviso de visibilidad las pide
+// todas, como antes.
+let observadorMedios=null;
+function observarMedios(cargas,generation){
+ observadorMedios?.disconnect();observadorMedios=null;
+ const cola=[];let activas=0;
+ const bombear=()=>{
+  while(activas<3&&cola.length){
+   if(generation!==drawRequest){cola.length=0;return;}
+   const cargar=cola.shift();activas++;
+   Promise.resolve().then(cargar).catch(()=>{}).then(()=>{activas--;bombear();});
+  }
+ };
+ const pedir=cargar=>{cola.push(cargar);bombear();};
+ const porTarjeta=new Map();
+ for(const cargar of cargas){if(cargar.tarjeta)porTarjeta.set(cargar.tarjeta,cargar);else pedir(cargar);}
+ if(!porTarjeta.size)return;
+ if(typeof IntersectionObserver!=='function'){for(const cargar of porTarjeta.values())pedir(cargar);return;}
+ // El observador se guarda en una variable propia: un repintado posterior
+ // cambia el del módulo, y un aviso tardío del viejo dejaría de observar
+ // tarjetas del nuevo.
+ const mio=new IntersectionObserver(entradas=>{
+  for(const entrada of entradas){
+   if(!entrada.isIntersecting)continue;
+   const cargar=porTarjeta.get(entrada.target);if(!cargar)continue;
+   porTarjeta.delete(entrada.target);mio.unobserve(entrada.target);pedir(cargar);
+  }
+ },{rootMargin:'400px'});
+ observadorMedios=mio;
+ for(const tarjeta of [...porTarjeta.keys()])mio.observe(tarjeta);
 }
 async function renderStage(){
  if(!p)stage='Historia';
+ // La lista de trabajos no depende del proyecto recién leído, así que se piden
+ // a la vez: esperar una detrás de la otra era una ida y vuelta de más antes
+ // de poder pintar nada.
+ const trabajos=p?api(route('/jobs')).then(r=>({jobs:r.jobs}),error=>({error})):null;
  if(p)await refresh();navigation();screen.replaceChildren();
  if(!p){$('#activity').hidden=true;knownJobs=[];return newProject();}
  try{
-  const {jobs}=await api(route('/jobs'));knownJobs=jobs;
+  const leido=await trabajos;if(leido.error)throw leido.error;
+  const jobs=leido.jobs;knownJobs=jobs;
   const latest=[...jobs].sort((a,b)=>(b.created||0)-(a.created||0));
   // Keep the newest result after polling finishes. An older failed attempt
   // must not replace a newer successful generation when the page redraws.
@@ -746,7 +782,9 @@ async function production(){
  await activityList();
 }
 async function activityList(){
- const {jobs}=await api(route('/jobs'));if(!jobs.length)return;
+ // La pantalla acaba de leer los trabajos: volver a pedirlos aquí era una
+ // segunda petición idéntica por cada vez que se abre Escenas.
+ const jobs=knownJobs;if(!jobs.length)return;
  // Antes listaba las últimas treinta generaciones, terminadas incluidas: un
  // historial permanente debajo de la música que no se usa para nada. Sólo
  // aparece lo que espera una decisión: lo que sigue en curso y lo que falló o
@@ -813,7 +851,8 @@ async function assetCard(parent,a){
    finally{clearTimeout(timer);loading=null;}
   })();return loading;
  };
- mediaLoads.push(open);
+ // Cada carga recuerda su tarjeta para poder pedir sólo la que se ve.
+ open.tarjeta=c;mediaLoads.push(open);
  // Aprobar un audio es un solo toque: antes, el primer toque solo
  // cargaba el audio y, como el audio no se reproducía, nunca se marcaba
  // como revisado y el botón seguía apareciendo. Para imagen y video se
@@ -831,7 +870,13 @@ async function assetVersions(parent,rows){
 async function generatorControls(parent){
  const projectId=p.id;
  const box=card('Generadores','<p class="muted">Elige con qué generar. Se guarda para este corto y se aplica a las nuevas solicitudes.</p>');parent.append(box);
- try{generatorCatalog=await api(route('/generators'));}catch(error){generatorCatalog=null;box.append(document.createTextNode('No se pudieron cargar los generadores. '+error.message));return;}
+ // El catálogo sólo cambia cuando esta misma página guarda un generador, y
+ // entonces se actualiza aquí mismo: pedirlo otra vez en cada cambio de
+ // pantalla era una petición por nada.
+ if(!generatorCatalog||generatorCatalogProject!==projectId){
+  try{generatorCatalog=await api(route('/generators'));generatorCatalogProject=projectId;}
+  catch(error){generatorCatalog=null;generatorCatalogProject=null;box.append(document.createTextNode('No se pudieron cargar los generadores. '+error.message));return;}
+ }
  for(const [kind,title] of [['image','Imagen'],['veo','Video'],['tts','Voces'],['music','Música']]){
   const label=document.createElement('label');label.textContent=title;const select=document.createElement('select');select.setAttribute('aria-label','Generador de '+title.toLowerCase());
   for(const model of generatorCatalog.choices[kind]){const option=document.createElement('option');option.value=model.id;option.textContent=model.name;select.append(option);}
