@@ -118,6 +118,22 @@ def run_job(cloud,j,p):
         if op=='image':
             from shorts.service.image_direction import image_prompt
             shot=next((s for s in d['shots'] if s['id']==eid),None)
+            if shot:
+                # Guardia 2026-10-29, caso Plano 09 de Mi Vida Lenta: la toma
+                # decía "llegada de Elara" pero Elara no estaba en el reparto
+                # visible, así que el generador nunca recibió su referencia
+                # y se inventó unas piernas con pantalones. No se genera
+                # a ciegas en ese caso: se avisa para corregir el guion
+                # antes de pagar otra imagen inventada. Solo cubre el
+                # patrón estrecho de llegada/entrada, no cualquier mención
+                # de pasada, para no bloquear tomas donde un personaje solo
+                # se recuerda o se nombra sin estar presente.
+                import re as _re
+                _text=(shot.get('function','')+' '+shot.get('prompt',''))
+                for _ch in d['bible']['characters']:
+                    _name=_ch['name']
+                    if _re.search(r'(llegada|entrada|aparici\u00f3n)\s+de\s+'+_re.escape(_name)+r'\b|\b'+_re.escape(_name)+r'\s+(llega|camina|entra|aparece|avanza|se acerca|regresa|sale)',_text,_re.IGNORECASE):
+                        require(_ch['id'] in shot.get('visibleCharacters',[]),'SHOT_CAST','La toma nombra la llegada o presencia de '+_name+' pero '+_name+' no está en el reparto visible de la toma, así que no se puede usar su referencia. Corrige el guion para incluir a '+_name+' en esa toma antes de generar su imagen, en vez de generar un personaje inventado.')
             refs=[];asset_deps=None;asset_parent=None
             if shot and data.get('shotImageInstruction'):
                 # Imagen principal con instrucción del usuario: NO es una
@@ -159,8 +175,21 @@ def run_job(cloud,j,p):
                     a=selected(rid,'image')
                     group,e=next((k,e) for k in ('characters','locations','props') for e in d['bible'][k] if e['id']==rid)
                     label={'characters':'Personaje','locations':'Lugar','props':'Objeto'}[group]+': '+e['name']+' ('+rid+')'
+                    if group=='characters' and e.get('costumes'):
+                        label+=' - vestuario: '+'; '.join(c.get('description','') for c in e['costumes'] if c.get('description'))
                     refs.append({**a,'uri':uri(a),'referenceLabel':label})
                 prompt=image_prompt(shot,shot=True,style=style)
+                if data.get('usePreviousShot'):
+                    # Botón 2026-10-29: la imagen de la toma anterior sirve
+                    # SOLO como referencia de continuidad, no para copiarla.
+                    _shots=d['shots'];_idx=next((i for i,s in enumerate(_shots) if s['id']==eid),None)
+                    require(_idx is not None and _idx>0,'PREVIOUS_SHOT','Esta es la primera toma, no hay toma anterior que usar como referencia.')
+                    _prev=_shots[_idx-1]
+                    try:_prev_asset=selected(_prev['id'],'image')
+                    except Exception:_prev_asset=None
+                    require(_prev_asset,'PREVIOUS_SHOT','La toma anterior todavía no tiene una imagen aprobada que usar como referencia. Genera primero la imagen de la toma anterior.')
+                    refs.append({**_prev_asset,'uri':uri(_prev_asset),'referenceLabel':'Toma anterior: referencia de continuidad, no copiar'})
+                    prompt+='\nContinuidad con la toma anterior: usa la imagen de la toma anterior SOLO como referencia de continuidad (mismo personaje, mismo vestuario, mismo lugar, misma luz y mismo estilo), pero dibuja ESTA toma con su propia acción y su propio encuadre. No copies la imagen anterior ni repitas su composición.'
                 # Vestuario vigente (2026-10-29): si el usuario editó el
                 # vestuario en la ficha, ese es el que se debe pedir en
                 # las imágenes nuevas, no el que tenía la referencia vieja.

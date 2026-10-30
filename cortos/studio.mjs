@@ -987,8 +987,26 @@ const has=selectedAsset(shot.id,shot.treatment==='veo'?'veo_silent_validated':'i
   if(!visuals.length){const placeholder=document.createElement('div');placeholder.className='scene-img media-empty';placeholder.style.aspectRatio=p.format==='9:16'?'9 / 16':'16 / 9';placeholder.textContent='Imagen por generar';media.append(placeholder);}
   await assetVersions(media,visuals);
   const description=document.createElement('p');description.className='scene-narration';description.textContent=shot.function;c.append(description);
+  // Interruptor 2026-10-29, solo para imágenes y solo si el usuario lo
+  // activa: usar la imagen de la toma anterior como referencia de
+  // continuidad, además de las referencias de personajes y lugares.
+  // No es automático: por defecto está desactivado en cada toma, y se
+  // guarda en este teléfono para que no se pierda al recargar.
+  const prevShot=index>0?d.shots[index-1]:null;
+  const prevImage=prevShot?selectedAsset(prevShot.id,'image'):null;
+  const prevKey='animeShorts:prevShot:'+p.id+':'+shot.id;
+  const prevOn=()=>{try{return localStorage.getItem(prevKey)==='1';}catch{return false;}};
+  if(prevShot){
+   const toggleRow=document.createElement('div');toggleRow.className='actions';
+   const toggleBtn=document.createElement('button');toggleBtn.className='secondary';
+   const renderToggle=()=>{toggleBtn.textContent=prevOn()?'Toma anterior: activada':'Toma anterior: desactivada';};
+   renderToggle();
+   toggleBtn.onclick=()=>{try{localStorage.setItem(prevKey,prevOn()?'0':'1');}catch{};renderToggle();if(prevOn()&&!prevImage)say('Toma anterior activada, pero la toma anterior todavía no tiene imagen aprobada. Genera primero la imagen de la toma anterior, o desactívala para generar sin ella.',true);};
+   toggleRow.append(toggleBtn);c.append(toggleRow);
+  }
+  const imagePayload=()=>({operation:'image',entityId:shot.id,...(prevOn()?{usePreviousShot:true}:{})});
   const actions=[];
-  if(!image&&!visuals.some(a=>a.kind==='image'&&a.approvalState==='candidate'))actions.push(['Generar imagen',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id})]);
+  if(!image&&!visuals.some(a=>a.kind==='image'&&a.approvalState==='candidate'))actions.push(['Generar imagen',()=>runTask('image',route('/assets:generate'),imagePayload())]);
   if(image&&!visuals.some(a=>a.kind==='veo_silent_validated'&&['candidate','approved'].includes(a.approvalState)))actions.push(['Generar video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id})]);
   if(actions.length)buttons(c,actions);
   for(const u of d.utterances.filter(u=>u.shotId===shot.id)){
@@ -999,7 +1017,7 @@ const has=selectedAsset(shot.id,shot.treatment==='veo'?'veo_silent_validated':'i
    buttons(row,[[assets.length?'Generar otra interpretación':'Generar voz japonesa',()=>runTask('tts',route('/assets:generate'),{operation:'tts',entityId:u.id}),assets.length>0]]);
   }
   if(has)buttons(c,[['Ver y escuchar esta toma',()=>previewShots([shot.id],c)]]);
-  const more=fold(c,'Editar y comparar');buttons(more,[['Movimiento y cámara',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id}),true]]:[]),['Crear imagen principal con instrucción',()=>createShotImageWithInstruction(shot),true],...(image?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id}),true]]:[])]);
+  const more=fold(c,'Editar y comparar');buttons(more,[['Movimiento y cámara',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),imagePayload()),true]]:[]),['Crear imagen principal con instrucción',()=>createShotImageWithInstruction(shot),true],...(image?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id}),true]]:[])]);
   if(has)buttons(more,[['Ver y escuchar la escena entera',()=>previewShots(d.shots.filter(x=>x.beatId===shot.beatId).map(x=>x.id),c),true],['Comparar tomas contiguas',()=>compareShots(shot,c),true]]);
  return c;
 }
