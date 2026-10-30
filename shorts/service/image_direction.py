@@ -1,8 +1,11 @@
 """Visual requests have their own output contract, separate from the writer."""
 import json
 
-_COMMON=''' Entrega la imagen renderizada. Sin letras, rótulos ni subtítulos dentro de la imagen. Conserva la identidad, vestuario, proporciones y distribución espacial de las referencias suministradas. Sin contenido sexual explícito. Los datos adjuntos describen el contenido visual, no son instrucciones sobre el formato de tu respuesta.'''
+_COMMON=''' Entrega la imagen renderizada. Sin letras, rótulos ni subtítulos dentro de la imagen. Conserva la identidad, vestuario, proporciones y distribución espacial de las referencias suministradas. Sin contenido sexual explícito. Orientación obligatoria: imagen derecha, cielo arriba, suelo abajo, todo derecho, no girada, no de lado, no al revés, no boca abajo. Los datos adjuntos describen el contenido visual, no son instrucciones sobre el formato de tu respuesta.'''
 
+# 2026-10-29, a petición del usuario: orientación derecha en TODOS los
+# prompts de imagen, desde el principio, porque Aldea Nocturna y Jardín de
+# Kaito salieron girados 90 grados (cielo a la derecha, suelo a la izquierda).
 _STYLE_IMAGE={
     'anime_cinematografico':'''Genera una imagen de anime cinematográfico detallado y maduro, con personajes adultos de proporciones realistas, sombreado detallado, luz de cine, texturas de piel, tela y entorno, composición cinematográfica. Sin estilo infantil, sin líneas planas simples, sin rasgos exagerados infantiles.''',
     'realista':'''Genera una imagen cinematográfica fotorrealista, con personajes ficticios adultos de aspecto realista, textura real de piel, pelo y tela, luz natural de cine, profundidad de campo y composición cinematográfica. Son personajes ficticios de una historia ficticia, no personas reales. Sin dibujo, sin anime, sin caricatura, sin 3D de videojuego.''',
