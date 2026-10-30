@@ -8,6 +8,11 @@ let mediaLoads=[];
 let knownJobs=[],watchVersion=0;
 let generatorCatalog,generatorSave=null,mutationQueue=Promise.resolve();
 let lastGeneration=null,pendingCard=null;
+// 2026-10-30, a petición del usuario: subir efectos en lote. Elegir un
+// archivo ya NO lo sube al momento; queda pendiente en esta cola, en
+// memoria, hasta pulsar 'Subir todos los efectos'. Así no hay que esperar
+// a que uno termine para poder elegir el siguiente.
+let pendingSoundUploads=new Map();
 const projectTitle=item=>item.title?.trim()||'Corto sin título';
 let transport=fetch;
 // A reload of the same tab is the SAME production session. Minting a new id
@@ -1091,8 +1096,10 @@ const r=usos[0];
   c.append(resumen);
   promptBox(c,r.prompt);
   if(r.type!=='ambience'&&(r.preparationSeconds||r.tailSeconds)){const margen=document.createElement('p');margen.className='muted';margen.textContent=`Preparación: ${r.preparationSeconds} s · Cola: ${r.tailSeconds} s`;c.append(margen);}
-  const label=document.createElement('label');label.className='upload';label.textContent='Subir tu efecto';const input=document.createElement('input');input.type='file';input.accept='audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/aac,audio/x-aac,audio/mp4,audio/x-m4a,audio/ogg,audio/flac,audio/webm,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.webm';label.append(input);c.append(label);const progress=document.createElement('progress');progress.max=1;progress.value=0;progress.hidden=true;c.append(progress);
-  input.onchange=async()=>{progress.hidden=false;try{await uploadSound(r,input.files[0],progress);await refreshEffectCard(usos).catch(()=>false);}catch(e){say(e.message,true);}finally{progress.hidden=true;input.value='';}};
+  const label=document.createElement('label');label.className='upload';label.textContent='Elegir efecto para subir en lote';const input=document.createElement('input');input.type='file';input.accept='audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/aac,audio/x-aac,audio/mp4,audio/x-m4a,audio/ogg,audio/flac,audio/webm,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.webm';label.append(input);c.append(label);const progress=document.createElement('progress');progress.max=1;progress.value=0;progress.hidden=true;c.append(progress);
+  const clavePendiente=r.soundGroup||r.id,pendiente=pendingSoundUploads.get(clavePendiente);
+  if(pendiente){const linea=document.createElement('p');linea.className='badge';linea.textContent='Pendiente para subir: '+pendiente.file.name;c.append(linea);buttons(c,[['Quitar de la lista para subir',async()=>{pendingSoundUploads.delete(clavePendiente);await refreshEffectCard(usos).catch(()=>false);},true]]);}
+  input.onchange=async()=>{const file=input.files[0];if(!file)return;pendingSoundUploads.set(clavePendiente,{usos,r,file});input.value='';say(r.name+' queda pendiente. Cuando tengas todos, pulsa «Subir todos los efectos».');await refreshEffectCard(usos).catch(()=>false);};
   // Un archivo para todo el grupo, y una sincronización por toma.
   await assetVersions(c,p.assets.filter(a=>usos.some(u=>u.id===a.requestId)));
   for(const uso of usos){
@@ -1152,6 +1159,21 @@ async function sounds(){
  const visibles=[...grupos.values()].filter(usos=>!usos.every(u=>omitidos.has(u.id)));
  const effects=visibles.length?fold(screen,'Efectos de sonido · '+visibles.length):null;
  for(const usos of visibles)effects.append(await buildEffectCard(usos));
+ if(visibles.length){
+  const lote=card('Subir todos los efectos','<p class="muted">Elige el archivo en cada tarjeta: no se sube al momento, queda pendiente. Cuando tengas todos, pulsa el botón y se suben uno tras otro en una sola espera, sin tener que esperar a que uno termine para elegir el siguiente. Si uno falla, los demás siguen y el que falló queda pendiente para reintentarlo sin volver a elegirlo.</p>');
+  buttons(lote,[['Subir todos los efectos',async()=>{
+   if(!pendingSoundUploads.size){say('No hay efectos pendientes para subir. Elige un archivo en una tarjeta primero.');return;}
+   const lista=[...pendingSoundUploads.values()];let ok=0;const fallos=[];
+   for(const item of lista){
+    say('Subiendo '+item.file.name+'…');
+    try{await uploadSound(item.r,item.file,{value:0});pendingSoundUploads.delete(item.usos[0].soundGroup||item.usos[0].id);ok++;await refreshEffectCard(item.usos).catch(()=>false);}
+    catch(e){fallos.push(item.r.name+': '+e.message);}
+   }
+   if(fallos.length)say('Subidos '+ok+' de '+lista.length+'. Fallaron y quedaron pendientes: '+fallos.join(' · '),true);
+   else say('Listos: '+ok+' efectos subidos y en uso.');
+  }]]);
+  screen.append(lote);
+ }
  if(gruposOmitidos.length){const omitidosBox=fold(screen,'Efectos omitidos · '+gruposOmitidos.length);
   for(const usos of gruposOmitidos){const line=document.createElement('p');line.textContent=usos[0].name+' · omitido';omitidosBox.append(line);buttons(omitidosBox,[['Restaurar este efecto',async()=>{for(const uso of usos)await mutate(route(`/sound-requests/${uso.id}/unomit`),{});await draw();},true]]);}
  }
