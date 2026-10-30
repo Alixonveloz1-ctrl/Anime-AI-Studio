@@ -1063,13 +1063,16 @@ const has=selectedAsset(shot.id,shot.treatment==='veo'?'veo_silent_validated':'i
   const prevImage=prevShot?selectedAsset(prevShot.id,'image'):null;
   const prevKey='animeShorts:prevShot:'+p.id+':'+shot.id;
   const prevOn=()=>{try{return localStorage.getItem(prevKey)==='1';}catch{return false;}};
+  // El interruptor sigue igual y guardado igual; sólo deja de ocupar sitio en
+  // cada una de las cuarenta tomas. Se cuelga del desplegable de abajo.
+  let toggleRow=null;
   if(prevShot){
-   const toggleRow=document.createElement('div');toggleRow.className='actions';
+   toggleRow=document.createElement('div');toggleRow.className='actions';
    const toggleBtn=document.createElement('button');toggleBtn.className='secondary';
    const renderToggle=()=>{toggleBtn.textContent=prevOn()?'Toma anterior: activada':'Toma anterior: desactivada';};
    renderToggle();
    toggleBtn.onclick=()=>{try{localStorage.setItem(prevKey,prevOn()?'0':'1');}catch{};renderToggle();if(prevOn()&&!prevImage)say('Toma anterior activada, pero la toma anterior todavía no tiene imagen aprobada. Genera primero la imagen de la toma anterior, o desactívala para generar sin ella.',true);};
-   toggleRow.append(toggleBtn);c.append(toggleRow);
+   toggleRow.append(toggleBtn);
   }
   const imagePayload=()=>({operation:'image',entityId:shot.id,...(prevOn()?{usePreviousShot:true}:{})});
   // Botón para corregir el reparto sin bloquear nada: si la función de
@@ -1085,12 +1088,17 @@ const has=selectedAsset(shot.id,shot.treatment==='veo'?'veo_silent_validated':'i
   for(const u of d.utterances.filter(u=>u.shotId===shot.id)){
    const character=d.bible.characters.find(x=>x.id===u.speakerId);
    const row=document.createElement('div');row.className='voice-row';row.innerHTML=`<p><strong>🎙️ ${esc(entityName(d,u.speakerId))} · ${esc(character?.voice?.name)}</strong></p><p class="scene-narration">${esc(u.spanish)}</p>`;c.append(row);
-   buttons(row,[['Cambiar voz del personaje',()=>go('Personajes'),true]]);
    const assets=p.assets.filter(a=>a.entityId===u.id);await assetVersions(row,assets);
    buttons(row,[[assets.length?'Generar otra interpretación':'Generar voz japonesa',()=>runTask('tts',route('/assets:generate'),{operation:'tts',entityId:u.id}),assets.length>0]]);
   }
   if(has)buttons(c,[['Ver y escuchar esta toma',()=>previewShots([shot.id],c)]]);
-  const more=fold(c,'Editar y comparar');buttons(more,[['Ver y editar prompt de imagen',()=>editImagePrompt(shot.id,'Plano '+(index+1)),true],['Movimiento y cámara',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),imagePayload()),true]]:[]),['Crear imagen principal con instrucción',()=>createShotImageWithInstruction(shot),true],...(image?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id}),true]]:[])]);
+  const more=fold(c,'Editar y comparar');
+  if(toggleRow)more.append(toggleRow);
+  // Antes iba un botón por intervención, y las cuarenta llevaban a la misma
+  // pantalla: aquí va uno por toma, con los personajes que hablan en ella.
+  const hablan=[...new Set(d.utterances.filter(u=>u.shotId===shot.id).map(u=>u.speakerId))];
+  if(hablan.length)buttons(more,[['Cambiar la voz de '+hablan.map(id=>entityName(d,id)).join(', '),()=>go('Personajes'),true]]);
+  buttons(more,[['Ver y editar prompt de imagen',()=>editImagePrompt(shot.id,'Plano '+(index+1)),true],['Movimiento y cámara',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),imagePayload()),true]]:[]),['Crear imagen principal con instrucción',()=>createShotImageWithInstruction(shot),true],...(image?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id}),true]]:[])]);
   if(has)buttons(more,[['Ver y escuchar la escena entera',()=>previewShots(d.shots.filter(x=>x.beatId===shot.beatId).map(x=>x.id),c),true],['Comparar tomas contiguas',()=>compareShots(shot,c),true]]);
  return c;
 }

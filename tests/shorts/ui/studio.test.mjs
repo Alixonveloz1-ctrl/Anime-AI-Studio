@@ -813,3 +813,26 @@ test('El catálogo de generadores se lee una vez por corto, no en cada pantalla'
   assert.equal(fixture.calls.filter(c=>c.path.endsWith('/generators')&&c.method==='GET').length,1);
  }finally{dom.window.close();}
 });
+
+// «La aplicación está llena de mucho ruido visual, me pide muchos pasos.»
+// (U030) Con cuarenta tomas, un botón por toma son cuarenta botones, y los de
+// dirección no hacen falta a la vista para generar.
+test('Una toma no muestra a la vista los mandos de dirección, pero los conserva',async()=>{
+ const {w,dom,click}=await setup();
+ try{
+  await click('Escenas');
+  const tomas=[...w.document.querySelectorAll('.shot-section')];
+  const plegado=toma=>[...toma.querySelectorAll('details')].find(x=>x.querySelector('summary')?.textContent==='Editar y comparar');
+  const aLaVista=toma=>[...toma.querySelectorAll('button')].filter(b=>!b.closest('details')).map(b=>b.textContent);
+  const dentro=toma=>[...plegado(toma).querySelectorAll('button')].map(b=>b.textContent);
+  for(const toma of tomas){
+   assert.equal(aLaVista(toma).filter(t=>t.startsWith('Toma anterior')).length,0,'el interruptor de continuidad no ocupa sitio en cada toma');
+   assert.equal(aLaVista(toma).filter(t=>t.startsWith('Cambiar')).length,0,'cambiar de voz no se repite por cada frase');
+   assert.ok(aLaVista(toma).some(t=>t.includes('Generar')),'generar sigue a la vista');
+  }
+  // Y siguen estando, dentro del desplegable de su toma.
+  assert.ok(dentro(tomas[1]).some(t=>t.startsWith('Toma anterior')),'el interruptor sigue disponible');
+  assert.ok(dentro(tomas[0]).some(t=>t==='Cambiar la voz de Haru'),'cambiar la voz sigue disponible, con el nombre de quien habla');
+  assert.equal(dentro(tomas[1]).filter(t=>t.startsWith('Cambiar la voz')).length,0,'una toma sin frases no ofrece cambiar ninguna voz');
+ }finally{dom.window.close();}
+});

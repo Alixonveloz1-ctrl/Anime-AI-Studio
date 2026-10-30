@@ -293,3 +293,52 @@ Pruebas (`tests/shorts/ui/studio.test.mjs`): con cuarenta tomas pintadas,
 abrir Escenas pide como mucho cuatro archivos y lee los trabajos una vez;
 bajar hasta la toma veintiuno pide entonces su imagen; y el catálogo de
 generadores se lee una vez aunque se cambie de sección tres veces.
+
+## U030 — Revisión de continuidad, acabado y ruido (2026-10-30)
+
+«Quiero saber si el procedimiento está bien realizado para mantener la
+continuidad y que sea realmente un video estilo anime cinematográfico o estilo
+realista cinematográfico… Siento que la aplicación está llena de mucho ruido
+visual, me pide muchos pasos.»
+
+**Lo que ya estaba bien.** Cada toma se genera con las imágenes aprobadas de su
+lugar, de cada personaje visible y de cada objeto, etiquetadas una por una, y
+el guion describe la posición, la pose y el vestuario de cada personaje antes y
+después de la toma. La referencia maestra de un personaje es de cuerpo
+completo, y si en una toma sólo se ven sus piernas, esa parte tiene que ser la
+suya. El estilo elegido —anime cinematográfico o realista— manda en el guion y
+en todas las imágenes. El video parte de la imagen aprobada de la toma, que es
+la que ancla el aspecto, y hay un interruptor por toma para usar además la
+imagen de la toma anterior como referencia de continuidad.
+
+**Lo que faltaba, y queda arreglado.** Al generador de video se le mandaba la
+acción, el contexto ficticio y el estilo, pero nada que sostuviera la toma: ni
+que continúe el primer fotograma —la imagen que ya se aprobó, con su vestuario,
+sus colores y su luz—, ni que sea **un solo plano continuo**. Un corte interno
+de Veo dentro de ocho segundos parte la toma en dos en el montaje, y es lo que
+rompe la continuidad de verdad. Tampoco llevaba la regla de orientación que las
+imágenes sí tenían desde que salieron giradas. Todo el prompt de video vive
+ahora junto al de imagen, en un solo sitio, y la autoprueba de la imagen —el
+paso que decide si una instalación recibe tráfico— comprueba esas reglas.
+
+**Lo que no se cambia, y conviene saber.** Veo entrega a 720p por contrato
+verificado, y el montaje final es 1920×1080: cada toma de video se amplía, así
+que es algo más blanda que una toma de imagen fija. Subirlo exige verificar que
+el modelo y la región admiten 1080p, y eso no se hace sin probarlo contra el
+proveedor. El constructor del envío a Veo admite además un último fotograma
+para encadenar dos tomas, pero nada se lo pasa: ese camino está sin usar.
+
+**Menos ruido en Escenas.** Cada toma mostraba a la vista un interruptor «Toma
+anterior: desactivada» y, por cada frase, un botón «Cambiar voz del personaje»
+que lleva siempre a la misma pantalla. En un corto de cuarenta tomas eso son
+ochenta botones de dirección delante de los de generar. Los dos siguen
+existiendo, con el mismo comportamiento y el mismo guardado, dentro del
+desplegable «Editar y comparar» de su toma, y el de la voz es uno por toma con
+el nombre de quien habla en ella. A la vista queda lo que se usa: qué plano es,
+su imagen o su video, qué pasa en él, generar, sus voces y «Ver y escuchar».
+
+Pruebas: `tests/shorts/test_visual_style.py` (el video exige continuar el primer
+fotograma, un solo plano continuo y la orientación; conserva el contexto
+ficticio y el estilo elegido; un estilo desconocido se rechaza) y
+`tests/shorts/ui/studio.test.mjs` (ninguna toma muestra los mandos de dirección
+a la vista y los dos siguen dentro de su desplegable).

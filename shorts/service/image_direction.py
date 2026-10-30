@@ -30,3 +30,29 @@ def image_prompt(entity, *, shot=False, variant=None, style=None):
     # completo, con el botón de editar prompt, y ese prompt guardado es
     # el que manda. Aquí solo queda la regla de cuerpo completo.
     return rules+'\nDibuja una referencia visual maestra clara de este personaje, lugar u objeto. Usa su descripción visual y vestuario para definir su apariencia. Si es un personaje, muestra su cuerpo completo, de la cabeza a los pies, con todo el vestuario visible, incluyendo piernas, pies y calzado, sin cortar por las rodillas ni por la cintura, para que después se pueda dibujar cualquier parte de su cuerpo con esa misma ropa.\n'+json.dumps(visual,ensure_ascii=False)
+
+
+# 2026-10-30, revisión de continuidad y acabado. A Veo ya se le mandaba el
+# contexto ficticio —sin él, un plano realista con un arma vuelve vacío— y el
+# estilo elegido. Faltaban las dos reglas que sostienen la continuidad: que
+# continúe el primer fotograma, que es la imagen que el usuario aprobó, y que
+# no corte a otro plano a mitad del clip. Un corte interno de Veo dentro de
+# ocho segundos parte la toma en dos en el montaje. Y la regla de orientación,
+# que las imágenes ya llevaban porque salieron giradas, nunca llegó al video.
+_FICTION='Fictional science-fiction survival story, fictional characters and fictional creatures, staged scene, not real people, not real violence. '
+
+_STYLE_VIDEO={
+    'anime_cinematografico':' Estilo visual: anime cinematográfico detallado y maduro, no infantil.',
+    'realista':' Estilo visual: cinematográfico fotorrealista, personajes ficticios, no personas reales, no dibujo ni anime.',
+}
+
+_VIDEO_RULES=(' Continúa exactamente el primer fotograma: misma identidad, mismo vestuario, mismos colores, mismo escenario y misma luz.'
+              ' UN SOLO PLANO CONTINUO: no cortes, no cambies de ángulo ni de encuadre a mitad del clip, no insertes otra toma.'
+              ' Movimiento de cámara contenido y motivado, sin sacudidas.'
+              ' Orientación obligatoria: imagen derecha, cielo arriba, suelo abajo, no girada, no de lado, no al revés.'
+              ' Sin letras, rótulos ni subtítulos.')
+
+def video_prompt(action, style=None):
+    from shorts.core.requests import visual_style
+    style=visual_style({'visualStyle':style} if style else {})
+    return _FICTION+str(action)+_STYLE_VIDEO[style]+_VIDEO_RULES

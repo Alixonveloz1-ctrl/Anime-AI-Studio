@@ -194,17 +194,10 @@ def run_job(cloud,j,p):
             from shorts.core.timing import veo_seconds_for_manual_video
             shot=next(s for s in d['shots'] if s['id']==eid);image=selected(eid,'image')
             raw_id=ident_new();output=j.get('providerOutput') or f'gs://{cloud.c["bucket"]}/{cloud.c["prefix"]}/projects/{pid}/assets/{raw_id}/'
-            # Veo parte de la imagen aprobada, así que el estilo ya viene de
-            # ella; este sufijo refuerza el estilo elegido cuando la imagen
-            # es antigua o el modelo duda entre estilos.
-            veo_style=' Estilo visual: anime cinematográfico detallado y maduro, no infantil.' if style=='anime_cinematografico' else ' Estilo visual: cinematográfico fotorrealista, personajes ficticios, no personas reales, no dibujo ni anime.'
-            # Contexto ficticio explícito: la historia es ciencia ficción y
-            # supervivencia, con criaturas ficticias; el aspecto realista es
-            # solo el estilo visual, no personas ni violencia reales. Sin
-            # este contexto, un plano realista con un arma puede leerse como
-            # manejo real de un arma y el proveedor lo devuelve vacío.
-            veo_context='Fictional science-fiction survival story, fictional characters and fictional creatures, staged scene, not real people, not real violence. '
-            operation={'name':j['providerOperation']} if j.get('providerOperation') else provider.veo({'prompt':veo_context+shot['prompt']+veo_style,'imageApproved':True,'imageMime':image['mimeType'],'durationSeconds':veo_seconds_for_manual_video(shot),'format':p['format']},uri(image),output)
+            # El prompt de video —contexto ficticio, estilo elegido y reglas de
+            # continuidad— vive junto al de imagen, en image_direction.
+            from shorts.service.image_direction import video_prompt
+            operation={'name':j['providerOperation']} if j.get('providerOperation') else provider.veo({'prompt':video_prompt(shot['prompt'],style),'imageApproved':True,'imageMime':image['mimeType'],'durationSeconds':veo_seconds_for_manual_video(shot),'format':p['format']},uri(image),output)
             require(operation.get('name'),'VEO_OPERATION','No se recibió operationId')
             ref=cloud.db.collection('animeShortsJobs').document(j['id']);ref.update({'providerOperation':operation['name'],'providerOutput':output,'state':'waiting_provider'})
             deadline=time.time()+1800
