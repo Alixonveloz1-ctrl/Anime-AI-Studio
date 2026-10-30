@@ -974,7 +974,7 @@ async function buildReferenceSection(group,e){
  const rows=p.assets.filter(a=>a.entityId===e.id);await assetVersions(section,rows);
  if(!rows.length){const placeholder=document.createElement('div');placeholder.className='scene-img media-empty';placeholder.textContent='Referencia por generar';section.append(placeholder);}
  buttons(section,[[rows.length?'Crear otra referencia':'Generar referencia',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:e.id}),rows.length>0]]);
- if(group==='characters')buttons(section,[['Editar vestuario',()=>editCostumes(e),true]]);
+ // Editar vestuario fue sustituido por editar el prompt (2026-10-29, a petición del usuario): en la ficha solo queda el botón del prompt, no un cuadro aparte de vestuario.
  buttons(section,[['Ver y editar prompt de imagen',()=>editImagePrompt(e.id,e.name),true]]);
  const details=fold(section,'Ficha y dirección visual');readable(details,e);
  return section;
