@@ -9,7 +9,15 @@ def generation_inputs(development,development_id,assets,selections,operation,eid
         if operation=='veo' or variant:
             require(shot,'SHOT','Selecciona una toma existente')
             require((eid,'image') in by,'IMAGE_APPROVAL','Aprueba la imagen vigente de esta toma')
-            if operation=='veo':require(shot.get('maxFrames',shot['frames'])<=192,'VEO_COVERAGE','Revisa la duración: un clip cubre como máximo ocho segundos')
+            # El tope de ocho segundos es del GUION: una toma que el director
+            # marcó como video no puede planearse más larga que un clip. Pero
+            # pedir video a mano en una toma de imagen es otra cosa: ahí la
+            # regla del dueño es que se genere el clip más cercano (4, 6 u 8 s)
+            # y que el montaje lo ralentice o lo acelere para cubrir la toma,
+            # sin cortarlo. Este guardia se aplicaba a TODAS las tomas y
+            # bloqueaba justo eso, contradiciendo a veo_seconds_for_manual_video.
+            if operation=='veo' and shot.get('treatment')=='veo':
+                require(shot.get('maxFrames',shot['frames'])<=192,'VEO_COVERAGE','Revisa la duración: un clip cubre como máximo ocho segundos')
         elif shot:
             require(all((ref,'image') in by for ref in shot['referenceEntityIds']),'REFERENCE','Faltan referencias aprobadas vigentes; no se envió generación')
         else:require(any(x['id']==eid for group in ('characters','locations','props') for x in development['bible'][group]),'REFERENCE','Ficha inexistente')

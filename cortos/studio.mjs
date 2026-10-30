@@ -132,8 +132,8 @@ async function go(next,part){stage=next;if(part&&next==='Escenas')productionTab=
 function tabs(parent,options,selected,onSelect){const nav=document.createElement('nav');nav.className='tabs';nav.setAttribute('aria-label','Contenido de esta etapa');for(const [id,name] of options){const b=action(name,()=>onSelect(id),true);b.setAttribute('aria-pressed',String(id===selected));nav.append(b);}parent.append(nav);}
 // Veo entrega 4, 6 u 8 segundos y el montaje estira o encoge el clip entero
 // para cubrir la toma, sin cortarlo nunca. Hasta un tercio no se nota; más
-// allá sí. Una toma de 20 segundos sale a cámara lenta de 2,5x, y eso había
-// que saberlo ANTES de gastar la generación, no al ver el corto montado. Los
+// allá sí: una toma de 20 segundos se ralentiza 2,5x. No es un error, es la
+// regla; pero hay que saberlo ANTES de gastar la generación. Los
 // mismos números que el servidor (RETIME_NATURAL en su cálculo del montaje);
 // una prueba comprueba que no se separen. Aquí se usa la duración prevista de
 // la toma, la misma que se lee en su cabecera; el montaje usa la definitiva
@@ -144,8 +144,8 @@ function avisoDeVelocidad(frames){
  if(!(frames>0))return null;
  const clip=[96,144,192].reduce((a,b)=>{const da=Math.abs(a-frames),db=Math.abs(b-frames);return db<da||(db===da&&b>a)?b:a;});
  const velocidad=clip/frames;
- if(velocidad<RETIME_NATURAL[0])return `Esta toma dura ${(frames/24).toFixed(1)} s y Veo da 8 s como máximo: el video quedaría en cámara lenta de ${(1/velocidad).toFixed(1)}x. Divide la toma o déjala en imagen fija.`;
- if(velocidad>RETIME_NATURAL[1])return `Esta toma dura ${(frames/24).toFixed(1)} s y Veo da 4 s como mínimo: el video quedaría acelerado ${velocidad.toFixed(1)}x. Alarga la toma o déjala en imagen fija.`;
+ if(velocidad<RETIME_NATURAL[0])return `Esta toma dura ${(frames/24).toFixed(1)} s y el clip más largo dura 8 s: el video se ralentizará ${(1/velocidad).toFixed(1)}x para cubrirla, entero y sin cortarse.`;
+ if(velocidad>RETIME_NATURAL[1])return `Esta toma dura ${(frames/24).toFixed(1)} s y el clip más corto dura 4 s: el video se acelerará ${velocidad.toFixed(1)}x para ajustarse, entero y sin cortarse.`;
  return null;
 }
 // Treinta veces «Falta voz aprobada: …», cada una con su frase entera, llenaba

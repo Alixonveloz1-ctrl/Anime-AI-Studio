@@ -30,3 +30,48 @@ class VeoPlanningTests(unittest.TestCase):
             self.assertEqual(veo_seconds({'treatment':'veo','frames':48,'maxFrames':maximum}),seconds)
         with self.assertRaises(ContractError):veo_seconds({'treatment':'veo','frames':193,'maxFrames':193})
         with self.assertRaises(ContractError):veo_seconds({'treatment':'hold','frames':48})
+
+
+class ManualVideoOnAnyShotTests(unittest.TestCase):
+    """«Si la toma pasa de 8 segundos, que se genere un clip de 8 y se
+    ralentice hasta cubrirla.» Un guardia bloqueaba justo eso (U032)."""
+
+    def setUp(self):
+        from shorts.core.generation import generation_inputs
+        self.generation_inputs=generation_inputs
+        self.d=complete();self.shot=self.d['shots'][0]
+        self.image={'id':'i1','entityId':self.shot['id'],'kind':'image','approvalState':'approved',
+                    'developmentId':'dev','created':1}
+
+    def pedir(self,seconds,treatment):
+        self.shot.update(frames=seconds*24,minFrames=seconds*24,maxFrames=seconds*24,treatment=treatment)
+        return self.generation_inputs(self.d,'dev',[self.image],{},'veo',self.shot['id'])
+
+    def test_a_long_image_shot_can_be_asked_for_video_and_gets_the_longest_clip(self):
+        from shorts.core.timing import veo_seconds_for_manual_video
+        for seconds in (10,20,150):
+            with self.subTest(seconds=seconds):
+                self.pedir(seconds,'hold')  # no levanta
+                self.shot.update(frames=seconds*24)
+                self.assertEqual(veo_seconds_for_manual_video(self.shot),8)
+
+    def test_a_short_image_shot_gets_the_nearest_clip_instead_of_being_refused(self):
+        from shorts.core.timing import veo_seconds_for_manual_video
+        for seconds,clip in ((2,4),(5,6),(7,8)):
+            with self.subTest(seconds=seconds):
+                self.pedir(seconds,'hold')
+                self.shot.update(frames=seconds*24)
+                self.assertEqual(veo_seconds_for_manual_video(self.shot),clip)
+
+    def test_the_script_still_cannot_plan_a_video_shot_longer_than_one_clip(self):
+        # Ese tope sigue siendo del guion: no es lo mismo que pedir video a
+        # mano en una toma de imagen.
+        with self.assertRaises(ContractError) as error:self.pedir(20,'veo')
+        self.assertEqual(error.exception.code,'VEO_COVERAGE')
+        self.pedir(8,'veo')  # dentro del clip, no levanta
+
+    def test_an_unapproved_image_still_blocks_before_spending_a_generation(self):
+        self.shot.update(frames=20*24,minFrames=20*24,maxFrames=20*24,treatment='hold')
+        with self.assertRaises(ContractError) as error:
+            self.generation_inputs(self.d,'dev',[],{},'veo',self.shot['id'])
+        self.assertEqual(error.exception.code,'IMAGE_APPROVAL')

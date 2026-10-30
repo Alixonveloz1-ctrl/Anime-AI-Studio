@@ -24,13 +24,16 @@ if __name__=='__main__':unittest.main()
 
 
 class RetimeWarningTests(unittest.TestCase):
-    """Una toma larga en video sale en cámara lenta, y eso hay que decirlo."""
+    """Cubrir la toma con un solo clip la ralentiza, y eso hay que decirlo."""
 
-    def test_a_shot_longer_than_the_longest_clip_is_reported_as_slow_motion(self):
-        # Veo entrega 8 s como máximo. Una toma de 20 s estira ese clip a 0,4x.
+    def test_a_shot_longer_than_the_longest_clip_says_how_slow_it_will_run(self):
+        # El clip más largo dura 8 s. Una toma de 20 s lo estira a 0,4x. No es
+        # un error: es la regla de cubrir la toma sin cortar el clip, así que
+        # el aviso dice el factor y no manda hacer otra cosa.
         from shorts.service.timeline import retime_warning
         aviso=retime_warning(veo_retime({'clipSeconds':8},20*24),'t5')
-        self.assertIn('cámara lenta',aviso)
+        self.assertIn('ralentizado',aviso)
+        self.assertIn('sin cortarlo',aviso)
         self.assertIn('2.5x',aviso)
         self.assertIn('t5',aviso)
 
@@ -78,7 +81,7 @@ class RetimeWarningTests(unittest.TestCase):
         cloud.project_ref.return_value.collection.return_value.stream.return_value=[
             Mock(to_dict=lambda fila=fila:fila) for fila in filas]
         plan=assemble_plan(cloud,{'id':'p','activeDevelopment':'dev','format':'16:9'})
-        lentas=[i for i in plan['draftIssues'] if i.startswith('Video en cámara lenta:')]
+        lentas=[i for i in plan['draftIssues'] if i.startswith('Video ralentizado:')]
         self.assertEqual(len(lentas),1,plan['draftIssues'])
         self.assertIn('2.5x',lentas[0])
         # Y el montaje sigue recibiendo la velocidad: no se recorta nada.

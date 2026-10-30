@@ -371,14 +371,13 @@ generación, montaba el corto y descubría la cámara lenta al verlo. Un corto d
 cinco minutos cuyas tomas largas vayan en video es, literalmente, medio corto a
 cámara lenta. Eso no es acabado cinematográfico.
 
-No se cambia la regla de no cortar. Lo que cambia es que se dice. Hasta un
-tercio arriba o abajo el cambio de velocidad no se lee como efecto, y ahí caben
-todos los casos que la regla busca a propósito; más allá, la toma aparece entre
-los pendientes del borrador antes de exportar, con su factor y qué hacer
-—dividir la toma, acortarla o dejarla en imagen fija—. Y la propia toma lo
+No se cambia la regla de no cortar: ralentizar para cubrir la toma es lo que el
+dueño pidió. Lo que cambia es que se dice cuánto. Hasta un tercio arriba o abajo
+no se lee como efecto y no se dice nada; más allá, la toma aparece entre los
+pendientes del borrador antes de exportar con su factor, y la propia toma lo
 avisa **antes** de pulsar «Generar video», que es donde se ahorra la generación.
-Los dos sitios usan los mismos números y una prueba comprueba que no se
-separen.
+Ninguno de los dos manda hacer otra cosa: informan. Los dos sitios usan los
+mismos números y una prueba comprueba que no se separen.
 
 Pruebas: `tests/shorts/test_veo_retime.py` (una toma larga se reporta como
 cámara lenta con su factor, una corta como acelerada, los casos que la regla
@@ -396,3 +395,39 @@ generar referencia, aprobar una versión y subir un efecto. Las siete: cero
 reconstrucciones de pantalla y la tarjeta vecina intacta. También se comprobó
 que el prompt de imagen que el editor muestra para editar ya trae la regla de
 orientación y las demás, así que editarlo a mano no las pierde.
+
+
+## U032 — Pedir video en una toma larga estaba bloqueado (2026-10-30)
+
+«Yo había puesto unas reglas muy claras: si la toma pasa de 8 segundos, que se
+genere un clip de 8 segundos y se ralentice hasta cubrir el tiempo; y si es
+menos, que se pida el clip de 4, 6 u 8 más cercano.»
+
+Esas reglas estaban escritas y funcionando en el cálculo del clip y en el
+montaje. Lo que faltaba quitar era un guardia anterior: antes de repartir el
+trabajo se rechazaba cualquier petición de video cuya toma pasara de ocho
+segundos —«Revisa la duración: un clip cubre como máximo ocho segundos»— sin
+mirar si la toma era de video por guion o una toma de imagen a la que el dueño
+le pedía video a mano. Era el segundo caso el que quedaba bloqueado, que es
+justo el que esas reglas describen.
+
+Hay tres guardias más con ese mismo tope y los tres son correctos, porque todos
+preguntan primero si **el guion** marcó la toma como video: una toma de video
+planeada más larga que un clip es un error de planificación. El que fallaba era
+el único que no preguntaba. Ahora pregunta igual que los otros tres.
+
+Comprobado con las propias funciones: una toma de imagen de 150 s, de 20 s o de
+10 s ya se puede pedir en video y recibe el clip de 8 s; una de 2 s recibe el de
+4 s, una de 5 s el de 6 s y una de 7 s el de 8 s; una toma marcada como video
+por el guion y planeada a 20 s se sigue rechazando; y una toma sin imagen
+aprobada se sigue parando antes de gastar nada.
+
+De paso, el aviso de velocidad que se añadió esta misma tarde decía «divide la
+toma o déjala en imagen fija», que es lo contrario de lo que el dueño quiere.
+Ahora informa sin mandar: «esta toma dura 20 s y el clip más largo dura 8 s: el
+video se ralentizará 2,5x para cubrirla, entero y sin cortarse».
+
+Pruebas: `tests/shorts/test_veo_planning.py` (una toma de imagen larga o corta
+se puede pedir en video y recibe el clip que le toca; el guion sigue sin poder
+planear una toma de video más larga que un clip; una imagen sin aprobar sigue
+parando la generación). Las tres primeras fallan si vuelve el guardia.

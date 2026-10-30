@@ -44,21 +44,20 @@ def ambience_placements(shots,cue,audio_samples):
         out.append(repeat);cursor+=piece
     return out,cursor<start+span
 
-# Hasta un tercio arriba o abajo el cambio de velocidad no se lee como un
-# efecto: ahí caben los casos que la regla de no cortar busca a propósito (una
-# toma de 5 s con clip de 6 s va a 1,2x; una de 10 s con clip de 8 s, a 0,8x).
-# Más allá sí se ve, y es lo que pasa con una toma larga: Veo entrega 8 s como
-# máximo, así que una toma de 20 s sale a 0,4x, cámara lenta de 2,5x. No se
-# recorta nada —esa regla se respeta— pero se avisa, porque el dueño preguntó
-# justo si el acabado es cinematográfico y eso no lo es.
+# La regla del dueño: un clip se ralentiza o se acelera para cubrir su toma,
+# entero y sin cortarlo nunca. Eso es deliberado, así que esto NO es un error ni
+# una recomendación de hacer otra cosa: es decir cuánto se va a notar. Hasta un
+# tercio arriba o abajo no se lee como efecto y no se dice nada; más allá sí se
+# ve —una toma de 20 s con el clip más largo (8 s) queda a 0,4x— y entonces se
+# anota el factor entre los pendientes, para que no sorprenda al ver el montaje.
 RETIME_NATURAL=(0.75,1.35)
 
 def retime_warning(speed,shot_id):
-    """Aviso en claro si la velocidad del clip se va a notar, o None."""
+    """Cuánto se va a notar el cambio de velocidad del clip, o None."""
     if not speed:return None
     low,high=RETIME_NATURAL
-    if speed<low:return f'Video en cámara lenta: {shot_id} queda a {1/speed:.1f}x de lento porque la toma es más larga que el clip más largo que da Veo (8 s). Divide la toma, acórtala, o déjala en imagen fija.'
-    if speed>high:return f'Video acelerado: {shot_id} queda a {speed:.1f}x de rápido porque la toma es más corta que el clip más corto que da Veo (4 s). Alarga la toma o déjala en imagen fija.'
+    if speed<low:return f'Video ralentizado: {shot_id} queda a {1/speed:.1f}x de lento para cubrir la toma con un solo clip, sin cortarlo. El clip más largo dura 8 s.'
+    if speed>high:return f'Video acelerado: {shot_id} queda a {speed:.1f}x de rápido para ajustarse a la toma con un solo clip, sin cortarlo. El clip más corto dura 4 s.'
     return None
 
 def veo_retime(asset,frames):

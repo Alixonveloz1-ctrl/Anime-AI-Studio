@@ -846,12 +846,12 @@ test('Una toma demasiado larga para Veo avisa antes de generar el video',async()
   // La primera toma del simulador dura 150 s: muy por encima de los 8 s.
   await click('Escenas');
   const toma=[...w.document.querySelectorAll('.shot-section')][0];
-  assert.match(toma.textContent,/cámara lenta/,'la toma dice que el video saldría en cámara lenta');
-  assert.match(toma.textContent,/imagen fija/,'y dice qué hacer en su lugar');
+  assert.match(toma.textContent,/se ralentizará/,'la toma dice cuánto se ralentizará el video');
+  assert.match(toma.textContent,/sin cortarse/,'y que el clip no se corta, que es la regla');
   // Una toma que cabe en un clip no avisa de nada.
   fixture.project.developments[0].data.shots[1].frames=144;
   await click('Historia');await click('Escenas');
   const corta=[...w.document.querySelectorAll('.shot-section')][1];
-  assert.doesNotMatch(corta.textContent,/cámara lenta|acelerado/,'una toma de seis segundos no avisa');
+  assert.doesNotMatch(corta.textContent,/ralentizará|acelerará/,'una toma de seis segundos no avisa');
  }finally{dom.window.close();}
 });
