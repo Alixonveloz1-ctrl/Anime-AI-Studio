@@ -118,6 +118,7 @@ def run_job(cloud,j,p):
         if op=='image':
             from shorts.service.image_direction import image_prompt
             shot=next((s for s in d['shots'] if s['id']==eid),None)
+            refs=[];asset_deps=None;asset_parent=None
             if shot and data.get('shotImageInstruction'):
                 # Imagen principal con instrucción del usuario: NO es una
                 # variante. Se edita la imagen aprobada de la toma (si la
