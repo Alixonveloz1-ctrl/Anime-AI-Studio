@@ -182,7 +182,7 @@ def run_job(cloud,j,p):
                     _ch=next((x for k in ('characters',) for x in d['bible'][k] if x['id']==_rid),None)
                     if _ch and _ch.get('costumes'):
                         _costumes.append(_ch['name']+': '+'; '.join(c.get('description','') for c in _ch['costumes'] if c.get('description')))
-                if _costumes:prompt+='\nVestuario vigente que deben llevar los personajes en esta imagen: '+ ' | '.join(_costumes)
+                if _costumes:prompt+='\nVESTUARIO OBLIGATORIO, POR ENCIMA DEL PROMPT DE LA TOMA Y DE LAS IMÁGENES DE REFERENCIA: '+ ' | '.join(_costumes)+'. Usa EXACTAMENTE ese vestuario para cada personaje, sin inventar otro, sin cambiar sus colores, piezas ni estilo, aunque la toma o una referencia vieja muestren otra ropa.'
             else:
                 e=next((e for k in ('characters','locations','props') for e in d['bible'][k] if e['id']==eid),None)
                 require(e,'ENTITY','Referencia inexistente');prompt=image_prompt(e,style=style)
