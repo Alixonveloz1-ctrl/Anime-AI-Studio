@@ -342,3 +342,57 @@ fotograma, un solo plano continuo y la orientación; conserva el contexto
 ficticio y el estilo elegido; un estilo desconocido se rechaza) y
 `tests/shorts/ui/studio.test.mjs` (ninguna toma muestra los mandos de dirección
 a la vista y los dos siguen dentro de su desplegable).
+
+## U031 — Una toma larga en video salía en cámara lenta sin decirlo (2026-10-30)
+
+«Quiero saber si el procedimiento está bien realizado… y que sea realmente un
+video cinematográfico.» Volviendo a revisar sobre el código de ahora, no sobre
+lo que había antes, apareció esto.
+
+Veo entrega clips de 4, 6 u 8 segundos y nada más. Desde que se puede pedir
+video en cualquier toma, el montaje estira o encoge el **clip entero** para
+cubrir la toma, sin cortarlo nunca —esa regla es del dueño y se respeta—, pero
+el cálculo de esa velocidad no tenía ningún límite. Medido con las propias
+funciones:
+
+| Toma | Clip | Velocidad | Lo que se ve |
+|---|---|---|---|
+| 1 s | 4 s | 4,00x | acelerado 4x |
+| 2 s | 4 s | 2,00x | acelerado 2x |
+| 4, 6, 8 s | igual | 1,00x | normal |
+| 5 s | 6 s | 1,20x | no se avisa: es lo que la regla busca |
+| 10 s | 8 s | 0,80x | no se avisa: es lo que la regla busca |
+| 12 s | 8 s | 0,67x | cámara lenta 1,5x |
+| 20 s | 8 s | 0,40x | cámara lenta 2,5x |
+| 60 s | 8 s | 0,13x | cámara lenta 7,5x |
+
+Y se marcaba como ajuste aprobado, sin un solo aviso: el dueño gastaba la
+generación, montaba el corto y descubría la cámara lenta al verlo. Un corto de
+cinco minutos cuyas tomas largas vayan en video es, literalmente, medio corto a
+cámara lenta. Eso no es acabado cinematográfico.
+
+No se cambia la regla de no cortar. Lo que cambia es que se dice. Hasta un
+tercio arriba o abajo el cambio de velocidad no se lee como efecto, y ahí caben
+todos los casos que la regla busca a propósito; más allá, la toma aparece entre
+los pendientes del borrador antes de exportar, con su factor y qué hacer
+—dividir la toma, acortarla o dejarla en imagen fija—. Y la propia toma lo
+avisa **antes** de pulsar «Generar video», que es donde se ahorra la generación.
+Los dos sitios usan los mismos números y una prueba comprueba que no se
+separen.
+
+Pruebas: `tests/shorts/test_veo_retime.py` (una toma larga se reporta como
+cámara lenta con su factor, una corta como acelerada, los casos que la regla
+busca no se reportan, y la web y el servicio usan el mismo límite) y
+`tests/shorts/ui/studio.test.mjs` (una toma de 150 segundos lo avisa en su
+tarjeta; una de seis segundos no). Las pruebas del reajuste entran además en la
+autoprueba de la imagen, porque el reajuste es montaje.
+
+### Comprobado pulsando, no leyendo
+
+Como entre revisión y revisión hubo cuarenta y dos cambios, el repintado se
+verificó pulsando cada botón sobre el código de ahora y midiendo si la pantalla
+se reconstruye: generar voz, crear otra imagen, generar video, generar música,
+generar referencia, aprobar una versión y subir un efecto. Las siete: cero
+reconstrucciones de pantalla y la tarjeta vecina intacta. También se comprobó
+que el prompt de imagen que el editor muestra para editar ya trae la regla de
+orientación y las demás, así que editarlo a mano no las pierde.

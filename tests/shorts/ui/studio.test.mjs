@@ -836,3 +836,22 @@ test('Una toma no muestra a la vista los mandos de dirección, pero los conserva
   assert.equal(dentro(tomas[1]).filter(t=>t.startsWith('Cambiar la voz')).length,0,'una toma sin frases no ofrece cambiar ninguna voz');
  }finally{dom.window.close();}
 });
+
+// Veo da 8 segundos como máximo y el montaje estira el clip entero para cubrir
+// la toma, sin cortarlo. Una toma larga sale en cámara lenta, y eso hay que
+// saberlo antes de gastar la generación, no al ver el corto montado. (U031)
+test('Una toma demasiado larga para Veo avisa antes de generar el video',async()=>{
+ const {fixture,w,dom,click}=await setup();
+ try{
+  // La primera toma del simulador dura 150 s: muy por encima de los 8 s.
+  await click('Escenas');
+  const toma=[...w.document.querySelectorAll('.shot-section')][0];
+  assert.match(toma.textContent,/cámara lenta/,'la toma dice que el video saldría en cámara lenta');
+  assert.match(toma.textContent,/imagen fija/,'y dice qué hacer en su lugar');
+  // Una toma que cabe en un clip no avisa de nada.
+  fixture.project.developments[0].data.shots[1].frames=144;
+  await click('Historia');await click('Escenas');
+  const corta=[...w.document.querySelectorAll('.shot-section')][1];
+  assert.doesNotMatch(corta.textContent,/cámara lenta|acelerado/,'una toma de seis segundos no avisa');
+ }finally{dom.window.close();}
+});

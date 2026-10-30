@@ -44,6 +44,23 @@ def ambience_placements(shots,cue,audio_samples):
         out.append(repeat);cursor+=piece
     return out,cursor<start+span
 
+# Hasta un tercio arriba o abajo el cambio de velocidad no se lee como un
+# efecto: ahí caben los casos que la regla de no cortar busca a propósito (una
+# toma de 5 s con clip de 6 s va a 1,2x; una de 10 s con clip de 8 s, a 0,8x).
+# Más allá sí se ve, y es lo que pasa con una toma larga: Veo entrega 8 s como
+# máximo, así que una toma de 20 s sale a 0,4x, cámara lenta de 2,5x. No se
+# recorta nada —esa regla se respeta— pero se avisa, porque el dueño preguntó
+# justo si el acabado es cinematográfico y eso no lo es.
+RETIME_NATURAL=(0.75,1.35)
+
+def retime_warning(speed,shot_id):
+    """Aviso en claro si la velocidad del clip se va a notar, o None."""
+    if not speed:return None
+    low,high=RETIME_NATURAL
+    if speed<low:return f'Video en cámara lenta: {shot_id} queda a {1/speed:.1f}x de lento porque la toma es más larga que el clip más largo que da Veo (8 s). Divide la toma, acórtala, o déjala en imagen fija.'
+    if speed>high:return f'Video acelerado: {shot_id} queda a {speed:.1f}x de rápido porque la toma es más corta que el clip más corto que da Veo (4 s). Alarga la toma o déjala en imagen fija.'
+    return None
+
 def veo_retime(asset,frames):
     """Velocidad para que el clip completo cubra la toma, sin recortar.
 
@@ -99,7 +116,10 @@ def assemble_plan(cloud,p,cue_overrides=None):
             # un segundo del final. La velocidad sale de la duración real
             # del clip aprobado, no de la duración pedida a Veo (4, 6 u 8 s).
             speed=veo_retime(a,t['frames'])
-            if speed:shot['speed']=speed;shot['trimSeconds']=0;shot['retimeApproved']=True
+            if speed:
+                shot['speed']=speed;shot['trimSeconds']=0;shot['retimeApproved']=True
+                aviso=retime_warning(speed,s['id'])
+                if aviso:issues.append(aviso)
         if a['id'].startswith('missing_'):shot.update(treatment='black',approvedBlack=True,draftPlaceholder=True)
         if shot['treatment']=='localized' and kind!='veo_silent_validated':
             layers=[]

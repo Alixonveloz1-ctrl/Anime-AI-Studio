@@ -130,6 +130,24 @@ function pageTitle(title,subtitle=''){const h=document.createElement('div');h.cl
 function empty(title,text){screen.append(card(title,`<p class="muted">${esc(text)}</p>`));}
 async function go(next,part){stage=next;if(part&&next==='Escenas')productionTab=part;if(part&&next==='Revisión')reviewTab=part;volverArriba=true;await draw();}
 function tabs(parent,options,selected,onSelect){const nav=document.createElement('nav');nav.className='tabs';nav.setAttribute('aria-label','Contenido de esta etapa');for(const [id,name] of options){const b=action(name,()=>onSelect(id),true);b.setAttribute('aria-pressed',String(id===selected));nav.append(b);}parent.append(nav);}
+// Veo entrega 4, 6 u 8 segundos y el montaje estira o encoge el clip entero
+// para cubrir la toma, sin cortarlo nunca. Hasta un tercio no se nota; más
+// allá sí. Una toma de 20 segundos sale a cámara lenta de 2,5x, y eso había
+// que saberlo ANTES de gastar la generación, no al ver el corto montado. Los
+// mismos números que el servidor (RETIME_NATURAL en su cálculo del montaje);
+// una prueba comprueba que no se separen. Aquí se usa la duración prevista de
+// la toma, la misma que se lee en su cabecera; el montaje usa la definitiva
+// tras medir las voces, así que la última palabra la tiene el aviso que
+// aparece en los pendientes antes de exportar.
+const RETIME_NATURAL=[0.75,1.35];
+function avisoDeVelocidad(frames){
+ if(!(frames>0))return null;
+ const clip=[96,144,192].reduce((a,b)=>{const da=Math.abs(a-frames),db=Math.abs(b-frames);return db<da||(db===da&&b>a)?b:a;});
+ const velocidad=clip/frames;
+ if(velocidad<RETIME_NATURAL[0])return `Esta toma dura ${(frames/24).toFixed(1)} s y Veo da 8 s como máximo: el video quedaría en cámara lenta de ${(1/velocidad).toFixed(1)}x. Divide la toma o déjala en imagen fija.`;
+ if(velocidad>RETIME_NATURAL[1])return `Esta toma dura ${(frames/24).toFixed(1)} s y Veo da 4 s como mínimo: el video quedaría acelerado ${velocidad.toFixed(1)}x. Alarga la toma o déjala en imagen fija.`;
+ return null;
+}
 // Treinta veces «Falta voz aprobada: …», cada una con su frase entera, llenaba
 // la pantalla sin decir nada más que «faltan treinta voces».
 function resumirPendientes(issues){
@@ -1085,6 +1103,8 @@ const has=selectedAsset(shot.id,shot.treatment==='veo'?'veo_silent_validated':'i
   if(!image&&!visuals.some(a=>a.kind==='image'&&a.approvalState==='candidate'))actions.push(['Generar imagen',()=>runTask('image',route('/assets:generate'),imagePayload())]);
   if(image&&!visuals.some(a=>a.kind==='veo_silent_validated'&&['candidate','approved'].includes(a.approvalState)))actions.push(['Generar video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id})]);
   if(actions.length)buttons(c,actions);
+  const aviso=avisoDeVelocidad(shot.frames);
+  if(aviso&&(actions.some(a=>a[0]==='Generar video')||image)){const linea=document.createElement('p');linea.className='muted';linea.textContent=aviso;c.append(linea);}
   for(const u of d.utterances.filter(u=>u.shotId===shot.id)){
    const character=d.bible.characters.find(x=>x.id===u.speakerId);
    const row=document.createElement('div');row.className='voice-row';row.innerHTML=`<p><strong>🎙️ ${esc(entityName(d,u.speakerId))} · ${esc(character?.voice?.name)}</strong></p><p class="scene-narration">${esc(u.spanish)}</p>`;c.append(row);
