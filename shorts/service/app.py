@@ -141,6 +141,56 @@ def shot_cast(pid,sid):
         return record
     result,_=cloud().mutate(pid,expected(),save);return jsonify(result),201
 
+def _image_prompt_for(p,eid):
+    # Prompt que se enviaría hoy para una imagen de esta entidad/toma,
+    # sin generar nada. Es el mismo texto que construye production.py
+    # para la generación normal (sin toma anterior).
+    from shorts.service.image_direction import image_prompt
+    from shorts.core.requests import visual_style
+    require(p.get('activeDevelopment'),'DEVELOPMENT','Abre producción con el guion aprobado.')
+    dev=cloud().entity(p['id'],'developments',p['activeDevelopment']);d=dev['data']
+    shot=next((s for s in d['shots'] if s['id']==eid),None)
+    if shot:
+        prompt=image_prompt(shot,shot=True,style=visual_style(p.get('generators',{})))
+        costumes=[]
+        for rid in shot.get('visibleCharacters',[]):
+            ch=next((x for x in d['bible']['characters'] if x['id']==rid),None)
+            if ch and ch.get('costumes'):
+                costumes.append(ch['name']+': '+'; '.join(c.get('description','') for c in ch['costumes'] if c.get('description')))
+        if costumes:prompt+='\nVESTUARIO OBLIGATORIO, POR ENCIMA DEL PROMPT DE LA TOMA Y DE LAS IMÁGENES DE REFERENCIA: '+' | '.join(costumes)+'. Usa EXACTAMENTE ese vestuario para cada personaje, sin inventar otro, sin cambiar sus colores, piezas ni estilo, aunque la toma o una referencia vieja muestren otra ropa.'
+        return prompt,True
+    e=next((x for k in ('characters','locations','props') for x in d['bible'][k] if x['id']==eid),None)
+    require(e,'ENTITY','Entidad inexistente')
+    return image_prompt(e,style=visual_style(p.get('generators',{}))),False
+
+@app.get('/projects/<pid>/image-prompt/<eid>')
+def image_prompt_get(pid,eid):
+    p=owned(pid)
+    custom=(p.get('customImagePrompts') or {}).get(eid)
+    if custom:return jsonify(prompt=custom,custom=True,entityId=eid)
+    prompt,is_shot=_image_prompt_for(p,eid);return jsonify(prompt=prompt,custom=False,entityId=eid,isShot=is_shot)
+
+@app.post('/projects/<pid>/image-prompt')
+def image_prompt_save(pid):
+    # Prompt guardado por el usuario para una entidad/toma. Tiene prioridad
+    # sobre el prompt construido por el director, hasta que se borre.
+    # No es una regla que bloquee: solo cambia el texto que se envía.
+    p=owned(pid);d=body();eid=d.get('entityId');prompt=d.get('prompt')
+    require(isinstance(eid,str) and eid,'ENTITY','Entidad inválida')
+    _image_prompt_for(p,eid)
+    if prompt is None or (isinstance(prompt,str) and not prompt.strip()):
+        prompt=None
+    else:
+        require(isinstance(prompt,str) and 1<=len(prompt)<=20000,'PROMPT','El prompt debe tener entre 1 y 20000 caracteres.')
+        prompt=prompt.strip()
+    def save(tx,current):
+        prompts=dict(current.get('customImagePrompts') or {})
+        if prompt is None:prompts.pop(eid,None)
+        else:prompts[eid]=prompt
+        current['customImagePrompts']=prompts
+        return {'entityId':eid,'custom':prompt is not None,'prompt':prompt}
+    result,_=cloud().mutate(pid,expected(),save);return jsonify(result)
+
 @app.post('/projects/<pid>/characters/<cid>/costumes')
 def character_costumes(pid,cid):
     # Vestuario editable en la ficha (2026-10-29, a petición del usuario):

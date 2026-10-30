@@ -159,7 +159,7 @@ def run_job(cloud,j,p):
                     a=selected(rid,'image')
                     group,e=next((k,e) for k in ('characters','locations','props') for e in d['bible'][k] if e['id']==rid)
                     label={'characters':'Personaje','locations':'Lugar','props':'Objeto'}[group]+': '+e['name']+' ('+rid+')'
-                    if group=='characters' and e.get('costumes'):
+                    if group=='characters' and e.get('costumes') and not (p.get('customImagePrompts') or {}).get(eid):
                         label+=' - vestuario: '+'; '.join(c.get('description','') for c in e['costumes'] if c.get('description'))
                     refs.append({**a,'uri':uri(a),'referenceLabel':label})
                 prompt=image_prompt(shot,shot=True,style=style)
@@ -186,6 +186,13 @@ def run_job(cloud,j,p):
             else:
                 e=next((e for k in ('characters','locations','props') for e in d['bible'][k] if e['id']==eid),None)
                 require(e,'ENTITY','Referencia inexistente');prompt=image_prompt(e,style=style)
+            _custom=(p.get('customImagePrompts') or {}).get(eid)
+            if isinstance(_custom,str) and _custom.strip():
+                # Prompt guardado por el usuario: es exactamente el texto
+                # que recibe el modelo. No se le añaden vestuarios, reglas
+                # ni continuidad por detrás, porque eso era lo que lo
+                # confundía: varios textos de ropa a la vez.
+                prompt=_custom.strip()
             raw,mime=provider.image(prompt,refs,p['format'])
             extension={'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp','image/gif':'.gif'}.get(mime)
             require(extension,'IMAGE_FORMAT','Google devolvió un formato de imagen no admitido. No se repitió la generación.')

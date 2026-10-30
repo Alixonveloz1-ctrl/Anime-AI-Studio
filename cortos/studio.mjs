@@ -949,6 +949,22 @@ async function editCostumes(e){
  },true],['Cerrar',()=>{dialog.close();dialog.remove();},true]]);
  dialog.showModal();
 }
+async function editImagePrompt(entityId,label){
+ const data=await api(route(`/image-prompt/${entityId}`));
+ const dialog=document.createElement('dialog');document.body.append(dialog);
+ const box=card('Prompt de imagen · '+label,'<p>Esto es exactamente lo que recibirá el modelo para esta imagen, además de las imágenes de referencia de personajes y lugares. Edita solo la parte del vestuario, guarda y genera. Si guardas, este prompt queda guardado para esta toma o personaje hasta que lo vuelvas a cambiar o lo devuelvas al del director.</p>'+(data.custom?'<p>Ahora mismo hay un prompt guardado por ti para esta imagen, no el del director.</p>':''));dialog.append(box);
+ const field=document.createElement('textarea');field.value=data.prompt||'';field.rows=14;box.append(field);
+ buttons(box,[['Guardar y generar imagen',async()=>{
+  const prompt=field.value.trim();if(!prompt)throw new Error('El prompt no puede quedar vacío.');
+  await mutate(route('/image-prompt'),{entityId,prompt});
+  dialog.close();dialog.remove();
+  await runTask('image',route('/assets:generate'),{operation:'image',entityId});
+ },true],...(data.custom?[['Volver al prompt del director',async()=>{
+  await mutate(route('/image-prompt'),{entityId,prompt:null});
+  dialog.close();dialog.remove();await draw();say('Prompt devuelto al del director.');
+ },true]]:[]),['Cerrar',()=>{dialog.close();dialog.remove();},true]]);
+ dialog.showModal();
+}
 async function buildReferenceSection(group,e){
  const section=card(e.name);section.classList.add('char-card');section.dataset.entity=e.id;
  const description=document.createElement('p');description.className='char-detail';description.textContent=e.description||e.objective||e.layout||e.state||'';section.append(description);
@@ -959,6 +975,7 @@ async function buildReferenceSection(group,e){
  if(!rows.length){const placeholder=document.createElement('div');placeholder.className='scene-img media-empty';placeholder.textContent='Referencia por generar';section.append(placeholder);}
  buttons(section,[[rows.length?'Crear otra referencia':'Generar referencia',()=>runTask('image',route('/assets:generate'),{operation:'image',entityId:e.id}),rows.length>0]]);
  if(group==='characters')buttons(section,[['Editar vestuario',()=>editCostumes(e),true]]);
+ buttons(section,[['Ver y editar prompt de imagen',()=>editImagePrompt(e.id,e.name),true]]);
  const details=fold(section,'Ficha y dirección visual');readable(details,e);
  return section;
 }
@@ -1023,7 +1040,7 @@ const has=selectedAsset(shot.id,shot.treatment==='veo'?'veo_silent_validated':'i
    buttons(row,[[assets.length?'Generar otra interpretación':'Generar voz japonesa',()=>runTask('tts',route('/assets:generate'),{operation:'tts',entityId:u.id}),assets.length>0]]);
   }
   if(has)buttons(c,[['Ver y escuchar esta toma',()=>previewShots([shot.id],c)]]);
-  const more=fold(c,'Editar y comparar');buttons(more,[['Movimiento y cámara',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),imagePayload()),true]]:[]),['Crear imagen principal con instrucción',()=>createShotImageWithInstruction(shot),true],...(image?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id}),true]]:[])]);
+  const more=fold(c,'Editar y comparar');buttons(more,[['Ver y editar prompt de imagen',()=>editImagePrompt(shot.id,'Plano '+(index+1)),true],['Movimiento y cámara',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),imagePayload()),true]]:[]),['Crear imagen principal con instrucción',()=>createShotImageWithInstruction(shot),true],...(image?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id}),true]]:[])]);
   if(has)buttons(more,[['Ver y escuchar la escena entera',()=>previewShots(d.shots.filter(x=>x.beatId===shot.beatId).map(x=>x.id),c),true],['Comparar tomas contiguas',()=>compareShots(shot,c),true]]);
  return c;
 }
