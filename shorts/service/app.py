@@ -151,14 +151,10 @@ def _image_prompt_for(p,eid):
     dev=cloud().entity(p['id'],'developments',p['activeDevelopment']);d=dev['data']
     shot=next((s for s in d['shots'] if s['id']==eid),None)
     if shot:
-        prompt=image_prompt(shot,shot=True,style=visual_style(p.get('generators',{})))
-        costumes=[]
-        for rid in shot.get('visibleCharacters',[]):
-            ch=next((x for x in d['bible']['characters'] if x['id']==rid),None)
-            if ch and ch.get('costumes'):
-                costumes.append(ch['name']+': '+'; '.join(c.get('description','') for c in ch['costumes'] if c.get('description')))
-        if costumes:prompt+='\nVESTUARIO OBLIGATORIO, POR ENCIMA DEL PROMPT DE LA TOMA Y DE LAS IMÁGENES DE REFERENCIA: '+' | '.join(costumes)+'. Usa EXACTAMENTE ese vestuario para cada personaje, sin inventar otro, sin cambiar sus colores, piezas ni estilo, aunque la toma o una referencia vieja muestren otra ropa.'
-        return prompt,True
+        # Sin vestuario añadido por detrás (2026-10-29): el prompt que
+        # se muestra es el del director, y el usuario edita el vestuario
+        # dentro de ese prompt y lo guarda.
+        return image_prompt(shot,shot=True,style=visual_style(p.get('generators',{}))),True
     e=next((x for k in ('characters','locations','props') for x in d['bible'][k] if x['id']==eid),None)
     require(e,'ENTITY','Entidad inexistente')
     return image_prompt(e,style=visual_style(p.get('generators',{}))),False

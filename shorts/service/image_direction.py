@@ -22,11 +22,8 @@ def image_prompt(entity, *, shot=False, variant=None, style=None):
     if shot:
         return rules+'\nDibuja este instante narrativo de la escena. Los personajes actúan dentro del escenario, con continuidad entre sus posiciones.\nREGLA DE CUERPO PARCIAL: aunque en esta toma solo se vea una parte de un personaje (piernas, pies, espalda, manos), esa parte DEBE ser exactamente la de ese personaje de referencia: mismo vestuario, mismos colores, mismas botas o calzado, sin inventar otro personaje ni otra ropa. Nunca dibujes partes sueltas, flotantes o invisibles: las botas siempre van unidas a piernas, las piernas siempre van unidas al cuerpo aunque el cuerpo quede fuera de cuadro, las manos siempre van unidas a brazos. Si la parte visible no coincide con la referencia, la imagen no sirve.\n'+json.dumps(entity,ensure_ascii=False)
     visual={k:entity[k] for k in ('name','age','description','referencePrompt','costumes','layout','entrances','windows','furniture','light','state') if k in entity}
-    out=rules+'\nDibuja una referencia visual maestra clara de este personaje, lugar u objeto. Usa su descripción visual y vestuario para definir su apariencia. Si es un personaje, muestra su cuerpo completo, de la cabeza a los pies, con todo el vestuario visible, incluyendo piernas, pies y calzado, sin cortar por las rodillas ni por la cintura, para que después se pueda dibujar cualquier parte de su cuerpo con esa misma ropa.\n'+json.dumps(visual,ensure_ascii=False)
-    if entity.get('costumes'):
-        # La ropa que el usuario editó en la ficha es la única válida.
-        # description y referencePrompt pueden traer la ropa vieja del
-        # director; si no se dice cuál manda, el modelo mezcla o elige
-        # otra ropa en cada intento, que es justo lo que reportó el usuario.
-        out+='\nVESTUARIO OBLIGATORIO, POR ENCIMA DE CUALQUIER OTRA ROPA MENCIONADA EN LA FICHA: '+'; '.join(c.get('description','') for c in entity['costumes'] if c.get('description'))+'. Usa EXACTAMENTE ese vestuario, sin inventar otro, sin cambiar sus colores, piezas ni estilo, y sin mezclarlo con otra ropa de la ficha.'
-    return out
+    # 2026-10-29, a petición del usuario: NO hay vestuario obligatorio
+    # añadido por detrás. El usuario edita el vestuario dentro del prompt
+    # completo, con el botón de editar prompt, y ese prompt guardado es
+    # el que manda. Aquí solo queda la regla de cuerpo completo.
+    return rules+'\nDibuja una referencia visual maestra clara de este personaje, lugar u objeto. Usa su descripción visual y vestuario para definir su apariencia. Si es un personaje, muestra su cuerpo completo, de la cabeza a los pies, con todo el vestuario visible, incluyendo piernas, pies y calzado, sin cortar por las rodillas ni por la cintura, para que después se pueda dibujar cualquier parte de su cuerpo con esa misma ropa.\n'+json.dumps(visual,ensure_ascii=False)

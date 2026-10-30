@@ -159,8 +159,7 @@ def run_job(cloud,j,p):
                     a=selected(rid,'image')
                     group,e=next((k,e) for k in ('characters','locations','props') for e in d['bible'][k] if e['id']==rid)
                     label={'characters':'Personaje','locations':'Lugar','props':'Objeto'}[group]+': '+e['name']+' ('+rid+')'
-                    if group=='characters' and e.get('costumes') and not (p.get('customImagePrompts') or {}).get(eid):
-                        label+=' - vestuario: '+'; '.join(c.get('description','') for c in e['costumes'] if c.get('description'))
+
                     refs.append({**a,'uri':uri(a),'referenceLabel':label})
                 prompt=image_prompt(shot,shot=True,style=style)
                 if data.get('usePreviousShot'):
@@ -174,15 +173,8 @@ def run_job(cloud,j,p):
                     require(_prev_asset,'PREVIOUS_SHOT','La toma anterior todavía no tiene una imagen aprobada que usar como referencia. Genera primero la imagen de la toma anterior.')
                     refs.append({**_prev_asset,'uri':uri(_prev_asset),'referenceLabel':'Toma anterior: referencia de continuidad, no copiar'})
                     prompt+='\nContinuidad con la toma anterior: usa la imagen de la toma anterior SOLO como referencia de continuidad (mismo personaje, mismo vestuario, mismo lugar, misma luz y mismo estilo), pero dibuja ESTA toma con su propia acción y su propio encuadre. No copies la imagen anterior ni repitas su composición.'
-                # Vestuario vigente (2026-10-29): si el usuario editó el
-                # vestuario en la ficha, ese es el que se debe pedir en
-                # las imágenes nuevas, no el que tenía la referencia vieja.
-                _costumes=[]
-                for _rid in shot.get('visibleCharacters',[]):
-                    _ch=next((x for k in ('characters',) for x in d['bible'][k] if x['id']==_rid),None)
-                    if _ch and _ch.get('costumes'):
-                        _costumes.append(_ch['name']+': '+'; '.join(c.get('description','') for c in _ch['costumes'] if c.get('description')))
-                if _costumes:prompt+='\nVESTUARIO OBLIGATORIO, POR ENCIMA DEL PROMPT DE LA TOMA Y DE LAS IMÁGENES DE REFERENCIA: '+ ' | '.join(_costumes)+'. Usa EXACTAMENTE ese vestuario para cada personaje, sin inventar otro, sin cambiar sus colores, piezas ni estilo, aunque la toma o una referencia vieja muestren otra ropa.'
+                # 2026-10-29: sin vestuario añadido por detrás. El usuario
+                # edita el vestuario dentro del prompt completo guardado.
             else:
                 e=next((e for k in ('characters','locations','props') for e in d['bible'][k] if e['id']==eid),None)
                 require(e,'ENTITY','Referencia inexistente');prompt=image_prompt(e,style=style)
