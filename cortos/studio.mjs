@@ -1005,6 +1005,12 @@ const has=selectedAsset(shot.id,shot.treatment==='veo'?'veo_silent_validated':'i
    toggleRow.append(toggleBtn);c.append(toggleRow);
   }
   const imagePayload=()=>({operation:'image',entityId:shot.id,...(prevOn()?{usePreviousShot:true}:{})});
+  // Botón para corregir el reparto sin bloquear nada: si la función de
+  // la toma nombra a un personaje que llega o actúa y ese personaje no
+  // está en el reparto visible, se ofrece añadirlo, pero nunca se impide
+  // generar la imagen aunque no se pulse.
+  const missingCast=d.bible.characters.filter(ch=>!shot.visibleCharacters.includes(ch.id)&&new RegExp('(llegada|entrada|aparici\\u00f3n)\\s+de\\s+'+ch.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b|\\b'+ch.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s+(llega|camina|entra|aparece|avanza|se acerca|regresa|sale)','i').test(shot.function+' '+shot.prompt));
+  if(missingCast.length)buttons(c,missingCast.map(ch=>['Añadir '+ch.name+' a esta toma',async()=>{await mutate(route(`/shots/${shot.id}/cast`),{characterIds:[...shot.visibleCharacters,ch.id]});await draw();say(ch.name+' añadido al reparto de esta toma. Ya puedes generar su imagen con su referencia.');}]));
   const actions=[];
   if(!image&&!visuals.some(a=>a.kind==='image'&&a.approvalState==='candidate'))actions.push(['Generar imagen',()=>runTask('image',route('/assets:generate'),imagePayload())]);
   if(image&&!visuals.some(a=>a.kind==='veo_silent_validated'&&['candidate','approved'].includes(a.approvalState)))actions.push(['Generar video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id})]);

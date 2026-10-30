@@ -118,23 +118,6 @@ def run_job(cloud,j,p):
         if op=='image':
             from shorts.service.image_direction import image_prompt
             shot=next((s for s in d['shots'] if s['id']==eid),None)
-            if shot:
-                # Guardia 2026-10-29, caso Plano 09 de Mi Vida Lenta: la toma
-                # decía "llegada de Elara" pero Elara no estaba en el reparto
-                # visible, así que el generador nunca recibió su referencia
-                # y se inventó unas piernas con pantalones. No se genera
-                # a ciegas en ese caso: se avisa para corregir el guion
-                # antes de pagar otra imagen inventada. Solo cubre el
-                # patrón estrecho de llegada/entrada, no cualquier mención
-                # de pasada, para no bloquear tomas donde un personaje solo
-                # se recuerda o se nombra sin estar presente.
-                import re as _re
-                _text=(shot.get('function','')+' '+shot.get('prompt',''))
-                for _ch in d['bible']['characters']:
-                    _name=_ch['name']
-                    if _re.search(r'(llegada|entrada|aparici\u00f3n)\s+de\s+'+_re.escape(_name)+r'\b|\b'+_re.escape(_name)+r'\s+(llega|camina|entra|aparece|avanza|se acerca|regresa|sale)',_text,_re.IGNORECASE):
-                        require(_ch['id'] in shot.get('visibleCharacters',[]),'SHOT_CAST','La toma nombra la llegada o presencia de '+_name+' pero '+_name+' no está en el reparto visible de la toma, así que no se puede usar su referencia. Corrige el guion para incluir a '+_name+' en esa toma antes de generar su imagen, en vez de generar un personaje inventado.')
-            refs=[];asset_deps=None;asset_parent=None
             if shot and data.get('shotImageInstruction'):
                 # Imagen principal con instrucción del usuario: NO es una
                 # variante. Se edita la imagen aprobada de la toma (si la

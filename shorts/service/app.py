@@ -108,6 +108,39 @@ def generators(pid):
                    visualStyle=visual_style(p.get('generators',{})),
                    visualStyles=[{'id':k,'name':v} for k,v in VISUAL_STYLES.items()])
 
+@app.post('/projects/<pid>/shots/<sid>/cast')
+def shot_cast(pid,sid):
+    # Corrección directa de reparto 2026-10-29, caso Plano 09: la toma
+    # nombraba a un personaje presente pero no lo tenía en visibleCharacters,
+    # así que su referencia nunca se enviaba. El editor general no permite
+    # añadir un elemento a una lista vacía, así que este endpoint, igual
+    # que los de voz y vestuario, crea una versión aprobada nueva y la deja
+    # en uso de inmediato, solo con ese reparto cambiado.
+    from shorts.service.director import validate_development
+    p=owned(pid);d=body()
+    ids=d.get('characterIds')
+    require(isinstance(ids,list) and ids,'CAST','Elige al menos un personaje para esta toma.')
+    require(len(set(ids))==len(ids),'CAST','Personajes duplicados en el reparto.')
+    require(p.get('activeDevelopment'),'DEVELOPMENT','Abre producción con el guion aprobado.')
+    old=cloud().entity(pid,'developments',p['activeDevelopment'])
+    candidate=copy.deepcopy(old['data'])
+    chars={x['id'] for x in candidate['bible']['characters']}
+    require(set(ids)<=chars,'CAST','Personaje sin ficha.')
+    shot=next((s for s in candidate['shots'] if s['id']==sid),None)
+    require(shot,'SHOT','Toma inexistente')
+    shot['visibleCharacters']=list(ids)
+    shot['referenceEntityIds']=list(dict.fromkeys([*shot.get('referenceEntityIds',[]),shot['locationId'],*ids,*shot.get('props',[])]))
+    validate_development(candidate)
+    record={**old,'id':new_id(),'data':candidate,'previousId':old['id'],'source':'cast_fix','created':time.time(),'revision':1,
+            'approvalState':'approved','approvedBy':p['owner'],'approvedAt':time.time()}
+    for field in ('impact','review','jobId','dataHash'):record.pop(field,None)
+    def save(tx,current):
+        require(current.get('activeDevelopment')==old['id'],'STAGE_CHANGED','Cambió el guion. Vuelve a corregir el reparto.',409)
+        tx.create(cloud().entity_ref(pid,'developments',record['id']),record)
+        current.update(activeDevelopment=record['id'],timelineStale=True)
+        return record
+    result,_=cloud().mutate(pid,expected(),save);return jsonify(result),201
+
 @app.post('/projects/<pid>/characters/<cid>/costumes')
 def character_costumes(pid,cid):
     # Vestuario editable en la ficha (2026-10-29, a petición del usuario):
