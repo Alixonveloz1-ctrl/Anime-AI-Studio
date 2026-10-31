@@ -59,13 +59,20 @@ def voice_layout(shot, voices):
 def shot_bounds(shot,measured_minimum,draft=False):
     lo=max(measured_minimum,shot.get('minFrames',shot['frames']))
     hi=shot.get('maxFrames',shot['frames'])
+    veo=shot.get('treatment')=='veo'
+    # Un guion NUEVO no puede planear una toma de video más larga que un clip:
+    # eso es un error de planificación y se rechaza al validarlo. Pero un guion
+    # ya guardado no puede dejar al dueño sin vista previa ni exportación por
+    # lo mismo: ahí manda su regla, el clip cubre la toma ralentizándose. Así
+    # que al montar se acota el máximo a los ocho segundos del clip y se sigue.
+    if draft and veo and hi>192:hi=192
     # La duración de una toma se planeó antes de que la voz existiera, así que
     # la voz medida puede no caber. En un borrador manda la voz y la toma se
     # alarga —nunca se acelera el audio—; la toma queda señalada y exportar
     # sigue exigiendo revisarla, porque cambia el metraje aprobado.
     if draft and lo>hi:hi=lo
     require(lo<=hi,'SCRIPT_REVIEW','La voz, pausas y acciones exceden el intervalo aprobado en '+shot['id']+'; revisa esa toma, sin acelerar el audio')
-    require(shot['treatment']!='veo' or hi<=192,'VEO_COVERAGE','Divide o cambia el tratamiento de la toma Veo '+shot['id']+': máximo 8 segundos, sin repetir clips')
+    require(draft or not veo or hi<=192,'VEO_COVERAGE','La toma '+shot['id']+' está marcada como video y dura más de 8 segundos, que es lo máximo que entrega un clip. Divídela en varias tomas, acórtala, o cámbiala a imagen.')
     return lo,hi
 
 

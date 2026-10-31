@@ -469,3 +469,33 @@ Pruebas (`tests/shorts/ui/studio.test.mjs`): pulsar «Ver resultado» no redibuj
 la pantalla, no vuelve a pedir ni una imagen ni un video, lleva a la toma de lo
 generado y hace desaparecer el cuadro; y el cuadro nombra la toma. Las dos
 fallan con el botón de antes.
+
+## U034 — Un aviso que bloquea y no se entiende (2026-10-31)
+
+«Divide o cambia el tratamiento de la toma Veo t4_shot_04: máximo 8 segundos,
+sin repetir clips.» — «No entiendo.»
+
+Con razón. Ese aviso dejaba el corto entero sin vista previa y sin exportación,
+y hacía tres cosas mal: hablaba de «tratamiento», que es vocabulario de dentro;
+nombraba la toma por su identificador interno, que no aparece en ninguna
+pantalla; y mandaba arreglar algo sin decir cómo.
+
+**Deja de bloquear.** Un guion NUEVO sigue sin poder planear una toma de video
+más larga que un clip: eso es un error de planificación y se rechaza al
+validarlo. Pero un guion ya guardado no puede dejar al dueño sin vista previa
+por lo mismo. Al montar, el máximo de esa toma se acota a los ocho segundos del
+clip y se sigue, que es exactamente su regla: el clip cubre la toma
+ralentizándose, sin cortarse. Comprobado con su toma: al montar devuelve el
+intervalo acotado; al validar un guion nuevo sigue rechazándola.
+
+**Y se entiende.** El texto pasa a decir qué pasa y qué hacer: «está marcada
+como video y dura más de 8 segundos, que es lo máximo que entrega un clip.
+Divídela en varias tomas, acórtala, o cámbiala a imagen.» Además, todo lo que
+se escribe en pantalla —avisos propios y errores del servicio por igual— cambia
+ahora los identificadores internos por el nombre que lleva la tarjeta: donde
+decía `t4_shot_04` dice «Plano 04».
+
+Pruebas: `tests/shorts/test_workflow.py` (al montar se acota, al validar se
+rechaza, y el mensaje dice qué hacer sin hablar de tratamientos) y
+`tests/shorts/ui/studio.test.mjs` (un error del servicio que nombra una toma
+por su identificador se lee en pantalla como «Plano 02»).

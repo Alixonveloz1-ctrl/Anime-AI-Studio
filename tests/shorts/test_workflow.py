@@ -36,11 +36,17 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(shot_bounds(s,7201,draft=True),(7201,7201))
         with self.assertRaises(ContractError) as error:shot_bounds(s,7201)
         self.assertEqual(error.exception.code,'SCRIPT_REVIEW')
-        # Y el tope de Veo no se relaja ni en borrador: un clip no puede durar
-        # más de ocho segundos.
-        veo={**s,'treatment':'veo','minFrames':96,'maxFrames':144,'frames':120}
-        with self.assertRaises(ContractError) as error:shot_bounds(veo,200,draft=True)
+        # El tope de Veo, en cambio, no deja al dueño sin vista previa. Un guion
+        # NUEVO no puede planear una toma de video más larga que un clip, y se
+        # rechaza al validarlo; pero uno ya guardado se monta igual, acotado a
+        # los ocho segundos del clip, porque la regla del dueño es que el clip
+        # cubra la toma ralentizándose en vez de bloquear el corto entero.
+        largo={**s,'treatment':'veo','minFrames':96,'maxFrames':240,'frames':168}
+        self.assertEqual(shot_bounds(largo,144,draft=True),(144,192))
+        with self.assertRaises(ContractError) as error:shot_bounds(largo,144)
         self.assertEqual(error.exception.code,'VEO_COVERAGE')
+        self.assertIn('Divídela',str(error.exception),'el mensaje dice qué hacer, sin jerga')
+        self.assertNotIn('tratamiento',str(error.exception))
     def test_A020_validate_plan_no_unrenderable_veo(self):
         d=development();validate_development(d)
         d['shots'][0]['treatment']='veo'

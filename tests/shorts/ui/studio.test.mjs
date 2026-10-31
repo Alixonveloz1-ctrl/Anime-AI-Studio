@@ -31,6 +31,10 @@ async function setup(options={}){
  if(options.uncertainCreation&&path==='/projects'&&request.method==='POST'){options.createCalls=(options.createCalls||0)+1;await baseTransport(url,request);return new Response('',{status:502});}
  if(options.failOpening&&path==='/projects/fixture'&&fixture.calls.some(c=>c.path==='/projects'&&c.method==='POST')){options.failOpening=false;return new Response(JSON.stringify({error:'Lectura temporalmente no disponible'}),{status:503});}
  if(options.failImage&&path==='/projects/fixture/assets/imgCandidate/url')return new Response('{}',{status:503});
+ if(options.errorConIdDeToma&&path.endsWith('/assets:generate')){
+  const toma=fixture.project.developments[0].data.shots[1].id;
+  return new Response(JSON.stringify({code:'VEO_COVERAGE',error:'La toma '+toma+' está marcada como video y dura más de 8 segundos.'}),{status:400});
+ }
  if(options.threeDrafts&&path==='/projects'&&(request.method||'GET')==='GET')return new Response(JSON.stringify({projects:[1,2,3].map(n=>({...fixture.project,id:'draft'+n,title:'',created:n}))}));
  if(options.pendingAfterSubmit&&path.endsWith('/ideas:generate')){const r=await baseTransport(url,request);const job=fixture.jobs.at(-1);Object.assign(job,{state:'queued',settled:false});options.savedIdeas=fixture.project.ideas;fixture.project.ideas=[];return r;}
  if(options.jobSequence&&path.startsWith('/jobs/')&&!path.includes(':')){const job=fixture.jobs.find(j=>j.id===path.split('/').at(-1));const next=options.jobSequence.shift();if(next)Object.assign(job,next);if(next?.state==='awaiting_review')fixture.project.ideas=options.savedIdeas;}
@@ -895,5 +899,23 @@ test('El cuadro de actividad dice de qué toma es lo que generó',async()=>{
   const panel=w.document.querySelector('#activity');
   assert.equal(panel.hidden,false);
   assert.match(panel.textContent,/Plano 01/,'nombra la toma, no sólo «Voz»: '+panel.textContent);
+ }finally{dom.window.close();}
+});
+
+// «Divide o cambia el tratamiento de la toma Veo t4_shot_04» no dice nada: ni
+// qué es un tratamiento, ni cuál de las cuarenta tomas es ésa. (U034)
+test('Un error del servicio nunca enseña el identificador interno de una toma',async()=>{
+ const {fixture,w,dom,click}=await setup({errorConIdDeToma:true});
+ try{
+  await click('Escenas');
+  const toma=[...w.document.querySelectorAll('.shot-section')][1];
+  const boton=[...toma.querySelectorAll('button')].find(b=>b.textContent==='Generar video');
+  assert.ok(boton,'hay algo que generar en esa toma');
+  await boton.onclick();
+  await new Promise(r=>setTimeout(r,0));
+  const aviso=w.document.querySelector('#notice').textContent;
+  const id=fixture.project.developments[0].data.shots[1].id;
+  assert.doesNotMatch(aviso,new RegExp(id),'no enseña el identificador: '+aviso);
+  assert.match(aviso,/Plano 02/,'lo nombra como la tarjeta: '+aviso);
  }finally{dom.window.close();}
 });

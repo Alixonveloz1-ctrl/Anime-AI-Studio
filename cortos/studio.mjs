@@ -25,6 +25,9 @@ const session=guardado('animeShorts:v2:session')||crypto.randomUUID();
 try{sessionStorage.setItem('animeShorts:v2:session',session)}catch{}
 const device=localStorage.getItem('animeShorts:v2:device')||crypto.randomUUID();localStorage.setItem('animeShorts:v2:device',device);
 const say=(s,error=false)=>{
+ // Todo lo que se lee en pantalla pasa por aquí, errores del servicio
+ // incluidos: ninguno debe enseñar un identificador interno.
+ s=describeIssue(s);
  notice.textContent=s;notice.className=error?'error':'';
  // #notice sits at the top of the page, under any open dialog and scrolled
  // away, so a failure reported from inside one looked like the tap had done
@@ -159,7 +162,18 @@ function resumirPendientes(issues){
  }
  return [...grupos].map(([clave,lista])=>lista.length>1?`${clave}: ${lista.length} pendientes`:describeIssue(lista[0])).join(' · ');
 }
-function describeIssue(text){const d=development();if(!d)return text;let value=String(text);const ids=[...d.shots,...d.utterances,...d.soundRequests,...d.musicRequests,...d.bible.characters,...d.bible.locations,...d.bible.props].sort((a,b)=>b.id.length-a.id.length);for(const row of ids)value=value.replaceAll(row.id,entityName(d,row.id));return value;}
+// Un mensaje con «t4_shot_04» dentro no dice nada: cada identificador se
+// cambia por el nombre que lleva la tarjeta en pantalla.
+function describeIssue(text){
+ // Un aviso puede salir antes de que haya proyecto abierto: ahí no hay nada
+ // que traducir y no puede romper el mensaje.
+ let d=null;try{d=development();}catch{}
+ if(!d)return text;
+ let value=String(text);
+ const ids=[...d.shots,...d.utterances,...d.soundRequests,...d.musicRequests,...d.bible.characters,...d.bible.locations,...d.bible.props].sort((a,b)=>b.id.length-a.id.length);
+ for(const row of ids)value=value.replaceAll(row.id,d.shots.some(s=>s.id===row.id)?nombreDeToma(d,row.id):entityName(d,row.id));
+ return value;
+}
 async function runTask(operation,path,data={}){
  lastGeneration=data?.entityId?{operation,entityId:data.entityId}:null;pendingCard=data?.entityId||null;trabajoVisto=null;
  if(generatorSave)await generatorSave;
