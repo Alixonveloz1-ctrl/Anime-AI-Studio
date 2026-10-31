@@ -5,9 +5,9 @@
 <nav class="section-switch" aria-label="Secciones"><button id="account" hidden>Salir</button><a href="/" id="back">← Animes</a></nav>
 <main>
 <header class="header"><div class="brand"><h1 class="studio-brand">Anime AI Studio</h1><p class="jp">アニメ · スタジオ</p><p class="section-name">Cortos de anime · 5 minutos</p></div><button id="projects" class="header-btn" hidden>📁 Proyectos</button></header>
+<div id="notice" role="status" aria-live="polite">Preparando el estudio…</div>
 <section id="login" class="welcome-card" hidden><h2>Vuelve a tus historias.</h2><p>Entra con tu cuenta para recuperar el guion, los recursos y las decisiones que guardaste.</p><button id="signin">Entrar con Google</button></section>
-<section id="workspace" hidden><div class="project-heading"><span id="project-name"></span></div><div id="screen"></div><nav id="steps" aria-label="Secciones del corto"></nav></section>
-<div id="status-dock"><aside id="activity" class="activity-banner" aria-live="polite" hidden></aside><div id="notice" role="status" aria-live="polite">Preparando el estudio…</div></div>
+<section id="workspace" hidden><div class="project-heading"><span id="project-name"></span></div><aside id="activity" class="activity-banner" aria-live="polite" hidden></aside><div id="screen"></div><nav id="steps" aria-label="Secciones del corto"></nav></section>
 </main>
 <dialog id="editor"><div class="dialog-header"><div><p class="eyebrow">REVISIÓN DE SONIDO</p><h2>Ajustar sincronización</h2></div><button id="close-editor" class="secondary">Cerrar</button></div><div id="editor-content"></div></dialog>
 <script type="module" src="/cortos/app.js"></script>

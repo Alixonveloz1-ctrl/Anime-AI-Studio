@@ -161,7 +161,7 @@ function resumirPendientes(issues){
 }
 function describeIssue(text){const d=development();if(!d)return text;let value=String(text);const ids=[...d.shots,...d.utterances,...d.soundRequests,...d.musicRequests,...d.bible.characters,...d.bible.locations,...d.bible.props].sort((a,b)=>b.id.length-a.id.length);for(const row of ids)value=value.replaceAll(row.id,entityName(d,row.id));return value;}
 async function runTask(operation,path,data={}){
- lastGeneration=data?.entityId?{operation,entityId:data.entityId}:null;pendingCard=data?.entityId||null;
+ lastGeneration=data?.entityId?{operation,entityId:data.entityId}:null;pendingCard=data?.entityId||null;trabajoVisto=null;
  if(generatorSave)await generatorSave;
  await mutationQueue;
  // Another job of the same kind may be running for a DIFFERENT shot, line or
@@ -189,7 +189,7 @@ async function runTask(operation,path,data={}){
  const key=saved?.key||crypto.randomUUID();
  localStorage.setItem(storageKey,JSON.stringify({key,jobId:saved?.jobId||null}));
  let job;try{job=await api(path,'POST',{...data,session},{'Idempotency-Key':key});}catch(e){if(e.confirmedRejected)localStorage.removeItem(storageKey);throw e;}
- localStorage.setItem(storageKey,JSON.stringify({key,jobId:job.jobId}));
+ localStorage.setItem(storageKey,JSON.stringify({key,jobId:job.jobId}));ultimoTrabajo=job.jobId;
  say('Solicitud guardada. Comprobando su estado…');
  const result=await watch(job.jobId,projectId);
  if(result&&terminal(result.state)&&result.state!=='submitted_unknown')localStorage.removeItem(storageKey);
@@ -213,32 +213,84 @@ async function runTask(operation,path,data={}){
  if(p?.id===projectId&&stage===currentStage)needsRedraw=true;
  return job.jobId;
 }
+// Un trabajo decía «Video · Listo para revisar» y nada más: ni de qué toma era,
+// ni cuál de las cuarenta. El recurso que entregó sí lo sabe.
+function entidadDelTrabajo(job){
+ const id=job?.result?.assetId;
+ const recurso=id&&p?.assets?.find(a=>a.id===id);
+ return recurso?.entityId||(lastGeneration&&job?.id===ultimoTrabajo?lastGeneration.entityId:null)||null;
+}
+// El mismo nombre que lleva la tarjeta: la toma se llama «Plano 04» ahí, así
+// que decir «Toma 4» aquí obligaría a traducir mentalmente.
+function nombreDeToma(d,shotId){
+ const i=d.shots.findIndex(s=>s.id===shotId);
+ return i<0?entityName(d,shotId):'Plano '+String(i+1).padStart(2,'0');
+}
+function deQuienEs(job){
+ const d=development(),eid=entidadDelTrabajo(job);
+ if(!d||!eid)return '';
+ const voz=d.utterances.find(u=>u.id===eid);
+ if(voz)return ' de '+nombreDeToma(d,voz.shotId);
+ if(d.shots.some(s=>s.id===eid))return ' de '+nombreDeToma(d,eid);
+ const sonido=d.soundRequests.find(r=>r.id===eid);
+ if(sonido)return ' · '+sonido.name;
+ const pieza=d.musicRequests.findIndex(m=>m.id===eid);
+ if(pieza>=0)return ' · Pieza '+(pieza+1);
+ return ' de '+entityName(d,eid);
+}
+// Llevar a la tarjeta es MOVERSE hasta ella, no redibujar la pantalla: volver a
+// dibujarla vuelve a pedir todas las imágenes y todos los videos del corto, que
+// es lo que se veía como «se recargó la página entera» al pulsar Ver resultado.
+function tarjetaDeEntidad(eid){
+ const d=development();if(!d||!eid)return null;
+ const voz=d.utterances.find(u=>u.id===eid);
+ const sonido=d.soundRequests.find(r=>r.id===eid);
+ const clave=voz?voz.shotId:eid;
+ return document.querySelector(`.shot-section[data-shot="${clave}"]`)
+  ||document.querySelector(`[data-music="${clave}"]`)
+  ||document.querySelector(`[data-effect-group="${sonido?(sonido.soundGroup||sonido.id):clave}"]`)
+  ||document.querySelector(`[data-entity="${clave}"]`);
+}
+async function verResultado(job){
+ const eid=entidadDelTrabajo(job);
+ const destino=['ideas','develop','revise'].includes(job.operation)?'Historia':'Escenas';
+ // Sólo se redibuja si hay que cambiar de sección, porque ahí la pantalla
+ // cambia entera de todos modos.
+ if(stage!==destino)await go(destino);
+ const nodo=tarjetaDeEntidad(eid);
+ if(nodo){nodo.scrollIntoView({behavior:'smooth',block:'start'});nodo.classList.add('recien-generada');setTimeout(()=>nodo.classList.remove('recien-generada'),2200);}
+ // Ya lo viste: el panel deja de ocupar sitio.
+ trabajoVisto=job.id;$('#activity').hidden=true;$('#activity').replaceChildren();
+}
+let trabajoVisto=null,ultimoTrabajo=null;
 function showJob(job){
+ // Un trabajo que ya fuiste a ver no vuelve a aparecer solo.
+ if(job.id===trabajoVisto&&!unresolved(job)){$('#activity').hidden=true;return;}
  const panel=$('#activity');panel.hidden=false;panel.replaceChildren();
  const text=document.createElement('div'),heading=document.createElement('strong'),message=document.createElement('p');
- heading.textContent=titleFor(job.operation)+' · '+titleFor(job.state);message.textContent=job.state==='running'&&job.progress&&!job.providerWait?`${job.progress.stage}/${job.progress.total} · ${job.progress.label}`:describeIssue(jobMessage(job));text.append(heading,message);panel.append(text);
+ heading.textContent=titleFor(job.operation)+deQuienEs(job)+' · '+titleFor(job.state);message.textContent=job.state==='running'&&job.progress&&!job.providerWait?`${job.progress.stage}/${job.progress.total} · ${job.progress.label}`:describeIssue(jobMessage(job));text.append(heading,message);panel.append(text);
  const controls=[],available=taskActions(job);
  if(job.canStartInService)controls.push(['Iniciar generación pendiente',async()=>{
   if(!active)await lease(true);const latest=await api('/jobs/'+job.id);
   await api('/jobs/'+job.id+':start','POST',{session},{'If-Match':String(latest.revision)});
-  await watch(job.id);await draw();
+  await watch(job.id);
  }]);
  if(unresolved(job)&&!enCola(job))controls.push(['Comprobar estado',async()=>{
   const latest=await api('/jobs/'+job.id);
   if(taskActions(latest).inspect){const result=await api('/jobs/'+job.id+':inspect','POST',{}, {'If-Match':String(latest.revision)});say(result.message);}
-  await watch(job.id);await draw();
+  await watch(job.id);
  },true]);
  if(available.recover)controls.push(['Continuar',async()=>{
   if(!active)await lease(true);const latest=await api('/jobs/'+job.id);
   await api('/jobs/'+job.id+':resume','POST',{session},{'If-Match':String(latest.revision)});
-  await watch(job.id);await draw();
+  await watch(job.id);
  },true]);
  if(available.cancel)controls.push(['Cancelar',async()=>{
   const latest=await api('/jobs/'+job.id);await api('/jobs/'+job.id+':cancel','POST',{}, {'If-Match':String(latest.revision)});
   ++watchVersion;await draw();say('Cancelación solicitada. Lo ya generado se conserva.');
  },true]);
  if(available.close)controls.push(['Cerrar sin repetir',async()=>{if(await closeUncertain(job.id)){++watchVersion;await draw();}},true]);
- if(['awaiting_review','succeeded'].includes(job.state))controls.push(['Ver resultado',()=>go(['ideas','develop','revise'].includes(job.operation)?'Historia':'Escenas'),true]);
+ if(['awaiting_review','succeeded'].includes(job.state))controls.push(['Ver resultado',()=>verResultado(job),true]);
  buttons(panel,controls);
 }
 async function watch(id,projectId=p?.id){

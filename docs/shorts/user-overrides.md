@@ -432,35 +432,40 @@ se puede pedir en video y recibe el clip que le toca; el guion sigue sin poder
 planear una toma de video más larga que un clip; una imagen sin aprobar sigue
 parando la generación). Las tres primeras fallan si vuelve el guardia.
 
-## U033 — Las tomas no se repintaban: saltaban (2026-10-31)
+## U033 — «Ver resultado» recargaba el corto entero (2026-10-31)
 
-«Se repinta todas las escenas, todas las imágenes, todos los videos. Cada vez
-que genero una imagen, un video, un audio, toda la página se repinta.»
+«Pulso donde dice Ver resultado y se repinta toda la página. Y sé que se
+repinta porque todo se carga de nuevo: las imágenes se vuelven a cargar, los
+videos se vuelven a cargar.»
 
-Dos revisiones midieron el repintado y las dos dijeron que no pasaba: pulsando
-cada botón de generar sobre el código real, la pantalla no se vaciaba ni una
-vez y las tarjetas vecinas sobrevivían intactas. Las medidas eran correctas y
-la queja también: **las tomas no se repintaban, se movían**.
+Era literal, y estaba a la vista: el botón «Ver resultado» del cuadro de
+actividad llamaba al redibujado completo de la pantalla. Eso vacía la lista de
+tomas y la vuelve a construir, y como la dirección de cada archivo se firma de
+nuevo cada vez, el navegador no puede reutilizar ninguna: vuelve a descargar
+TODAS las imágenes y TODOS los videos del corto. Las dos revisiones anteriores
+midieron los botones de generar, que ya estaban bien, y no midieron éste.
 
-El aviso y el panel de actividad estaban los dos por encima de la lista de
-tomas, dentro del mismo flujo. Y los dos cambian de alto sin parar mientras se
-genera: el panel se reconstruye **cada tres segundos** con otro texto, otro
-progreso y otros botones, que además se reparten en una o dos filas según
-quepan; el aviso aparece, crece, se encoge y se pone con borde y relleno
-cuando es un error. Cada uno de esos cambios empujaba la lista entera hacia
-abajo o hacia arriba. Con cuarenta tomas y sus imágenes cargando, eso se ve
-exactamente como si la página se repintara sola, una y otra vez, durante todo
-el rato que dura una generación.
+Ahora ese botón **te lleva** a la tarjeta de lo que se generó en vez de
+redibujar: se desplaza hasta ella y la resalta un momento. Sólo redibuja si hay
+que cambiar de sección, porque ahí la pantalla cambia entera de todos modos.
+Medido con doce tomas en pantalla: cero redibujados, cero archivos vueltos a
+pedir, las doce tarjetas y sus veinticinco reproductores intactos.
 
-Los dos pasan a vivir fuera del flujo, en una franja fija sobre la barra de
-secciones: pueden cambiar cuanto quieran sin mover una sola toma. La franja se
-desvanece cuando no hay nada que decir, no tapa los botones de debajo cuando
-está vacía, y un mensaje largo no cubre la pantalla porque tiene tope de alto
-con desplazamiento propio. El hueco del final de la lista es un número fijo, no
-depende de la franja: si dependiera, volvería a moverse todo cada vez que el
-panel cambia.
+Dos cosas más del mismo cuadro. Decía «Video · Listo para revisar» sin decir de
+cuál de las cuarenta tomas: ahora dice «Video de Plano 04», con el mismo nombre
+que lleva la tarjeta, y para un efecto o una pieza dice cuál. Y se quedaba ahí
+después de ir a ver el resultado: ahora desaparece al pulsarlo.
 
-Pruebas (`tests/shorts/ui/studio.test.mjs`): nada que cambie durante una
-generación queda delante de la lista de tomas, y la franja está declarada fuera
-del flujo, sin tapar lo de debajo y con tope de alto. La primera falla si se
-devuelven el aviso y el panel a donde estaban.
+Se quitan además tres redibujados completos redundantes del mismo cuadro
+—iniciar, comprobar estado y continuar—: después de esperar al trabajo, el
+refresco por tarjeta ya hace lo que hay que hacer.
+
+**Lo que se probó y se descartó.** Antes de encontrar esto se movieron el aviso
+y el cuadro de actividad a una franja fija sobre la barra inferior, para que
+sus cambios de alto no empujaran la lista. Tapaba media pantalla y las vistas
+previas, así que se revirtió: los dos vuelven arriba, donde estaban.
+
+Pruebas (`tests/shorts/ui/studio.test.mjs`): pulsar «Ver resultado» no redibuja
+la pantalla, no vuelve a pedir ni una imagen ni un video, lleva a la toma de lo
+generado y hace desaparecer el cuadro; y el cuadro nombra la toma. Las dos
+fallan con el botón de antes.

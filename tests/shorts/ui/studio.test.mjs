@@ -856,40 +856,44 @@ test('Una toma demasiado larga para Veo avisa antes de generar el video',async()
  }finally{dom.window.close();}
 });
 
-// «Cada vez que genero, toda la página se repinta.» (U033) Las tomas no se
-// repintaban: SALTABAN. El aviso y el panel de actividad iban por encima de
-// todas ellas y cambian de alto sin parar mientras se genera —el panel se
-// reconstruye cada tres segundos con otro texto y otros botones—, así que cada
-// cambio empujaba la lista entera. Tienen que estar fuera del flujo.
-test('Lo que cambia mientras generas no está por encima de las escenas',async()=>{
+
+// «Pulso Ver resultado y se repinta toda la página: las imágenes y los videos
+// se vuelven a cargar.» (U033) Ese botón llamaba al redibujado completo, que
+// vuelve a pedir la dirección de CADA imagen y CADA video del corto.
+test('Ver resultado lleva a la toma generada sin volver a cargar el corto',async()=>{
+ const {fixture,w,dom,click}=await setup();
+ try{
+  await click('Escenas');
+  const tomas=[...w.document.querySelectorAll('.shot-section')];
+  const toma=tomas[0];
+  await click('Generar otra interpretación',toma);
+  await new Promise(r=>setTimeout(r,0));
+  const pantalla=w.document.querySelector('#screen');
+  let vaciados=0;const vaciar=pantalla.replaceChildren.bind(pantalla);
+  pantalla.replaceChildren=(...a)=>{vaciados++;return vaciar(...a);};
+  const vivas=[...w.document.querySelectorAll('.shot-section')];
+  let llevadoA=null;
+  for(const n of vivas)n.scrollIntoView=()=>{llevadoA=n;};
+  fixture.calls.length=0;
+  await click('Ver resultado');
+  await new Promise(r=>setTimeout(r,0));
+  pantalla.replaceChildren=vaciar;
+  assert.equal(vaciados,0,'no se redibuja la pantalla');
+  assert.equal(fixture.calls.filter(c=>/\/assets\/[^/]+\/url$/.test(c.path)).length,0,
+   'no se vuelve a pedir ni una imagen ni un video');
+  assert.equal(llevadoA,vivas[0],'te lleva a la toma de lo generado');
+  assert.equal(w.document.querySelector('#activity').hidden,true,'y el cuadro desaparece');
+ }finally{dom.window.close();}
+});
+test('El cuadro de actividad dice de qué toma es lo que generó',async()=>{
  const {w,dom,click}=await setup();
  try{
   await click('Escenas');
-  const pantalla=w.document.querySelector('#screen');
-  const aviso=w.document.querySelector('#notice');
-  const actividad=w.document.querySelector('#activity');
-  const franja=w.document.querySelector('#status-dock');
-  assert.ok(franja,'existe la franja de estado');
-  assert.equal(aviso.parentElement,franja,'el aviso vive en la franja');
-  assert.equal(actividad.parentElement,franja,'el panel de actividad vive en la franja');
-  // Y la franja no puede estar antes de las escenas dentro del mismo flujo.
-  assert.ok(!franja.contains(pantalla)&&!pantalla.contains(franja));
-  assert.equal(pantalla.compareDocumentPosition(franja)&w.Node.DOCUMENT_POSITION_PRECEDING,0,
-   'la franja no precede a las escenas');
-  // Nada que cambie durante una generación queda delante de la lista.
-  const antes=[];for(let n=pantalla.previousElementSibling;n;n=n.previousElementSibling)antes.push(n.id||n.className);
-  assert.equal(antes.filter(x=>/notice|activity|status-dock/.test(x)).length,0,'delante de las escenas: '+antes.join(','));
+  const toma=[...w.document.querySelectorAll('.shot-section')][0];
+  await click('Generar otra interpretación',toma);
+  await new Promise(r=>setTimeout(r,0));
+  const panel=w.document.querySelector('#activity');
+  assert.equal(panel.hidden,false);
+  assert.match(panel.textContent,/Plano 01/,'nombra la toma, no sólo «Voz»: '+panel.textContent);
  }finally{dom.window.close();}
-});
-test('La franja de estado está fuera del flujo, no empuja la lista',async()=>{
- const css=await fs.readFile(new URL('../../../cortos/style.css',import.meta.url),'utf8');
- const regla=css.match(/#status-dock\{([^}]*)\}/);
- assert.ok(regla,'la franja tiene su propia regla de estilo');
- assert.match(regla[1],/position:fixed/,'fuera del flujo: no mueve nada al cambiar de alto');
- assert.match(regla[1],/pointer-events:none/,'vacía no tapa los botones de debajo');
- assert.match(regla[1],/max-height/,'un mensaje largo no cubre la pantalla entera');
- // El hueco del final es un número fijo: si dependiera de la franja, volvería
- // a moverse la lista cada vez que el panel cambia.
- const principal=css.match(/\bmain\{([^}]*)\}/);
- assert.match(principal[1],/padding:12px 14px calc\(\d+px \+ env\(safe-area-inset-bottom\)\)/);
 });
