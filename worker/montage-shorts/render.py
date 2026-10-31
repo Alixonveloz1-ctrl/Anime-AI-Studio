@@ -106,10 +106,22 @@ def visual_clip(s, files, target, w, h, offset, length):
             vf=[f"scale={w*2}:{h*2}:force_original_aspect_ratio=increase,crop={w*2}:{h*2}",f"zoompan=z='{z}':x='(iw-iw/zoom)*({x})':y='(ih-ih/zoom)*({y})':d=1:s={w}x{h}:fps=24"]
         else:vf=[f'scale={w}:{h}:force_original_aspect_ratio=decrease',f'pad={w}:{h}:(ow-iw)/2:(oh-ih)/2']
     else:
-        speed=s.get('speed',1); trim=s.get('trimSeconds',0)+offset/24*speed
-        require(float(probe(files[s['assetRevision']])['format']['duration'])+1/24>=trim+length/24*speed,'VIDEO_COVERAGE','El video no cubre la toma')
-        args=['-i',files[s['assetRevision']]]
-        vf=[f'trim=start={trim}:duration={length/24*speed}',f'setpts=(PTS-STARTPTS)/{speed}','fps=24',f'scale={w}:{h}:force_original_aspect_ratio=decrease',f'pad={w}:{h}:(ow-iw)/2:(oh-ih)/2']
+        # Regla del dueño: el video cubre su toma ENTERO, estirándose si la toma
+        # es más larga que el video o acelerándose si es más corta. Nunca se
+        # corta y el montaje nunca falla por esto: la velocidad se calcula aquí,
+        # con el archivo delante y su duración real medida, en vez de confiar en
+        # la que venga en el plan. Así la vista previa y la entrega final salen
+        # iguales aunque el plan traiga un número viejo o no traiga ninguno.
+        archivo=files[s['assetRevision']]
+        disponible=float(probe(archivo)['format']['duration'])
+        corte=s.get('trimSeconds',0)
+        util=disponible-corte
+        require(util>1/24,'VIDEO_VACIO','El video de la toma '+str(s.get('id',''))+' está vacío o no se pudo leer. Vuelve a generarlo.')
+        completo=max(1,s.get('frames',length))
+        speed=util/(completo/24)
+        inicio=corte+offset/24*speed
+        args=['-i',archivo]
+        vf=[f'trim=start={inicio}:duration={length/24*speed}',f'setpts=(PTS-STARTPTS)/{speed}','fps=24',f'scale={w}:{h}:force_original_aspect_ratio=decrease',f'pad={w}:{h}:(ow-iw)/2:(oh-ih)/2']
     if typ=='localized':
         layers=s.get('layers',[]); require(bool(layers),'LAYERS','Faltan variantes/capas aprobadas')
         graph=f'[0:v]{",".join(vf)}[base]';previous='base'

@@ -515,3 +515,37 @@ al director ya no tiene un tope propio para el video) y
 `tests/shorts/ui/studio.test.mjs` (un error del servicio que nombra una toma
 por su código se lee en pantalla como «Plano 02»). Las pruebas que fijaban el
 rechazo se reescriben a la regla del dueño, no al revés.
+
+## U035 — El montaje calcula la velocidad él mismo (2026-10-31)
+
+«Si una toma dura 3,6 segundos se genera un video de 4 y se hace más rápido
+para que quede exacto. Se generará el video con el tiempo más cercano y se
+ralentiza o se acelera para que cubra el tiempo exacto de la toma. Eso debe
+aplicar para todo, y no puede ser que vaya a fallar en el montaje, que es la
+entrega final. Y la vista previa debe verse como si estuviera montado.»
+
+Quitar los rechazos no bastaba. El montaje —el que arma la entrega final y la
+vista previa— no calculaba la velocidad: la recibía hecha en el plan y luego
+**exigía** que el video cubriera la toma, fallando con «El video no cubre la
+toma» si no cuadraba. Bastaba con que el plan trajera un número viejo, o con
+que no se conociera la duración del video cuando se armó, para que la entrega
+final se cayera por esto.
+
+Ahora la velocidad se calcula en el montaje, con el archivo delante y su
+duración real medida. No depende de nada que venga de antes: lo que dura el
+video es lo que manda, y el video siempre cubre su toma exacta. El único fallo
+que queda ahí es un archivo vacío o ilegible, que sí hay que volver a generar,
+y lo dice nombrando la toma.
+
+La vista previa y la entrega final usan el mismo montador y el mismo plan: sólo
+cambian de tamaño. Así que la vista previa se ve como el montaje, que es lo que
+se pidió.
+
+Comprobado con video de verdad, montando con ffmpeg: tomas de 2; 3,58; 3,6; 6;
+11 y 20 segundos, cada una con el video más cercano de 4, 6 u 8. Las seis salen
+cubriendo su toma al fotograma. Una velocidad vieja en el plan ya no la rompe.
+Y una vista previa de un trozo de toma sale a la misma velocidad que el montaje
+entero.
+
+Pruebas: `tests/shorts/test_media.py` (las tres anteriores, con ffmpeg real).
+Las tres fallan si el montaje vuelve a confiar en la velocidad del plan.

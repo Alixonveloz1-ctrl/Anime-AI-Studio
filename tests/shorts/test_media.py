@@ -125,3 +125,53 @@ class MediaTests(unittest.TestCase):
         self.assertLessEqual(abs(onset(p)-onset(f)),100)
         self.assertTrue((self.root/'subtitles.ass').exists())
 if __name__=='__main__':unittest.main()
+
+
+@unittest.skipUnless(shutil.which('ffmpeg'),'FFmpeg required')
+class VideoCoversItsShotTests(unittest.TestCase):
+    """«El video se ralentiza o se acelera para cubrir el tiempo exacto de la
+    toma. Y no puede fallar en el montaje, que es la entrega final.» (U035)"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.temp=tempfile.TemporaryDirectory(prefix='shorts-cover-');cls.root=Path(cls.temp.name)
+        cls.clips={}
+        for seconds in (4,6,8):
+            crudo=cls.root/f'crudo{seconds}.mp4'
+            ff(['-f','lavfi','-i',f'color=black:s=160x90:r=24:d={seconds}','-c:v','libx264','-pix_fmt','yuv420p','-threads','1',crudo])
+            mudo=cls.root/f'clip{seconds}.mp4';silent_video(crudo,mudo);cls.clips[seconds]=mudo
+
+    @classmethod
+    def tearDownClass(cls):cls.temp.cleanup()
+
+    def duracion(self,path):return float(probe(path)['format']['duration'])
+
+    def test_a_shot_of_any_length_is_covered_exactly_by_its_video(self):
+        # Once segundos con un video de ocho: se ralentiza. Tres segundos y
+        # medio con uno de cuatro: se acelera. Ninguno falla, ninguno se corta.
+        casos=[(11*24,8),(3*24+14,4),(6*24,6),(20*24,8),(2*24,4),(int(3.6*24),4)]
+        for frames,clip in casos:
+            with self.subTest(segundos=round(frames/24,2),clip=clip):
+                salida=self.root/f'salida{frames}.mp4'
+                shot={'id':'t','treatment':'veo','assetRevision':'v','frames':frames}
+                visual_clip(shot,{'v':self.clips[clip]},salida,160,90,0,frames)
+                self.assertAlmostEqual(self.duracion(salida),frames/24,delta=0.09,
+                                       msg='el video tiene que cubrir la toma exacta')
+
+    def test_the_montage_does_not_trust_a_stale_speed_in_the_plan(self):
+        # Antes el montaje confiaba en una velocidad que le llegaba hecha y, si
+        # no cuadraba, fallaba la entrega final. Ahora la mide él.
+        frames=11*24
+        salida=self.root/'sinvelocidad.mp4'
+        shot={'id':'t','treatment':'veo','assetRevision':'v','frames':frames,'speed':1}
+        visual_clip(shot,{'v':self.clips[8]},salida,160,90,0,frames)
+        self.assertAlmostEqual(self.duracion(salida),frames/24,delta=0.09)
+
+    def test_a_piece_of_a_shot_keeps_the_same_speed_as_the_whole(self):
+        # Una vista previa de un trozo tiene que verse igual que el montaje.
+        frames=11*24;trozo=48
+        entera=self.root/'entera.mp4';parte=self.root/'parte.mp4'
+        shot={'id':'t','treatment':'veo','assetRevision':'v','frames':frames}
+        visual_clip(shot,{'v':self.clips[8]},entera,160,90,0,frames)
+        visual_clip(shot,{'v':self.clips[8]},parte,160,90,96,trozo)
+        self.assertAlmostEqual(self.duracion(parte),trozo/24,delta=0.09)
