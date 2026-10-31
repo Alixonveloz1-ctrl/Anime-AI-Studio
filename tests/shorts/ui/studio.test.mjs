@@ -855,3 +855,41 @@ test('Una toma demasiado larga para Veo avisa antes de generar el video',async()
   assert.doesNotMatch(corta.textContent,/ralentizará|acelerará/,'una toma de seis segundos no avisa');
  }finally{dom.window.close();}
 });
+
+// «Cada vez que genero, toda la página se repinta.» (U033) Las tomas no se
+// repintaban: SALTABAN. El aviso y el panel de actividad iban por encima de
+// todas ellas y cambian de alto sin parar mientras se genera —el panel se
+// reconstruye cada tres segundos con otro texto y otros botones—, así que cada
+// cambio empujaba la lista entera. Tienen que estar fuera del flujo.
+test('Lo que cambia mientras generas no está por encima de las escenas',async()=>{
+ const {w,dom,click}=await setup();
+ try{
+  await click('Escenas');
+  const pantalla=w.document.querySelector('#screen');
+  const aviso=w.document.querySelector('#notice');
+  const actividad=w.document.querySelector('#activity');
+  const franja=w.document.querySelector('#status-dock');
+  assert.ok(franja,'existe la franja de estado');
+  assert.equal(aviso.parentElement,franja,'el aviso vive en la franja');
+  assert.equal(actividad.parentElement,franja,'el panel de actividad vive en la franja');
+  // Y la franja no puede estar antes de las escenas dentro del mismo flujo.
+  assert.ok(!franja.contains(pantalla)&&!pantalla.contains(franja));
+  assert.equal(pantalla.compareDocumentPosition(franja)&w.Node.DOCUMENT_POSITION_PRECEDING,0,
+   'la franja no precede a las escenas');
+  // Nada que cambie durante una generación queda delante de la lista.
+  const antes=[];for(let n=pantalla.previousElementSibling;n;n=n.previousElementSibling)antes.push(n.id||n.className);
+  assert.equal(antes.filter(x=>/notice|activity|status-dock/.test(x)).length,0,'delante de las escenas: '+antes.join(','));
+ }finally{dom.window.close();}
+});
+test('La franja de estado está fuera del flujo, no empuja la lista',async()=>{
+ const css=await fs.readFile(new URL('../../../cortos/style.css',import.meta.url),'utf8');
+ const regla=css.match(/#status-dock\{([^}]*)\}/);
+ assert.ok(regla,'la franja tiene su propia regla de estilo');
+ assert.match(regla[1],/position:fixed/,'fuera del flujo: no mueve nada al cambiar de alto');
+ assert.match(regla[1],/pointer-events:none/,'vacía no tapa los botones de debajo');
+ assert.match(regla[1],/max-height/,'un mensaje largo no cubre la pantalla entera');
+ // El hueco del final es un número fijo: si dependiera de la franja, volvería
+ // a moverse la lista cada vez que el panel cambia.
+ const principal=css.match(/\bmain\{([^}]*)\}/);
+ assert.match(principal[1],/padding:12px 14px calc\(\d+px \+ env\(safe-area-inset-bottom\)\)/);
+});

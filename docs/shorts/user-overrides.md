@@ -431,3 +431,36 @@ Pruebas: `tests/shorts/test_veo_planning.py` (una toma de imagen larga o corta
 se puede pedir en video y recibe el clip que le toca; el guion sigue sin poder
 planear una toma de video más larga que un clip; una imagen sin aprobar sigue
 parando la generación). Las tres primeras fallan si vuelve el guardia.
+
+## U033 — Las tomas no se repintaban: saltaban (2026-10-31)
+
+«Se repinta todas las escenas, todas las imágenes, todos los videos. Cada vez
+que genero una imagen, un video, un audio, toda la página se repinta.»
+
+Dos revisiones midieron el repintado y las dos dijeron que no pasaba: pulsando
+cada botón de generar sobre el código real, la pantalla no se vaciaba ni una
+vez y las tarjetas vecinas sobrevivían intactas. Las medidas eran correctas y
+la queja también: **las tomas no se repintaban, se movían**.
+
+El aviso y el panel de actividad estaban los dos por encima de la lista de
+tomas, dentro del mismo flujo. Y los dos cambian de alto sin parar mientras se
+genera: el panel se reconstruye **cada tres segundos** con otro texto, otro
+progreso y otros botones, que además se reparten en una o dos filas según
+quepan; el aviso aparece, crece, se encoge y se pone con borde y relleno
+cuando es un error. Cada uno de esos cambios empujaba la lista entera hacia
+abajo o hacia arriba. Con cuarenta tomas y sus imágenes cargando, eso se ve
+exactamente como si la página se repintara sola, una y otra vez, durante todo
+el rato que dura una generación.
+
+Los dos pasan a vivir fuera del flujo, en una franja fija sobre la barra de
+secciones: pueden cambiar cuanto quieran sin mover una sola toma. La franja se
+desvanece cuando no hay nada que decir, no tapa los botones de debajo cuando
+está vacía, y un mensaje largo no cubre la pantalla porque tiene tope de alto
+con desplazamiento propio. El hueco del final de la lista es un número fijo, no
+depende de la franja: si dependiera, volvería a moverse todo cada vez que el
+panel cambia.
+
+Pruebas (`tests/shorts/ui/studio.test.mjs`): nada que cambie durante una
+generación queda delante de la lista de tomas, y la franja está declarada fuera
+del flujo, sin tapar lo de debajo y con tope de alto. La primera falla si se
+devuelven el aviso y el panel a donde estaban.
