@@ -470,32 +470,48 @@ la pantalla, no vuelve a pedir ni una imagen ni un video, lleva a la toma de lo
 generado y hace desaparecer el cuadro; y el cuadro nombra la toma. Las dos
 fallan con el botón de antes.
 
-## U034 — Un aviso que bloquea y no se entiende (2026-10-31)
+## U034 — Ningún rechazo por durar más de ocho segundos (2026-10-31)
 
-«Divide o cambia el tratamiento de la toma Veo t4_shot_04: máximo 8 segundos,
-sin repetir clips.» — «No entiendo.»
+«Yo había sido muy claro: si la toma dura 11 segundos, ya sabemos que sólo se
+puede crear un video de 8 segundos, pues ese video tiene que ralentizarse para
+cubrir los 11 y punto. No rechazarse.»
 
-Con razón. Ese aviso dejaba el corto entero sin vista previa y sin exportación,
-y hacía tres cosas mal: hablaba de «tratamiento», que es vocabulario de dentro;
-nombraba la toma por su identificador interno, que no aparece en ninguna
-pantalla; y mandaba arreglar algo sin decir cómo.
+Primero se quitó el rechazo sólo al armar la vista previa, y se dejó puesto al
+guardar un guion nuevo, con el argumento de que eso es un error de
+planificación. No lo es: es la misma situación, y el dueño ya había dicho qué
+hacer con ella. Dejarlo puesto significaba que el director podía escribir una
+toma de video de 11 segundos y el programa tiraba el guion entero.
 
-**Deja de bloquear.** Un guion NUEVO sigue sin poder planear una toma de video
-más larga que un clip: eso es un error de planificación y se rechaza al
-validarlo. Pero un guion ya guardado no puede dejar al dueño sin vista previa
-por lo mismo. Al montar, el máximo de esa toma se acota a los ocho segundos del
-clip y se sigue, que es exactamente su regla: el clip cubre la toma
-ralentizándose, sin cortarse. Comprobado con su toma: al montar devuelve el
-intervalo acotado; al validar un guion nuevo sigue rechazándola.
+**Ya no queda ni un sitio que rechace por duración.** Eran cinco:
 
-**Y se entiende.** El texto pasa a decir qué pasa y qué hacer: «está marcada
-como video y dura más de 8 segundos, que es lo máximo que entrega un clip.
-Divídela en varias tomas, acórtala, o cámbiala a imagen.» Además, todo lo que
-se escribe en pantalla —avisos propios y errores del servicio por igual— cambia
-ahora los identificadores internos por el nombre que lleva la tarjeta: donde
-decía `t4_shot_04` dice «Plano 04».
+- al armar la vista previa y la exportación,
+- al guardar o aprobar un guion,
+- al repartir el trabajo cuando se pulsa generar video,
+- en la edición visual de una toma,
+- y en el formato que se le exige al director, que tiraba el guion entero si
+  devolvía una toma de video más larga de ocho segundos.
 
-Pruebas: `tests/shorts/test_workflow.py` (al montar se acota, al validar se
-rechaza, y el mensaje dice qué hacer sin hablar de tratamientos) y
+Se quita además un recorte silencioso: una toma de video de diez segundos
+guardaba ocho sin avisar. Ahora la toma dura lo que dice el guion.
+
+Al director se le sigue pidiendo tomas de video cortas, porque un video de
+verdad se ve mejor que uno ralentizado; pero eso es una preferencia escrita en
+su encargo, no un rechazo.
+
+Comprobado con una toma de 11 segundos marcada como video: guardar el guion,
+armar la vista previa, la edición visual y pedir el video pasan las cuatro, y
+se genera un video de 8 segundos que se ralentiza 1,38 veces para cubrirla.
+
+**Y ningún mensaje vuelve a enseñar un código interno.** Un aviso decía
+`t4_shot_04`, que no aparece en ninguna pantalla. Todo lo que se escribe
+—avisos propios y errores del servicio por igual— pasa ahora por un traductor
+que lo cambia por el nombre de la tarjeta: «Plano 04». El traductor no puede
+romper un mensaje si todavía no hay proyecto abierto.
+
+Pruebas: `tests/shorts/test_veo_planning.py` y `tests/shorts/test_workflow.py`
+(una toma de video de cualquier duración se planea, se guarda y se monta; no se
+recorta en silencio ni se cambia a imagen por detrás; el formato que se le pide
+al director ya no tiene un tope propio para el video) y
 `tests/shorts/ui/studio.test.mjs` (un error del servicio que nombra una toma
-por su identificador se lee en pantalla como «Plano 02»).
+por su código se lee en pantalla como «Plano 02»). Las pruebas que fijaban el
+rechazo se reescriben a la regla del dueño, no al revés.

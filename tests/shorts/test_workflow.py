@@ -36,21 +36,20 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(shot_bounds(s,7201,draft=True),(7201,7201))
         with self.assertRaises(ContractError) as error:shot_bounds(s,7201)
         self.assertEqual(error.exception.code,'SCRIPT_REVIEW')
-        # El tope de Veo, en cambio, no deja al dueño sin vista previa. Un guion
-        # NUEVO no puede planear una toma de video más larga que un clip, y se
-        # rechaza al validarlo; pero uno ya guardado se monta igual, acotado a
-        # los ocho segundos del clip, porque la regla del dueño es que el clip
-        # cubra la toma ralentizándose en vez de bloquear el corto entero.
+        # Una toma de video larga NO se rechaza y NO se recorta, ni al guardar
+        # el guion ni al montar: dura lo que dice el guion y el video se
+        # ralentiza para cubrirla. Regla del dueño, dicha varias veces.
         largo={**s,'treatment':'veo','minFrames':96,'maxFrames':240,'frames':168}
-        self.assertEqual(shot_bounds(largo,144,draft=True),(144,192))
-        with self.assertRaises(ContractError) as error:shot_bounds(largo,144)
-        self.assertEqual(error.exception.code,'VEO_COVERAGE')
-        self.assertIn('Divídela',str(error.exception),'el mensaje dice qué hacer, sin jerga')
-        self.assertNotIn('tratamiento',str(error.exception))
-    def test_A020_validate_plan_no_unrenderable_veo(self):
+        self.assertEqual(shot_bounds(largo,144),(144,240))
+        self.assertEqual(shot_bounds(largo,144,draft=True),(144,240))
+    def test_A020_a_long_video_shot_is_accepted_and_slowed_down_instead_of_refused(self):
+        # A020 nació cuando un video más largo que un clip no se podía montar.
+        # Ya sí: el clip cubre la toma ralentizándose, así que rechazar el guion
+        # entero por esto era dejar al dueño sin corto por una regla interna.
         d=development();validate_development(d)
         d['shots'][0]['treatment']='veo'
-        with self.assertRaisesRegex(ContractError,'ocho|8 segundos'):validate_development(d)
+        validate_development(d)
+        self.assertEqual(d['shots'][0]['treatment'],'veo','no se cambia por detrás')
     def test_A024_missing_cast_reference_rejected(self):
         d=development();d['shots'][0]['referenceEntityIds']=['room']
         with self.assertRaises(ContractError):validate_development(d)

@@ -9,7 +9,10 @@ EDGE=1e-9
 
 def validate_visual(shot, assets):
     require(shot['treatment'] in ('hold','camera2d','localized','veo'),'TREATMENT','Tratamiento no válido')
-    require(shot['treatment']!='veo' or shot.get('maxFrames',shot['frames'])<=192,'VEO_COVERAGE','Divide la toma o elige otro tratamiento: Veo cubre como máximo ocho segundos')
+    # Regla del dueño, dicha varias veces: si la toma dura 11 segundos y un
+    # video sólo puede durar 8, ese video se ralentiza hasta cubrir los 11.
+    # Punto. No se rechaza, no se divide, no se acorta. Aquí había un tope
+    # que lo rechazaba y dejaba el corto sin vista previa ni exportación.
     if shot['treatment']=='camera2d':
         for end in ('start','end'):
             values=shot.get('camera',{}).get(end)

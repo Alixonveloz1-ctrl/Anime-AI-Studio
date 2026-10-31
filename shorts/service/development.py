@@ -31,8 +31,10 @@ def stage_schema(stage):
         image=copy.deepcopy(properties['shots']['items']);video=copy.deepcopy(image)
         image['properties']['treatment']['enum']=['hold','camera2d']
         video['properties']['treatment']['enum']=['veo']
-        for key in ('frames','minFrames','maxFrames','leadFrames','tailFrames'):
-            video['properties'][key]['maximum']=192
+        # Sin tope de duración tampoco aquí. Al director se le sigue pidiendo
+        # que las tomas de video sean cortas, porque un video de verdad se ve
+        # mejor que uno ralentizado; pero si devuelve una más larga, el guion
+        # entero ya no se tira a la basura: el video se ralentiza para cubrirla.
         for variant in (image,video):
             order=variant['propertyOrdering'];order.remove('treatment');order.insert(0,'treatment')
         properties['shots']['items']={'anyOf':[image,video]}
@@ -105,9 +107,10 @@ def plan_shots(data, duration_bounds=None):
                 for k in ('pauseBeforeFrames','pauseAfterFrames'):pauses+=integer(voice.get(k),k,0,7560)
         minimum=max(shot['minFrames'],pauses);maximum=shot['maxFrames']
         require(minimum<=maximum,'PAUSE_BOUNDS','Las pausas exceden el intervalo de la toma '+shot['id']+'. Corrige solo este paso.')
-        if shot.get('treatment')=='veo':
-            require(max(minimum,shot['frames'])<=192,'VEO_COVERAGE',f"La toma {shot['id']} está prevista para {shot['frames']/24:.1f} segundos, con un mínimo de {minimum/24:.1f}; necesita una corrección de planificación para Veo. El guion se conserva.")
-            maximum=min(maximum,192);shot['maxFrames']=maximum
+        # Una toma de video dura lo que dice el guion. Aquí se rechazaba si
+        # pasaba de ocho segundos y, si no, se le recortaba el máximo en
+        # silencio. Ninguna de las dos: el video se ralentiza para cubrir la
+        # toma, que es la regla del dueño, y la toma conserva su duración.
         lo.append(minimum);hi.append(maximum);sizes.append(max(minimum,min(maximum,shot['frames'])))
     if duration_bounds is None:
         target=duration_target(sum(lo),sum(sizes),sum(hi))
