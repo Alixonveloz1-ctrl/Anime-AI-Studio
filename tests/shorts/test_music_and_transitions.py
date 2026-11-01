@@ -17,7 +17,7 @@ from test_manual_development import complete
 TOTAL = 6840
 
 
-def plan(musica, aprobadas, tomas=(('t1', 1000), ('t2', 2000), ('t3', 500), ('t4', TOTAL-3500))):
+def plan(musica, aprobadas, tomas=(('t1', 1000), ('t2', 2000), ('t3', 500), ('t4', TOTAL-3500)), sin_aprobar=(), segundos=30, extra=()):
     d = complete();d['utterances'] = [];d['subtitles'] = [];d['soundRequests'] = []
     beat = d['beats'][0]['id']
     d['shots'] = [dict(d['shots'][0], id=i, beatId=beat, frames=f, minFrames=f, maxFrames=f, treatment='hold') for i, f in tomas]
@@ -26,7 +26,9 @@ def plan(musica, aprobadas, tomas=(('t1', 1000), ('t2', 2000), ('t3', 500), ('t4
                            'fadeInSamples': 0, 'fadeOutSamples': 0} for m, a, b in musica]
     comun = {'projectId': 'p', 'approvalState': 'approved', 'developmentId': 'dev', 'created': 1, 'sha256': '0'*64}
     filas = [{**comun, 'id': 'i'+t, 'entityId': t, 'kind': 'image'} for t, _ in tomas]
-    filas += [{**comun, 'id': 'a'+m, 'entityId': m, 'kind': 'pcm', 'samples': 30*48000, 'sampleRate': 48000} for m in aprobadas]
+    filas += [{**comun, 'id': 'a'+m, 'entityId': m, 'kind': 'pcm', 'samples': segundos*48000, 'sampleRate': 48000} for m in aprobadas]
+    filas += [{**comun, 'approvalState': 'candidate', 'id': 'c'+m, 'entityId': m, 'kind': 'pcm', 'samples': segundos*48000, 'sampleRate': 48000} for m in sin_aprobar]
+    filas += list(extra)
     cloud = Mock()
     cloud.entity.return_value = {'id': 'dev', 'approvalState': 'approved', 'data': d}
     cloud.project_ref.return_value.collection.return_value.stream.return_value = [Mock(to_dict=lambda fila=fila: fila) for fila in filas]
@@ -43,6 +45,17 @@ def huecos(cues, desde, hasta):
     return vacios
 
 
+def tramos_musicales(cues):
+    out = {}
+    for c in cues:
+        if c['track'] != 'music':continue
+        pieza = c['id'].removeprefix('music_').split('_bucle')[0]
+        a, b = c['anchorSample'], c['anchorSample']+c['trimOutSample']-c['trimInSample']
+        inicio, fin = out.get(pieza, (a, b))
+        out[pieza] = (min(inicio, a), max(fin, b))
+    return {k: (a, b) for k, (a, b) in out.items()}
+
+
 class MusicaSinHuecosTests(unittest.TestCase):
     def test_a_missing_piece_is_covered_by_the_previous_one_and_the_last_reaches_the_end(self):
         # El caso del dueño: cuatro piezas, la 2 y la 4 sin generar.
@@ -52,9 +65,40 @@ class MusicaSinHuecosTests(unittest.TestCase):
         self.assertFalse(any('música' in i for i in m['draftIssues']), 'la música que falta no frena la exportación')
         compile_timeline(m, False)
 
-    def test_a_gap_left_by_the_script_is_filled(self):
+    def test_each_piece_plays_exactly_its_span_from_the_director(self):
+        # «El tiempo de cada pista debe durar lo que diga el director.» Un
+        # hueco que dejó el director se respeta: la pieza no se alarga.
+        # Lo único que pasa de su tramo son los 2 s en que se apaga mientras
+        # entra la siguiente (el fundido cruzado entre piezas).
         m = plan([('m1', 0, 1000), ('m3', 3000, 3500)], ['m1', 'm3'])
-        self.assertEqual(huecos(m['cues'], 0, TOTAL*2000), [])
+        self.assertEqual(tramos_musicales(m['cues']), {'m1': (0, 1000*2000+96000), 'm3': (3000*2000, 3500*2000)})
+
+    def test_a_longer_file_is_cut_and_a_shorter_one_repeats_only_what_is_missing(self):
+        # Tramo de 30 s con un archivo de 50 s: suenan 30 s. Tramo de 30 s con
+        # un archivo de 25 s: suenan los 25 s y luego sólo 5 s más del principio.
+        largo = plan([('m1', 0, 720), ('m2', 720, TOTAL)], ['m1', 'm2'], segundos=50)
+        piezas = [c for c in largo['cues'] if c['id'].startswith('music_m1')]
+        self.assertEqual(len(piezas), 1)
+        self.assertEqual(piezas[0]['trimOutSample']-piezas[0]['trimInSample'], 720*2000+96000, 'sus 30 s y los 2 s del fundido con la siguiente')
+        corto = plan([('m1', 0, 720)], ['m1'], segundos=25)
+        piezas = sorted((c for c in corto['cues'] if c['id'].startswith('music_m1')), key=lambda c: c['anchorSample'])
+        self.assertEqual([c['trimOutSample']-c['trimInSample'] for c in piezas], [25*48000, 5*48000])
+        self.assertEqual(piezas[1]['trimInSample'], 0, 'la repetición empieza por el principio de la pista')
+
+    def test_every_generated_track_plays_even_if_it_was_never_approved(self):
+        # «Generé 5 pistas y sólo suenan 2.» Las que no se aprobaron aparte se
+        # trataban como si no existieran y la anterior se repetía.
+        cinco = [('m1', 0, 1000), ('m2', 1000, 3000), ('m3', 3000, 3500), ('m4', 3500, 5000), ('m5', 5000, TOTAL)]
+        m = plan(cinco, ['m1', 'm2'], sin_aprobar=['m3', 'm4', 'm5'])
+        self.assertEqual(set(tramos_musicales(m['cues'])), {'m1', 'm2', 'm3', 'm4', 'm5'})
+        self.assertEqual(tramos_musicales(m['cues'])['m4'], (3500*2000, 5000*2000+96000))
+        compile_timeline({**m, 'assets': {k: dict(a, sha256='%064x' % n) for n, (k, a) in enumerate(m['assets'].items(), 1)}}, True)
+
+    def test_the_newest_track_of_a_piece_is_the_one_that_plays(self):
+        comun = {'projectId': 'p', 'developmentId': 'dev', 'sha256': '0'*64, 'entityId': 'm1', 'kind': 'pcm', 'samples': 30*48000, 'sampleRate': 48000}
+        nueva = {**comun, 'id': 'nueva', 'approvalState': 'candidate', 'created': 50}
+        m = plan([('m1', 0, TOTAL)], ['m1'], extra=[nueva])
+        self.assertTrue(all(c['audioRevision'] == 'nueva' for c in m['cues'] if c['track'] == 'music'))
 
     def test_music_ends_softly_at_the_end_of_the_short(self):
         m = plan([('m1', 0, TOTAL)], ['m1'])

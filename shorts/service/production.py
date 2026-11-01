@@ -234,6 +234,10 @@ def run_job(cloud,j,p):
                 r=next(r for r in d['musicRequests'] if r['id']==eid);raw=provider.music(r['prompt'],r['seconds']);source=root/'original.mp3'
             source.write_bytes(raw);target=root/'audio.wav';meta=pcm(source,target);meta['waveform']=waveform(target)
             meta['model']=provider_config['models'][op];meta['contentReview']='needs_review';meta['originalObject']=cloud.upload_file(pid,ident_new(),source,source.name,media_type(source))
+            # La música generada se usa sin una aprobación aparte: el dueño la
+            # pidió para esa pieza, y una pista sin aprobar se quedaba fuera del
+            # montaje sin que nada lo dijera.
+            if op=='music':meta.update(approvalState='approved',approvedAt=time.time(),approvedBy='al generarla')
             return {'assetId':asset(target,'pcm',eid,meta)['id']}
         if op=='media':
             u=cloud.entity(pid,'uploads',data['uploadId']);source=root/'upload';cloud.download(pid,u['object'],source)

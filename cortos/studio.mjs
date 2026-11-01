@@ -156,7 +156,7 @@ function avisoDeVelocidad(frames){
 // alargó para que quepa la voz, un video ralentizado, una música que cubre a
 // la que falta. Eso ya está resuelto y no se muestra. Sólo queda una línea con
 // lo que de verdad falta para exportar, contado, no enumerado.
-const SOLO_INFORMA=['La voz medida no cabe','Video ralentizado','Video acelerado','Legibilidad de subtítulos','Revisar subtítulos tras cambiar audio','Falta música aprobada'];
+const SOLO_INFORMA=['La voz medida no cabe','Video ralentizado','Video acelerado','Legibilidad de subtítulos','Revisar subtítulos tras cambiar audio','Falta música'];
 function faltaParaExportar(issues){
  const cuenta=new Map();
  for(const issue of issues||[]){
@@ -948,7 +948,10 @@ async function assetCard(parent,a){
  // mantiene la regla de no aprobar lo que no cargó, porque ahí hay que
  // verlo primero; el audio lo subió el usuario y lo puede escuchar en
  // su reproductor, así que aprobar no depende de que se reproduzca.
- if(a.approvalState==='candidate')buttons(c,[['Aprobar versión',async()=>{if(a.kind!=='pcm'&&!opened){await open();say('Revisa el recurso cargado y pulsa Aprobar versión cuando esté listo.');return;}await approve('assets',a.id,true);},true]]);
+ // La música generada suena sin aprobarla aparte (la más nueva de cada pieza):
+ // ofrecer «Aprobar versión» hacía creer que sin ese paso no sonaba.
+ const esMusica=!!development()?.musicRequests?.some(m=>m.id===a.entityId);
+ if(a.approvalState==='candidate'&&!esMusica)buttons(c,[['Aprobar versión',async()=>{if(a.kind!=='pcm'&&!opened){await open();say('Revisa el recurso cargado y pulsa Aprobar versión cuando esté listo.');return;}await approve('assets',a.id,true);},true]]);
  else if(a.approvalState==='approved'&&a.variantOf&&!inUse)buttons(c,[['Usar como imagen de esta toma',()=>useVariantAsShotImage(a),true]]);
  else if(a.approvalState==='approved'&&!a.variantOf&&selectedAsset(a.entityId,a.kind)?.id!==a.id)buttons(c,[['Usar esta versión',()=>approve('assets',a.id),true]]);
 }

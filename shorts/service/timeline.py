@@ -92,22 +92,42 @@ def reloj_del_guion(shots,planned):
         return total
     return mapear
 
-def tramos_de_musica(requests,mapear,total,aprobada):
-    """Dónde suena cada pieza, sin huecos de silencio en el fondo.
+def tramos_de_musica(requests,mapear,total,audio):
+    """Dónde suena cada pieza: exactamente en el tramo que le dio el director.
 
-    Regla del dueño: la música de fondo no se corta. Cada pieza aprobada suena
-    hasta que entra la siguiente, y la última hasta el final del corto. Una
-    pieza que todavía no existe la cubre la anterior, en bucle, en vez de dejar
-    un silencio."""
-    filas=sorted(((mapear(r['startFrame']),mapear(r['endFrame']),r) for r in requests),key=lambda x:x[0])
-    sonando=[(inicio,fin,r,aprobada(r)) for inicio,fin,r in filas if aprobada(r) and inicio<total]
-    out=[]
-    for i,(inicio,fin,r,a) in enumerate(sonando):
-        if i==0 and filas:inicio=min(inicio,filas[0][0])
-        siguiente=sonando[i+1][0] if i+1<len(sonando) else total
-        fin=max(fin,siguiente) if i+1<len(sonando) else total
-        if fin>inicio:out.append((inicio,fin,r,a))
-    return out
+    Regla del dueño: cada pista dura lo que dice el director. Si el archivo es
+    más largo, se corta lo que sobra; si es más corto, se repite sólo lo que
+    falta para completar su tramo. El tramo se mide en el reloj del corto
+    montado, así que si una toma se alargó por la voz, su música se alarga con
+    ella. Sólo una pieza que todavía no tiene ningún archivo la cubre la pieza
+    anterior, para que el fondo no se quede en silencio."""
+    filas=sorted(((mapear(r['startFrame']),min(mapear(r['endFrame']),total),r,audio(r)) for r in requests),key=lambda x:(x[0],x[1]))
+    out=[];pendiente=None
+    for inicio,fin,r,a in filas:
+        if inicio>=total or fin<=inicio:continue
+        if a:
+            if pendiente is not None:inicio=min(inicio,pendiente);pendiente=None
+            out.append([inicio,fin,r,a])
+        elif out:out[-1][1]=max(out[-1][1],fin)
+        elif pendiente is None:pendiente=inicio
+    return [tuple(x) for x in out]
+
+def musica_en_uso(assets,development,development_id,request_id):
+    """La pista más nueva generada para esa pieza, aprobada o no.
+
+    Sólo sonaban dos de cinco pistas: las que se generaron y no se aprobaron
+    aparte se trataban como si no existieran, y la anterior se repetía en su
+    lugar. En pantalla sólo se ofrece la versión más nueva de cada pieza; esa
+    es la que suena. Se prefiere la que corresponde a la petición actual del
+    director; si la petición cambió después, se usa igualmente la última."""
+    from shorts.core.dependencies import fingerprint
+    filas=[a for a in assets if a.get('entityId')==request_id and a.get('kind')=='pcm' and a.get('approvalState') in ('approved','candidate') and not a.get('requestId')]
+    if not filas:return None
+    esperada=fingerprint(development,request_id,'pcm')
+    vigentes=[a for a in filas if a.get('inputFingerprint')==esperada] or [a for a in filas if a.get('developmentId')==development_id] or filas
+    a=max(vigentes,key=lambda a:(a.get('created',0),a['id']))
+    # Generarla es elegirla: va al montaje final sin una aprobación aparte.
+    return {**a,'approvalState':'approved'}
 
 def assemble_plan(cloud,p,cue_overrides=None):
     pid=p['id'];dev=cloud.entity(pid,'developments',p['activeDevelopment'])
@@ -298,10 +318,12 @@ def assemble_plan(cloud,p,cue_overrides=None):
             cues.append(rendered)
     for req in d['soundRequests']:
         if not any(c.get('requestId')==req['id'] for c in stored) and req.get('required',True) and req['id'] not in omitted:issues.append('Falta efecto obligatorio: '+req['name'])
+    todos=[x.to_dict() for x in cloud.project_ref(pid).collection('assets').stream()]
+    musica={r['id']:musica_en_uso(todos,d,dev['id'],r['id']) for r in d['musicRequests']}
     for r in d['musicRequests']:
-        if not by.get((r['id'],'pcm')):notes.append('Falta música aprobada: '+r['id'])
+        if not musica[r['id']]:notes.append('Falta música: '+r['id'])
     mapear=reloj_del_guion(d['shots'],planned)
-    tramos=tramos_de_musica(d['musicRequests'],mapear,target,lambda r:by.get((r['id'],'pcm')))
+    tramos=tramos_de_musica(d['musicRequests'],mapear,target,lambda r:musica[r['id']])
     for idx,(inicio,fin,r,a) in enumerate(tramos):
         assets[a['id']]=a
         duration=(fin-inicio)*2000

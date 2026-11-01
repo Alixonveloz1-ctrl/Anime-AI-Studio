@@ -681,3 +681,28 @@ palabras en vez de girar sin fin.
 Pruebas: `tests/shorts/test_preview_failures.py` (el enlace dura horas) y
 `tests/shorts/ui/studio.test.mjs` (un fallo del video pide un enlace nuevo una
 sola vez y, si vuelve a fallar, avisa).
+
+## U040 — Cada pista de música dura lo que dice el director, y suenan todas (2026-11-01)
+
+«Generé 5 pistas, lo que pidió el director, y solamente suenan 2. Una suena al
+principio, y los otros 4 minutos se repite la segunda.» Dos causas:
+
+1. El montaje sólo usaba la música aprobada aparte. Una pista generada sin pulsar
+   «Aprobar versión» se trataba como si no existiera, y la anterior se repetía en
+   su lugar (U038 ocultó además el aviso). Ahora suena la pista más nueva de cada
+   pieza, aprobada o no; la música se aprueba sola al generarla, la tarjeta ya no
+   ofrece «Aprobar versión» para la música y marca «en uso» la que suena.
+2. Desde U038 cada pieza sonaba hasta que entraba la siguiente. Regla del dueño:
+   «el tiempo de cada pista debe durar lo que diga el director. Si no alcanza, se
+   repite esa pista para completar el tiempo de esa pista. Y si sobra, se corta
+   lo sobrante». Ahora cada pieza suena exactamente en su tramo (medido en el
+   reloj del corto montado, así que se alarga con las tomas que alargó la voz):
+   si el archivo es más largo se corta, si es más corto se repite sólo lo que
+   falta, empezando por el principio de la pista. Sólo pasa de su tramo en los
+   2 segundos en que se apaga mientras entra la siguiente. Una pieza que todavía
+   no tiene ningún archivo la sigue cubriendo la anterior.
+
+Pruebas: `tests/shorts/test_music_and_transitions.py` (cinco pistas con tres sin
+aprobar suenan las cinco, cada una en su tramo; un archivo de 50 s en un tramo de
+30 s suena 30 s; uno de 25 s suena 25 s más 5 s del principio; la versión más
+nueva es la que suena).

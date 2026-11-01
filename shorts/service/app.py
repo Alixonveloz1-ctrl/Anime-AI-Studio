@@ -85,6 +85,12 @@ def project_route(pid):
             dev=cloud().entity(pid,'developments',p['activeDevelopment'])
             assets=result['assets'] if 'assets' not in result['entityCursors'] else [x.to_dict() for x in cloud().project_ref(pid).collection('assets').stream()]
             result['usableAssetSelections']={eid+'|'+kind:a['id'] for (eid,kind),a in select_assets(assets,dev['data'],dev['id'],p.get('assetSelections')).items()}
+            # La música que suena es la pista más nueva de cada pieza (la misma
+            # regla que el montaje): la tarjeta dice «en uso» en esa.
+            from shorts.service.timeline import musica_en_uso
+            for r in dev['data'].get('musicRequests',[]):
+                a=musica_en_uso(assets,dev['data'],dev['id'],r['id'])
+                if a:result['usableAssetSelections'][r['id']+'|pcm']=a['id']
         return jsonify(result)
     d=body();require(set(d)<={'title'},'FIELDS','Edita el contenido como una nueva revisión')
     def patch(tx,current):current.update(d)
