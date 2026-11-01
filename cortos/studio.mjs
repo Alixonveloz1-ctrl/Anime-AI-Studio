@@ -795,18 +795,24 @@ async function script(parent=screen){
   }catch(error){say(error.message,true);}
  }
  const nextControls=document.createElement('section');nextControls.className='next-step';intro.append(nextControls);
- const note=document.createElement('p');note.textContent=p.activeDevelopment?'Tu guion está aprobado. Ya puedes producir las tomas.':'Una pulsación escribe todo el texto —historia, guion y biblias, plan de sonido y revisión— y deja las tomas listas. Imagen, video y voz los pides tú, una a una, en Escenas.';nextControls.append(note);
+ const note=document.createElement('p');note.textContent=p.activeDevelopment?'Tu guion está listo. Ya puedes producir las tomas.':'Una pulsación escribe todo el texto —historia, guion y biblias, plan de sonido y revisión— y deja las tomas listas. Imagen, video y voz los pides tú, una a una, en Escenas.';nextControls.append(note);
  const inUse=p.developments.find(d=>d.id===p.activeDevelopment);
- if(approved&&[2,3].includes(approved.stage)&&inUse?.sourceDraftId!==approved.id){
+ // Con el guion ya en producción, el texto está terminado. La entrega del
+ // último paso se queda guardada como «lista» y esta pantalla seguía
+ // ofreciendo «Aprobar el guion y abrir producción» al lado de «Continuar a
+ // producción»: los dos hacían lo mismo (ir a Escenas) y parecía que uno
+ // cambiaba el guion. Ahora sólo queda uno.
+ const textoTerminado=!!p.activeDevelopment&&next===4&&latest?.status==='ready';
+ if(approved&&[2,3].includes(approved.stage)&&inUse?.sourceDraftId!==approved.id&&!textoTerminado){
   buttons(nextControls,[[inUse?'Usar este guion en producción':'Abrir producción con este guion',async()=>{await mutate(route('/drafts/'+approved.id+':produce'),{});await go('Escenas');say('Guion abierto. Genera y revisa cada imagen, video y voz desde su toma.');}]]);
  }
  if(approved){
   const history=[],seen=new Set();let current=approved;
   while(current&&!seen.has(current.id)){seen.add(current.id);history.unshift(current);current=drafts.find(d=>d.id===current.sourceDraftId&&d.approvalState==='approved');}
-  for(const previous of history){const details=fold(intro,'Paso '+previous.stage+' aprobado · '+stages[previous.stage-1]);try{const saved=await api(route('/drafts/'+previous.id));if(previous.stage===2){scriptBreakdown(details,saved.data);const bible=fold(details,'Personajes, lugares y objetos');readable(bible,{bible:saved.data.bible});}else if(previous.stage===3)audioPlan(details,saved.data);else readable(details,saved.data);}catch(e){details.append(document.createTextNode(e.message));}}
+  for(const previous of history){const details=fold(intro,'Paso '+previous.stage+' · '+stages[previous.stage-1]);try{const saved=await api(route('/drafts/'+previous.id));if(previous.stage===2){scriptBreakdown(details,saved.data);const bible=fold(details,'Personajes, lugares y objetos');readable(bible,{bible:saved.data.bible});}else if(previous.stage===3)audioPlan(details,saved.data);else readable(details,saved.data);}catch(e){details.append(document.createTextNode(e.message));}}
  }
  if(working){const note=document.createElement('p');note.textContent='El paso solicitado está pendiente. Su estado aparece arriba.';intro.append(note);if(next===2&&checkpoint){try{const saved=await api(route('/drafts/'+checkpoint.id));scriptBreakdown(intro,saved.data);}catch(e){const error=document.createElement('p');error.textContent=e.message;intro.append(error);}}}
- else if(next<=4){
+ else if(next<=4&&!textoTerminado){
   const heading=document.createElement('h4');heading.textContent='Paso '+next+' de 4 · '+stages[next-1];nextControls.append(heading);
   if(next===2){
    const progress=checkpoint?.scriptProgress||latest?.scriptProgress;
@@ -825,7 +831,7 @@ async function script(parent=screen){
     if(saved.review){const review=fold(intro,'Revisión de continuidad');readable(review,saved.review);}
     if(saved.error){const error=document.createElement('p');error.textContent=saved.error.message+' Los pasos aprobados siguen guardados.';intro.append(error);}
     // Aprobar y PARAR aquí, para ir a trabajar las tomas sin escribir más.
-    if(saved.status==='ready'&&next<4)sueltas.push(['Aprobar este paso y parar aquí',async()=>{await mutate(route('/drafts/'+saved.id+':approve'),{});await draw();say('Paso aprobado. Lo que falte del texto se escribe cuando lo pidas.');},true]);
+    if(saved.status==='ready'&&next<4)sueltas.push(['Quedarme con este paso y parar aquí',async()=>{await mutate(route('/drafts/'+saved.id+':approve'),{});await draw();say('Paso guardado. Lo que falte del texto se escribe cuando lo pidas.');},true]);
    }catch(e){const error=document.createElement('p');error.textContent=e.message;intro.append(error);}
   }
   if(next===3){const note=document.createElement('p');note.textContent='Ya puedes abrir producción y trabajar las imágenes y voces. Este paso prepara el plan de música y efectos; no genera archivos de audio. Completa el plan y la revisión antes de exportar.';intro.append(note);}
@@ -835,7 +841,7 @@ async function script(parent=screen){
   const faltan=checkpoint?checkpoint.scriptProgress.total-checkpoint.scriptProgress.completed:0;
   const escribirLabel=next===1&&!latest?'Escribir toda la historia'
    :checkpoint?(latest?.status==='invalid'?`Reintentar y seguir (faltan ${faltan} tramos)`:`Seguir escribiendo (faltan ${faltan} tramos)`)
-   :latest?.status==='ready'?(next===4?'Aprobar el guion y abrir producción':`Aprobar y seguir desde «${stages[next-1]}»`)
+   :latest?.status==='ready'?(next===4?'Abrir producción':`Seguir desde «${stages[next-1]}»`)
    :`Seguir desde «${stages[next-1]}»`;
   buttons(nextControls,[[escribirLabel,()=>escribirTodoElTexto(instruction.value)]]);
   sueltas.push([`Generar sólo «${stages[next-1]}»`,()=>runStage(next,instruction.value,null),true]);
@@ -851,11 +857,11 @@ async function script(parent=screen){
  if(approved){const restart=fold(intro,'Crear otra historia para esta idea');buttons(restart,[['Generar otra historia',()=>runStage(1),true]]);}
  parent.append(intro);
  const grouped=versions(p.developments,p.activeDevelopment);
- const show=(target,e)=>{const d=e.data,c=card(d.title,`<p class="badge">${esc(titleFor(e.approvalState))}${e.id===p.activeDevelopment?' · versión en uso':''}</p>`);
+ const show=(target,e)=>{const d=e.data,c=card(d.title,`<p class="badge">${e.id===p.activeDevelopment?'Versión en uso':'Otra versión'}</p>`);
  scriptBreakdown(c,d);
  if(e.impact){const changes=fold(c,'Qué cambia en esta versión');const line=document.createElement('p');line.textContent=`${e.impact.changes.length} cambios. ${e.impact.assetsNeedingReview?.length||0} recursos necesitan revisión.`;changes.append(line);for(const asset of e.impact.assetsNeedingReview||[]){const note=document.createElement('p');note.textContent=entityName(d,asset.entityId);changes.append(note);}}
  if(e.review){const report=fold(c,'Notas de revisión');readable(report,e.review);}
- if(e.approvalState==='candidate')buttons(target===parent?nextControls:c,[['Aprobar guion y biblias',async()=>{await approve('developments',e.id);await go('Escenas');}]]);
+ if(e.approvalState==='candidate')buttons(target===parent?nextControls:c,[['Usar este guion',async()=>{await approve('developments',e.id);await go('Escenas');}]]);
  else if(e.approvalState==='approved'&&e.id!==p.activeDevelopment)buttons(c,[['Usar esta versión',()=>approve('developments',e.id),true]]);
  const edit=fold(c,'Editar esta versión');buttons(edit,[['Corregir con IA',()=>revise('developments',e),true],['Editar manualmente',()=>editDevelopment(e),true]]);target.append(c);};
  grouped.visible.forEach(e=>show(parent,e));if(grouped.history.length){const h=fold(parent,'Historial del guion · '+grouped.history.length);grouped.history.forEach(e=>show(h,e));}
@@ -1276,7 +1282,7 @@ async function sounds(){
     line.textContent=[effect.name,effect.type==='ambience'?`ambiente · bucle de ${effect.seconds} s`:`efecto · ${effect.seconds} s`,usos.length>1?`${usos.length} tomas, un solo archivo`:''].filter(Boolean).join(' · ');
     c.append(line);promptBox(c,effect.prompt);
    }
-   buttons(c,[['Aprobar sonido y abrir sus generadores',async()=>{await mutate(route('/drafts/'+candidate.id+':approve'),{});await mutate(route('/drafts/'+candidate.id+':produce'),{});await draw();}]]);
+   buttons(c,[['Usar este sonido y abrir sus generadores',async()=>{await mutate(route('/drafts/'+candidate.id+':approve'),{});await mutate(route('/drafts/'+candidate.id+':produce'),{});await draw();}]]);
   }else if(activeDraft?.stage===3&&activeDraft.approvalState==='approved'){
    buttons(c,[['Abrir el sonido aprobado',async()=>{await mutate(route('/drafts/'+activeDraft.id+':produce'),{});await draw();}]]);
   }else if(activeDraft?.stage===2&&activeDraft.approvalState==='approved'){

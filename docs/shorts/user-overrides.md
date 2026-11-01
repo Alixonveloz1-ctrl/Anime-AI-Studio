@@ -739,3 +739,24 @@ tomas), `tests/shorts/test_workflow.py`, `tests/shorts/test_music_and_transition
 (una imagen generada nace en uso; lo que quedó sin aprobar entra al montaje) y
 `tests/shorts/ui/studio.test.mjs` (ningún botón de aprobar en Escenas ni en
 Subtítulos; exportar sin aprobar subtítulos).
+
+## U042 — En Historia, un solo botón para ir a producción (2026-11-01)
+
+«Hay dos botones, uno dice aprobar y abrir producción y el otro continuar a
+producción. ¿No es redundante? Eso nunca lo entendí. Yo nunca he cambiado el
+guion.» Lo era. La entrega del último paso del texto (la revisión de
+continuidad) se queda guardada como «lista» después de poner el guion en
+producción, y la pantalla seguía ofreciendo «Aprobar el guion y abrir
+producción» al lado de «Continuar a producción». Con el guion ya en producción,
+los dos sólo llevaban a Escenas.
+
+Con el guion en producción y el texto terminado, Historia ya no muestra el
+último paso ni «Usar este guion en producción» (que habría vuelto a una versión
+anterior a la revisión): queda sólo «Continuar a producción». Además ningún
+botón de Historia dice «aprobar»: «Abrir producción», «Seguir desde…»,
+«Quedarme con este paso y parar aquí», «Usar este guion», «Usar este sonido y
+abrir sus generadores». La insignia de cada versión dice «Versión en uso» u
+«Otra versión».
+
+Prueba: `tests/shorts/ui/studio.test.mjs` (con el guion ya en producción hay un
+solo botón hacia producción y ninguno dice «aprobar»).

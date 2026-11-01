@@ -68,7 +68,8 @@ export function createFixture({empty=false,servidorViejo=false,motorOcupado=fals
    const prior=body.sourceDraftId?p.developmentDrafts.find(x=>x.id===body.sourceDraftId)?.data||{}:{};
    const current=step<4?{...clone(prior),...Object.fromEntries(groups[step-1].map(k=>[k,clone(data[k])]))}:clone(prior);
    p.developmentDrafts.push({id,ideaId:p.selectedIdea.id,stage:step,sourceDraftId:body.sourceDraftId,data:current,status:'ready',approvalState:'candidate',created:n});
-   if(step===4)p.developments.push({id:'dev',data:current,created:n,revision:1,approvalState:'candidate'});
+   // Como el servicio: la versión del paso 4 nace del paso 3 aprobado.
+   if(step===4)p.developments.push({id:'dev',data:current,created:n,revision:1,approvalState:'candidate',sourceDraftId:body.sourceDraftId});
    result=job('develop',{draftId:id,stage:step});
   }
   else if(path.includes('/drafts/')&&path.endsWith(':approve')){const id=path.split('/').at(-1).split(':')[0];const row=p.developmentDrafts.find(x=>x.id===id);

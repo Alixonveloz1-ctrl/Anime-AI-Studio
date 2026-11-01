@@ -454,7 +454,7 @@ test('One press writes every text step and generates no image, video or voice',a
   await click('Historia');
   assert.match(w.document.body.textContent,/Haru espera el último tren/);
   // The sound plan is explained, never dumped as raw prompts to approve.
-  const paso3=[...w.document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent==='Paso 3 aprobado · Sonido, música y subtítulos');
+  const paso3=[...w.document.querySelectorAll('details')].find(d=>d.querySelector('summary')?.textContent==='Paso 3 · Sonido, música y subtítulos');
   assert.ok(paso3,'the sound step is there to read');
   assert.match(paso3.textContent,/La dirección sonora está preparada/);
   assert.doesNotMatch(paso3.textContent,/Piano íntimo|Metal station door/);
@@ -470,7 +470,7 @@ test('A single step can still be generated and approved on its own',async()=>{
   await click('Generar sólo «Historia»');
   assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).length,1,'one step, one call');
   assert.match(w.document.body.textContent,/Haru espera el último tren/);
-  await click('Aprobar este paso y parar aquí');
+  await click('Quedarme con este paso y parar aquí');
   assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).length,1,'approving generates nothing');
   assert.equal(fixture.project.developments.length,0,'and nothing went to production');
  }finally{dom.window.close();}
@@ -523,7 +523,7 @@ test('A screenplay left half written is finished by one press, without rewriting
  const develops=()=>fixture.calls.filter(c=>c.path.endsWith('/develop'));
  try{
   await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
-  await click('Generar sólo «Historia»');await click('Aprobar este paso y parar aquí');
+  await click('Generar sólo «Historia»');await click('Quedarme con este paso y parar aquí');
   await click('Generar sólo «Guion, biblias y planos»');
   // Where the old interface left it: three of ten segments written and saved.
   const punto=fixture.project.developmentDrafts.at(-1);
@@ -550,18 +550,18 @@ test('Approved screenplay opens production before sound planning and retains ass
  const {fixture,w,dom,click}=await setup({empty:true});
  try{
   await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
-  await click('Generar sólo «Historia»');await click('Aprobar este paso y parar aquí');
-  await click('Generar sólo «Guion, biblias y planos»');await click('Aprobar este paso y parar aquí');
+  await click('Generar sólo «Historia»');await click('Quedarme con este paso y parar aquí');
+  await click('Generar sólo «Guion, biblias y planos»');await click('Quedarme con este paso y parar aquí');
   const calls=fixture.calls.filter(c=>c.path.endsWith('/develop')).length;
   await click('Abrir producción con este guion');
   assert.equal(fixture.calls.filter(c=>c.path.endsWith('/develop')).length,calls,'Opening production makes no model call');
   assert.equal(w.document.querySelectorAll('.shot-section').length,2);
   await click('Generar voz japonesa',w.document.querySelector('.shot-section'));
   const asset=fixture.project.assets.at(-1).id;
-  await click('Música y efectos');await click('Preparar música y efectos');await click('Aprobar sonido y abrir sus generadores');
+  await click('Música y efectos');await click('Preparar música y efectos');await click('Usar este sonido y abrir sus generadores');
   assert.ok(fixture.project.assets.some(a=>a.id===asset));
   await click('Música y efectos');assert.match(w.document.body.textContent,/Piano íntimo/);
-  await click('Continuar preparación en Historia');await click('Generar sólo «Revisión de continuidad»');await click('Aprobar guion y biblias');
+  await click('Continuar preparación en Historia');await click('Generar sólo «Revisión de continuidad»');await click('Usar este guion');
   assert.ok(fixture.project.assets.some(a=>a.id===asset));await click('Escenas y voces');assert.equal(w.document.querySelectorAll('.shot-section').length,2);
  }finally{dom.window.close();}
 });
@@ -656,7 +656,7 @@ test('The script reads as a story: no shot techniques, frame counts or internal 
  }finally{dom.window.close();}
 });
 
-test('With the script already approved, step 4 opens production instead of asking for an impossible approval',async()=>{
+test('With the script already in production, Historia offers one way to production and nothing to approve',async()=>{
  const {fixture,w,dom,click}=await setup({empty:true});
  try{
   await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
@@ -667,7 +667,13 @@ test('With the script already approved, step 4 opens production instead of askin
   // rechaza siempre. El botón tiene que llevar a las tomas, no a ese error.
   const paso4=fixture.project.developmentDrafts.filter(d=>d.stage===4).at(-1);
   assert.equal(paso4.status,'ready');assert.notEqual(paso4.approvalState,'approved');
-  await click('Aprobar el guion y abrir producción');
+  // «Hay dos botones, aprobar y abrir producción y continuar a producción.
+  // ¿No es redundante?» Lo era: con el guion ya en producción los dos sólo
+  // llevaban a Escenas. Queda uno, y nada dice «aprobar».
+  const nombres=[...w.document.querySelectorAll('button')].map(b=>b.textContent);
+  assert.equal(nombres.filter(n=>/producción/.test(n)).length,1,nombres.join(' | '));
+  assert.equal(nombres.some(n=>/Aprobar/.test(n)),false,'nada que aprobar en Historia');
+  await click('Continuar a producción');
   assert.equal(fixture.calls.filter(c=>c.path.endsWith(paso4.id+':approve')).length,0,
    'no se pide aprobar el paso 4 como borrador');
   assert.equal(w.document.querySelectorAll('.shot-section').length,2,'lleva a las tomas');
