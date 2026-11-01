@@ -40,7 +40,7 @@ test('the actual Cortos UI can generate after its own heartbeat but preserves a 
   const dom=new JSDOM(html,{url:'https://fixture.invalid/cortos/',runScripts:'outside-only'}),w=dom.window;
   Object.assign(w,{...catalogue,steps:presentation.steps,titleFor:presentation.label,terminal:presentation.terminal,
    unresolved:presentation.unresolved,jobMessage:presentation.jobMessage,versions:presentation.versions,
-   taskActions:presentation.taskActions,entityName:presentation.entityName,fieldLabel:presentation.fieldLabel,
+   taskActions:presentation.taskActions,entityName:presentation.entityName,fieldLabel:presentation.fieldLabel,sinNadaDudoso:presentation.sinNadaDudoso,estadoVisible:presentation.estadoVisible,
    TextEncoder,structuredClone,fetch:transport,confirm:()=>false,prompt:()=>null});
   Object.defineProperty(w.crypto,'subtle',{value:webcrypto.subtle});w.setInterval=()=>0;
   w.HTMLMediaElement.prototype.pause=function(){};

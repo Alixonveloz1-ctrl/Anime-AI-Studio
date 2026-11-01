@@ -41,10 +41,13 @@ def close_uncertain(job):
     owner abandoned it, which is what lets the job settle and free its engine."""
     require(not job.get('settled'),'JOB_FINISHED','El trabajo ya terminó',409)
     require(job.get('state')=='submitted_unknown','JOB_STATE','Solo se cierra un trabajo pendiente de comprobar',409)
-    j=copy.deepcopy(job)
+    j=copy.deepcopy(job);dudosa=False
     for call in j.get('providerCalls',[]):
-        if call['state']=='submitted_unknown':call.update(state='abandoned_unknown')
-    return settle(j,'failed',{'code':'CLOSED_UNCERTAIN','error':'Cerrado sin repetir. Si Google llegó a procesar ese envío pudo cobrarlo; no se volvió a enviar.'})
+        if call['state']=='submitted_unknown':call.update(state='abandoned_unknown');dudosa=True
+    # Sin ninguna llamada dudosa (una vista previa que se rompió, por ejemplo)
+    # no hay nada que pudiera cobrarse: decirlo asustaba sin motivo.
+    error='Cerrado sin repetir. Si Google llegó a procesar ese envío pudo cobrarlo; no se volvió a enviar.' if dudosa else 'Cerrado. No se gastó nada en Google: puedes pedirlo otra vez.'
+    return settle(j,'failed',{'code':'CLOSED_UNCERTAIN','error':error})
 
 def service_startable(job):
     return (job.get('operation') in ('image','tts','music') and job.get('state')=='queued'

@@ -590,3 +590,40 @@ se monta con su duración; uno que no cabe se arma con su duración más cercana
 no se estira; uno que cabe sigue apuntando a los cinco minutos; un guion más
 corto de cinco minutos se guarda en vez de tirarse). Fallan si vuelve el
 rechazo.
+
+## U037 — Una vista previa nunca queda «Pendiente de comprobar» (2026-11-01)
+
+El dueño vio «Vista previa · Pendiente de comprobar — No se confirmó el
+resultado del envío», con los botones «Comprobar estado» y «Cerrar sin
+repetir». Una vista previa no llama a Google: no hay ningún envío que
+confirmar ni nada que se pueda cobrar.
+
+Había tres fallos, uno detrás de otro:
+
+1. Una toma que el guion pensó como imagen o cámara 2D y a la que el dueño
+   pidió video a mano seguía marcada como imagen. El montaje trataba el video
+   como una foto fija y ffmpeg se negaba («Option loop not found»). Ahora el
+   archivo manda: si la toma tiene video, se monta como video; si una toma
+   pensada como video sólo tiene su imagen, se ve la imagen quieta en vez de
+   negarse a montar el corto entero. Un montaje guardado antes del arreglo
+   también se monta bien, porque el montador decide por el archivo.
+2. Cualquier fallo del montaje se guardaba como «envío sin confirmar». Ahora
+   sólo una llamada a Google sin respuesta queda pendiente; un video que Google
+   ya aceptó se sigue consultando, y todo lo demás termina como «No se
+   completó» con un mensaje llano («La vista previa se detuvo sin terminar. No
+   se gastó nada en Google: vuelve a pedirlo»). Si falla una toma concreta, el
+   mensaje dice qué plano («No se pudo montar el Plano 02…»).
+3. Escondido detrás: la duración del sonido se guardaba en milésimas. Un trozo
+   que no caía en una milésima exacta (dos de cada tres) no pasaba la
+   comprobación final, y tampoco la entrega final si el total no cuadraba. El
+   archivo usa ahora la escala del sonido y la duración es exacta.
+
+Un trabajo que ya quedó así se muestra como «No se completó», sin hablar de
+cobros, con un solo botón «Cerrar» que lo quita sin preguntar.
+
+Pruebas: `tests/shorts/test_preview_failures.py` (con archivos reales guardados
+como los guarda el servicio: tomas de imagen con video a mano, toma de video que
+sólo tiene imagen, montaje viejo, plano roto con su nombre llano, fallo del
+montaje que termina como fallo claro, envío dudoso que sigue sin repetirse) y
+`tests/shorts/ui/studio.test.mjs` / `cortos-jobs.test.mjs` (la pantalla dice
+«No se completó» y ofrece sólo «Cerrar»).

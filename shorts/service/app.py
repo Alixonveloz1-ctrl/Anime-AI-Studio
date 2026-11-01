@@ -824,14 +824,14 @@ def job_action(jid,action):
             update_job_review(ref,j['revision'],{'state':'submitted_unknown','errorCode':'WORKER_STOPPED_UNKNOWN'})
             cloud().release_slot(jid)
             return jsonify(state='submitted_unknown',message='Worker detenido con envío incierto. No se repetirá automáticamente; puedes cerrarlo sin repetir.')
-        cloud().finish(jid,'failed',{'code':'WORKER_STOPPED','error':'El worker terminó sin publicar resultado. Se conservan los recursos ya guardados.'})
-        return jsonify(state='failed',message='Trabajo cerrado sin repetir llamadas. Revisa los recursos conservados.')
+        cloud().finish(jid,'failed',{'code':'WORKER_STOPPED','error':'Se detuvo sin terminar. Lo ya guardado se conserva y no se repitió nada: vuelve a pedirlo.'})
+        return jsonify(state='failed',message='Cerrado. No se repitió nada: puedes pedirlo otra vez.')
     if action=='close':
         # Explicit owner decision for an uncertain job: settle it without any
         # new provider call and free its engine (shorts.core.jobs.close_uncertain).
         revision(j,expected())
         cloud().close_uncertain(jid)
-        return jsonify(state='failed',message='Cerrado sin repetir. El motor queda libre; puedes pedirlo otra vez cuando quieras.')
+        return jsonify(state='failed',message='Cerrado. Puedes pedirlo otra vez cuando quieras.')
     require(action in ('pause','cancel','resume','start'),'ACTION','Acción inválida')
     from google.cloud import firestore
     @firestore.transactional

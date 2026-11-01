@@ -61,11 +61,10 @@ class RetimeWarningTests(unittest.TestCase):
         from shorts.service.timeline import assemble_plan
         from test_manual_development import complete
         d=complete();d['utterances']=[];d['subtitles']=[];d['musicRequests']=[];d['soundRequests']=[]
-        # El caso real: el guion NO puede marcar una toma veo de más de 8 s
-        # (shot_bounds la rechaza con VEO_COVERAGE). La cámara lenta aparece
-        # cuando el usuario pide video a mano en una toma de imagen larga,
-        # que es justo lo que el botón «Generar video» permite desde que está
-        # en todas las tomas con imagen aprobada.
+        # El caso real: el dueño pide video a mano en una toma de imagen
+        # larga, que es justo lo que el botón «Generar video» permite desde
+        # que está en todas las tomas con imagen aprobada. Esa toma se monta
+        # como video (U037), ralentizada para cubrirla entera.
         # El corto completo tiene que cubrir 285 s, así que la toma larga va
         # acompañada del resto del metraje en otra toma de imagen.
         beat=d['beats'][0]['id']
@@ -87,6 +86,7 @@ class RetimeWarningTests(unittest.TestCase):
         # Y el montaje sigue recibiendo la velocidad: no se recorta nada.
         self.assertAlmostEqual(plan['shots'][0]['speed'],0.4)
         self.assertEqual(plan['shots'][0]['trimSeconds'],0)
+        self.assertEqual(plan['shots'][0]['treatment'],'veo')
 
     def test_the_page_and_the_service_use_the_same_limits(self):
         # Dos sitios con el mismo número: si uno se edita solo, la web avisa de

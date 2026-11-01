@@ -7,6 +7,20 @@ test('An uncertain job offers "Cerrar sin repetir" and never "Continuar"', () =>
   const actions = presentation.taskActions({state:'submitted_unknown', providerCalls:[{state:'submitted_unknown'}]});
   assert.deepEqual({...actions}, {cancel:false, recover:false, inspect:true, close:true});
 });
+// «Vista previa · Pendiente de comprobar — No se confirmó el resultado del envío»:
+// una vista previa no llama a Google, así que no hay nada dudoso que comprobar.
+test('A job that broke without any Google call is shown as not completed, with one Cerrar', () => {
+  const roto = {state:'submitted_unknown', operation:'preview', providerCalls:[]};
+  assert.equal(presentation.sinNadaDudoso(roto), true);
+  assert.equal(presentation.label(presentation.estadoVisible(roto)), 'No se completó');
+  assert.deepEqual({...presentation.taskActions(roto)}, {cancel:false, recover:false, inspect:false, close:true});
+  assert.match(presentation.jobMessage(roto), /No se gastó nada/);
+  assert.doesNotMatch(presentation.jobMessage(roto), /No se confirmó el resultado del envío/);
+  const dudoso = {...roto, providerCalls:[{state:'submitted_unknown'}]};
+  assert.equal(presentation.sinNadaDudoso(dudoso), false, 'a call without answer is still uncertain');
+  assert.equal(presentation.label(presentation.estadoVisible(dudoso)), 'Pendiente de comprobar');
+  assert.equal(presentation.sinNadaDudoso({...roto, dispatchUnknown:true}), false);
+});
 test('A closed job offers nothing and no longer counts as pending', () => {
   const closed = {state:'failed', settled:true, result:{code:'CLOSED_UNCERTAIN'}};
   assert.deepEqual({...presentation.taskActions(closed)}, {cancel:false, recover:false, inspect:false, close:false});

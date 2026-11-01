@@ -4,6 +4,11 @@ const names={queued:'En espera',running:'Preparando',waiting_provider:'Procesand
 export const label=value=>names[value]||String(value||'').replace(/([a-z])([A-Z])/g,'$1 $2').replace(/[_-]/g,' ');
 export const terminal=state=>['awaiting_review','succeeded','failed','cancelled','submitted_unknown'].includes(state);
 export const unresolved=job=>!job.settled&&(!terminal(job.state)||job.state==='submitted_unknown');
+// «Pendiente de comprobar» sólo tiene sentido si una llamada a Google quedó sin
+// respuesta. Una vista previa que se rompió no llamó a nadie: no hay nada que
+// comprobar ni nada que se pudiera cobrar, sólo cerrarla y pedirla otra vez.
+export const sinNadaDudoso=job=>job.state==='submitted_unknown'&&!job.settled&&!job.dispatchUnknown&&!(job.providerCalls||[]).some(c=>c.state==='submitted_unknown');
+export const estadoVisible=job=>sinNadaDudoso(job)?'failed':job.state;
 export function jobMessage(job){
  const code=job.result?.code||job.errorCode;
  if(job.state==='running'&&job.providerWait){const wait=job.providerWait;const seconds=Math.max(0,Math.ceil(wait.retryAt-Date.now()/1000));return wait.reason==='quota'?`Google pidió esperar por cuota (429). Reintento ${wait.attempt} de ${wait.maxRetries} en aproximadamente ${seconds} s. No necesitas pulsar otra vez.`:`Esperando ${seconds} s para espaciar las llamadas a Gemini.`;}
@@ -14,6 +19,7 @@ export function jobMessage(job){
  if(job.dispatchError?.code==='CAPACITY_BUSY')return 'En cola: otra generación está usando este motor. Ésta empezará sola cuando termine.';
  if(job.dispatchError?.message)return job.dispatchError.message;
  if(job.queueError?.message)return job.queueError.message;
+ if(sinNadaDudoso(job))return 'Se detuvo sin terminar. No se gastó nada en Google: ciérralo y vuelve a pedirlo.';
  if(job.state==='submitted_unknown'||job.dispatchUnknown)return 'No se confirmó el resultado del envío. Conservamos este trabajo y no repetimos la generación.';
  if(job.state==='queued')return job.workerOperation?'Google aceptó el arranque, pero todavía no se confirmó que el trabajo haya comenzado.':'La solicitud está guardada, pero el servicio todavía no ha confirmado el arranque.';
  if(job.state==='running')return job.providerCalls?.length?'Google está procesando la solicitud. Esperamos su resultado.':'El servicio arrancó y está preparando la solicitud.';
@@ -45,7 +51,7 @@ export function taskActions(job){
  // An uncertain job is never resent by itself; the owner can close it so the
  // engine is free again (POST /jobs/<id>:close).
  const uncertain=job.state==='submitted_unknown'&&!job.settled;
- return {cancel:false,recover:false,inspect:uncertain,close:uncertain};
+ return {cancel:false,recover:false,inspect:uncertain&&!sinNadaDudoso(job),close:uncertain};
 }
 export function entityName(data,id){
  if(!data)return 'Recurso';

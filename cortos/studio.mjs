@@ -1,5 +1,5 @@
 import {fileHash} from './hash.mjs';
-import {steps,label as titleFor,terminal,unresolved,jobMessage,versions,taskActions,entityName,fieldLabel,enCola} from './presentation.mjs';
+import {steps,label as titleFor,terminal,unresolved,jobMessage,versions,taskActions,entityName,fieldLabel,enCola,sinNadaDudoso,estadoVisible} from './presentation.mjs';
 import {genres,subgenres,storyChoice} from './catalog.mjs';
 const $=s=>document.querySelector(s), screen=$('#screen'), notice=$('#notice');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -53,8 +53,8 @@ function promptBox(parent,texto){
  return caja;
 }
 const CLOSE_UNCERTAIN='No se sabe si Google llegó a procesar ese envío (pudo cobrarlo). Cerrarlo libera el motor y NO lo vuelve a enviar. ¿Cerrar sin repetir?';
-async function closeUncertain(id){
- if(!confirm(CLOSE_UNCERTAIN))return false;
+async function closeUncertain(id,preguntar=true){
+ if(preguntar&&!confirm(CLOSE_UNCERTAIN))return false;
  const latest=await api('/jobs/'+id);const result=await api('/jobs/'+id+':close','POST',{}, {'If-Match':String(latest.revision)});
  say(result.message);await refresh();return true;
 }
@@ -282,14 +282,14 @@ function showJob(job){
  if(job.id===trabajoVisto&&!unresolved(job)){$('#activity').hidden=true;return;}
  const panel=$('#activity');panel.hidden=false;panel.replaceChildren();
  const text=document.createElement('div'),heading=document.createElement('strong'),message=document.createElement('p');
- heading.textContent=titleFor(job.operation)+deQuienEs(job)+' · '+titleFor(job.state);message.textContent=job.state==='running'&&job.progress&&!job.providerWait?`${job.progress.stage}/${job.progress.total} · ${job.progress.label}`:describeIssue(jobMessage(job));text.append(heading,message);panel.append(text);
+ heading.textContent=titleFor(job.operation)+deQuienEs(job)+' · '+titleFor(estadoVisible(job));message.textContent=job.state==='running'&&job.progress&&!job.providerWait?`${job.progress.stage}/${job.progress.total} · ${job.progress.label}`:describeIssue(jobMessage(job));text.append(heading,message);panel.append(text);
  const controls=[],available=taskActions(job);
  if(job.canStartInService)controls.push(['Iniciar generación pendiente',async()=>{
   if(!active)await lease(true);const latest=await api('/jobs/'+job.id);
   await api('/jobs/'+job.id+':start','POST',{session},{'If-Match':String(latest.revision)});
   await watch(job.id);
  }]);
- if(unresolved(job)&&!enCola(job))controls.push(['Comprobar estado',async()=>{
+ if(unresolved(job)&&!enCola(job)&&!sinNadaDudoso(job))controls.push(['Comprobar estado',async()=>{
   const latest=await api('/jobs/'+job.id);
   if(taskActions(latest).inspect){const result=await api('/jobs/'+job.id+':inspect','POST',{}, {'If-Match':String(latest.revision)});say(result.message);}
   await watch(job.id);
@@ -303,7 +303,7 @@ function showJob(job){
   const latest=await api('/jobs/'+job.id);await api('/jobs/'+job.id+':cancel','POST',{}, {'If-Match':String(latest.revision)});
   ++watchVersion;await draw();say('Cancelación solicitada. Lo ya generado se conserva.');
  },true]);
- if(available.close)controls.push(['Cerrar sin repetir',async()=>{if(await closeUncertain(job.id)){++watchVersion;await draw();}},true]);
+ if(available.close)controls.push(sinNadaDudoso(job)?['Cerrar',async()=>{await closeUncertain(job.id,false);++watchVersion;$('#activity').hidden=true;}]:['Cerrar sin repetir',async()=>{if(await closeUncertain(job.id)){++watchVersion;await draw();}},true]);
  if(['awaiting_review','succeeded'].includes(job.state))controls.push(['Ver resultado',()=>verResultado(job),true]);
  buttons(panel,controls);
 }
@@ -878,11 +878,11 @@ async function activityList(){
  const ordered=[...new Set([...pending,...attention])].sort((a,b)=>(b.created||0)-(a.created||0));
  if(!ordered.length)return;
  const box=fold(screen,pending.length?'Generaciones en curso · '+pending.length:'Generaciones con aviso · '+attention.length,pending.length>0);
- for(const job of ordered.slice(0,10)){const row=document.createElement('div');row.className='activity-row';row.innerHTML=`<p><strong>${esc(titleFor(job.operation))}</strong><span class="muted">${esc(titleFor(job.state))}</span></p>`;const a=taskActions(job),items=[];
+ for(const job of ordered.slice(0,10)){const row=document.createElement('div');row.className='activity-row';row.innerHTML=`<p><strong>${esc(titleFor(job.operation))}</strong><span class="muted">${esc(titleFor(estadoVisible(job)))}</span></p>`;const a=taskActions(job),items=[];
  if(a.recover)items.push(['Continuar',async()=>{if(!active)await lease(true);const j=await api('/jobs/'+job.id);await api('/jobs/'+job.id+':resume','POST',{session},{'If-Match':String(j.revision)});await watch(job.id);await draw();},true]);
  if(a.cancel)items.push(['Cancelar',async()=>{const j=await api('/jobs/'+job.id);await api('/jobs/'+job.id+':cancel','POST',{}, {'If-Match':String(j.revision)});await draw();},true]);
  if(a.inspect)items.push(['Comprobar estado',async()=>{const j=await api('/jobs/'+job.id);const result=await api('/jobs/'+job.id+':inspect','POST',{}, {'If-Match':String(j.revision)});say(result.message);await draw();},true]);
- if(a.close)items.push(['Cerrar sin repetir',async()=>{if(await closeUncertain(job.id))await draw();},true]);
+ if(a.close)items.push(sinNadaDudoso(job)?['Cerrar',async()=>{await closeUncertain(job.id,false);row.remove();},true]:['Cerrar sin repetir',async()=>{if(await closeUncertain(job.id))await draw();},true]);
  if(job.result?.previewId)items.push(['Reproducir',()=>playPreview(job.result.previewId,row),true]);
  if(items.length)buttons(row,items);if(job.result?.error){const message=document.createElement('p');message.className='muted';message.textContent=describeIssue(job.result.error);row.append(message);}box.append(row);
  }

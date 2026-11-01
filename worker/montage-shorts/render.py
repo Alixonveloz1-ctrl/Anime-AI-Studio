@@ -5,7 +5,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import wave
-from shorts.core.contracts import compile_timeline, require, FPS, RATE, SAMPLES, TRACKS
+from shorts.core.contracts import compile_timeline, require, ContractError, FPS, RATE, SAMPLES, TRACKS
 from shorts.core.mouth import span
 from media import ff, probe, checksum
 
@@ -151,6 +151,16 @@ def visual_clip(s, files, target, w, h, offset, length):
     else:opts=['-vf',','.join(vf),'-map','0:v:0']
     ff([*args,*opts,'-an','-frames:v',length,'-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p',target])
 
+def con_tratamiento_del_archivo(s, assets):
+    """El archivo manda sobre lo que el guion pensó para la toma. Un video
+    tratado como foto fija rompía el montaje («Option loop not found»), y un
+    montaje guardado antes de este arreglo todavía puede traerlo así."""
+    kind=assets.get(s.get('assetRevision'),{}).get('kind')
+    if kind=='veo_silent_validated' and s['treatment']!='veo':
+        s={k:v for k,v in s.items() if k!='layers'};s['treatment']='veo'
+    elif kind=='image' and s['treatment']=='veo':s={**s,'treatment':'hold'}
+    return s
+
 def render(manifest, root, start=0, end=None, final=False, width=None):
     root=Path(root).resolve();root.mkdir(parents=True,exist_ok=True)
     plan=compile_timeline(manifest,final)
@@ -168,14 +178,24 @@ def render(manifest, root, start=0, end=None, final=False, width=None):
     for si,s in enumerate(plan['shots']):
         left=max(start,s['startFrame']); right=min(end,s['startFrame']+s['frames'])
         if left>=right:continue
-        offset=left-s['startFrame']; length=right-left; target=root/f'shot-{si}.mp4'; typ=s['treatment']
-        visual_clip(s,files,target,w,h,offset,length)
+        offset=left-s['startFrame']; length=right-left; target=root/f'shot-{si}.mp4'
+        s=con_tratamiento_del_archivo(s,plan['assets'])
+        try:visual_clip(s,files,target,w,h,offset,length)
+        except (subprocess.CalledProcessError,subprocess.TimeoutExpired) as error:
+            detalle=(getattr(error,'stderr',None) or b'')[-600:].decode('utf-8','replace')
+            print('Montaje del plano',si+1,'falló:',detalle,flush=True)
+            raise ContractError('MONTAJE',f'No se pudo montar el Plano {si+1:02d}. Vuelve a pedir la vista previa; si vuelve a fallar, genera otra vez la imagen o el video de ese plano.') from None
         clips.append(target)
+    # La duración del sonido se guarda en el MP4 con la escala del archivo,
+    # que por defecto es de milésimas. Un trozo de 494 fotogramas (20,5833 s)
+    # quedaba en 20,583 s y la comprobación final lo rechazaba: fallaban dos de
+    # cada tres vistas previas y la entrega final si el total no caía en una
+    # milésima exacta. Con la escala del sonido (48 000) la duración es exacta.
     listing=root/'concat.txt';listing.write_text(''.join(f"file '{p.name}'\n" for p in clips))
-    ff(['-f','concat','-safe','1','-i',listing,'-i',root/'mix.wav','-filter_complex',f'[1:a]atrim=start_sample={start*2000}:end_sample={end*2000},asetpts=PTS-STARTPTS[a]','-map','0:v:0','-map','[a]','-c:v','copy','-c:a','aac','-b:a','192k','-movflags','+faststart',root/'clean.mp4'])
+    ff(['-f','concat','-safe','1','-i',listing,'-i',root/'mix.wav','-filter_complex',f'[1:a]atrim=start_sample={start*2000}:end_sample={end*2000},asetpts=PTS-STARTPTS[a]','-map','0:v:0','-map','[a]','-c:v','copy','-c:a','aac','-b:a','192k','-movie_timescale',RATE,'-movflags','+faststart',root/'clean.mp4'])
     output=root/'preview.mp4' if not final else root/'final_es.mp4'
     # Absolute subtitle times are preserved then restored to local PTS.
-    ff(['-i',root/'clean.mp4','-vf',f"setpts=PTS+{start/24}/TB,ass='{root/'subtitles.ass'}',setpts=PTS-STARTPTS",'-map','0:v:0','-map','0:a:0','-c:v','libx264','-preset','fast','-pix_fmt','yuv420p','-c:a','copy','-movflags','+faststart',output])
+    ff(['-i',root/'clean.mp4','-vf',f"setpts=PTS+{start/24}/TB,ass='{root/'subtitles.ass'}',setpts=PTS-STARTPTS",'-map','0:v:0','-map','0:a:0','-c:v','libx264','-preset','fast','-pix_fmt','yuv420p','-c:a','copy','-movie_timescale',RATE,'-movflags','+faststart',output])
     info=probe(output);v=next(s for s in info['streams'] if s['codec_type']=='video')
     require(int(v['nb_frames'])==end-start,'OUTPUT_FRAMES','Salida perdió fotogramas')
     audio=[s for s in info['streams'] if s['codec_type']=='audio']

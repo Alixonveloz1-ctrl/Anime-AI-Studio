@@ -22,7 +22,7 @@ def main():
         import subprocess
         # Container fixtures exercise the shipped media/service code. Repository
         # history/installer checks run in CI's full checkout, outside this image.
-        for pattern in ('test_contracts.py','test_dependencies.py','test_media.py','test_api.py','test_requests.py','test_revisions.py','test_subtitles.py','test_dispatch.py','test_workflow.py','test_ideas.py','test_job_recovery.py','test_text_execution.py','test_generator_controls.py','test_image_output.py','test_provider_lifecycle.py','test_production_entry.py','test_reference_recovery.py','test_manual_development.py','test_duration_range.py','test_veo_planning.py','test_script_segments.py','test_quota_retry.py','test_sound_plan.py','test_engine_release.py','test_visual_style.py','test_veo_retime.py'):
+        for pattern in ('test_contracts.py','test_dependencies.py','test_media.py','test_api.py','test_requests.py','test_revisions.py','test_subtitles.py','test_dispatch.py','test_workflow.py','test_ideas.py','test_job_recovery.py','test_text_execution.py','test_generator_controls.py','test_image_output.py','test_provider_lifecycle.py','test_production_entry.py','test_reference_recovery.py','test_manual_development.py','test_duration_range.py','test_veo_planning.py','test_script_segments.py','test_quota_retry.py','test_sound_plan.py','test_engine_release.py','test_visual_style.py','test_veo_retime.py','test_preview_failures.py'):
             subprocess.run([sys.executable,'-m','unittest','discover','-s','tests/shorts','-p',pattern],check=True)
         return
     if os.environ.get('SHORTS_CLOUD_SELF_TEST')=='1':
@@ -83,7 +83,27 @@ def main():
         else:cloud.finish(jid,'cancelled' if e.code=='CANCELLED' else 'failed',{'code':e.code,'error':str(e)})
         raise SystemExit(1)
     except Exception as e:
-        # Unknown crash after claim can include an accepted paid call.
-        cloud.db.collection('animeShortsJobs').document(jid).update({'state':'submitted_unknown','errorCode':'WORKER_EXCEPTION','errorType':type(e).__name__})
+        ref=cloud.db.collection('animeShortsJobs').document(jid);actual=ref.get().to_dict() or {}
+        # Sólo una llamada a Google sin respuesta confirmada es dudosa. Una
+        # vista previa o una exportación no llama a nadie: marcarla como
+        # «envío sin confirmar» la dejaba «Pendiente de comprobar» para
+        # siempre, con botones que hablaban de cobros que no existen.
+        if any(c.get('state')=='submitted_unknown' for c in actual.get('providerCalls',[])):
+            ref.update({'state':'submitted_unknown','errorCode':'WORKER_EXCEPTION','errorType':type(e).__name__})
+        elif actual.get('providerOperation') and job['operation'] in ('veo','transcribe'):
+            # Google ya aceptó la operación y tenemos su número: se sigue
+            # consultando esa misma, sin pedir otra.
+            ref.update({'state':'waiting_provider','errorCode':'VEO_PENDING' if job['operation']=='veo' else 'SPEECH_PENDING'})
+        else:
+            detalle=getattr(e,'stderr',None)
+            if isinstance(detalle,bytes):detalle=detalle[-600:].decode('utf-8','replace')
+            print('Fallo del trabajo',jid,type(e).__name__,detalle or e,flush=True)
+            cloud.finish(jid,'failed',{'code':'WORKER_ERROR','errorType':type(e).__name__,'error':fallo_en_palabras(job['operation'],actual.get('providerCalls'))})
         raise SystemExit(2)
+
+QUE={'preview':'La vista previa','render':'La exportación','frames':'La lectura de fotogramas','analyze':'La sincronización','media':'La preparación del sonido','import':'La importación','review':'La revisión','veo':'El video','transcribe':'La lectura de tiempos de voz'}
+
+def fallo_en_palabras(operation,llamadas=None):
+    gasto=' No se repitió ninguna llamada a Google: vuelve a pedirlo.' if llamadas else ' No se gastó nada en Google: vuelve a pedirlo.'
+    return QUE.get(operation,'El trabajo')+' se detuvo sin terminar.'+gasto
 if __name__=='__main__':main()

@@ -42,7 +42,7 @@ async function setup(options={}){
  if(options.failJobPolls&&path.startsWith('/jobs/')&&!path.includes(':'))return new Response(JSON.stringify({error:'Lectura no disponible'}),{status:503});
  if(options.nonJsonError&&decodeURIComponent(url).endsWith('/ideas:generate')){options.errorRequests=(options.errorRequests||0)+1;return new Response('',{status:502});}if(new Headers(request.headers).has('If-Match'))return new Response('',{status:412});return baseTransport(url,request);};
  const dom=new JSDOM(html,{url:'https://fixture.invalid/cortos/',runScripts:'outside-only'}),w=dom.window;
- Object.assign(w,{...catalogue,steps:presentation.steps,titleFor:presentation.label,terminal:presentation.terminal,unresolved:presentation.unresolved,enCola:presentation.enCola,jobMessage:presentation.jobMessage,versions:presentation.versions,taskActions:presentation.taskActions,entityName:presentation.entityName,fieldLabel:presentation.fieldLabel,TextEncoder,structuredClone,fetch:fixture.transport,confirm:()=>{throw new Error('Unexpected confirmation')},prompt:()=>null});
+ Object.assign(w,{...catalogue,steps:presentation.steps,titleFor:presentation.label,terminal:presentation.terminal,unresolved:presentation.unresolved,enCola:presentation.enCola,jobMessage:presentation.jobMessage,versions:presentation.versions,taskActions:presentation.taskActions,entityName:presentation.entityName,fieldLabel:presentation.fieldLabel,sinNadaDudoso:presentation.sinNadaDudoso,estadoVisible:presentation.estadoVisible,TextEncoder,structuredClone,fetch:fixture.transport,confirm:()=>{throw new Error('Unexpected confirmation')},prompt:()=>null});
  // Un corto largo de verdad: cuarenta tomas con su imagen y su voz.
  if(options.muchasTomas){
   const d=fixture.project.developments[0].data,tomas=[],voces=[];
@@ -334,6 +334,21 @@ test('A queued idea remains accessible in Historia after reload, without another
   assert.ok([...panel.querySelectorAll('button')].some(b=>b.textContent==='Continuar'));
   assert.equal([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Generar tres ideas'),false);
   assert.equal(fixture.calls.some(c=>c.path.endsWith('/ideas:generate')),false);
+ }finally{dom.window.close();}
+});
+test('A preview that broke without calling Google says so plainly and closes with one tap',async()=>{
+ // «Vista previa · Pendiente de comprobar — No se confirmó el resultado del envío.»
+ const {fixture,w,dom}=await setup({empty:true,pendingJob:{id:'roto',operation:'preview',state:'submitted_unknown',revision:1,created:1,settled:false,providerCalls:[]}});
+ try{
+  const panel=w.document.querySelector('#activity');assert.equal(panel.hidden,false);
+  assert.match(panel.textContent,/Vista previa · No se completó/);
+  assert.match(panel.textContent,/No se gastó nada/);
+  assert.doesNotMatch(panel.textContent,/Pendiente de comprobar|No se confirmó el resultado/);
+  const nombres=[...panel.querySelectorAll('button')].map(b=>b.textContent);
+  assert.deepEqual(nombres.filter(n=>/Comprobar|Cerrar/.test(n)),['Cerrar'],'one button, no question about charges');
+  await [...panel.querySelectorAll('button')].find(b=>b.textContent==='Cerrar').onclick();
+  assert.ok(fixture.calls.some(c=>c.path==='/jobs/roto:close'));
+  assert.equal(panel.hidden,true,'and the box goes away');
  }finally{dom.window.close();}
 });
 test('Polling timeout does not claim ongoing work, hide recovery, or resend ideas',async()=>{

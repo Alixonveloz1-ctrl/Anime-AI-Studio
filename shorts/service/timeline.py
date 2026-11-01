@@ -110,6 +110,12 @@ def assemble_plan(cloud,p,cue_overrides=None):
         else:assets[a['id']]=a
         shot={**s,'startFrame':t['startFrame'],'frames':t['frames'],'assetRevision':a['id'],'trimSeconds':s.get('trimSeconds',0),'speed':s.get('speed',1)}
         if kind=='veo_silent_validated' and not a['id'].startswith('missing_'):
+            # El archivo manda, no lo que el guion pensó para la toma. Una
+            # toma de imagen o de cámara 2D a la que el dueño le pidió video
+            # a mano conservaba su tratamiento de imagen, y el montaje
+            # intentaba tratar el video como una foto fija: la vista previa
+            # se rompía y quedaba «Pendiente de comprobar».
+            shot['treatment']='veo';shot.pop('layers',None)
             # Regla del usuario, prohibido cortar: el clip completo se
             # acelera o se ralentiza para cubrir la toma, nunca se recorta
             # un segundo del final. La velocidad sale de la duración real
@@ -119,6 +125,11 @@ def assemble_plan(cloud,p,cue_overrides=None):
                 shot['speed']=speed;shot['trimSeconds']=0;shot['retimeApproved']=True
                 aviso=retime_warning(speed,s['id'])
                 if aviso:issues.append(aviso)
+        elif shot['treatment']=='veo':
+            # Toma pensada como video que todavía sólo tiene imagen: se ve la
+            # imagen quieta hasta que llegue el video, en vez de negarse a
+            # montar el corto entero.
+            shot['treatment']='hold'
         if a['id'].startswith('missing_'):shot.update(treatment='black',approvedBlack=True,draftPlaceholder=True)
         if shot['treatment']=='localized' and kind!='veo_silent_validated':
             layers=[]
