@@ -680,6 +680,24 @@ test('With the script already in production, Historia offers one way to producti
  }finally{dom.window.close();}
 });
 
+test('Once the script is in production there is no way to change it, only to keep producing',async()=>{
+ // «El guion que me genera el director al principio es el que utilizo. Si no
+ // me gusta esa historia, no voy a estar cambiando partes: la elimino y creo
+ // una nueva.» (U043)
+ const {w,dom,click}=await setup({empty:true});
+ try{
+  await click('Generar tres ideas');await click('Elegir esta historia',w.document.querySelector('.grid>.card'));
+  await click('Escribir toda la historia');
+  await click('Historia');
+  const historia=w.document.body.textContent;
+  for(const fuera of ['Generar otra historia','Crear otra historia','Corregir con IA','Editar manualmente','Editar esta versión','Historial del guion','Usar esta versión','Usar este guion'])
+   assert.equal(historia.includes(fuera),false,'Historia ya no ofrece «'+fuera+'»');
+  await click('Continuar a producción');
+  assert.equal([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Movimiento y cámara'),false,'Escenas tampoco cambia el guion');
+  assert.ok([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Ver y editar prompt de imagen'),'las herramientas de imagen siguen');
+ }finally{dom.window.close();}
+});
+
 test('Waiting for a busy engine reads as a queue, not as an error with buttons to press',async()=>{
  const {fixture,w,dom,click}=await setup();
  try{

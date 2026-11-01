@@ -854,17 +854,22 @@ async function script(parent=screen){
   }
  }
  if(p.activeDevelopment)buttons(nextControls,[['Continuar a producción',()=>go('Escenas')]]);
- if(approved){const restart=fold(intro,'Crear otra historia para esta idea');buttons(restart,[['Generar otra historia',()=>runStage(1),true]]);}
  parent.append(intro);
  const grouped=versions(p.developments,p.activeDevelopment);
  const show=(target,e)=>{const d=e.data,c=card(d.title,`<p class="badge">${e.id===p.activeDevelopment?'Versión en uso':'Otra versión'}</p>`);
  scriptBreakdown(c,d);
  if(e.impact){const changes=fold(c,'Qué cambia en esta versión');const line=document.createElement('p');line.textContent=`${e.impact.changes.length} cambios. ${e.impact.assetsNeedingReview?.length||0} recursos necesitan revisión.`;changes.append(line);for(const asset of e.impact.assetsNeedingReview||[]){const note=document.createElement('p');note.textContent=entityName(d,asset.entityId);changes.append(note);}}
  if(e.review){const report=fold(c,'Notas de revisión');readable(report,e.review);}
- if(e.approvalState==='candidate')buttons(target===parent?nextControls:c,[['Usar este guion',async()=>{await approve('developments',e.id);await go('Escenas');}]]);
- else if(e.approvalState==='approved'&&e.id!==p.activeDevelopment)buttons(c,[['Usar esta versión',()=>approve('developments',e.id),true]]);
- const edit=fold(c,'Editar esta versión');buttons(edit,[['Corregir con IA',()=>revise('developments',e),true],['Editar manualmente',()=>editDevelopment(e),true]]);target.append(c);};
- grouped.visible.forEach(e=>show(parent,e));if(grouped.history.length){const h=fold(parent,'Historial del guion · '+grouped.history.length);grouped.history.forEach(e=>show(h,e));}
+ // El guion lo escribe el director una vez y no se toca: si la historia no
+ // gusta, se borra el corto y se empieza otro (U043). Ni otra historia, ni
+ // corregir, ni editar, ni versiones anteriores. Sólo se pone en uso lo que
+ // termina de escribir ese mismo guion (el último paso, si se escribió por
+ // pasos y se paró a mitad), nunca una historia distinta.
+ if(e.approvalState==='candidate'&&(!p.activeDevelopment||e.sourceDraftId))buttons(target===parent?nextControls:c,[['Usar este guion',async()=>{await approve('developments',e.id);await go('Escenas');}]]);
+ target.append(c);};
+ const enUso=p.developments.find(d=>d.id===p.activeDevelopment);
+ const continuacion=(p.developments||[]).filter(d=>d.approvalState==='candidate'&&d.sourceDraftId&&d.id!==p.activeDevelopment).sort((a,b)=>(a.created||0)-(b.created||0)).at(-1);
+ if(enUso){show(parent,enUso);if(continuacion)show(parent,continuacion);}else grouped.visible.forEach(e=>show(parent,e));
 }
 async function production(){
  const heading=pageTitle('Escenas','Da forma a las imágenes, las voces y el sonido.');
@@ -1190,7 +1195,7 @@ const has=selectedAsset(shot.id,shot.treatment==='veo'?'veo_silent_validated':'i
   // pantalla: aquí va uno por toma, con los personajes que hablan en ella.
   const hablan=[...new Set(d.utterances.filter(u=>u.shotId===shot.id).map(u=>u.speakerId))];
   if(hablan.length)buttons(more,[['Cambiar la voz de '+hablan.map(id=>entityName(d,id)).join(', '),()=>go('Personajes'),true]]);
-  buttons(more,[['Ver y editar prompt de imagen',()=>editImagePrompt(shot.id,'Plano '+(index+1)),true],['Movimiento y cámara',()=>visualEditor(shot),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),imagePayload()),true]]:[]),['Crear imagen principal con instrucción',()=>createShotImageWithInstruction(shot),true],...(image?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id}),true]]:[])]);
+  buttons(more,[['Ver y editar prompt de imagen',()=>editImagePrompt(shot.id,'Plano '+(index+1)),true],...(visuals.length?[['Crear otra imagen',()=>runTask('image',route('/assets:generate'),imagePayload()),true]]:[]),['Crear imagen principal con instrucción',()=>createShotImageWithInstruction(shot),true],...(image?[['Crear otro video',()=>runTask('veo',route('/assets:generate'),{operation:'veo',entityId:shot.id}),true]]:[])]);
   if(has)buttons(more,[['Ver y escuchar la escena entera',()=>previewShots(d.shots.filter(x=>x.beatId===shot.beatId).map(x=>x.id),c),true],['Comparar tomas contiguas',()=>compareShots(shot,c),true]]);
  return c;
 }
@@ -1436,39 +1441,6 @@ async function openEditor(initial){
 $('#close-editor').onclick=async()=>{$('#editor').querySelectorAll('video,audio').forEach(m=>m.pause());$('#editor').querySelector('.dialog-notice')?.remove();$('#editor').close();if(needsRedraw){needsRedraw=false;await draw();}};
 document.addEventListener('play',e=>{if(e.target.matches('video,audio'))document.querySelectorAll('video,audio').forEach(m=>{if(m!==e.target)m.pause();});},true);
 $('#back').onclick=async e=>{if(active){e.preventDefault();if(confirm('¿Pausar nuevas generaciones y volver a Animes?')){await lease(false);location.href='/';}}};
-async function editDevelopment(entity){
- const dialog=document.createElement('dialog'),box=document.createElement('div');dialog.append(box);document.body.append(dialog);
- const patches=new Map(),labels={title:'Título',bible:'Biblias',story:'Historia',beats:'Momentos dramáticos',shots:'Planos',utterances:'Voces del guion',soundRequests:'Efectos de sonido',musicRequests:'Música',subtitles:'Subtítulos',dramatic:'Dirección dramática',visual:'Dirección visual',characters:'Personajes',locations:'Lugares',props:'Objetos',beats:'Unidades dramáticas',shots:'Tomas',utterances:'Intervenciones',soundRequests:'Efectos y ambientes',musicRequests:'Música',subtitles:'Subtítulos',spanish:'Español',japanese:'Japonés',acting:'Actuación',prompt:'Instrucción',type:'Tipo de sonido',frames:'Duración (fotogramas)',before:'Estado antes',after:'Estado después',treatment:'Tratamiento visual',camera:'Cámara',name:'Nombre',description:'Descripción',seconds:'Duración (segundos)',preparationSeconds:'Preparación',tailSeconds:'Cola',perspective:'Perspectiva',text:'Texto',layout:'Distribución',referencePrompt:'Referencia visual',voice:'Voz',direction:'Dirección de voz',japaneseReading:'Lectura japonesa',minFrames:'Mínimo de fotogramas',maxFrames:'Máximo de fotogramas',leadFrames:'Acción inicial (frames)',tailFrames:'Acción final (frames)',pauseBeforeFrames:'Pausa antes (frames)',pauseAfterFrames:'Pausa después (frames)',timingReason:'Razón de la duración',gainDb:'Ganancia (dB)',sourceInSample:'Recorte de entrada (muestras)',fadeInSamples:'Fundido de entrada (muestras)',fadeOutSamples:'Fundido de salida (muestras)'};
- const heading=document.createElement('h2');heading.textContent='Editar guion y biblias';box.append(heading);
- const explanation=document.createElement('p');explanation.textContent='Los cambios crean una candidata. Antes de guardar verás qué recursos necesitan revisión. Las versiones aprobadas se conservan.';box.append(explanation);
- function fields(parent,value,path=[]){
-  for(const [key,current] of Object.entries(value)){
-   // soundGroup lo calcula el plan a partir del prompt: editar su huella a
-   // mano reagruparía sonidos sin decirlo.
-   if(['id','hash','sha256','developmentId','assetId','audioHash','nativeQualityGuaranteed','assetRevision','audioRevision','voiceBinding','soundGroup'].includes(key))continue;
-   const part=Array.isArray(value)?Number(key):key,next=[...path,part],name=labels[key]||fieldLabel(key);
-   if(current!==null&&typeof current==='object'){
-    const group=document.createElement('details'),summary=document.createElement('summary');summary.textContent=Array.isArray(value)?(current.name||(current.id?entityName(entity.data,current.id):`Elemento ${Number(key)+1}`)):name;group.append(summary);parent.append(group);fields(group,current,next);continue;
-   }
-   if(current===null)continue;
-   const label=document.createElement('label');label.textContent=name;let input;
-   const relation=['locationId','speakerId','shotId','beatId'].includes(key)?key:['visibleCharacters','offscreenCharacters','referenceEntityIds','props'].includes(path.at(-1))?path.at(-1):null;
-   if(relation&&typeof current==='string'){input=document.createElement('select');const d=entity.data;const rows=relation==='locationId'?d.bible.locations:relation==='shotId'?d.shots:relation==='beatId'?d.beats:relation==='props'?d.bible.props:relation==='referenceEntityIds'?[...d.bible.characters,...d.bible.locations,...d.bible.props]:d.bible.characters;for(const row of rows){const option=document.createElement('option');option.value=row.id;option.textContent=row.name||row.change||entityName(d,row.id);input.append(option);}input.value=current;}
-   else if(key==='treatment'){input=document.createElement('select');for(const item of ['hold','camera2d','veo']){const option=document.createElement('option');option.value=item;option.textContent={hold:'Ilustración sostenida',camera2d:'Cámara 2D',veo:'Veo'}[item];input.append(option);}input.value=current;}
-   else if(key==='type'&&['sfx','ambience'].includes(current)){input=document.createElement('select');for(const item of ['sfx','ambience']){const option=document.createElement('option');option.value=item;option.textContent={sfx:'Efecto con instante de contacto',ambience:'Ambiente en bucle'}[item];input.append(option);}input.value=current;}
-   else{input=document.createElement(typeof current==='string'?'textarea':'input');if(typeof current==='boolean'){input.type='checkbox';input.checked=current;}else if(typeof current==='number'){input.type='number';input.step='any';input.value=current;}else input.value=current;}
-   input.onchange=()=>{const v=typeof current==='boolean'?input.checked:typeof current==='number'?Number(input.value):input.value;const k=JSON.stringify(next);if(v===current)patches.delete(k);else patches.set(k,{path:next,value:v});};label.append(input);parent.append(label);
-  }
- }
- fields(box,entity.data);
- const order=card('Orden de tomas','<p>Mover una toma conserva su contenido. Revisa continuidad y anclas después de aprobar.</p>'),ordered=[...entity.data.shots];box.append(order);
- function drawOrder(){order.querySelectorAll('.shot-order').forEach(x=>x.remove());ordered.forEach((shot,index)=>{const row=document.createElement('div');row.className='shot-order';row.textContent=entityName(entity.data,shot.id);buttons(row,[['↑',()=>move(index,-1),true],['↓',()=>move(index,1),true]]);order.append(row);});}
- function move(index,delta){const target=index+delta;if(target<0||target>=ordered.length)return;[ordered[index],ordered[target]]=[ordered[target],ordered[index]];patches.set('order',{path:['shots'],value:ordered});drawOrder();}drawOrder();
- const report=document.createElement('div');box.append(report);let confirmed;
- buttons(box,[['Revisar cambios',async()=>{const input={sourceHash:entity.dataHash,patches:[...patches.values()]};const result=await api(route(`/developments/${entity.id}/edits:preview`),'POST',input);confirmed={...input,impactHash:result.impactHash};report.replaceChildren();const detail=document.createElement('p');detail.textContent=`${result.report.changes.length} cambios. Recursos que necesitan revisión: ${result.report.assetsNeedingReview.map(x=>entityName(entity.data,x.entityId)+' ('+titleFor(x.kind)+')').join(', ')||'ninguno'}. No se genera contenido al guardar.`;report.append(detail);}],['Guardar candidata',async()=>{if(!confirmed||JSON.stringify(confirmed.patches)!==JSON.stringify([...patches.values()]))throw new Error('Revisa los cambios actuales antes de guardar.');await mutate(route(`/developments/${entity.id}/edits:save`),confirmed);dialog.close();dialog.remove();await draw();say('Candidata guardada. Revisa y aprueba cuando esté lista.');}],['Cerrar',()=>{dialog.close();dialog.remove();},true]]);
- dialog.showModal();
-}
-
 async function subtitlesView(){
  const data=await api(route('/subtitles'));
  if(!data.rows.length){empty('Primero prepara las voces','Los subtítulos se ajustan al audio definitivo.');return;}
@@ -1502,16 +1474,6 @@ async function createShotImageWithInstruction(shot){
  buttons(box,[['Generar imagen principal',async()=>{if(!field.value.trim())throw new Error('Escribe la instrucción para la imagen.');const instruction=field.value.trim();dialog.close();dialog.remove();await runTask('image',route('/assets:generate'),{operation:'image',entityId:shot.id,shotImageInstruction:instruction});await draw();say('Imagen principal creada y en uso para el video.');},true],['Cerrar',()=>{dialog.close();dialog.remove();},true]]);dialog.showModal();
 }
 
-async function visualEditor(shot){
- const dialog=document.createElement('dialog');document.body.append(dialog);const box=card('Movimiento y cámara','<p>La cámara reutiliza la imagen aprobada.</p>');dialog.append(box);
- const fields={},field=(key,label,value,min,max,step='any')=>{const l=document.createElement('label');l.textContent=label;const input=document.createElement('input');input.type='number';input.min=min;input.max=max;input.step=step;input.value=value;l.append(input);box.append(l);fields[key]=input;};
- const methodLabel=document.createElement('label');methodLabel.textContent='Tratamiento';const method=document.createElement('select');for(const [value,label] of [['hold','Ilustración sostenida'],['camera2d','Cámara 2D'],['veo','Veo']]){const option=document.createElement('option');option.value=value;option.textContent=label;method.append(option);}method.value=shot.treatment==='localized'?'hold':shot.treatment;methodLabel.append(method);box.append(methodLabel);
- for(const [end,label] of [['start','Inicio'],['end','Final']]){const values=shot.camera?.[end]||[1,.5,.5];field(end+'Zoom',label+' · zoom',values[0],1,2);field(end+'X',label+' · centro horizontal (%)',values[1]*100,0,100);field(end+'Y',label+' · centro vertical (%)',values[2]*100,0,100);}
- const base=selectedAsset(shot.id,'image');
- if(base){const image=document.createElement('img');image.src=(await api(route(`/assets/${base.id}/url`))).url;image.alt='Imagen aprobada de la toma';box.append(image);}
- const layerRows=[];
- buttons(box,[['Guardar candidata visual',async()=>{const camera=Object.fromEntries(['start','end'].map(end=>[end,[Number(fields[end+'Zoom'].value),Number(fields[end+'X'].value)/100,Number(fields[end+'Y'].value)/100]]));const layers=layerRows.filter(x=>x.use.checked).map(({variant,inputs,voice})=>({...(voice.value?{voiceBinding:(()=>{const a=p.assets.find(a=>a.id===voice.value);return {utteranceId:a.entityId,audioRevision:a.id,audioHash:a.sha256};})()}:{}),assetRevision:variant.id,mask:Object.fromEntries(['x','y','width','height'].map(k=>[k,Number(inputs[k].value)/100])),startFrame:Number(inputs.startFrame.value),endFrame:Number(inputs.endFrame.value),approved:true}));await mutate(route(`/shots/${shot.id}/visual:propose`),{treatment:method.value,camera,layers});dialog.close();dialog.remove();stage='Historia';await draw();say('Edición visual candidata. Revisa su alcance antes de aprobarla.');}],['Cerrar',()=>{dialog.close();dialog.remove();},true]]);dialog.showModal();
-}
 
 // A transport can be injected by the isolated UI tests; production always uses fetch.
 export async function mountStudio(identity,options={}){

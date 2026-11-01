@@ -760,3 +760,24 @@ abrir sus generadores». La insignia de cada versión dice «Versión en uso» u
 
 Prueba: `tests/shorts/ui/studio.test.mjs` (con el guion ya en producción hay un
 solo botón hacia producción y ninguno dice «aprobar»).
+
+## U043 — El guion no se cambia: si la historia no gusta, se empieza otra (2026-11-01)
+
+«El guion que me genera el director al principio es el que yo utilizo para una
+historia. Si a mí no me gusta esa historia, yo no voy a estar cambiando partes
+del guion. Yo lo elimino y creo una historia nueva.» No basta con esconder un
+botón: se quitan las funciones de cambiar el guion.
+
+Con el guion en producción, Historia sólo lo muestra para leerlo: desaparecen
+«Generar otra historia», «Corregir con IA», «Editar manualmente» (el editor de
+guion y biblias, con su orden de tomas), las versiones anteriores y «Usar esta
+versión». En Escenas desaparece «Movimiento y cámara», que proponía un cambio
+del guion que luego había que aprobar. Siguen las herramientas de imagen («Ver
+y editar prompt de imagen», «Crear imagen principal con instrucción») y la
+elección de voz, que no cambian la historia.
+
+Sólo se pone en uso lo que termina de escribir ese mismo guion: si se escribió
+por pasos y se paró a mitad, el último paso (revisión) sigue pudiendo usarse.
+
+Prueba: `tests/shorts/ui/studio.test.mjs` (con el guion en producción no queda
+ninguna forma de cambiarlo, y las herramientas de imagen siguen).
