@@ -175,3 +175,17 @@ class CerrarSinNadaDudosoTests(unittest.TestCase):
 
 
 if __name__ == '__main__':unittest.main()
+
+
+class EnlaceDelVideoTests(unittest.TestCase):
+    """«Cuando le doy al botón de play se queda cargando y nunca termina.» El
+    enlace firmado caducaba a los 15 minutos de preparar la vista previa."""
+
+    def test_a_media_link_lasts_hours_not_minutes(self):
+        import datetime
+        from shorts.service import cloud as modulo
+        c = modulo.Cloud.__new__(modulo.Cloud);c.c = {'serviceAccount': 'sa@example.invalid'}
+        c.credentials = Mock(token='t');blob = Mock();c.blob = Mock(return_value=blob)
+        with patch.object(modulo, 'Request'):c.url('p', 'previews/x/preview.mp4')
+        dura = blob.generate_signed_url.call_args.kwargs['expiration']
+        self.assertGreaterEqual(dura, datetime.timedelta(hours=6))

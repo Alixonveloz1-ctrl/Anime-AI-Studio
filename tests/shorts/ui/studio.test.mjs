@@ -175,6 +175,24 @@ test('Subtitle approval, automatic preview preparation and final export are conn
  assert.equal([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Compilar montaje'),false);dom.window.close();
 });
 
+test('A preview whose link stopped working asks for a new one by itself, and says so if that fails too',async()=>{
+ // «Cuando le doy al botón de play se queda cargando y nunca termina.»
+ const {fixture,w,dom,click}=await setup();
+ try{
+  await click('Exportar');await click('Revisar el corto');await click('Preparar vista previa');
+  const video=w.document.querySelector('video.preview-player');assert.ok(video);
+  assert.equal(video.preload,'metadata');
+  const pedidas=()=>fixture.calls.filter(c=>/\/previews\/preview\d+$/.test(c.path)).length;
+  const antes=pedidas();
+  await video.onerror();
+  assert.equal(pedidas(),antes+1,'pide un enlace nuevo una vez');
+  assert.ok(video.isConnected,'y sigue el mismo reproductor');
+  await video.onerror();
+  assert.equal(pedidas(),antes+1,'no insiste sin fin');
+  assert.match(w.document.body.textContent,/No se pudo cargar el video\. Pulsa «Reproducir» otra vez\./);
+ }finally{dom.window.close();}
+});
+
 test('A short longer than five minutes with only notes from the montage can be exported',async()=>{
  // Un corto que se alargó por las voces (340 s) no encontraba su vista previa,
  // y los avisos informativos frenaban la exportación. (U038)

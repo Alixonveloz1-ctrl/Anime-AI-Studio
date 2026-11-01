@@ -664,3 +664,20 @@ frene un corto completo, fundido real entre una toma roja y una azul, trozo que
 empieza a mitad del fundido igual que el corto entero) y
 `tests/shorts/ui/studio.test.mjs` (una línea corta en vez del párrafo; un corto
 de 340 segundos con sólo avisos se exporta).
+
+## U039 — La vista previa se quedaba cargando al pulsar reproducir (2026-11-01)
+
+«La vista previa sale como terminada y aparece la pantalla para reproducir,
+pero cuando le doy al botón de play se queda cargando y nunca termina.» El
+enlace firmado de cada archivo caducaba a los 15 minutos. Una vista previa tarda
+varios minutos en prepararse; si el dueño pulsaba reproducir más tarde, o seguía
+viendo un corto de cinco minutos con pausas, el teléfono pedía el video con un
+enlace caducado y Safari se quedaba cargando sin dar ningún error.
+
+Ahora el enlace dura 12 horas, y si el video aun así no carga, la página pide un
+enlace nuevo una vez y sigue en el mismo segundo; si tampoco carga, lo dice con
+palabras en vez de girar sin fin.
+
+Pruebas: `tests/shorts/test_preview_failures.py` (el enlace dura horas) y
+`tests/shorts/ui/studio.test.mjs` (un fallo del video pide un enlace nuevo una
+sola vez y, si vuelve a fallar, avisa).

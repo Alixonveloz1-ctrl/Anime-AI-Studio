@@ -1358,7 +1358,19 @@ async function uploadSound(r,file,progress){
  say(jobId?'Efecto guardado y en uso.':'Archivo conservado. Su preparación espera tu autorización.');
 }
 
-async function playPreview(id,parent){const d=await api(route(`/previews/${id}`));if(!d.url)throw new Error('Preview aún no disponible.');if(d.current===false){const stale=document.createElement('p');stale.className='error';stale.textContent='Versión anterior: cambiaron sus dependencias. Puedes compararla, pero no aprobar ajustes nuevos con ella.';parent.append(stale);}const falta=faltaParaExportar(d.draftIssues);if(falta){const note=document.createElement('p');note.className='muted';note.textContent=falta;parent.append(note);}parent.querySelector(':scope > video.preview-player')?.remove();const v=document.createElement('video');v.className='preview-player';v.controls=true;v.playsInline=true;v.src=d.url;parent.append(v);return d;}
+async function playPreview(id,parent){const d=await api(route(`/previews/${id}`));if(!d.url)throw new Error('Preview aún no disponible.');if(d.current===false){const stale=document.createElement('p');stale.className='error';stale.textContent='Versión anterior: cambiaron sus dependencias. Puedes compararla, pero no aprobar ajustes nuevos con ella.';parent.append(stale);}const falta=faltaParaExportar(d.draftIssues);if(falta){const note=document.createElement('p');note.className='muted';note.textContent=falta;parent.append(note);}parent.querySelector(':scope > video.preview-player')?.remove();const v=document.createElement('video');v.className='preview-player';v.controls=true;v.playsInline=true;v.preload='metadata';v.src=d.url;
+ // Si el enlace ya no sirve (caducó, se cortó la conexión), el teléfono se
+ // quedaba cargando sin avisar. Se pide un enlace nuevo una vez y se sigue en
+ // el mismo segundo; si tampoco carga, se dice con palabras.
+ let renovado=false;
+ v.onerror=async()=>{
+  const segundo=v.currentTime||0;
+  if(renovado){v.replaceWith(Object.assign(document.createElement('p'),{className:'error',textContent:'No se pudo cargar el video. Pulsa «Reproducir» otra vez.'}));return;}
+  renovado=true;
+  try{const nuevo=await api(route(`/previews/${id}`));if(!nuevo.url)return;v.src=nuevo.url;if(segundo)v.addEventListener('loadedmetadata',()=>{v.currentTime=segundo;},{once:true});v.load();}
+  catch{v.onerror();}
+ };
+ parent.append(v);return d;}
 async function preparePreview(parent){
  const t=await mutate(route('/timeline:compile'),{});const id=await runTask('preview',route('/previews'),{timelineId:t.id,startFrame:0,endFrame:t.data.frames});
  if(id){const job=await api('/jobs/'+id);if(job.result?.previewId){await playPreview(job.result.previewId,parent);keepInlineResult();}}

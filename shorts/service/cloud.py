@@ -9,6 +9,9 @@ from google.auth.transport.requests import AuthorizedSession, Request
 from google.oauth2 import id_token
 from shorts.core.contracts import require, ident, revision, digest, ContractError
 from shorts.core.jobs import create_job, claim, settle, close_uncertain
+
+# Cuánto vale el enlace firmado de un archivo (imagen, voz, video, vista previa).
+ENLACE_VALIDO=datetime.timedelta(hours=12)
 from shorts.core.requests import check_call_scope, verify_models
 from shorts.core.dispatch import resource_class, acquire
 
@@ -84,7 +87,12 @@ class Cloud:
     def url(self,p,name):
         blob=self.blob(p,name)
         self.credentials.refresh(Request())
-        return blob.generate_signed_url(version='v4',expiration=datetime.timedelta(minutes=15),method='GET',service_account_email=self.c['serviceAccount'],access_token=self.credentials.token)
+        # El enlace caducaba a los 15 minutos. Una vista previa tarda varios
+        # minutos en prepararse; si el dueño pulsaba reproducir más tarde, o
+        # seguía viendo un corto de cinco minutos con pausas, el teléfono pedía
+        # el video con un enlace caducado y se quedaba cargando sin avisar.
+        # Es una aplicación de uso personal: 12 horas cubren cualquier sesión.
+        return blob.generate_signed_url(version='v4',expiration=ENLACE_VALIDO,method='GET',service_account_email=self.c['serviceAccount'],access_token=self.credentials.token)
     def upload_file(self,p,aid,path,name,mime):
         obj=self.object_name(p,aid,name);self.blob(p,obj).upload_from_filename(str(path),content_type=mime,if_generation_match=0)
         return obj
