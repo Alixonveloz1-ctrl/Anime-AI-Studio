@@ -151,16 +151,21 @@ function avisoDeVelocidad(frames){
  if(velocidad>RETIME_NATURAL[1])return `Esta toma dura ${(frames/24).toFixed(1)} s y el clip más corto dura 4 s: el video se acelerará ${velocidad.toFixed(1)}x para ajustarse, entero y sin cortarse.`;
  return null;
 }
-// Treinta veces «Falta voz aprobada: …», cada una con su frase entera, llenaba
-// la pantalla sin decir nada más que «faltan treinta voces».
-function resumirPendientes(issues){
- const grupos=new Map();
- for(const issue of issues){
-  const corte=String(issue).indexOf(':');
-  const clave=corte>0?String(issue).slice(0,corte):String(issue);
-  (grupos.get(clave)||grupos.set(clave,[]).get(clave)).push(issue);
+// Bajo la vista previa salía un párrafo enorme con cada aviso del borrador. El
+// dueño no lo va a leer, y la mayoría no pedía nada: una toma que el montaje
+// alargó para que quepa la voz, un video ralentizado, una música que cubre a
+// la que falta. Eso ya está resuelto y no se muestra. Sólo queda una línea con
+// lo que de verdad falta para exportar, contado, no enumerado.
+const SOLO_INFORMA=['La voz medida no cabe','Video ralentizado','Video acelerado','Legibilidad de subtítulos','Revisar subtítulos tras cambiar audio','Falta música aprobada'];
+function faltaParaExportar(issues){
+ const cuenta=new Map();
+ for(const issue of issues||[]){
+  const t=String(issue);if(SOLO_INFORMA.some(x=>t.startsWith(x)))continue;
+  const nombre=t.startsWith('Falta voz')?['voz','voces']:t.startsWith('Falta material')?['imagen','imágenes']:t.startsWith('Falta efecto')?['efecto','efectos']:t.startsWith('Completa y aprueba')?['revisión del sonido en Historia','revisiones del sonido en Historia']:['ajuste por revisar','ajustes por revisar'];
+  const fila=cuenta.get(nombre[0])||{n:0,nombre};fila.n++;cuenta.set(nombre[0],fila);
  }
- return [...grupos].map(([clave,lista])=>lista.length>1?`${clave}: ${lista.length} pendientes`:describeIssue(lista[0])).join(' · ');
+ if(!cuenta.size)return '';
+ return 'Antes de exportar falta: '+[...cuenta.values()].map(({n,nombre})=>`${n} ${n===1?nombre[0]:nombre[1]}`).join(', ')+'.';
 }
 // Un mensaje con «t4_shot_04» dentro no dice nada: cada identificador se
 // cambia por el nombre que lleva la tarjeta en pantalla.
@@ -1353,7 +1358,7 @@ async function uploadSound(r,file,progress){
  say(jobId?'Efecto guardado y en uso.':'Archivo conservado. Su preparación espera tu autorización.');
 }
 
-async function playPreview(id,parent){const d=await api(route(`/previews/${id}`));if(!d.url)throw new Error('Preview aún no disponible.');if(d.current===false){const stale=document.createElement('p');stale.className='error';stale.textContent='Versión anterior: cambiaron sus dependencias. Puedes compararla, pero no aprobar ajustes nuevos con ella.';parent.append(stale);}if(d.draftIssues?.length){const note=document.createElement('p');note.className='muted';note.textContent='Borrador: '+resumirPendientes(d.draftIssues);parent.append(note);}parent.querySelector(':scope > video.preview-player')?.remove();const v=document.createElement('video');v.className='preview-player';v.controls=true;v.playsInline=true;v.src=d.url;parent.append(v);return d;}
+async function playPreview(id,parent){const d=await api(route(`/previews/${id}`));if(!d.url)throw new Error('Preview aún no disponible.');if(d.current===false){const stale=document.createElement('p');stale.className='error';stale.textContent='Versión anterior: cambiaron sus dependencias. Puedes compararla, pero no aprobar ajustes nuevos con ella.';parent.append(stale);}const falta=faltaParaExportar(d.draftIssues);if(falta){const note=document.createElement('p');note.className='muted';note.textContent=falta;parent.append(note);}parent.querySelector(':scope > video.preview-player')?.remove();const v=document.createElement('video');v.className='preview-player';v.controls=true;v.playsInline=true;v.src=d.url;parent.append(v);return d;}
 async function preparePreview(parent){
  const t=await mutate(route('/timeline:compile'),{});const id=await runTask('preview',route('/previews'),{timelineId:t.id,startFrame:0,endFrame:t.data.frames});
  if(id){const job=await api('/jobs/'+id);if(job.result?.previewId){await playPreview(job.result.previewId,parent);keepInlineResult();}}
@@ -1380,10 +1385,13 @@ async function exportsView(){
  pageTitle('Exportar','Conserva la versión que has revisado.');
  if(!development()){empty('El corto todavía no tiene guion aprobado','Continúa en Historia.');return;}
  const c=card('Preparar entrega');screen.append(c);
- const ready=p.previews.filter(r=>!r.final&&r.state==='ready'&&r.startFrame===0&&r.endFrame>=6840&&r.endFrame<=7560).sort((a,b)=>(b.created||0)-(a.created||0));
+ // Antes sólo valía una vista previa de 285 a 315 segundos: un corto que se
+ // alargó por las voces nunca encontraba la suya y no se podía exportar. Vale
+ // la del corto completo, dure lo que dure.
+ const ready=p.previews.filter(r=>!r.final&&r.state==='ready'&&r.startFrame===0).sort((a,b)=>(b.created||0)-(a.created||0));
  let current;for(const candidate of ready){const detail=await api(route(`/previews/${candidate.id}`));if(detail.current&&detail.fullProgram){current=detail;break;}}
  if(!current){c.innerHTML+='<p>Prepara y revisa el corto completo antes de exportar.</p>';buttons(c,[['Revisar el corto',()=>go('Revisión')]]);}
- else if(current.draftIssues?.length){const list=document.createElement('p');list.textContent=resumirPendientes(current.draftIssues);c.append(list);buttons(c,[['Revisar pendientes',()=>go('Revisión')],['Abrir producción',()=>go('Escenas'),true]]);}
+ else if(faltaParaExportar(current.draftIssues)){const list=document.createElement('p');list.textContent=faltaParaExportar(current.draftIssues);c.append(list);buttons(c,[['Revisar pendientes',()=>go('Revisión')],['Abrir producción',()=>go('Escenas'),true]]);}
  else{c.innerHTML+='<p>Reproduce esta versión. Al aprobarla se prepararán el video final, los subtítulos y las pistas de sonido.</p>';await playPreview(current.id,c);buttons(c,[['Aprobar y exportar',async()=>{const t=await mutate(route('/timeline:compile'),{});if(t.compiledHash!==current.manifestHash)throw new Error('El corto cambió. Revisa una nueva vista previa antes de exportar.');await approve('timelines',t.id);await runTask('render',route('/renders'));await draw();}]]);}
  await previewHistory(screen,true);
 }

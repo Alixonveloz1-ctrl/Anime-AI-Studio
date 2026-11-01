@@ -73,13 +73,51 @@ def veo_retime(asset,frames):
     if clip_seconds and frames>0:return clip_seconds*24/frames
     return None
 
+def reloj_del_guion(shots,planned):
+    """Traduce un fotograma del guion al mismo instante del corto montado.
+
+    La música se escribe sobre el reloj del guion. Cuando una voz no cabe y su
+    toma se alarga, todo lo que viene después se corre; una pieza puesta en
+    fotogramas fijos dejaba de coincidir con sus tomas y aparecían huecos sin
+    música. Cada fotograma se lleva a su toma y a la misma proporción dentro
+    de ella."""
+    tramos=[];cursor=0
+    for s,t in zip(shots,planned):
+        tramos.append((cursor,s['frames'],t['startFrame'],t['frames']));cursor+=s['frames']
+    total=sum(t['frames'] for t in planned)
+    def mapear(frame):
+        for inicio,largo,nuevo,nuevo_largo in tramos:
+            if frame<inicio+largo:
+                return nuevo+round((max(frame,inicio)-inicio)*nuevo_largo/max(1,largo))
+        return total
+    return mapear
+
+def tramos_de_musica(requests,mapear,total,aprobada):
+    """Dónde suena cada pieza, sin huecos de silencio en el fondo.
+
+    Regla del dueño: la música de fondo no se corta. Cada pieza aprobada suena
+    hasta que entra la siguiente, y la última hasta el final del corto. Una
+    pieza que todavía no existe la cubre la anterior, en bucle, en vez de dejar
+    un silencio."""
+    filas=sorted(((mapear(r['startFrame']),mapear(r['endFrame']),r) for r in requests),key=lambda x:x[0])
+    sonando=[(inicio,fin,r,aprobada(r)) for inicio,fin,r in filas if aprobada(r) and inicio<total]
+    out=[]
+    for i,(inicio,fin,r,a) in enumerate(sonando):
+        if i==0 and filas:inicio=min(inicio,filas[0][0])
+        siguiente=sonando[i+1][0] if i+1<len(sonando) else total
+        fin=max(fin,siguiente) if i+1<len(sonando) else total
+        if fin>inicio:out.append((inicio,fin,r,a))
+    return out
+
 def assemble_plan(cloud,p,cue_overrides=None):
     pid=p['id'];dev=cloud.entity(pid,'developments',p['activeDevelopment'])
     require(dev['approvalState']=='approved','SCRIPT_APPROVAL','Guion sin aprobar')
     d=dev['data'];available=approved_assets(cloud,pid)
     if 'approvedAssetIds' in p:available=[a for a in available if a['id'] in p['approvedAssetIds']]
     by=select_assets(available,d,dev['id'],p.get('assetSelections'))
-    assets={};shots=[];cues=[];subtitles=[];elastic=[];voice_by_shot={};issues=[]
+    # issues: lo que falta de verdad y frena la exportación. notes: lo que el
+    # montaje ya resolvió solo y sólo se informa (no bloquea nada).
+    assets={};shots=[];cues=[];subtitles=[];elastic=[];voice_by_shot={};issues=[];notes=[]
     if dev.get('editorialStage',4)<4:
         issues.append('Completa y aprueba el plan de sonido y la revisión de continuidad en Historia antes de exportar.')
     for u in d['utterances']:
@@ -92,7 +130,7 @@ def assemble_plan(cloud,p,cue_overrides=None):
         # Only pauses explicitly approved with development can absorb time.
         lo,hi=shot_bounds(s,minimum,draft=True)
         if lo>s.get('maxFrames',s['frames']):
-            issues.append(f"La voz medida no cabe en el tiempo previsto de {s['id']}: el borrador alarga esa toma a {lo/24:.1f} s. Ajústala antes de exportar.")
+            notes.append(f"La voz medida no cabe en el tiempo previsto de {s['id']}: la toma se alarga a {lo/24:.1f} s.")
         elastic.append({'id':s['id'],'minFrames':lo,'preferredFrames':max(lo,min(hi,s['frames'])),'maxFrames':hi,'timingEvidence':'measured_audio' if speech else 'approved_action'})
     target=duration_target(sum(b['minFrames'] for b in elastic),sum(b['preferredFrames'] for b in elastic),sum(b['maxFrames'] for b in elastic))
     planned=plan_beats(elastic,target)
@@ -124,7 +162,7 @@ def assemble_plan(cloud,p,cue_overrides=None):
             if speed:
                 shot['speed']=speed;shot['trimSeconds']=0;shot['retimeApproved']=True
                 aviso=retime_warning(speed,s['id'])
-                if aviso:issues.append(aviso)
+                if aviso:notes.append(aviso)
         elif shot['treatment']=='veo':
             # Toma pensada como video que todavía sólo tiene imagen: se ve la
             # imagen quieta hasta que llegue el video, en vez de negarse a
@@ -168,11 +206,14 @@ def assemble_plan(cloud,p,cue_overrides=None):
             sub=next((x for x in d['subtitles'] if x['utteranceId']==u['id']),None)
             require(sub,'SUBTITLE_MISSING','Falta traducción española vinculada')
             segments,stale=subtitle_segments(u,audio,sub['text'],p.get('subtitleEdits',{}))
-            if stale:issues.append('Revisar subtítulos tras cambiar audio: '+u['id'])
+            if stale:notes.append('Revisar subtítulos tras cambiar audio: '+u['id'])
             segments=[{**seg,'endSample':min(seg['endSample'],trimmed)} for seg in segments if seg['startSample']<trimmed]
             warnings=validate_segments(segments,trimmed)
-            if any(not w['exceptionApproved'] for w in warnings):issues.append('Legibilidad de subtítulos pendiente: '+u['id'])
-            approved=p.get('subtitleApproval',{}).get('developmentId')==dev['id'] and p.get('subtitleApproval',{}).get('audioHashes',{}).get(audio['id'])==audio['sha256'] and not stale
+            if any(not w['exceptionApproved'] for w in warnings):notes.append('Legibilidad de subtítulos pendiente: '+u['id'])
+            # Regla del dueño, sin restricciones: los subtítulos salen del guion
+            # y de la voz medida, y van al montaje final sin una aprobación
+            # aparte. Revisarlos sigue siendo posible, nunca obligatorio.
+            approved=True
             for segment in segments:
                 subtitles.append({**segment,'startSample':cursor+segment['startSample'],'endSample':cursor+segment['endSample'],'audioRevision':audio['id'],'approvalState':'approved' if approved else 'needs_review','utteranceId':u['id']})
     all_cues=[x.to_dict() for x in cloud.project_ref(pid).collection('cues').stream()]
@@ -257,52 +298,50 @@ def assemble_plan(cloud,p,cue_overrides=None):
             cues.append(rendered)
     for req in d['soundRequests']:
         if not any(c.get('requestId')==req['id'] for c in stored) and req.get('required',True) and req['id'] not in omitted:issues.append('Falta efecto obligatorio: '+req['name'])
-    music_order=sorted(d['musicRequests'],key=lambda x:x['startFrame'])
-    for ri,r in enumerate(d['musicRequests']):
-        a=by.get((r['id'],'pcm'))
-        if not a:
-            issues.append('Falta música aprobada: '+r['id']);continue
+    for r in d['musicRequests']:
+        if not by.get((r['id'],'pcm')):notes.append('Falta música aprobada: '+r['id'])
+    mapear=reloj_del_guion(d['shots'],planned)
+    tramos=tramos_de_musica(d['musicRequests'],mapear,target,lambda r:by.get((r['id'],'pcm')))
+    for idx,(inicio,fin,r,a) in enumerate(tramos):
         assets[a['id']]=a
-        duration=(r['endFrame']-r['startFrame'])*2000
+        duration=(fin-inicio)*2000
         source=r.get('sourceInSample',0)
         require(0<=source<a['samples'],'MUSIC_COVERAGE','La música no empieza dentro de su archivo')
         # Regla del usuario: música y efectos de sonido SÍ pueden repetirse
-        # en bucle. Si la pieza aprobada es más corta que su intervalo, se
-        # repite desde su inicio y la repetición se corta exactamente para
-        # rellenar solo el tiempo faltante. No se inventa música nueva, no
-        # se alarga el archivo y no se cambia la pieza aprobada.
+        # en bucle. Si la pieza aprobada es más corta que su tramo, se repite
+        # desde su inicio y la repetición se corta exactamente para rellenar
+        # solo el tiempo faltante. No se inventa música nueva, no se alarga el
+        # archivo y no se cambia la pieza aprobada.
         # Cambio de pieza sin corte brusco: la pieza anterior se alarga
-        # 2 segundos sobre la siguiente, bajando, mientras la siguiente
-        # entra subiendo en esos mismos 2 segundos. Es un fundido cruzado
-        # real (las dos suenan a la vez en la frontera), no un corte seco
-        # ni un silencio entre piezas. El fundido nunca supera la mitad
-        # de la pieza más corta de la frontera.
-        idx=next((i for i,x in enumerate(music_order) if x['id']==r['id']),0)
-        nxt=music_order[idx+1] if idx+1<len(music_order) else None
+        # 2 segundos sobre la siguiente, bajando, mientras la siguiente entra
+        # subiendo en esos mismos 2 segundos. Es un fundido cruzado real (las
+        # dos suenan a la vez en la frontera), no un corte seco ni un silencio
+        # entre piezas. El fundido nunca supera la mitad de la pieza más corta
+        # de la frontera. La última pieza se apaga en esos 2 segundos al final.
         cross=0
-        if nxt:
-            nxt_duration=(nxt['endFrame']-nxt['startFrame'])*2000
-            cross=min(96000,duration//2,nxt_duration//2)
-        # El fundido de entrada de cada pieza (salvo la primera) es el
-        # fundido de su frontera anterior, igual al fundido de salida
-        # de la pieza anterior.
+        if idx+1<len(tramos):
+            siguiente=tramos[idx+1]
+            cross=min(96000,duration//2,(siguiente[1]-siguiente[0])*2000//2)
         fade_in_cross=0
         if idx>0:
-            prev=music_order[idx-1]
-            prev_duration=(prev['endFrame']-prev['startFrame'])*2000
-            fade_in_cross=min(96000,prev_duration//2,duration//2)
+            anterior=tramos[idx-1]
+            fade_in_cross=min(96000,(anterior[1]-anterior[0])*2000//2,duration//2)
+        final_fade=min(96000,duration//2) if idx+1==len(tramos) else 0
+        # La frontera cruzada no puede pasar del final del programa.
+        cross=min(cross,max(0,target*2000-fin*2000))
         effective=duration+cross
-        remaining=effective;anchor=r['startFrame']*2000;piece=0
+        remaining=effective;anchor=inicio*2000;piece=0
         while remaining>0:
             take=min(a['samples']-source,remaining)
             last_piece=take==remaining
             fade_in=r.get('fadeInSamples',0) if piece==0 and not fade_in_cross else fade_in_cross if piece==0 else 0
-            fade_out=cross if last_piece and cross else r.get('fadeOutSamples',0) if last_piece else 0
-            cues.append({'id':'music_'+r['id'] if piece==0 else 'music_'+r['id']+'_bucle'+str(piece),'track':'music','audioRevision':a['id'],'anchorSample':anchor,'sourceSyncSample':source,'trimInSample':source,'trimOutSample':source+take,'gainDb':r.get('gainDb',-18),'fadeInSamples':fade_in,'fadeOutSamples':fade_out,'approvalState':'approved'})
+            # Un fundido nunca puede ser más largo que el trozo que suena.
+            fade_out=min(cross or final_fade,take) if last_piece else 0
+            cues.append({'id':'music_'+r['id'] if piece==0 else 'music_'+r['id']+'_bucle'+str(piece),'track':'music','audioRevision':a['id'],'anchorSample':anchor,'sourceSyncSample':source,'trimInSample':source,'trimOutSample':source+take,'gainDb':r.get('gainDb',-18),'fadeInSamples':min(fade_in,take),'fadeOutSamples':fade_out,'approvalState':'approved'})
             anchor+=take;remaining-=take;piece+=1
     events={x.id:x.to_dict() for x in cloud.project_ref(pid).collection('events').stream()}
     used_events={c['eventId'] for c in cues if c.get('eventId')}
     # Waveforms (1600 peaks per audio) were already used above for subtitles and
     # mouths; copied into every timeline they pushed it past Firestore's 1 MB.
     assets={k:{field:value for field,value in a.items() if field!='waveform'} for k,a in assets.items()}
-    return {'schemaVersion':2,'projectId':pid,'format':p['format'],'fps':FPS,'sampleRate':RATE,'frames':target,'assets':assets,'shots':shots,'cues':cues,'events':{k:v for k,v in events.items() if k in used_events},'subtitles':subtitles,'developmentId':dev['id'],'globalGainDb':0,'draftIssues':issues,'cueOverrides':cue_overrides or {},'mixPolicy':p.get('mixPolicy',{})}
+    return {'schemaVersion':2,'projectId':pid,'format':p['format'],'fps':FPS,'sampleRate':RATE,'frames':target,'assets':assets,'shots':shots,'cues':cues,'events':{k:v for k,v in events.items() if k in used_events},'subtitles':subtitles,'developmentId':dev['id'],'globalGainDb':0,'draftIssues':issues,'notes':notes,'cueOverrides':cue_overrides or {},'mixPolicy':p.get('mixPolicy',{})}

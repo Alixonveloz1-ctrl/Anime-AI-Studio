@@ -119,9 +119,15 @@ def visual_clip(s, files, target, w, h, offset, length):
         require(util>1/24,'VIDEO_VACIO','El video de la toma '+str(s.get('id',''))+' está vacío o no se pudo leer. Vuelve a generarlo.')
         completo=max(1,s.get('frames',length))
         speed=util/(completo/24)
-        inicio=corte+offset/24*speed
         args=['-i',archivo]
-        vf=[f'trim=start={inicio}:duration={length/24*speed}',f'setpts=(PTS-STARTPTS)/{speed}','fps=24',f'scale={w}:{h}:force_original_aspect_ratio=decrease',f'pad={w}:{h}:(ow-iw)/2:(oh-ih)/2']
+        # Primero se estira o se encoge el clip entero a la duración de la toma
+        # y se cuenta en fotogramas de la toma; después se toma el trozo pedido
+        # por número de fotograma. Recortar por segundos antes de estirar podía
+        # dejar un trozo muy corto (un solo fotograma) sin ninguna imagen.
+        # El último fotograma se repite si al redondear faltara uno.
+        vf=[f'trim=start={corte}',f'setpts=(PTS-STARTPTS)/{speed}','fps=24',f'tpad=stop_mode=clone:stop={completo}',
+            f'trim=start_frame={offset}:end_frame={offset+length}','setpts=PTS-STARTPTS',
+            f'scale={w}:{h}:force_original_aspect_ratio=decrease',f'pad={w}:{h}:(ow-iw)/2:(oh-ih)/2']
     if typ=='localized':
         layers=s.get('layers',[]); require(bool(layers),'LAYERS','Faltan variantes/capas aprobadas')
         graph=f'[0:v]{",".join(vf)}[base]';previous='base'
@@ -150,6 +156,17 @@ def visual_clip(s, files, target, w, h, offset, length):
         opts=['-filter_complex_threads','1','-filter_complex',graph,'-map',f'[{previous}]']
     else:opts=['-vf',','.join(vf),'-map','0:v:0']
     ff([*args,*opts,'-an','-frames:v',length,'-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p',target])
+
+# Fundido encadenado entre tomas: medio segundo en el que la última imagen de
+# la toma anterior se desvanece sobre el comienzo de la siguiente. Antes cada
+# cambio de toma era un corte seco y se notaba brusco. La toma nueva empieza en
+# su sitio (su voz y su sonido no se mueven) y la duración total no cambia.
+FUNDIDO=12
+
+def fundido(shots, si):
+    """Fotogramas de fundido al entrar en la toma si (0 = corte seco)."""
+    if si==0:return 0
+    return min(FUNDIDO,shots[si]['frames']//3,shots[si-1]['frames']//3)
 
 def con_tratamiento_del_archivo(s, assets):
     """El archivo manda sobre lo que el guion pensó para la toma. Un video
@@ -180,12 +197,30 @@ def render(manifest, root, start=0, end=None, final=False, width=None):
         if left>=right:continue
         offset=left-s['startFrame']; length=right-left; target=root/f'shot-{si}.mp4'
         s=con_tratamiento_del_archivo(s,plan['assets'])
-        try:visual_clip(s,files,target,w,h,offset,length)
+        n=fundido(plan['shots'],si)
+        try:
+            if n and offset<n:
+                # Cabeza de la toma: la anterior se funde en ésta. Se calcula
+                # siempre desde el corte, así un trozo que empiece a mitad del
+                # fundido se ve igual en la vista previa que en la entrega.
+                anterior=con_tratamiento_del_archivo(plan['shots'][si-1],plan['assets'])
+                cabeza=root/f'shot-{si}-cabeza.mp4';ultimo=root/f'shot-{si}-anterior.mp4';base=root/f'shot-{si}-base.mp4'
+                visual_clip(anterior,files,ultimo,w,h,anterior['frames']-1,1)
+                visual_clip(s,files,base,w,h,0,n)
+                hasta=min(n,offset+length)
+                ff(['-i',ultimo,'-i',base,'-filter_complex',
+                    f'[0:v]tpad=stop_mode=clone:stop={n},settb=1/24,setpts=N[a];[1:v]settb=1/24,setpts=N[b];'
+                    f'[a][b]xfade=transition=fade:duration={n/24}:offset=0,trim=start_frame={offset}:end_frame={hasta},setpts=PTS-STARTPTS[v]',
+                    '-map','[v]','-an','-frames:v',hasta-offset,'-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p',cabeza])
+                clips.append(cabeza)
+                if offset+length>n:
+                    visual_clip(s,files,target,w,h,n,offset+length-n);clips.append(target)
+            else:
+                visual_clip(s,files,target,w,h,offset,length);clips.append(target)
         except (subprocess.CalledProcessError,subprocess.TimeoutExpired) as error:
             detalle=(getattr(error,'stderr',None) or b'')[-600:].decode('utf-8','replace')
             print('Montaje del plano',si+1,'falló:',detalle,flush=True)
             raise ContractError('MONTAJE',f'No se pudo montar el Plano {si+1:02d}. Vuelve a pedir la vista previa; si vuelve a fallar, genera otra vez la imagen o el video de ese plano.') from None
-        clips.append(target)
     # La duración del sonido se guarda en el MP4 con la escala del archivo,
     # que por defecto es de milésimas. Un trozo de 494 fotogramas (20,5833 s)
     # quedaba en 20,583 s y la comprobación final lo rechazaba: fallaban dos de

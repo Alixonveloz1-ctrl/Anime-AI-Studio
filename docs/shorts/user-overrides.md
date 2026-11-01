@@ -627,3 +627,40 @@ sólo tiene imagen, montaje viejo, plano roto con su nombre llano, fallo del
 montaje que termina como fallo claro, envío dudoso que sigue sin repetirse) y
 `tests/shorts/ui/studio.test.mjs` / `cortos-jobs.test.mjs` (la pantalla dice
 «No se completó» y ofrece sólo «Cerrar»).
+
+## U038 — Música de fondo sin huecos, fundido entre tomas y menos texto (2026-11-01)
+
+Tras ver la primera vista previa completa, el dueño pidió tres cosas:
+
+- «La música comienza bien, minuto y medio, luego dos minutos sin música, vuelve
+  veinte segundos y se vuelve a cortar.» La música se escribía sobre el reloj
+  del guion; cuando una voz no cabía y su toma se alargaba, todo se corría y la
+  música dejaba de coincidir. Además una pieza todavía sin generar dejaba su
+  tramo en silencio. Ahora cada pieza sigue a sus tomas aunque se alarguen,
+  suena hasta que entra la siguiente (en bucle si hace falta), la que falta la
+  cubre la anterior y la última llega hasta el final del corto y se apaga en dos
+  segundos. El cambio de pieza sigue siendo un fundido cruzado.
+- «Los cambios entre un video y otro son muy bruscos.» Entre toma y toma hay
+  ahora medio segundo de fundido encadenado: la última imagen de la toma
+  anterior se desvanece sobre el comienzo de la siguiente. La toma nueva empieza
+  en su sitio, con su voz y sus sonidos, y la duración no cambia. La vista previa
+  de un trozo se ve igual que la entrega final. El recorte de los videos se hace
+  ahora por fotogramas de la toma, así un trozo muy corto nunca sale vacío.
+- «No tengo necesidad de ver todo ese texto de un millón de palabras.» Bajo la
+  vista previa y en Exportar sólo queda una línea con lo que de verdad falta,
+  contado («Antes de exportar falta: 2 voces, 1 imagen»). Lo que el montaje ya
+  resolvió solo —una toma alargada para que quepa la voz, un video ralentizado o
+  acelerado, una música que cubre a la que falta, subtítulos rápidos de leer— no
+  se muestra y ya no frena la exportación. Los subtítulos van al montaje final
+  sin una aprobación aparte (revisarlos sigue siendo posible, nunca obligatorio).
+
+También se quita de Exportar el último resto de la regla de los cinco minutos:
+sólo valía una vista previa de 285 a 315 segundos, así que un corto alargado por
+las voces nunca podía exportarse.
+
+Pruebas: `tests/shorts/test_music_and_transitions.py` (música sin huecos con
+piezas que faltan, música que sigue a una toma alargada, final suave, nada que
+frene un corto completo, fundido real entre una toma roja y una azul, trozo que
+empieza a mitad del fundido igual que el corto entero) y
+`tests/shorts/ui/studio.test.mjs` (una línea corta en vez del párrafo; un corto
+de 340 segundos con sólo avisos se exporta).

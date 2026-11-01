@@ -175,6 +175,20 @@ test('Subtitle approval, automatic preview preparation and final export are conn
  assert.equal([...w.document.querySelectorAll('button')].some(b=>b.textContent==='Compilar montaje'),false);dom.window.close();
 });
 
+test('A short longer than five minutes with only notes from the montage can be exported',async()=>{
+ // Un corto que se alargó por las voces (340 s) no encontraba su vista previa,
+ // y los avisos informativos frenaban la exportación. (U038)
+ const avisos=['La voz medida no cabe en el tiempo previsto de shot1: la toma se alarga a 12.7 s.','Video ralentizado: shot1 queda a 1.8x de lento','Falta música aprobada: music1'];
+ const {fixture,w,dom,click}=await setup({largo:340*24,pendientes:avisos});
+ try{
+  await click('Exportar');await click('Revisar el corto');await click('Subtítulos');
+  await click('Aprobar subtítulos revisados');await click('Preparar vista previa');await click('Exportar');
+  assert.doesNotMatch(w.document.body.textContent,/Prepara y revisa el corto completo/);
+  await click('Aprobar y exportar');
+  assert.ok(fixture.calls.some(c=>c.path.endsWith('/renders')),'se exporta');
+ }finally{dom.window.close();}
+});
+
 // Approving records the audio hashes of the voices, not the blocks on screen:
 // an edited but unsaved block was silently dropped and the export carried the
 // old subtitles.
@@ -676,17 +690,18 @@ test('A task queued behind a busy engine starts on its own, with nothing to pres
  }finally{dom.window.close();}
 });
 
-test('Pending work in a preview is summed up instead of listed line by line',async()=>{
+test('Pending work in a preview is one short line, and what the montage already solved is not shown',async()=>{
  const faltan=Array.from({length:30},(_,i)=>'Falta voz aprobada: voice'+i);
- const {w,dom,click}=await setup({pendientes:[...faltan,'Falta material aprobado: shot2']});
+ // «No tengo necesidad de ver todo ese texto de un millón de palabras.» (U038)
+ const resueltos=['La voz medida no cabe en el tiempo previsto de shot1: la toma se alarga a 12.7 s.','Video ralentizado: shot1 queda a 1.8x de lento','Legibilidad de subtítulos pendiente: voice1','Falta música aprobada: music1'];
+ const {w,dom,click}=await setup({pendientes:[...faltan,'Falta material aprobado: shot2',...resueltos]});
  try{
-  // Treinta frases enteras repetidas llenaban la pantalla sin decir nada más
-  // que «faltan treinta voces».
   await click('Escenas');
   await click('Ver y escuchar esta toma',w.document.querySelector('.shot-section'));
   const texto=w.document.querySelector('.shot-section').textContent;
-  assert.match(texto,/Falta voz aprobada: 30 pendientes/);
+  assert.match(texto,/Antes de exportar falta: 30 voces, 1 imagen\./);
   assert.doesNotMatch(texto,/voice7/,'no se enumera una por una');
+  assert.doesNotMatch(texto,/alarga|ralentizado|Legibilidad|música/,'lo que ya está resuelto no se muestra');
  }finally{dom.window.close();}
 });
 

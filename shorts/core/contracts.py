@@ -166,7 +166,7 @@ def cue_render_data(cue):
     return {k:copy.deepcopy(v) for k,v in cue.items() if k not in ignored}
 
 def compile_timeline(manifest, final=False):
-    allowed={'schemaVersion','projectId','format','fps','sampleRate','frames','assets','shots','cues','events','subtitles','developmentId','globalGainDb','draftIssues','cueOverrides','mixPolicy'}
+    allowed={'schemaVersion','projectId','format','fps','sampleRate','frames','assets','shots','cues','events','subtitles','developmentId','globalGainDb','draftIssues','notes','cueOverrides','mixPolicy'}
     require(set(manifest)<=allowed,'MANIFEST_FIELDS','El manifiesto contiene campos no admitidos; no se ejecutan comandos')
     require(not final or not manifest.get('draftIssues'), 'DRAFT_RESOURCES', 'Resuelve los recursos provisionales antes del final')
     require(manifest.get('schemaVersion')==2,'SCHEMA','Esquema incompatible')

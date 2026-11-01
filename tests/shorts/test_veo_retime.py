@@ -80,8 +80,8 @@ class RetimeWarningTests(unittest.TestCase):
         cloud.project_ref.return_value.collection.return_value.stream.return_value=[
             Mock(to_dict=lambda fila=fila:fila) for fila in filas]
         plan=assemble_plan(cloud,{'id':'p','activeDevelopment':'dev','format':'16:9'})
-        lentas=[i for i in plan['draftIssues'] if i.startswith('Video ralentizado:')]
-        self.assertEqual(len(lentas),1,plan['draftIssues'])
+        lentas=[i for i in plan['notes'] if i.startswith('Video ralentizado:')]
+        self.assertEqual(len(lentas),1,plan['notes'])
         self.assertIn('2.5x',lentas[0])
         # Y el montaje sigue recibiendo la velocidad: no se recorta nada.
         self.assertAlmostEqual(plan['shots'][0]['speed'],0.4)

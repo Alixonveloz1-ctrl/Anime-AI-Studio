@@ -1,0 +1,134 @@
+"""«La música comienza bien, minuto y medio, luego dos minutos sin música, vuelve
+veinte segundos y se vuelve a cortar.» «Los cambios entre un video y otro son
+muy bruscos.» «No tengo necesidad de ver todo ese texto.» (U038)"""
+import shutil
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import Mock
+
+RAIZ = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(RAIZ/'worker/montage-shorts'))
+from shorts.core.contracts import compile_timeline
+from shorts.service.timeline import assemble_plan, reloj_del_guion, tramos_de_musica
+from test_manual_development import complete
+
+TOTAL = 6840
+
+
+def plan(musica, aprobadas, tomas=(('t1', 1000), ('t2', 2000), ('t3', 500), ('t4', TOTAL-3500))):
+    d = complete();d['utterances'] = [];d['subtitles'] = [];d['soundRequests'] = []
+    beat = d['beats'][0]['id']
+    d['shots'] = [dict(d['shots'][0], id=i, beatId=beat, frames=f, minFrames=f, maxFrames=f, treatment='hold') for i, f in tomas]
+    d['beats'] = [dict(d['beats'][0], minFrames=TOTAL, preferredFrames=TOTAL, maxFrames=TOTAL)]
+    d['musicRequests'] = [{'id': m, 'prompt': 'Piano', 'seconds': 120, 'startFrame': a, 'endFrame': b, 'sourceInSample': 0,
+                           'fadeInSamples': 0, 'fadeOutSamples': 0} for m, a, b in musica]
+    comun = {'projectId': 'p', 'approvalState': 'approved', 'developmentId': 'dev', 'created': 1, 'sha256': '0'*64}
+    filas = [{**comun, 'id': 'i'+t, 'entityId': t, 'kind': 'image'} for t, _ in tomas]
+    filas += [{**comun, 'id': 'a'+m, 'entityId': m, 'kind': 'pcm', 'samples': 30*48000, 'sampleRate': 48000} for m in aprobadas]
+    cloud = Mock()
+    cloud.entity.return_value = {'id': 'dev', 'approvalState': 'approved', 'data': d}
+    cloud.project_ref.return_value.collection.return_value.stream.return_value = [Mock(to_dict=lambda fila=fila: fila) for fila in filas]
+    return assemble_plan(cloud, {'id': 'p', 'activeDevelopment': 'dev', 'format': '16:9'})
+
+
+def huecos(cues, desde, hasta):
+    tramos = sorted((c['anchorSample'], c['anchorSample']+c['trimOutSample']-c['trimInSample']) for c in cues if c['track'] == 'music')
+    vacios, cursor = [], desde
+    for a, b in tramos:
+        if a > cursor:vacios.append((cursor, a))
+        cursor = max(cursor, b)
+    if cursor < hasta:vacios.append((cursor, hasta))
+    return vacios
+
+
+class MusicaSinHuecosTests(unittest.TestCase):
+    def test_a_missing_piece_is_covered_by_the_previous_one_and_the_last_reaches_the_end(self):
+        # El caso del dueño: cuatro piezas, la 2 y la 4 sin generar.
+        m = plan([('m1', 0, 1000), ('m2', 1000, 3000), ('m3', 3000, 3500), ('m4', 3500, TOTAL)], ['m1', 'm3'])
+        self.assertEqual(huecos(m['cues'], 0, TOTAL*2000), [], 'nunca hay silencio en el fondo')
+        self.assertEqual(sum('Falta música' in n for n in m['notes']), 2)
+        self.assertFalse(any('música' in i for i in m['draftIssues']), 'la música que falta no frena la exportación')
+        compile_timeline(m, False)
+
+    def test_a_gap_left_by_the_script_is_filled(self):
+        m = plan([('m1', 0, 1000), ('m3', 3000, 3500)], ['m1', 'm3'])
+        self.assertEqual(huecos(m['cues'], 0, TOTAL*2000), [])
+
+    def test_music_ends_softly_at_the_end_of_the_short(self):
+        m = plan([('m1', 0, TOTAL)], ['m1'])
+        ultima = max((c for c in m['cues'] if c['track'] == 'music'), key=lambda c: c['anchorSample'])
+        self.assertGreater(ultima['fadeOutSamples'], 0)
+        self.assertLessEqual(ultima['fadeOutSamples'], ultima['trimOutSample']-ultima['trimInSample'])
+
+    def test_music_follows_its_shots_when_a_shot_gets_longer(self):
+        # El guion pone la música en su reloj. Si una toma se alarga por la
+        # voz, todo lo que viene después se corre con ella.
+        guion = [{'frames': 100}, {'frames': 100}, {'frames': 100}]
+        montado = [{'startFrame': 0, 'frames': 100}, {'startFrame': 100, 'frames': 200}, {'startFrame': 300, 'frames': 100}]
+        mapear = reloj_del_guion(guion, montado)
+        self.assertEqual(mapear(0), 0)
+        self.assertEqual(mapear(150), 200, 'la mitad de la toma alargada sigue siendo su mitad')
+        self.assertEqual(mapear(200), 300, 'la tercera toma empieza donde empieza de verdad')
+        self.assertEqual(mapear(300), 400, 'el final del guion es el final del corto')
+        tramos = tramos_de_musica([{'id': 'a', 'startFrame': 0, 'endFrame': 200}, {'id': 'b', 'startFrame': 200, 'endFrame': 300}], mapear, 400, lambda r: r)
+        self.assertEqual([(i, f) for i, f, *_ in tramos], [(0, 300), (300, 400)])
+
+
+class AvisosQueNoFrenanTests(unittest.TestCase):
+    def test_a_complete_short_has_nothing_blocking_even_with_notes(self):
+        m = plan([('m1', 0, TOTAL)], ['m1'])
+        self.assertEqual(m['draftIssues'], [])
+        sumas = {k: dict(a, sha256='%064x' % n) for n, (k, a) in enumerate(m['assets'].items(), 1)}
+        compile_timeline({**m, 'assets': sumas}, True)
+
+
+@unittest.skipUnless(shutil.which('ffmpeg'), 'FFmpeg required')
+class FundidoEntreTomasTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from media import ff, checksum
+        cls.temp = tempfile.TemporaryDirectory(prefix='shorts-fundido-');cls.root = Path(cls.temp.name)
+        for nombre, color in (('rojo', 'red'), ('azul', 'blue')):
+            png = cls.root/f'{nombre}.png'
+            ff(['-f', 'lavfi', '-i', f'color={color}:s=160x90', '-frames:v', '1', png])
+            shutil.copyfile(png, cls.root/f'{nombre}.media')
+        sumas = {n: checksum(cls.root/f'{n}.media') for n in ('rojo', 'azul')}
+        activo = lambda n: {'projectId': 'p', 'kind': 'image', 'approvalState': 'approved', 'sha256': sumas[n], 'local': n+'.media'}
+        cls.manifest = {'schemaVersion': 2, 'projectId': 'p', 'format': '16:9', 'fps': 24, 'sampleRate': 48000, 'frames': 96,
+                        'assets': {'rojo': activo('rojo'), 'azul': activo('azul')},
+                        'shots': [{'id': 'a', 'startFrame': 0, 'frames': 48, 'assetRevision': 'rojo', 'treatment': 'hold'},
+                                  {'id': 'b', 'startFrame': 48, 'frames': 48, 'assetRevision': 'azul', 'treatment': 'hold'}],
+                        'events': {}, 'cues': [], 'subtitles': []}
+
+    @classmethod
+    def tearDownClass(cls):cls.temp.cleanup()
+
+    def color(self, video, frame):
+        from media import ff
+        crudo = ff(['-i', video, '-vf', f'select=eq(n\\,{frame}),scale=1:1', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'])
+        return tuple(crudo[:3])
+
+    def test_the_cut_dissolves_instead_of_jumping(self):
+        from render import render, FUNDIDO
+        r = render(self.manifest, self.root, 0, 96, False, width=160)
+        self.assertEqual(r['frames'], 96, 'la duración no cambia')
+        video = self.root/'preview.mp4'
+        antes, medio, despues = self.color(video, 47), self.color(video, 48+FUNDIDO//2), self.color(video, 48+FUNDIDO+2)
+        self.assertGreater(antes[0], 200);self.assertLess(antes[2], 60)
+        self.assertGreater(medio[0], 60, 'a mitad del fundido todavía se ve la toma anterior')
+        self.assertGreater(medio[2], 60, 'y ya se ve la nueva')
+        self.assertLess(despues[0], 60);self.assertGreater(despues[2], 200)
+
+    def test_a_preview_that_starts_inside_the_dissolve_looks_the_same(self):
+        from render import render, FUNDIDO
+        render(self.manifest, self.root, 0, 96, False, width=160)
+        entero = self.color(self.root/'preview.mp4', 48+FUNDIDO//2)
+        r = render(self.manifest, self.root, 48+2, 96, False, width=160)
+        self.assertEqual(r['frames'], 96-50)
+        trozo = self.color(self.root/'preview.mp4', FUNDIDO//2-2)
+        for a, b in zip(entero, trozo):self.assertLessEqual(abs(a-b), 12)
+
+
+if __name__ == '__main__':unittest.main()
