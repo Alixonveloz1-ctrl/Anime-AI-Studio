@@ -141,6 +141,10 @@ class UnFalloDelMontajeNoEsUnEnvioDudosoTests(unittest.TestCase):
         reclamado = (self.job, self.c.db.data['animeShortsProjects/p'], True)
         with patch.dict(os.environ, {'SHORTS_JOB_ID': 'j'}), patch.object(self.runner, 'Cloud', return_value=self.c), \
              patch.object(type(self.c), 'claim', return_value=reclamado), patch.object(self.runner, 'run_job', side_effect=error):
+            # Dentro de la imagen esta prueba corre bajo SHORTS_SELF_TEST=1, y
+            # con esa variable main() lanza la autoprueba entera, que vuelve a
+            # llegar aquí: una vuelta sin fin. patch.dict la devuelve al salir.
+            for modo in ('SHORTS_SELF_TEST', 'SHORTS_CLOUD_SELF_TEST', 'SHORTS_DISPATCH_PROBE'):os.environ.pop(modo, None)
             with self.assertRaises(SystemExit):self.runner.main()
 
     def test_a_broken_preview_ends_as_a_plain_failure_that_can_be_asked_again(self):
