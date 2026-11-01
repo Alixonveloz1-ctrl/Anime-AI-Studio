@@ -644,19 +644,19 @@ async function revise(kind,e){
 function badgeForAsset(a){
  const promotedCopy=a.variantOf?p.assets.find(x=>x.promotedFrom===a.id):null;
  const inUse=promotedCopy&&selectedAsset(a.variantOf,'image')?.id===promotedCopy.id;
- return titleFor(a.approvalState)+(a.variantOf?' · variante':selectedAsset(a.entityId,a.kind)?.id===a.id?' · en uso':'')+(inUse?' · en uso como imagen de la toma':'');
+ // No se aprueba nada: la insignia sólo dice si es lo que está en uso.
+ if(a.approvalState==='quarantined')return titleFor(a.approvalState);
+ return a.variantOf?'Variante'+(inUse?' · en uso como imagen de la toma':''):selectedAsset(a.entityId,a.kind)?.id===a.id?'En uso':'';
 }
 function updateAssetCardInPlace(assetId){
  const cardEl=document.querySelector(`.asset-card[data-asset="${assetId}"]`);if(!cardEl)return false;
  const a=p?.assets?.find(x=>x.id===assetId);if(!a)return false;
  const badge=cardEl.querySelector('.badge');if(badge)badge.textContent=badgeForAsset(a);
  cardEl.querySelector('.actions')?.remove();
- if(a.approvalState==='approved'&&a.variantOf){
+ if(['approved','candidate'].includes(a.approvalState)&&a.variantOf){
   const promotedCopy=p.assets.find(x=>x.promotedFrom===a.id);
   const inUse=promotedCopy&&selectedAsset(a.variantOf,'image')?.id===promotedCopy.id;
   if(!inUse)buttons(cardEl,[['Usar como imagen de esta toma',()=>useVariantAsShotImage(a),true]]);
- }else if(a.approvalState==='approved'&&!a.variantOf&&selectedAsset(a.entityId,a.kind)?.id!==a.id){
-  buttons(cardEl,[['Usar esta versión',()=>approve('assets',a.id),true]]);
  }
  // Si otra tarjeta del mismo recurso dejó de estar en uso, su insignia
  // también cambia, sin tocar su medio ni reconstruirla.
@@ -900,7 +900,7 @@ function editorialNotice(parent){
  const box=card('Puedes producir tus tomas','<p>Genera y revisa imágenes, videos y voces. Antes de exportar, completa el plan de sonido y la revisión de continuidad en Historia.</p>');
  buttons(box,[['Continuar preparación en Historia',()=>go('Historia'),true]]);parent.append(box);
 }
-const selectedAsset=(id,kind)=>{const usable=p.assets.find(a=>a.id===p.usableAssetSelections?.[id+'|'+kind]);if(usable)return usable;const chosen=p.assets.find(a=>a.id===p.assetSelections?.[id+'|'+kind]);if(chosen?.requestId)return chosen;return p.usableAssetSelections?undefined:p.assets.filter(a=>a.entityId===id&&a.kind===kind&&a.approvalState==='approved').at(-1);};
+const selectedAsset=(id,kind)=>{const usable=p.assets.find(a=>a.id===p.usableAssetSelections?.[id+'|'+kind]);if(usable)return usable;const chosen=p.assets.find(a=>a.id===p.assetSelections?.[id+'|'+kind]);if(chosen?.requestId)return chosen;return p.usableAssetSelections?undefined:p.assets.filter(a=>a.entityId===id&&a.kind===kind&&['approved','candidate'].includes(a.approvalState)).at(-1);};
 function expandImage(url,name){
  const dialog=document.createElement('dialog');dialog.className='image-dialog';const bar=document.createElement('div');bar.className='dialog-header';const label=document.createElement('strong');label.textContent=name;bar.append(label,action('Cerrar',()=>{dialog.close();dialog.remove();},true));dialog.append(bar);
  const img=document.createElement('img');img.src=url;img.alt=name;dialog.append(img);document.body.append(dialog);dialog.showModal();
@@ -913,7 +913,7 @@ async function assetCard(parent,a){
  // que selecciona solo la capa y parece no hacer nada.
  const promotedCopy=a.variantOf?p.assets.find(x=>x.promotedFrom===a.id):null;
  const inUse=promotedCopy&&selectedAsset(a.variantOf,'image')?.id===promotedCopy.id;
- const c=card(titleFor(a.kind),`<p class="badge">${esc(titleFor(a.approvalState))}${a.variantOf?' · variante':selectedAsset(a.entityId,a.kind)?.id===a.id?' · en uso':''}${inUse?' · en uso como imagen de la toma':''}</p>`);c.classList.add('asset-card');c.dataset.asset=a.id;c.dataset.entity=a.entityId;c.dataset.kind=a.kind;parent.append(c);
+ const c=card(titleFor(a.kind),`<p class="badge">${esc(badgeForAsset(a))}</p>`);c.classList.add('asset-card');c.dataset.asset=a.id;c.dataset.entity=a.entityId;c.dataset.kind=a.kind;parent.append(c);
  if(a.requestId&&a.samples){const requested=development()?.soundRequests.find(x=>x.id===a.requestId);const duration=document.createElement('p');duration.className='muted';duration.textContent=`Solicitado: ${requested?.seconds??'—'} s · archivo: ${(a.samples/48000).toFixed(2)} s`;c.append(duration);}
  const mediaBox=document.createElement('div');mediaBox.className='asset-media';c.append(mediaBox);
  if(a.approvalState==='quarantined'||!['image','pcm','veo_silent_validated'].includes(a.kind)){mediaBox.textContent='Este archivo no está validado para reproducirse.';return;}
@@ -942,18 +942,10 @@ async function assetCard(parent,a){
  };
  // Cada carga recuerda su tarjeta para poder pedir sólo la que se ve.
  open.tarjeta=c;mediaLoads.push(open);
- // Aprobar un audio es un solo toque: antes, el primer toque solo
- // cargaba el audio y, como el audio no se reproducía, nunca se marcaba
- // como revisado y el botón seguía apareciendo. Para imagen y video se
- // mantiene la regla de no aprobar lo que no cargó, porque ahí hay que
- // verlo primero; el audio lo subió el usuario y lo puede escuchar en
- // su reproductor, así que aprobar no depende de que se reproduzca.
- // La música generada suena sin aprobarla aparte (la más nueva de cada pieza):
- // ofrecer «Aprobar versión» hacía creer que sin ese paso no sonaba.
- const esMusica=!!development()?.musicRequests?.some(m=>m.id===a.entityId);
- if(a.approvalState==='candidate'&&!esMusica)buttons(c,[['Aprobar versión',async()=>{if(a.kind!=='pcm'&&!opened){await open();say('Revisa el recurso cargado y pulsa Aprobar versión cuando esté listo.');return;}await approve('assets',a.id,true);},true]]);
- else if(a.approvalState==='approved'&&a.variantOf&&!inUse)buttons(c,[['Usar como imagen de esta toma',()=>useVariantAsShotImage(a),true]]);
- else if(a.approvalState==='approved'&&!a.variantOf&&selectedAsset(a.entityId,a.kind)?.id!==a.id)buttons(c,[['Usar esta versión',()=>approve('assets',a.id),true]]);
+ // Nada que aprobar: lo más nuevo de cada cosa es lo que se usa. Sólo queda
+ // elegir una variante como imagen de su toma, que es una decisión, no un
+ // permiso.
+ if(['approved','candidate'].includes(a.approvalState)&&a.variantOf&&!inUse)buttons(c,[['Usar como imagen de esta toma',()=>useVariantAsShotImage(a),true]]);
 }
 async function assetVersions(parent,rows){
  const groups=Object.groupBy(rows,a=>a.entityId+'|'+a.kind);
@@ -1210,7 +1202,7 @@ async function importAsset(){
  const others=projects.projects.filter(x=>x.id!==p.id);let source,sourceAssets=[];
  for(const q of others){const option=document.createElement('option');option.value=q.id;option.textContent=q.title;from.append(option);}
  function targets(){target.replaceChildren();const a=sourceAssets.find(x=>x.id===assets.value);if(!a)return;const dev=source.developments.find(x=>x.id===a.developmentId)?.data;const group=['characters','locations','props'].find(k=>dev?.bible[k].some(x=>x.id===a.entityId));const rows=group?development().bible[group]:development().musicRequests;for(const item of rows){const option=document.createElement('option');option.value=item.id;option.textContent=item.name||item.prompt.slice(0,80);target.append(option);}}
- async function load(){assets.replaceChildren();if(!from.value)return;source=await getProject(from.value);sourceAssets=source.assets.filter(a=>{if(a.approvalState!=='approved')return false;const d=source.developments.find(x=>x.id===a.developmentId)?.data;return d&&((a.kind==='image'&&['characters','locations','props'].some(k=>d.bible[k].some(x=>x.id===a.entityId)))||(a.kind==='pcm'&&d.musicRequests.some(x=>x.id===a.entityId)));});for(const a of sourceAssets){const option=document.createElement('option');option.value=a.id;option.textContent=entityName(source.developments.find(x=>x.id===a.developmentId)?.data,a.entityId)+' · '+titleFor(a.kind);assets.append(option);}targets();}
+ async function load(){assets.replaceChildren();if(!from.value)return;source=await getProject(from.value);sourceAssets=source.assets.filter(a=>{if(!['approved','candidate'].includes(a.approvalState))return false;const d=source.developments.find(x=>x.id===a.developmentId)?.data;return d&&((a.kind==='image'&&['characters','locations','props'].some(k=>d.bible[k].some(x=>x.id===a.entityId)))||(a.kind==='pcm'&&d.musicRequests.some(x=>x.id===a.entityId)));});for(const a of sourceAssets){const option=document.createElement('option');option.value=a.id;option.textContent=entityName(source.developments.find(x=>x.id===a.developmentId)?.data,a.entityId)+' · '+titleFor(a.kind);assets.append(option);}targets();}
  from.onchange=()=>load().catch(e=>say(e.message,true));assets.onchange=targets;await load();
  buttons(box,[['Copiar como candidata',async()=>{if(!assets.value||!target.value)throw new Error('Selecciona un recurso compatible y su destino.');const id=await runTask('import',route('/imports'),{sourceProjectId:from.value,sourceAssetId:assets.value,targetId:target.value});if(id){dialog.close();dialog.remove();stage='Historia';await draw();say('Copia conservada con procedencia. Revisa la ficha y el archivo importados antes de aprobarlos.');}}],['Cerrar',()=>{dialog.close();dialog.remove();},true]]);dialog.showModal();
 }
@@ -1407,7 +1399,7 @@ async function exportsView(){
  let current;for(const candidate of ready){const detail=await api(route(`/previews/${candidate.id}`));if(detail.current&&detail.fullProgram){current=detail;break;}}
  if(!current){c.innerHTML+='<p>Prepara y revisa el corto completo antes de exportar.</p>';buttons(c,[['Revisar el corto',()=>go('Revisión')]]);}
  else if(faltaParaExportar(current.draftIssues)){const list=document.createElement('p');list.textContent=faltaParaExportar(current.draftIssues);c.append(list);buttons(c,[['Revisar pendientes',()=>go('Revisión')],['Abrir producción',()=>go('Escenas'),true]]);}
- else{c.innerHTML+='<p>Reproduce esta versión. Al aprobarla se prepararán el video final, los subtítulos y las pistas de sonido.</p>';await playPreview(current.id,c);buttons(c,[['Aprobar y exportar',async()=>{const t=await mutate(route('/timeline:compile'),{});if(t.compiledHash!==current.manifestHash)throw new Error('El corto cambió. Revisa una nueva vista previa antes de exportar.');await approve('timelines',t.id);await runTask('render',route('/renders'));await draw();}]]);}
+ else{c.innerHTML+='<p>Reproduce esta versión. Al exportar se prepararán el video final, los subtítulos y las pistas de sonido.</p>';await playPreview(current.id,c);buttons(c,[['Exportar',async()=>{const t=await mutate(route('/timeline:compile'),{});if(t.compiledHash!==current.manifestHash)throw new Error('El corto cambió. Revisa una nueva vista previa antes de exportar.');await approve('timelines',t.id);await runTask('render',route('/renders'));await draw();}]]);}
  await previewHistory(screen,true);
 }
 
@@ -1475,10 +1467,8 @@ async function subtitlesView(){
  const data=await api(route('/subtitles'));
  if(!data.rows.length){empty('Primero prepara las voces','Los subtítulos se ajustan al audio definitivo.');return;}
  const sinGuardar=new Set();
- // Approving only records the audio hashes, so a block whose text or timings
- // were edited but not saved was dropped in silence and the export used the
- // old subtitles.
- buttons(screen,[['Aprobar subtítulos revisados',async()=>{if(sinGuardar.size)throw new Error('Guarda primero los cambios de '+sinGuardar.size+' bloque(s) con «Guardar subtítulos».');const audioHashes=Object.fromEntries(data.rows.map(row=>[row.audioRevision,row.audioHash]));await mutate(route('/subtitles:approve'),{developmentId:p.activeDevelopment,audioHashes});say('Traducción y tiempos aprobados. Prepara la vista previa del corto.');await go('Revisión','corto');}]]);
+ // Los subtítulos van al montaje solos (U038): no hay nada que aprobar aquí.
+ // Sólo se guardan los cambios de texto o tiempos de cada bloque.
  screen.append(card('Subtítulos sobre la voz definitiva','<p>Los tiempos son relativos a cada intervención. Divide por unidades de sentido y deja libres los silencios. Guardar texto o tiempos no genera otra voz.</p>'));
  for(const row of data.rows){
   const c=card(entityName(development(),row.utteranceId),`<p>${esc(row.japanese)}</p>${row.stale?'<p class="error">La voz cambió: revisa los tiempos.</p>':''}`);screen.append(c);

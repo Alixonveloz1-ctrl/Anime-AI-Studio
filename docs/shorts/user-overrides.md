@@ -706,3 +706,36 @@ Pruebas: `tests/shorts/test_music_and_transitions.py` (cinco pistas con tres sin
 aprobar suenan las cinco, cada una en su tramo; un archivo de 50 s en un tramo de
 30 s suena 30 s; uno de 25 s suena 25 s más 5 s del principio; la versión más
 nueva es la que suena).
+
+## U041 — Nada que aprobar: lo más nuevo de cada cosa es lo que se usa (2026-11-01)
+
+«En ningún lado debe seguir apareciendo nada de aprobar. Yo no tengo por qué
+estar aprobando nada. Siempre la generación más nueva debe ser la que se
+utilice. De todo: imagen, video, música, efectos, voces. Si regenero algo es
+porque lo que había no me gustó; lo nuevo tiene que quedar aprobado solo.»
+
+- Todo archivo generado (imagen, video, voz, música, efecto subido) nace en uso.
+  La página ya aprobaba al terminar cada generación, pero sólo si seguía
+  abierta: si el dueño cerraba o recargaba antes, el archivo se quedaba sin
+  aprobar y el montaje no lo usaba. Ahora lo hace el servidor al crearlo.
+- La elección es siempre lo más nuevo de cada cosa, aprobado o no. Lo generado
+  antes de esta regla y que quedó sin aprobar también vale. Sólo una elección
+  expresa posterior (usar una variante como imagen de su toma) gana a lo más
+  nuevo, porque también es lo último que hizo el dueño.
+- Regenerar el retrato de un personaje ya no deja fuera las imágenes de toma
+  hechas con el anterior (contrato A029): siguen siendo lo más nuevo de su toma
+  hasta que se regeneren. Cambiar el guion de esa toma o de ese personaje sí las
+  deja fuera, porque ya no lo muestran (A025 sigue igual).
+- En pantalla desaparecen «Aprobar versión», «Usar esta versión» (de archivos) y
+  «Aprobar subtítulos revisados»; «Aprobar y exportar» pasa a ser «Exportar». La
+  insignia de cada archivo sólo dice «En uso».
+
+Siguen en Historia los pasos del guion («Aprobar el guion y abrir producción» y
+similares): ahí aprobar es elegir esa versión del guion para seguir.
+
+Pruebas: `tests/shorts/test_dependencies.py` (lo más nuevo gana aunque no esté
+aprobado; un archivo en cuarentena nunca se usa; un retrato nuevo conserva las
+tomas), `tests/shorts/test_workflow.py`, `tests/shorts/test_music_and_transitions.py`
+(una imagen generada nace en uso; lo que quedó sin aprobar entra al montaje) y
+`tests/shorts/ui/studio.test.mjs` (ningún botón de aprobar en Escenas ni en
+Subtítulos; exportar sin aprobar subtítulos).

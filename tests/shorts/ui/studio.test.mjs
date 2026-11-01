@@ -145,14 +145,17 @@ test('Blocked production exposes the next action above the script and reaches im
   assert.deepEqual(fixture.calls.filter(c=>c.path.endsWith('/assets:generate')).map(c=>c.body.operation),['image','veo','tts']);
  }finally{dom.window.close();}
 });
-test('Only the newest version is shown, never old versions; one review approves',async()=>{
- const {fixture,w,dom,click}=await setup();await click('Escenas');
+test('Only the newest version is shown, and it is in use with nothing to approve',async()=>{
+ // «Siempre la generación más nueva debe ser la que se utilice... no tengo
+ // por qué estar aprobando nada.» (U041)
+ const {w,dom,click}=await setup();await click('Escenas');
  const shot=[...w.document.querySelectorAll('.shot-section')][0];const history=[...shot.querySelectorAll('details')].find(x=>x.querySelector('summary')?.textContent.startsWith('Versiones anteriores'));assert.equal(history,undefined);
- const candidate=[...shot.querySelectorAll('.card')].find(x=>x.querySelector(':scope>.badge')?.textContent.includes('Por revisar'));
- assert.ok(candidate);assert.equal(candidate.querySelectorAll('input[type=checkbox]').length,0);
- assert.equal(shot.querySelectorAll('.scene-visuals>.asset-card img').length,1,'Only the newest image is shown, not the older approved one');
- await new Promise(r=>setTimeout(r,0));assert.ok(candidate.querySelector('img'),'Candidate image is visible without opening another panel');candidate.querySelector('img').onload();await click('Aprobar versión',candidate);
- const sent=fixture.calls.find(c=>c.path.includes('imgCandidate:approve'));assert.deepEqual(sent.body,{reviewed:true});assert.equal(fixture.project.assetSelections['shot1|image'],'imgCandidate');dom.window.close();
+ assert.equal(shot.querySelectorAll('.scene-visuals>.asset-card').length,1,'Only the newest image is shown, not the older one');
+ const newest=shot.querySelector('.scene-visuals>.asset-card');
+ assert.equal(newest.dataset.asset,'imgCandidate');
+ assert.equal(newest.querySelector(':scope>.badge').textContent,'En uso');
+ assert.equal([...w.document.querySelectorAll('button')].some(b=>/^Aprobar versión$|^Usar esta versión$/.test(b.textContent)),false,'no approval buttons anywhere');
+ dom.window.close();
 });
 test('Manual synchronization is usable with analysis exhausted and without AI calls',async()=>{
  const {fixture,w,dom,click}=await setup();await click('Escenas');await click('Música y efectos');
@@ -165,7 +168,7 @@ test('Manual synchronization is usable with analysis exhausted and without AI ca
 test('Subtitle approval, automatic preview preparation and final export are connected',async()=>{
  const {fixture,w,dom,click}=await setup();await click('Exportar');await click('Revisar el corto');await click('Subtítulos');
  assert.equal([...w.document.querySelectorAll('textarea')].length,1,'No empty exception fields');
- await click('Aprobar subtítulos revisados');await click('Preparar vista previa');await click('Exportar');await click('Aprobar y exportar');
+ await click('Corto completo');await click('Preparar vista previa');await click('Exportar');await click('Exportar',w.document.querySelector('#screen'));
  // Exportar entrega UN paquete, no una lista de archivos que descargar uno a uno.
  const descargas=[];w.HTMLAnchorElement.prototype.click=function(){descargas.push(this.download);};
  await click('Descargar ZIP');
@@ -199,32 +202,25 @@ test('A short longer than five minutes with only notes from the montage can be e
  const avisos=['La voz medida no cabe en el tiempo previsto de shot1: la toma se alarga a 12.7 s.','Video ralentizado: shot1 queda a 1.8x de lento','Falta música aprobada: music1'];
  const {fixture,w,dom,click}=await setup({largo:340*24,pendientes:avisos});
  try{
-  await click('Exportar');await click('Revisar el corto');await click('Subtítulos');
-  await click('Aprobar subtítulos revisados');await click('Preparar vista previa');await click('Exportar');
+  await click('Exportar');await click('Revisar el corto');
+  await click('Preparar vista previa');await click('Exportar');
   assert.doesNotMatch(w.document.body.textContent,/Prepara y revisa el corto completo/);
-  await click('Aprobar y exportar');
+  await click('Exportar',w.document.querySelector('#screen'));
   assert.ok(fixture.calls.some(c=>c.path.endsWith('/renders')),'se exporta');
  }finally{dom.window.close();}
 });
 
-// Approving records the audio hashes of the voices, not the blocks on screen:
-// an edited but unsaved block was silently dropped and the export carried the
-// old subtitles.
-test('Approving subtitles with an unsaved block is refused until it is saved',async()=>{
+// «Yo no tengo por qué estar aprobando nada.» (U041) Los subtítulos van solos
+// al montaje; en su pantalla sólo se guardan los cambios.
+test('Subtitles have nothing to approve, and an edited block is saved with its button',async()=>{
  const {fixture,w,dom,click}=await setup();
  try{
   await click('Exportar');await click('Revisar el corto');await click('Subtítulos');
+  assert.equal([...w.document.querySelectorAll('button')].some(b=>/Aprobar/.test(b.textContent)),false,'ningún botón de aprobar');
   const text=w.document.querySelector('textarea');
   text.value='Todavia estamos a tiempo, de verdad.';text.onchange();
-  const approve=[...w.document.querySelectorAll('button')].find(b=>b.textContent==='Aprobar subtítulos revisados');
-  await approve.onclick();
-  assert.match(w.document.querySelector('#notice').textContent,/Guarda primero los cambios de 1 bloque/);
-  assert.equal(w.document.querySelector('#notice').className,'error');
-  assert.equal(fixture.calls.some(c=>c.path.endsWith('/subtitles:approve')),false,'nothing was approved');
   await click('Guardar subtítulos');
   assert.equal(fixture.calls.findLast(c=>c.path.includes('/subtitles/')).body.segments[0].text,'Todavia estamos a tiempo, de verdad.');
-  await click('Aprobar subtítulos revisados');
-  assert.ok(fixture.project.subtitleApproval,'the approval goes through once the edit is saved');
  }finally{dom.window.close();}
 });
 
@@ -311,15 +307,15 @@ test('Scenes show image and voice players inline, references stay under Personaj
  }finally{dom.window.close();}
 });
 
-test('A media read failure stays local, leaves scene controls usable and cannot approve an unloaded candidate',async()=>{
+test('A media read failure stays local, leaves scene controls usable and offers to load it again',async()=>{
  const {fixture,w,dom,click}=await setup({failImage:true});
  try{
   await click('Escenas');await new Promise(r=>setTimeout(r,0));
   const broken=[...w.document.querySelectorAll('.asset-card')].find(c=>c.textContent.includes('No se pudo cargar'));
-  assert.ok(broken);assert.ok(broken.querySelector('.asset-media button'));
+  assert.ok(broken);
+  assert.equal(broken.querySelector('.asset-media button')?.textContent,'Volver a cargar');
   assert.equal(w.document.querySelectorAll('.scene-card').length,2);
-  await click('Aprobar versión',broken);
-  assert.equal(fixture.calls.some(c=>c.path.includes('imgCandidate:approve')),false);
+  assert.equal(fixture.calls.some(c=>c.path.includes(':approve')),false,'nothing to approve');
   assert.ok(w.document.querySelector('.scene-card .voice-row audio'));
  }finally{dom.window.close();}
 });
@@ -770,8 +766,7 @@ test('Effect upload accepts named audio formats, not only a generic audio type',
 });
 
 test('A preview shown inside its card stays on screen after the job finishes',async()=>{
- const {w,dom,click}=await setup();await click('Exportar');await click('Revisar el corto');await click('Subtítulos');
- await click('Aprobar subtítulos revisados');
+ const {w,dom,click}=await setup();await click('Exportar');await click('Revisar el corto');await click('Corto completo');
  const button=[...w.document.querySelectorAll('button')].find(b=>b.textContent==='Preparar vista previa'),card=button.closest('article,.card,section')||button.parentElement.parentElement;
  await click('Preparar vista previa');
  assert.ok(card.isConnected,'the card was not rebuilt by a full redraw');

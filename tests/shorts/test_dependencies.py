@@ -35,10 +35,19 @@ class DependencyTests(unittest.TestCase):
         selected=select_assets([portrait,shot,candidate],self.d,'new')
         self.assertEqual(selected[('s','image')]['id'],'shot')
 
-    def test_A029_new_master_invalidates_only_old_reference_uses(self):
+    def test_A029_new_master_keeps_shots_made_with_the_previous_one(self):
+        # U041: regenerar el retrato es «el anterior no me gustó», no «borra mis
+        # tomas». Las imágenes de toma hechas con el retrato anterior siguen
+        # siendo lo más nuevo de su toma hasta que se regeneren.
         portrait=self.asset('portrait','c','image');shot=self.asset('shot','s','image',[portrait]);new=self.asset('new','c','image',time=2)
         selected=select_assets([portrait,shot,new],self.d,'new')
-        self.assertEqual(selected[('c','image')]['id'],'new');self.assertNotIn(('s','image'),selected)
+        self.assertEqual(selected[('c','image')]['id'],'new');self.assertEqual(selected[('s','image')]['id'],'shot')
+
+    def test_U041_the_newest_generation_is_used_even_if_never_approved(self):
+        old=self.asset('old','s','image');fresh=self.asset('fresh','s','image',time=5);fresh['approvalState']='candidate'
+        self.assertEqual(select_assets([old,fresh],self.d,'dev')[('s','image')]['id'],'fresh')
+        broken=self.asset('broken','s','image',time=9);broken['approvalState']='quarantined'
+        self.assertEqual(select_assets([old,fresh,broken],self.d,'dev')[('s','image')]['id'],'fresh','un archivo en cuarentena nunca se usa')
 
     def test_A017_translation_change_does_not_regenerate_japanese_voice(self):
         voice=self.asset('voice','u','pcm');d=copy.deepcopy(self.d);d['utterances'][0]['spanish']='Este es un libro.'
@@ -47,6 +56,10 @@ class DependencyTests(unittest.TestCase):
     def test_A009_select_previous_approved_without_mutating_history(self):
         old=self.asset('old','c','image');new=self.asset('new','c','image',time=2)
         shot=self.asset('shot','s','image',[old]);original=copy.deepcopy([old,new,shot])
+        # Elegir expresamente una versión anterior la vuelve la más reciente
+        # elegida (U041): sin eso, manda la última generada.
+        self.assertEqual(select_assets([old,new,shot],self.d,'dev')[('c','image')]['id'],'new')
+        old['selectedAt']=3;original=copy.deepcopy([old,new,shot])
         selected=select_assets([old,new,shot],self.d,'dev',{'c|image':'old'})
         self.assertEqual(selected[('c','image')]['id'],'old');self.assertEqual(selected[('s','image')]['id'],'shot')
         self.assertEqual([old,new,shot],original)

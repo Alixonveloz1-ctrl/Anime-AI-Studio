@@ -48,7 +48,7 @@ def run_job(cloud,j,p):
         require(p.get('activeDevelopment'),'DEVELOPMENT','Aprueba guion y biblias');return cloud.entity(pid,'developments',p['activeDevelopment'])
     def asset(path,kind,entity_id,meta=None):
         aid=ident_new();obj=cloud.upload_file(pid,aid,path,Path(path).name,media_type(path))
-        a={'id':aid,'projectId':pid,'entityId':entity_id,'developmentId':p.get('activeDevelopment'),'kind':kind,'object':obj,'sha256':checksum(path),'mimeType':media_type(path),'revision':1,'created':time.time(),'approvalState':'candidate','jobId':j['id'],**(meta or {})}
+        a={'id':aid,'projectId':pid,'entityId':entity_id,'developmentId':p.get('activeDevelopment'),'kind':kind,'object':obj,'sha256':checksum(path),'mimeType':media_type(path),'revision':1,'created':time.time(),'approvalState':'approved','approvedBy':'al generarla','jobId':j['id'],**(meta or {})}
         if not a.get('requestId') and p.get('activeDevelopment'):
             a['inputFingerprint']=fingerprint(development()['data'],entity_id,kind)
         cloud.put_entity(pid,'assets',a);return a

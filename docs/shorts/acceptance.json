@@ -522,7 +522,7 @@
       "shorts/service/production.py"
     ],
     "tests": [
-      "tests/shorts/test_dependencies.py:test_A029_new_master_invalidates_only_old_reference_uses",
+      "tests/shorts/test_dependencies.py:test_A029_new_master_keeps_shots_made_with_the_previous_one",
       "tests/shorts/test_workflow.py:test_A029_missing_reference_blocks_before_dispatch"
     ],
     "fixture": "passed_local_partial",

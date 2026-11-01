@@ -22,7 +22,7 @@ def validate_visual(shot, assets):
         layers=shot.get('layers',[]);require(isinstance(layers,list) and 1<=len(layers)<=8,'LAYERS','Selecciona entre una y ocho variantes')
         for layer in layers:
             a=assets.get(layer.get('assetRevision'))
-            require(a and a.get('approvalState')=='approved' and a.get('variantOf')==shot['id'],'LAYER_ASSET','Aprueba una variante de esta toma')
+            require(a and a.get('approvalState') in ('approved','candidate') and a.get('variantOf')==shot['id'],'LAYER_ASSET','Aprueba una variante de esta toma')
             mask=layer.get('mask',{});require(set(mask)=={'x','y','width','height'},'MASK','Marca una máscara rectangular')
             require(all(type(v) in (int,float) and math.isfinite(v) for v in mask.values()),'MASK','Coordenadas inválidas')
             # A region that ends exactly at the right or bottom edge is inside
@@ -35,6 +35,6 @@ def validate_visual(shot, assets):
             require(start<end and layer.get('approved') is True,'LAYER_APPROVAL','Revisa máscara e intervalo')
             if layer.get('voiceBinding'):
                 binding=layer['voiceBinding'];audio=assets.get(binding.get('audioRevision'))
-                require(audio and audio['kind']=='pcm' and audio.get('approvalState')=='approved' and audio['entityId']==binding.get('utteranceId') and audio['sha256']==binding.get('audioHash'),'MOUTH_AUDIO','Selecciona una voz aprobada y vigente')
+                require(audio and audio['kind']=='pcm' and audio.get('approvalState') in ('approved','candidate') and audio['entityId']==binding.get('utteranceId') and audio['sha256']==binding.get('audioHash'),'MOUTH_AUDIO','Selecciona una voz aprobada y vigente')
                 require('voiceActivity' in audio.get('waveform',{}),'MOUTH_ACTIVITY','Este audio no tiene medición de actividad vocal')
     return shot

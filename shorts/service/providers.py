@@ -170,7 +170,7 @@ class Providers:
         require(len(references)<=limit,'IMAGE_REFERENCES',f'El generador elegido admite hasta {limit} referencias por imagen. Elige otro generador para conservar todos los personajes y lugares.')
         parts=[{'text':prompt}]
         for a in references:
-            require(a['approvalState']=='approved','REFERENCE','Referencia no aprobada')
+            require(a['approvalState'] in ('approved','candidate'),'REFERENCE','Referencia no utilizable')
             parts.append({'text':'Referencia visual: '+a.get('referenceLabel',a.get('entityId','referencia aprobada'))+'. Conserva su identidad y diseño al representar este elemento.'})
             parts.append({'fileData':{'fileUri':a['uri'],'mimeType':a['mimeType']}})
         contents=[{'role':'user','parts':parts}]

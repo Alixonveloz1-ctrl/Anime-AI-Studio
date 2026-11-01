@@ -176,3 +176,29 @@ class FundidoEntreTomasTests(unittest.TestCase):
 
 
 if __name__ == '__main__':unittest.main()
+
+
+class NadaQueAprobarTests(unittest.TestCase):
+    """«Yo no tengo por qué estar aprobando nada. Siempre la generación más
+    nueva debe ser la que se utilice. De todo.» (U041)"""
+
+    def test_a_generated_image_is_in_use_from_the_moment_it_exists(self):
+        import copy
+        from unittest.mock import patch
+        from shorts.service.production import run_job
+        from shorts.service.config import config
+        from shorts.core.requests import selected_models
+        cloud = Mock();cloud.c = config()
+        cloud.entity.return_value = {'id': 'dev', 'data': complete()};cloud.upload_file.return_value = 'image.png'
+        with patch('shorts.service.production.Providers') as provider, patch('shorts.service.production.inspect'):
+            provider.return_value.image.return_value = (b'image', 'image/png')
+            run_job(cloud, {'id': 'job', 'operation': 'image', 'models': selected_models(cloud.c, {}), 'payload': {'entityId': 'hero'}},
+                    {'id': 'p', 'format': '16:9', 'activeDevelopment': 'dev'})
+        self.assertEqual(cloud.put_entity.call_args.args[2]['approvalState'], 'approved')
+
+    def test_whatever_was_generated_before_this_rule_goes_into_the_montage(self):
+        from shorts.service.timeline import approved_assets
+        filas = [{'id': 'a', 'approvalState': 'candidate', 'created': 1}, {'id': 'b', 'approvalState': 'approved', 'created': 2},
+                 {'id': 'c', 'approvalState': 'quarantined', 'created': 3}]
+        cloud = Mock();cloud.project_ref.return_value.collection.return_value.stream.return_value = [Mock(to_dict=lambda f=f: f) for f in filas]
+        self.assertEqual([(a['id'], a['approvalState']) for a in approved_assets(cloud, 'p')], [('a', 'approved'), ('b', 'approved')])

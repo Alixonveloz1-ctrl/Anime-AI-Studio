@@ -4,7 +4,7 @@ from .contracts import require,digest
 from .dependencies import fingerprint
 
 def import_candidate(source,source_development,target_development,target_id):
-    require(source.get('approvalState')=='approved','IMPORT_APPROVAL','Solo se importan recursos aprobados')
+    require(source.get('approvalState') in ('approved','candidate'),'IMPORT_APPROVAL','Solo se importan recursos aprobados')
     d=copy.deepcopy(target_development);group=None
     for candidate in ('characters','locations','props'):
         original=next((x for x in source_development['bible'][candidate] if x['id']==source['entityId']),None)

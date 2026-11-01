@@ -56,14 +56,15 @@ class WorkflowTests(unittest.TestCase):
     def test_A073_pending_skips_candidates_and_approvals(self):
         d=development()
         def a(eid,state):return {'id':eid+'asset','entityId':eid,'kind':'image','sha256':'a'*64,'approvalState':state,'inputFingerprint':fingerprint(d,eid,'image')}
+        # U041: lo generado está en uso sin aprobarlo; continuar lo salta igual.
         hero=a('hero','approved');room=a('room','candidate')
         nodes={n['entityId']:n for n in pending_plan(d,'dev',[hero,room],[])}
-        self.assertEqual(nodes['hero']['state'],'approved');self.assertEqual(nodes['room']['state'],'review')
-        self.assertEqual(nodes['shot']['state'],'blocked');self.assertEqual(nodes['voice']['state'],'ready')
-        room['approvalState']='approved';shot=a('shot','candidate');shot['dependencies']=dependency_records([hero,room])
-        self.assertEqual(next(n for n in pending_plan(d,'dev',[hero,room,shot],[]) if n['entityId']=='shot')['state'],'review')
+        self.assertEqual(nodes['hero']['state'],'approved');self.assertEqual(nodes['room']['state'],'approved')
+        self.assertEqual(nodes['shot']['state'],'ready');self.assertEqual(nodes['voice']['state'],'ready')
+        shot=a('shot','candidate');shot['dependencies']=dependency_records([hero,room])
+        self.assertEqual(next(n for n in pending_plan(d,'dev',[hero,room,shot],[]) if n['entityId']=='shot')['state'],'approved')
         hero2={**hero,'id':'new','approvedAt':3}
-        self.assertEqual(next(n for n in pending_plan(d,'dev',[hero,room,shot,hero2],[]) if n['entityId']=='shot')['state'],'ready')
+        self.assertEqual(next(n for n in pending_plan(d,'dev',[hero,room,shot,hero2],[]) if n['entityId']=='shot')['state'],'approved','un retrato nuevo no deja fuera la toma hecha con el anterior')
     def test_A074_batch_unknown_not_retried(self):
         d=development();j={'id':'job','operation':'tts','payload':{'entityId':'voice','developmentId':'dev'},'state':'submitted_unknown'}
         node=next(n for n in pending_plan(d,'dev',[],[j]) if n['entityId']=='voice')
@@ -112,7 +113,9 @@ class EditorialIntegrationTests(unittest.TestCase):
         self.assertEqual(candidate['bible']['characters'][0]['name'],'Imported name')
         self.assertEqual(d['bible']['characters'][0]['name'],'Hero');self.assertEqual(metadata['dependencies'],[])
         self.assertTrue(metadata['provenance']['explicit']);self.assertEqual(metadata['provenance']['projectId'],'other')
-        with self.assertRaises(ContractError):import_candidate({**asset,'approvalState':'candidate'},source,d,'hero')
+        # U041: lo generado sin aprobar aparte también se puede importar.
+        import_candidate({**asset,'approvalState':'candidate'},source,d,'hero')
+        with self.assertRaises(ContractError):import_candidate({**asset,'approvalState':'quarantined'},source,d,'hero')
         with self.assertRaises(ContractError):import_candidate(asset,source,d,'room')
     def test_A038_mouth_activity_is_local_and_audio_bound(self):
         from shorts.core.mouth import activity_intervals,mouth_frames

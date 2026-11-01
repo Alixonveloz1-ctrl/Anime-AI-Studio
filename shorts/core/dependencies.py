@@ -38,46 +38,45 @@ def fingerprint(development, entity_id, kind):
     return digest(value) if value is not None else None
 
 
-def select_assets(assets, development, development_id, selections=None):
-    """Select current approved inputs first, then derivatives referencing those IDs.
+# Estados de un archivo generado que se puede usar. Regla del dueño: no se
+# aprueba nada; lo más nuevo que se generó de cada cosa es lo que se usa.
+USABLE = ('approved', 'candidate')
 
-    No mutation of historic records, no blanket invalidation on development ID.
-    External uploads are associated with an explicit sound request separately.
+
+def momento(a):
+    """Cuándo se eligió este archivo: al generarlo, o después si el dueño eligió
+    expresamente una versión (promover una variante, «Usar esta versión»)."""
+    return max(a.get('created') or 0, a.get('approvedAt') or 0, a.get('selectedAt') or 0)
+
+
+def select_assets(assets, development, development_id, selections=None):
+    """Lo más nuevo de cada cosa (imagen, video, voz, música), sin aprobar nada.
+
+    Un archivo vale mientras corresponda al guion vigente (su huella) y los
+    archivos de los que salió también correspondan al guion. Regenerar el
+    retrato de un personaje no deja fuera las imágenes de toma hechas con el
+    anterior: siguen siendo lo más nuevo de su toma hasta que se regeneren.
+    Cambiar el guion de ese personaje sí las deja fuera, porque ya no lo
+    muestran. Sin modificar nunca los registros históricos.
     """
-    selected = {}
-    selections=selections or {}
-    candidates = sorted((a for a in assets if a.get('approvalState') == 'approved' and selections.get(str(a.get('entityId'))+'|'+a['kind'],a['id'])==a['id']),
-                        key=lambda a: (a.get('approvedAt', a.get('created', 0)), a['id']))
-    remaining = candidates[:]
-    for _ in range(len(candidates) + 1):
-        progressed = False
-        for a in remaining[:]:
-            eid, kind = a.get('entityId'), a['kind']
-            expected = fingerprint(development, eid, kind)
-            if a.get('requestId'):
-                remaining.remove(a)
-                continue
-            valid = (a.get('inputFingerprint') == expected and expected is not None) if 'inputFingerprint' in a else a.get('developmentId') == development_id
-            if not valid:
-                remaining.remove(a)
-                continue
-            deps = a.get('dependencies', [])
-            if any(selected.get((dep['entityId'], dep['kind']), {}).get('id') != dep['assetId'] for dep in deps):
-                continue
-            selected[(eid, kind)] = a
-            remaining.remove(a)
-            progressed = True
-        if not progressed:
-            break
-    # An earlier derivative may have been selected before a newer parent.
+    usable = [a for a in assets if a.get('approvalState') in USABLE and not a.get('requestId')]
+    valid = {}
+    for a in usable:
+        expected = fingerprint(development, a.get('entityId'), a['kind'])
+        ok = (a.get('inputFingerprint') == expected and expected is not None) if 'inputFingerprint' in a else a.get('developmentId') == development_id
+        if ok:
+            valid[a['id']] = a
+    # Un derivado vale si cada archivo del que salió sigue valiendo.
     while True:
-        invalid = [key for key, a in selected.items() if any(
-            selected.get((dep['entityId'], dep['kind']), {}).get('id') != dep['assetId']
-            for dep in a.get('dependencies', []))]
-        if not invalid:
-            return selected
-        for key in invalid:
-            del selected[key]
+        caidos = [aid for aid, a in valid.items() if any(dep['assetId'] not in valid for dep in a.get('dependencies', []))]
+        if not caidos:
+            break
+        for aid in caidos:
+            del valid[aid]
+    selected = {}
+    for a in sorted(valid.values(), key=lambda a: (momento(a), a['id'])):
+        selected[(a.get('entityId'), a['kind'])] = a
+    return selected
 
 
 def dependency_records(assets):

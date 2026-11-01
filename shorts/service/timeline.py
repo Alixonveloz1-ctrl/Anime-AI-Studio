@@ -4,8 +4,14 @@ from shorts.core.subtitles import subtitle_segments,validate_segments
 from shorts.core.timing import voice_layout,shot_bounds,is_vocal_sound
 
 def approved_assets(cloud,pid):
+    """Todo archivo generado que se puede usar, como en uso.
+
+    Regla del dueño: no se aprueba nada. Lo generado sin aprobar aparte vale
+    igual; la copia que va al montaje lo dice, para que la entrega final no lo
+    rechace por «sin aprobación»."""
+    from shorts.core.dependencies import USABLE
     assets=[x.to_dict() for x in cloud.project_ref(pid).collection('assets').stream()]
-    return sorted([a for a in assets if a.get('approvalState')=='approved'],key=lambda a:a.get('created',0))
+    return sorted([{**a,'approvalState':'approved'} for a in assets if a.get('approvalState') in USABLE],key=lambda a:a.get('created',0))
 
 AMBIENCE_REPEAT_LIMIT=64
 

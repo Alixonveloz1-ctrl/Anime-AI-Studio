@@ -42,7 +42,8 @@ def submit(pid,operation,payload,key_override=None,pin=True):
     p=owned(pid);d=body()
     if pin and operation in ('image','veo','tts','music','transcribe','review','frames','analyze','media'):
         payload={**payload,'developmentId':p.get('activeDevelopment')}
-        payload['approvedAssetIds']=[x.id for x in cloud().project_ref(pid).collection('assets').stream() if x.to_dict().get('approvalState')=='approved']
+        from shorts.core.dependencies import USABLE
+        payload['approvedAssetIds']=[x.id for x in cloud().project_ref(pid).collection('assets').stream() if x.to_dict().get('approvalState') in USABLE]
         payload['assetSelections']=p.get('assetSelections',{})
     job=cloud().submit(p,operation,payload,key_override or request.headers.get('Idempotency-Key',''),expected(),d.get('session',''))
     return jsonify(jobId=job['id'],state=job['state']),202
@@ -448,6 +449,7 @@ def approve(pid,kind,eid):
             if kind=='assets':
                 current.setdefault('assetSelections',{})[entity['entityId']+'|'+entity['kind']]=eid
                 current['timelineStale']=True
+                entity['selectedAt']=time.time();tx.set(ref,entity)
             if kind=='developments':current.update(activeDevelopment=eid,stage='tomas',timelineStale=True)
             tx.create(cloud().entity_ref(pid,'approvals',new_id()),{'kind':kind,'entity':eid,'action':'select_existing_approval','author':p['owner'],'at':time.time()})
             return entity
@@ -488,7 +490,7 @@ def use_variant_as_shot_image(pid,aid):
     p=owned(pid);require(p.get('activeDevelopment'),'DEVELOPMENT','Aprueba guion y biblias primero')
     dev=cloud().entity(pid,'developments',p['activeDevelopment'])
     variant=cloud().entity(pid,'assets',aid)
-    require(variant.get('kind')=='image' and variant.get('approvalState')=='approved','VARIANT','Solo una variante de imagen aprobada puede usarse como imagen de la toma')
+    require(variant.get('kind')=='image' and variant.get('approvalState') in ('approved','candidate'),'VARIANT','Solo una variante de imagen aprobada puede usarse como imagen de la toma')
     shot_id=variant.get('variantOf');require(shot_id,'VARIANT','Esta imagen no es una variante de una toma')
     shot=next((s for s in dev['data']['shots'] if s['id']==shot_id),None);require(shot,'SHOT','La toma de la variante ya no existe en el guion vigente')
     existing=None
@@ -498,10 +500,12 @@ def use_variant_as_shot_image(pid,aid):
             existing=row;break
     def change(tx,current):
         entity=cloud().entity_ref(pid,'assets',aid).get(transaction=tx).to_dict()
-        require(entity and entity.get('kind')=='image' and entity.get('approvalState')=='approved','VARIANT','Solo una variante de imagen aprobada puede usarse como imagen de la toma')
+        require(entity and entity.get('kind')=='image' and entity.get('approvalState') in ('approved','candidate'),'VARIANT','Solo una variante de imagen aprobada puede usarse como imagen de la toma')
         require(entity.get('variantOf')==shot_id,'VARIANT','La variante ya no pertenece a esta toma')
         if existing:
-            promoted=dict(existing)
+            # Elegirla otra vez la vuelve lo más nuevo de la toma.
+            promoted={**existing,'selectedAt':time.time()}
+            tx.set(cloud().entity_ref(pid,'assets',promoted['id']),promoted)
         else:
             promoted={**entity,'id':new_id(),'entityId':shot_id,'variantOf':None,'promotedFrom':aid,'approvalState':'approved','approvedBy':p['owner'],'approvedAt':time.time(),'created':time.time(),'revision':1,'inputFingerprint':fingerprint(dev['data'],shot_id,'image'),'dependencies':[]}
             tx.create(cloud().entity_ref(pid,'assets',promoted['id']),promoted)
@@ -564,7 +568,7 @@ def batch_next(pid,bid):
     require(d.get('session')==p.get('lease',{}).get('session') and p['lease']['expires']>time.time(),'LEASE','Continúa la sesión antes de despachar',409)
     nodes,assets=batch_plan(p);node=next((n for n in nodes if n['state']=='ready' and n['key'] in b['authorizedKeys']),None)
     if not node:return jsonify(state='awaiting_review' if any(n['state']!='approved' for n in nodes) else 'completed',nodes=nodes)
-    payload={'entityId':node['entityId'],'developmentId':b['developmentId'],'approvedAssetIds':[a['id'] for a in assets if a.get('approvalState')=='approved'],'assetSelections':p.get('assetSelections',{})}
+    payload={'entityId':node['entityId'],'developmentId':b['developmentId'],'approvedAssetIds':[a['id'] for a in assets if a.get('approvalState') in ('approved','candidate')],'assetSelections':p.get('assetSelections',{})}
     # Keep the original payload when an HTTP response was lost. Do not derive a
     # different fingerprint from later approvals for an existing idempotency key.
     key=batch_key(b,node);jid=digest([pid,key]);old=cloud().db.collection('animeShortsJobs').document(jid).get().to_dict()
@@ -593,7 +597,7 @@ def import_asset(pid):
     p=owned(pid);d=body();source_project=cloud().project(d['sourceProjectId'],p['owner'])
     require(source_project['id']!=pid and p.get('activeDevelopment'),'IMPORT_PROJECT','Selecciona otra historia y aprueba el guion de destino')
     source=cloud().entity(source_project['id'],'assets',d['sourceAssetId'])
-    require(source.get('approvalState')=='approved','IMPORT_APPROVAL','Recurso de origen sin aprobar')
+    require(source.get('approvalState') in ('approved','candidate'),'IMPORT_APPROVAL','Recurso de origen sin aprobar')
     return submit(pid,'import',{'sourceProjectId':source_project['id'],'sourceAssetId':source['id'],'sourceHash':digest(source),'targetId':ident(d['targetId']),'developmentId':p['activeDevelopment']},pin=False)
 
 @app.post('/projects/<pid>/sound-requests/<sid>/upload-session')
