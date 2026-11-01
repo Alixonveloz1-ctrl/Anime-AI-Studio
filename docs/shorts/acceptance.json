@@ -385,7 +385,7 @@
     "tests": [
       "tests/shorts/test_contracts.py:test_A020_planner_measured",
       "tests/shorts/test_workflow.py:test_A020_measured_voice_and_explicit_pauses",
-      "tests/shorts/test_workflow.py:test_A020_validate_plan_no_unrenderable_veo"
+      "tests/shorts/test_workflow.py:test_A020_a_long_video_shot_is_accepted_and_slowed_down_instead_of_refused"
     ],
     "fixture": "passed_local_partial",
     "api": "not_run",

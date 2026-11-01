@@ -1,5 +1,5 @@
 """24 FPS editorial pauses plus measured PCM, without speech speed fitting."""
-from .contracts import integer,require
+from .contracts import integer,require,LIMITE_FRAMES
 
 
 def is_vocal_sound(utterance):
@@ -13,10 +13,10 @@ def is_vocal_sound(utterance):
 
 
 def voice_layout(shot, voices):
-    cursor=integer(shot.get('leadFrames',0),'acción inicial',0,7560)*2000
+    cursor=integer(shot.get('leadFrames',0),'acción inicial',0,LIMITE_FRAMES)*2000
     rows=[]
-    shot_samples=integer(shot.get('frames',0),'duración',1,7560)*2000
-    tail_samples=integer(shot.get('tailFrames',0),'acción final',0,7560)*2000
+    shot_samples=integer(shot.get('frames',0),'duración',1,LIMITE_FRAMES)*2000
+    tail_samples=integer(shot.get('tailFrames',0),'acción final',0,LIMITE_FRAMES)*2000
     for utterance,audio in voices:
         # Desfase que el usuario vio en El Llanto: una voz que empieza
         # varios segundos después de que cambia la toma parece que llega
@@ -28,20 +28,20 @@ def voice_layout(shot, voices):
         # Las pausas entre intervenciones dentro de la misma toma no se
         # tocan: ahí sí son interpretación.
         if not rows:
-            pre=cursor+integer(utterance.get('pauseBeforeFrames',0),'pausa antes',0,7560)*2000
+            pre=cursor+integer(utterance.get('pauseBeforeFrames',0),'pausa antes',0,LIMITE_FRAMES)*2000
             limit=0 if is_vocal_sound(utterance) else 24*2000
             if pre>limit:cursor=limit
             else:cursor=pre
-            pause_after=integer(utterance.get('pauseAfterFrames',0),'pausa después',0,7560)*2000
+            pause_after=integer(utterance.get('pauseAfterFrames',0),'pausa después',0,LIMITE_FRAMES)*2000
             length=integer(audio['samples'],'voz medida',1,15120000)
             if is_vocal_sound(utterance):
                 length=max(0,min(length,shot_samples-cursor-pause_after-tail_samples))
             rows.append({'utterance':utterance,'audio':audio,'offsetSample':cursor,'samples':length})
             cursor+=length+pause_after
             continue
-        cursor+=integer(utterance.get('pauseBeforeFrames',0),'pausa antes',0,7560)*2000
+        cursor+=integer(utterance.get('pauseBeforeFrames',0),'pausa antes',0,LIMITE_FRAMES)*2000
         length=integer(audio['samples'],'voz medida',1,15120000)
-        pause_after=integer(utterance.get('pauseAfterFrames',0),'pausa después',0,7560)*2000
+        pause_after=integer(utterance.get('pauseAfterFrames',0),'pausa después',0,LIMITE_FRAMES)*2000
         if is_vocal_sound(utterance):
             # Respiración, gemido, gruñido, grito: si dura más de lo que
             # exige el plano, se recorta a lo que queda en el plano después
@@ -88,7 +88,7 @@ def veo_seconds_for_manual_video(shot):
     ralentiza o acelera el clip completo para cubrir la toma, sin
     cortarlo nunca. Si la toma es más corta, el clip elegido es el
     menor que la cubre, y el montaje lo acelera para ajustarla."""
-    frames=integer(shot['frames'],'duración Veo',1,7560)
+    frames=integer(shot['frames'],'duración Veo',1,LIMITE_FRAMES)
     # El más cercano a la toma, no siempre el que la cubre: una toma de
     # 6 s genera 6 s (no 8 ralentizado), una de 4.5 s genera 4 s y se
     # alarga un poco, una de 7 s genera 8 s. En empate (5 s, 7 s) se

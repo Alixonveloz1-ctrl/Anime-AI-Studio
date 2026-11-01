@@ -549,3 +549,44 @@ entero.
 
 Pruebas: `tests/shorts/test_media.py` (las tres anteriores, con ffmpeg real).
 Las tres fallan si el montaje vuelve a confiar en la velocidad del plan.
+
+## U036 — Los cinco minutos son lo que se pide, no un límite (2026-11-01)
+
+«La duración TOTAL prevista permite de 339,2 a 391,9 segundos. El corto
+completo debe cubrir entre 285 y 315 segundos.» — y el corto se quedaba sin
+vista previa y sin exportación.
+
+«No quiero restricciones de nada. Es una aplicación para mi uso personal.»
+
+Los cinco minutos —de 285 a 315 segundos— son lo que se le pide al director
+cuando escribe. Eran también una puerta que se cerraba en tres sitios: al
+guardar el guion, al calcular la duración del corto para la vista previa, y en
+el montaje final, que rechazaba el corto entero antes de tocar un fotograma si
+no caía dentro.
+
+Ahora son sólo lo que se le pide al director. Si las tomas caben en los cinco
+minutos, se apunta ahí como siempre. Si no caben, el corto se arma con la
+duración más cercana que sus tomas sí permiten: uno que sale de 339 a 392
+segundos se arma con 339; uno de 32 segundos se arma con 32 y no se estira a la
+fuerza. Nada se rechaza por la duración total.
+
+Había además un fallo escondido detrás de ese mismo número: la música sólo
+podía empezar en los primeros cinco minutos. En un corto de cinco minutos y
+medio, una pieza que entrara en el minuto 5:20 se rechazaba. Las duraciones y
+posiciones de tomas, pausas y música tienen ahora un único tope técnico de una
+hora, que sólo sirve para frenar un valor absurdo o corrupto.
+
+Comprobado: un corto de 340 segundos con música que entra en el minuto 5:20 se
+guarda, se arma para la vista previa y lo acepta el montaje final.
+
+También se corrige la matriz de requisitos, que apuntaba a una prueba
+renombrada el día anterior: por eso las dos subidas anteriores quedaron en rojo
+en la comprobación automática, sólo en ese paso de documentación. La imagen, su
+autoprueba y todas las pruebas de servicio y montaje habían pasado.
+
+Pruebas: `tests/shorts/test_duration_range.py` y
+`tests/shorts/test_manual_development.py` (un corto de 284, 316 o 340 segundos
+se monta con su duración; uno que no cabe se arma con su duración más cercana y
+no se estira; uno que cabe sigue apuntando a los cinco minutos; un guion más
+corto de cinco minutos se guarda en vez de tirarse). Fallan si vuelve el
+rechazo.

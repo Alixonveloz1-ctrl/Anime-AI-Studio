@@ -1,7 +1,7 @@
 """Project-specific direction; outputs validated before they become candidates."""
 import json
 import re
-from shorts.core.contracts import require, validate_ideas, ident, digest, integer, AMBIENCE_LOOP_SECONDS, SFX_MAX_SECONDS
+from shorts.core.contracts import require, validate_ideas, ident, digest, integer, AMBIENCE_LOOP_SECONDS, SFX_MAX_SECONDS, LIMITE_FRAMES
 
 def has_japanese(text):
     # El mismo criterio que usa la voz: caracteres japoneses reales,
@@ -66,11 +66,11 @@ def validate_development(d, *, duration_bounds=(6840,7560)):
     refs=chars|locations|props;beats=register(d['beats']);shots=register(d['shots']);utterances=register(d['utterances']);register(d['soundRequests']);register(d['musicRequests'])
     require(chars and locations and beats and shots,'BIBLE','Faltan personajes, lugares o unidades dramáticas')
     for beat in d['beats']:
-        for key in ('minFrames','preferredFrames','maxFrames'):integer(beat.get(key),key,0,7560)
+        for key in ('minFrames','preferredFrames','maxFrames'):integer(beat.get(key),key,0,LIMITE_FRAMES)
         require(beat['minFrames']<=beat['preferredFrames']<=beat['maxFrames'],'BEAT_BOUNDS','Límites dramáticos inválidos')
     for s in d['shots']:
-        for key in ('frames','minFrames','maxFrames'):integer(s.get(key),key,1,7560)
-        for key in ('leadFrames','tailFrames'):integer(s.get(key),key,0,7560)
+        for key in ('frames','minFrames','maxFrames'):integer(s.get(key),key,1,LIMITE_FRAMES)
+        for key in ('leadFrames','tailFrames'):integer(s.get(key),key,0,LIMITE_FRAMES)
         require(s['minFrames']<=s['frames']<=s['maxFrames'],'SHOT_BOUNDS','Intervalo de toma inválido')
         require(s.get('beatId') in beats,'BEAT_LINK','Toma sin unidad dramática')
         require(s.get('locationId') in locations and isinstance(s.get('visibleCharacters'),list) and isinstance(s.get('offscreenCharacters'),list) and set(s['visibleCharacters']+s['offscreenCharacters'])<=chars,'BIBLE_LINK','Reparto/lugar inválidos')
@@ -93,7 +93,9 @@ def validate_development(d, *, duration_bounds=(6840,7560)):
     if len(d['shots'])>=8:
         require(veo_count*2>=len(d['shots']),'VIDEO_MAJORITY','La mayoría de las tomas deben ser video real (veo), no imagen con paneo: al menos la mitad de las tomas deben ser veo.')
     total_frames=sum(s['frames'] for s in d['shots'])
-    require(duration_bounds[0]<=total_frames<=duration_bounds[1],'DURATION_PLAN','La duración TOTAL del guion debe estar entre 285 y 315 segundos' if duration_bounds==(6840,7560) else 'La duración del guion no corresponde al tramo solicitado')
+    # Los cinco minutos se le piden al director en su encargo; aquí ya no se
+    # rechaza un guion por salir más largo o más corto. Sólo tiene que durar algo.
+    require(total_frames>0,'DURATION_PLAN','El guion no tiene ninguna toma con duración.')
     for u in d['utterances']:
         require(u.get('shotId') in shots and u.get('type') in ('dialogue','thought','narration','system'),'UTTERANCE','Intervención incompleta')
         for key in ('japanese','spanish','acting'):text(u,key)
@@ -102,7 +104,7 @@ def validate_development(d, *, duration_bounds=(6840,7560)):
         # listo y solo fallaba después, al generar la voz. Ahora se rechaza
         # en el guion mismo, antes de aprobarlo y antes de pagar una voz.
         require(has_japanese(u.get('japanese')),'JAPANESE','La intervención '+str(u.get('id'))+' no tiene texto en japonés: su campo japonés está vacío o no usa caracteres japoneses. Corrige el guion antes de aprobarlo. Texto en español: '+str(u.get('spanish',''))[:60])
-        for key in ('pauseBeforeFrames','pauseAfterFrames'):integer(u.get(key),key,0,7560)
+        for key in ('pauseBeforeFrames','pauseAfterFrames'):integer(u.get(key),key,0,LIMITE_FRAMES)
         require(u.get('speakerId') in chars,'SPEAKER','Voz sin ficha')
     for s in d['shots']:
         pauses=s['leadFrames']+s['tailFrames']+sum(u['pauseBeforeFrames']+u['pauseAfterFrames'] for u in d['utterances'] if u['shotId']==s['id'])
@@ -124,7 +126,7 @@ def validate_development(d, *, duration_bounds=(6840,7560)):
                     'Un ambiente es un bucle corto que la aplicación repite; un fondo continuo se encarga como música.')
     for r in d['musicRequests']:
         text(r,'prompt');require(type(r.get('seconds')) is int and 1<=r['seconds']<=184,'MUSIC_DURATION','Lyria admite piezas de hasta 184 segundos')
-        integer(r.get('startFrame'),'entrada musical',0,7559);integer(r.get('endFrame'),'salida musical',1,7560)
+        integer(r.get('startFrame'),'entrada musical',0,LIMITE_FRAMES-1);integer(r.get('endFrame'),'salida musical',1,LIMITE_FRAMES)
         require(r['startFrame']<r['endFrame']<=total_frames and (r['endFrame']-r['startFrame'])<=r['seconds']*24,'MUSIC_COVERAGE','Uso musical fuera de su archivo')
         integer(r.get('sourceInSample',0),'recorte musical',0,15120000)
         for k in ('fadeInSamples','fadeOutSamples'):integer(r.get(k,0),k,0,15120000)

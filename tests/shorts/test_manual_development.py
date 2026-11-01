@@ -50,10 +50,13 @@ class ManualDevelopmentTests(unittest.TestCase):
         result=validate_stage(raw,2)
         self.assertEqual(result['shots'][0]['frames'],7100);self.assertEqual(raw['shots'][0]['frames'],7100)
         self.assertEqual(result['utterances'],raw['utterances'])
-    def test_impossible_duration_stops_at_script(self):
+    def test_a_script_shorter_than_five_minutes_is_kept_instead_of_refused(self):
+        # Antes se tiraba el guion por no llegar a los 285 segundos. Ahora se
+        # guarda, y su toma queda dentro de lo que el propio guion le dio: ni
+        # se rechaza ni se estira a la fuerza hasta los cinco minutos.
         d=complete();d['shots'][0].update(minFrames=6600,maxFrames=6800)
-        with self.assertRaises(ContractError) as error:validate_stage(d,2)
-        self.assertEqual(error.exception.code,'DURATION_PLAN')
+        frames=validate_stage(d,2)['shots'][0]['frames']
+        self.assertTrue(6600<=frames<=6800,frames)
     def test_a_voice_outside_the_catalogue_never_leaves_the_story_mute(self):
         # The response schema lists the thirty Gemini TTS names and the model
         # still answers now and then with the Cloud spelling or with a name

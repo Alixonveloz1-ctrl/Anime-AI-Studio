@@ -16,11 +16,20 @@ class DurationRangeTests(unittest.TestCase):
             d=complete();d['shots'][0].update(frames=seconds*24,minFrames=seconds*24,maxFrames=seconds*24)
             self.assertEqual(validate_stage(d,2)['shots'][0]['frames'],seconds*24)
             self.assertEqual(compile_timeline(manifest(seconds),True)['samples'],seconds*48000)
-        for seconds in (284,316):
-            with self.assertRaises(ContractError):compile_timeline(manifest(seconds))
-    def test_32_seconds_not_stretched_and_message_names_total(self):
-        with self.assertRaises(ContractError) as error:duration_target(660,720,768)
-        self.assertIn('TOTAL',str(error.exception));self.assertIn('285 y 315',str(error.exception))
+        # Fuera de los cinco minutos también se monta, con su duración: «no
+        # quiero restricciones de nada». Los cinco minutos se le PIDEN al
+        # director; no son una puerta que cierre el corto.
+        for seconds in (284,316,340):
+            self.assertEqual(compile_timeline(manifest(seconds),True)['samples'],seconds*48000)
+    def test_a_short_that_does_not_fit_five_minutes_is_built_at_its_nearest_length(self):
+        # Un corto de 32 segundos NO se estira a cinco minutos ni se rechaza: se
+        # arma con lo más largo que permiten sus tomas.
+        self.assertEqual(duration_target(660,720,768),768)
+        # Uno de entre 339 y 392 segundos —el caso real que dejó al dueño sin
+        # vista previa— se arma con lo más corto que permiten sus tomas.
+        self.assertEqual(duration_target(int(339.2*24),int(339.2*24),int(391.9*24)),int(339.2*24))
+        # Y uno que sí cabe sigue apuntando a los cinco minutos.
+        self.assertEqual(duration_target(290*24,300*24,310*24),300*24)
     def test_budget_covers_whole_story_and_explains_units(self):
         d=complete();b=d['beats'][0];d['beats']=[{**b,'id':'b1','preferredFrames':100},{**b,'id':'b2','preferredFrames':200}]
         brief=script_timing_brief(d)

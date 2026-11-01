@@ -3,7 +3,7 @@ import copy
 import json
 import math
 import time
-from shorts.core.contracts import require, ContractError, digest, ident, integer, duration_target, AMBIENCE_LOOP_SECONDS, SFX_MAX_SECONDS
+from shorts.core.contracts import require, ContractError, digest, ident, integer, duration_target, AMBIENCE_LOOP_SECONDS, SFX_MAX_SECONDS, LIMITE_FRAMES
 from shorts.service.director import develop_prompt, validate_development
 from shorts.service.development_schema import development_schema
 from shorts.service.references import link_references
@@ -82,7 +82,7 @@ def validate_story(data):
     for beat in data['beats']:
         require(isinstance(beat,dict),'STORY','Momento dramático inválido')
         key=ident(beat.get('id'));require(key not in ids,'DUPLICATE_ID','Momentos dramáticos con ID repetido');ids.add(key)
-        for field in ('minFrames','preferredFrames','maxFrames'):integer(beat.get(field),field,0,7560)
+        for field in ('minFrames','preferredFrames','maxFrames'):integer(beat.get(field),field,0,LIMITE_FRAMES)
         require(beat['minFrames']<=beat['preferredFrames']<=beat['maxFrames'],'BEAT_BOUNDS','Revisa los intervalos de los momentos dramáticos.')
     return data
 
@@ -98,13 +98,13 @@ def plan_shots(data, duration_bounds=None):
     for shot in shots:
         require(isinstance(shot,dict),'SCRIPT','Plano inválido')
         ident(shot.get('id'))
-        for k in ('minFrames','maxFrames','frames'):integer(shot.get(k),k,1,7560)
-        for k in ('leadFrames','tailFrames'):integer(shot.get(k),k,0,7560)
+        for k in ('minFrames','maxFrames','frames'):integer(shot.get(k),k,1,LIMITE_FRAMES)
+        for k in ('leadFrames','tailFrames'):integer(shot.get(k),k,0,LIMITE_FRAMES)
         pauses=shot['leadFrames']+shot['tailFrames']
         for voice in voices:
             require(isinstance(voice,dict),'SCRIPT','Intervención inválida')
             if voice.get('shotId')==shot['id']:
-                for k in ('pauseBeforeFrames','pauseAfterFrames'):pauses+=integer(voice.get(k),k,0,7560)
+                for k in ('pauseBeforeFrames','pauseAfterFrames'):pauses+=integer(voice.get(k),k,0,LIMITE_FRAMES)
         minimum=max(shot['minFrames'],pauses);maximum=shot['maxFrames']
         require(minimum<=maximum,'PAUSE_BOUNDS','Las pausas exceden el intervalo de la toma '+shot['id']+'. Corrige solo este paso.')
         # Una toma de video dura lo que dice el guion. Aquí se rechazaba si
@@ -139,7 +139,7 @@ def plan_music(data):
     for row in rows:
         require(isinstance(row,dict),'MUSIC','Indicación musical inválida')
         key=ident(row.get('id'));require(key not in occupied,'DUPLICATE_ID','ID musical repetido: '+key);occupied.add(key)
-        start=integer(row.get('startFrame'),'entrada musical',0,7559);end=integer(row.get('endFrame'),'salida musical',1,7560)
+        start=integer(row.get('startFrame'),'entrada musical',0,LIMITE_FRAMES-1);end=integer(row.get('endFrame'),'salida musical',1,LIMITE_FRAMES)
         require(start<end,'MUSIC_COVERAGE','La salida musical debe ir después de su entrada: '+key)
         # The screenplay is authoritative: a cue cannot extend past its ending.
         require(start<total,'MUSIC_COVERAGE','La música comienza después del final del guion: '+key)

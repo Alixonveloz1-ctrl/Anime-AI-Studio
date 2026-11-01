@@ -1,11 +1,12 @@
 """Vertex responseSchema for new developments; existing stories are not migrated."""
 from shorts.core.requests import VOICES
+from shorts.core.contracts import LIMITE_FRAMES
 
 
 def development_schema():
     def text(description=None):
         return {'type':'STRING',**({'description':description} if description else {})}
-    def number(kind='INTEGER',minimum=0,maximum=7560):
+    def number(kind='INTEGER',minimum=0,maximum=LIMITE_FRAMES):
         return {'type':kind,'minimum':minimum,'maximum':maximum}
     def obj(**properties):
         return {'type':'OBJECT','properties':properties,'required':list(properties),
@@ -46,6 +47,6 @@ def development_schema():
             seconds=number('NUMBER',0,600),preparationSeconds=number('NUMBER',0,600),tailSeconds=number('NUMBER',0,600),
             perspective=text(),shotId=text(),eventDescription=text(),required={'type':'BOOLEAN'})),
         musicRequests=rows(obj(id=text(),prompt=text(),seconds=number(minimum=1,maximum=184),
-            startFrame=number(maximum=7559),endFrame=number(minimum=1),sourceInSample=number(maximum=15120000),
+            startFrame=number(maximum=LIMITE_FRAMES-1),endFrame=number(minimum=1),sourceInSample=number(maximum=15120000),
             gainDb=number('NUMBER',-60,12),fadeInSamples=number(maximum=15120000),fadeOutSamples=number(maximum=15120000))),
         subtitles=rows(obj(utteranceId=text(),text=text())))

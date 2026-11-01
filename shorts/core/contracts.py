@@ -7,7 +7,13 @@ import re
 
 FPS, RATE, FRAMES, SAMPLES = 24, 48000, 7200, 14400000
 MIN_FRAMES, MAX_FRAMES = 285*FPS, 315*FPS
-MAX_SAMPLES = MAX_FRAMES*(RATE//FPS)
+# 285 a 315 segundos es lo que se le PIDE al director: un corto de cinco
+# minutos. No es un límite. Un corto que sale de 339 segundos se arma, se ve
+# en vista previa y se exporta igual; el dueño lo pidió así: «no quiero
+# restricciones de nada». LIMITE_FRAMES sólo frena valores absurdos o
+# corruptos: una hora.
+LIMITE_FRAMES = 60*60*FPS
+MAX_SAMPLES = LIMITE_FRAMES*(RATE//FPS)
 TRACKS = ('dialogue', 'thought', 'narration', 'system', 'music', 'ambience', 'sfx')
 # A sound the user has to obtain somewhere and upload has to be a length that
 # can actually be obtained. A 315-second "effect" could not: the plan asked for
@@ -66,7 +72,7 @@ def plan_beats(beats, target=FRAMES):
     require(bool(beats), 'NO_BEATS', 'Faltan unidades dramáticas')
     for b in beats:
         for k in ('minFrames','preferredFrames','maxFrames'):
-            integer(b[k],k,0,MAX_FRAMES)
+            integer(b[k],k,0,LIMITE_FRAMES)
         require(b['minFrames'] <= b['preferredFrames'] <= b['maxFrames'], 'BEAT_BOUNDS', 'Duraciones incompatibles')
         require(b.get('timingEvidence') in ('measured_audio','approved_silence','approved_action'), 'UNMEASURED_TIMING', 'Falta audio real o duración de acción/pausa aprobada')
     require(sum(b['minFrames'] for b in beats)<=target<=sum(b['maxFrames'] for b in beats), 'SCRIPT_REVIEW', 'El contenido no cabe: revisa guion o pausas')
@@ -88,8 +94,11 @@ def plan_beats(beats, target=FRAMES):
 
 def duration_target(minimum, preferred, maximum):
     lo=max(MIN_FRAMES,minimum);hi=min(MAX_FRAMES,maximum)
-    require(lo<=hi,'DURATION_PLAN',f'La duración TOTAL prevista permite de {minimum/FPS:.1f} a {maximum/FPS:.1f} segundos. El corto completo debe cubrir entre 285 y 315 segundos, sumando todos los planos, diálogos, acciones y silencios. Conserva la historia y completa el guion.')
-    return max(lo,min(hi,preferred))
+    if lo<=hi:return max(lo,min(hi,preferred))
+    # Las tomas no caben en los cinco minutos: el corto sale más largo o más
+    # corto. Se arma con la duración más cercana que las tomas SÍ permiten, en
+    # vez de negarse y dejar al dueño sin vista previa ni exportación.
+    return minimum if minimum>MAX_FRAMES else max(minimum,maximum)
 
 def visual_fingerprint(shot):
     return digest({k:v for k,v in shot.items() if k in ('assetRevision','frames','treatment','camera','layers','trimSeconds','speed')})
@@ -162,7 +171,7 @@ def compile_timeline(manifest, final=False):
     require(not final or not manifest.get('draftIssues'), 'DRAFT_RESOURCES', 'Resuelve los recursos provisionales antes del final')
     require(manifest.get('schemaVersion')==2,'SCHEMA','Esquema incompatible')
     require(manifest.get('fps')==FPS and manifest.get('sampleRate')==RATE,'TIMEBASE','Se requieren 24 FPS y 48 kHz')
-    frames=integer(manifest.get('frames'),'duración total',MIN_FRAMES,MAX_FRAMES);samples=frames*(RATE//FPS)
+    frames=integer(manifest.get('frames'),'duración total',1,LIMITE_FRAMES);samples=frames*(RATE//FPS)
     assets=manifest['assets']; shots=manifest['shots']; project_id=ident(manifest['projectId'])
     require(bool(shots),'NO_SHOTS','Faltan tomas')
     for key,a in assets.items():
@@ -173,7 +182,7 @@ def compile_timeline(manifest, final=False):
         require(a.get('approvalState')=='approved' or not final,'UNAPPROVED','Recurso sin aprobación vigente')
     cursor=0; last_video=None
     for shot in shots:
-        ident(shot['id']); integer(shot['frames'],'duración',1,MAX_FRAMES)
+        ident(shot['id']); integer(shot['frames'],'duración',1,LIMITE_FRAMES)
         require(shot['startFrame']==cursor,'COVERAGE','Hueco o solapamiento visual no declarado')
         cursor+=shot['frames']
         treatment=shot['treatment']
